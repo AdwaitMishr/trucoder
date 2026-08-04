@@ -1,0 +1,126 @@
+---
+id: edit-distance
+title: "Edit Distance"
+difficulty: hard
+order: 8
+tags: [string, two-dimensional-state, minimization]
+task: "Given two strings word1 and word2, return the minimum number of operations to convert word1 into word2. Allowed operations: insert a character, delete a character, replace a character."
+languages: [java, javascript, python]
+timeLimitMs: 2000
+signature:
+  java: "static int solve(String word1, String word2)"
+  javascript: "function solve(word1, word2)"
+  python: "def solve(word1: str, word2: str) -> int"
+starter:
+  java: |
+    static int solve(String word1, String word2) {
+        // Minimum edits (insert/delete/replace) to turn word1 into word2.
+        return 0;
+    }
+  javascript: |
+    function solve(word1, word2) {
+      // Minimum edits (insert/delete/replace) to turn word1 into word2.
+      return 0;
+    }
+  python: |
+    def solve(word1: str, word2: str) -> int:
+        # Minimum edits (insert/delete/replace) to turn word1 into word2.
+        return 0
+tests:
+  public:
+    - name: "horse -> ros"
+      args: ["horse", "ros"]
+      expected: 3
+    - name: "intention -> execution"
+      args: ["intention", "execution"]
+      expected: 5
+    - name: "a -> a"
+      args: ["a", "a"]
+      expected: 0
+  private:
+    - name: "empty -> empty"
+      args: ["", ""]
+      expected: 0
+    - name: "abc -> empty"
+      args: ["abc", ""]
+      expected: 3
+    - name: "sea -> eat"
+      args: ["sea", "eat"]
+      expected: 2
+    - name: "dinitrophenylhydrazine -> acetylphenylhydrazine"
+      args: ["dinitrophenylhydrazine", "acetylphenylhydrazine"]
+      expected: 6
+solution: |
+  def solve(word1: str, word2: str) -> int:
+      m, n = len(word1), len(word2)
+      dp = [[0] * (n + 1) for _ in range(m + 1)]
+      for j in range(n + 1):
+          dp[0][j] = j
+      for i in range(m + 1):
+          dp[i][0] = i
+      for i in range(1, m + 1):
+          for j in range(1, n + 1):
+              if word1[i - 1] == word2[j - 1]:
+                  dp[i][j] = dp[i - 1][j - 1]
+              else:
+                  dp[i][j] = 1 + min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1])
+      return dp[m][n]
+hints:
+  - "dp[i][j] = min edits to convert first i chars of word1 into first j chars of word2."
+  - "If the characters match, no cost — carry over dp[i-1][j-1]."
+  - "If they differ, try replace / delete / insert and take the minimum."
+  - "dp[0][j] = j and dp[i][0] = i are the base cases. Answer is dp[m][n]."
+---
+
+The capstone. It reuses the two-string table from the previous lesson but adds a
+*cost* for each operation. This is the problem that turns "can I see a pattern?"
+into "can I build a cost table?" — the real skill DP is about.
+
+## Define the state with cost
+
+Let `dp[i][j]` = minimum edits to turn the first `i` characters of `word1` into
+the first `j` characters of `word2`. Unlike LCS, here you pay a cost for each
+operation, so you take a **minimum** instead of a maximum.
+
+## The match case
+
+If `word1[i-1] == word2[j-1]`, no operation is needed — carry the previous cost
+over:
+
+```
+dp[i][j] = dp[i-1][j-1]
+```
+
+## The three operations
+
+If they differ, you pay `1` for one of three options, then recurse on the smaller
+subproblem:
+
+| Operation | Resulting cost | What it means |
+|---|---|---|
+| Replace | `dp[i-1][j-1] + 1` | fix the mismatch, advance both |
+| Delete | `dp[i-1][j] + 1` | drop a char from `word1` |
+| Insert | `dp[i][j-1] + 1` | add a char to match `word2` |
+
+Take the minimum of the three.
+
+## Base cases are the punchline
+
+```
+dp[0][j] = j    # insert all j characters
+dp[i][0] = i    # delete all i characters
+```
+
+These are **not** zeros — they are real costs.
+
+:::warning
+Getting the base cases wrong is where most edit-distance bugs live. An empty
+string requires *every* character of the other string to be inserted or deleted,
+so the first row and first column are the running indices, not zeroes.
+:::
+
+:::tip
+If you can solve edit distance, you can solve most two-string DP. The skill is
+naming the three operations and realising each one maps to a neighbouring cell of
+the table.
+:::

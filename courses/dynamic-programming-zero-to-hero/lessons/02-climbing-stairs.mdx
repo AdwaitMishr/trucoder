@@ -1,0 +1,104 @@
+---
+id: climbing-stairs
+title: "Climbing Stairs"
+difficulty: beginner
+order: 2
+tags: [recurrence, tabulation]
+task: "You are climbing a staircase with n steps. Each move you can take 1 or 2 steps. Return the number of distinct ways to reach the top."
+languages: [java, javascript, python]
+timeLimitMs: 2000
+signature:
+  java: "static int solve(int n)"
+  javascript: "function solve(n)"
+  python: "def solve(n: int) -> int"
+starter:
+  java: |
+    static int solve(int n) {
+        // Distinct ways to climb n steps, taking 1 or 2 at a time.
+        return 0;
+    }
+  javascript: |
+    function solve(n) {
+      // Distinct ways to climb n steps, taking 1 or 2 at a time.
+      return 0;
+    }
+  python: |
+    def solve(n: int) -> int:
+        # Distinct ways to climb n steps, taking 1 or 2 at a time.
+        return 0
+tests:
+  public:
+    - name: "1 step"
+      args: [1]
+      expected: 1
+    - name: "2 steps"
+      args: [2]
+      expected: 2
+    - name: "3 steps"
+      args: [3]
+      expected: 3
+    - name: "5 steps"
+      args: [5]
+      expected: 8
+  private:
+    - name: "10 steps"
+      args: [10]
+      expected: 89
+    - name: "20 steps"
+      args: [20]
+      expected: 10946
+    - name: "45 steps"
+      args: [45]
+      expected: 1836311903
+solution: |
+  def solve(n: int) -> int:
+      if n <= 1:
+          return 1
+      a, b = 1, 1
+      for _ in range(2, n + 1):
+          a, b = b, a + b
+      return b
+hints:
+  - "The last step to reach step i comes from either i-1 or i-2."
+  - "Define dp[i] = ways to reach step i. Express dp[i] in terms of smaller indexes."
+  - "Look at the outputs: 1, 1, 2, 3, 5, 8, ... — that is Fibonacci, shifted by one."
+  - "Keep only the last two values to save space."
+---
+
+This is Fibonacci wearing a costume. If you can express the answer as "previous
+answers combined", you have found the DP recurrence.
+
+## Understand the question
+
+To reach step `i`, your last move was either **1 step** (from step `i-1`) or
+**2 steps** (from step `i-2`). So the number of ways to reach `i` is exactly the
+number of ways to reach `i-1` **plus** the number of ways to reach `i-2`.
+
+## Write the recurrence
+
+Let `dp[i]` = number of ways to reach step `i`. Then:
+
+```
+dp[i] = dp[i-1] + dp[i-2]
+```
+
+Base cases: `dp[0] = 1` (one way to stand on the ground) and `dp[1] = 1`. This
+is the same recurrence as Fibonacci, shifted by one index.
+
+## Why it works (optimal substructure)
+
+The answer for a big problem is built from the answers of smaller problems, and
+those smaller answers do not change regardless of how the big one is assembled.
+That is *optimal substructure*, and it is why DP applies here.
+
+:::tip
+Look at the outputs for small inputs: `1, 1, 2, 3, 5, 8, ...`. Recognise that
+pattern? It is Fibonacci, shifted. You can reuse the exact sliding-two-values
+loop from the previous lesson.
+:::
+
+## Make it fast
+
+A naive recursion recomputes the same subproblems. Either memoize the recursion
+or fill a table from the bottom up. The bottom-up loop only needs the previous
+two values — keep `a` and `b` and slide them forward.

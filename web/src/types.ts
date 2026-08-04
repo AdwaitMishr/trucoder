@@ -1,0 +1,84 @@
+export type Lang = "java" | "javascript" | "python";
+export type Difficulty = "beginner" | "easy" | "medium" | "hard";
+
+export interface CourseSummary {
+  id: string;
+  title: string;
+  description: string;
+  difficultyLevels: string[];
+  lessonCount: number;
+  solved: number;
+  body: string;
+}
+
+export interface LessonMeta {
+  id: string;
+  title: string;
+  difficulty: Difficulty;
+  order: number;
+  tags: string[];
+  solved: boolean;
+  attemptCount: number;
+}
+
+export interface CourseDetail {
+  id: string;
+  title: string;
+  description: string;
+  difficultyLevels: string[];
+  body: string;
+  lessons: LessonMeta[];
+}
+
+export interface PublicTestCase {
+  name: string;
+  args: unknown[];
+  expected: string;
+}
+
+export interface Lesson {
+  id: string;
+  courseId: string;
+  title: string;
+  difficulty: Difficulty;
+  order: number;
+  tags: string[];
+  task: string;
+  languages: Lang[];
+  signature: Partial<Record<Lang, string>>;
+  starterCode: Partial<Record<Lang, string>>;
+  publicTests: PublicTestCase[];
+  timeLimitMs: number;
+  body: string;
+  hints: string[];
+  progress: { solved: boolean; attemptCount: number };
+  lastCode: string | null;
+  lastLanguage: Lang | null;
+}
+
+export interface TestResult {
+  name: string;
+  passed: boolean;
+  expected?: string;
+  actual?: string;
+  error?: string;
+}
+
+export interface RunResult {
+  publicTests: TestResult[];
+  compileError?: string;
+}
+
+export interface SubmitResult {
+  verdict: "accepted" | "wrong" | "error";
+  publicTests: TestResult[];
+  privatePassed: number;
+  privateTotal: number;
+  compileError?: string;
+  error?: string;
+}
+
+export interface User {
+  id: number;
+  username: string;
+}

@@ -1,0 +1,101 @@
+---
+id: 0-1-knapsack
+title: "0/1 Knapsack"
+difficulty: medium
+order: 6
+tags: [two-dimensional-state, 0/1-knapsack]
+task: "You have items with weights and values, one copy of each. A knapsack holds up to capacity total weight. Return the maximum total value you can carry."
+languages: [java, javascript, python]
+timeLimitMs: 2000
+signature:
+  java: "static int solve(int[] weights, int[] values, int capacity)"
+  javascript: "function solve(weights, values, capacity)"
+  python: "def solve(weights: list[int], values: list[int], capacity: int) -> int"
+starter:
+  java: |
+    static int solve(int[] weights, int[] values, int capacity) {
+        // Max value you can carry with total weight <= capacity.
+        return 0;
+    }
+  javascript: |
+    function solve(weights, values, capacity) {
+      // Max value you can carry with total weight <= capacity.
+      return 0;
+    }
+  python: |
+    def solve(weights: list[int], values: list[int], capacity: int) -> int:
+        # Max value you can carry with total weight <= capacity.
+        return 0
+tests:
+  public:
+    - name: "w=[1,3,4,5] v=[1,4,5,7] cap=7"
+      args: [[1, 3, 4, 5], [1, 4, 5, 7], 7]
+      expected: 9
+    - name: "w=[2,3] v=[3,4] cap=5"
+      args: [[2, 3], [3, 4], 5]
+      expected: 7
+  private:
+    - name: "w=[1,2,3] v=[6,10,12] cap=5"
+      args: [[1, 2, 3], [6, 10, 12], 5]
+      expected: 22
+    - name: "w=[2,3,4,5] v=[3,4,5,6] cap=5"
+      args: [[2, 3, 4, 5], [3, 4, 5, 6], 5]
+      expected: 7
+    - name: "w=[1,2,3,8,7,4] v=[20,5,10,40,15,25] cap=10"
+      args: [[1, 2, 3, 8, 7, 4], [20, 5, 10, 40, 15, 25], 10]
+      expected: 60
+solution: |
+  def solve(weights: list[int], values: list[int], capacity: int) -> int:
+      dp = [0] * (capacity + 1)
+      for i in range(len(weights)):
+          for w in range(capacity, weights[i] - 1, -1):
+              dp[w] = max(dp[w], dp[w - weights[i]] + values[i])
+      return dp[capacity]
+hints:
+  - "You need two dimensions: item index and remaining capacity."
+  - "At each item, decide take-or-skip, then take the max."
+  - "dp[i][w] = max(skip, take) where take requires weight[i] <= w."
+  - "For the 1D optimization, loop capacity downward to avoid reusing the item."
+---
+
+The first problem where one number is not enough to describe the state. You need
+to know *which items are used* and *how much capacity remains*. This introduces
+the **two-dimensional DP table** — the jump that unlocks the hardest DP problems.
+
+## Why one index is not enough
+
+If you only track capacity, you cannot know which items are already used. So the
+state must be a pair: `(item index, remaining capacity)`. The table is
+`dp[i][w]` = max value using the first `i` items with at most `w` weight.
+
+## The choice: take or skip item i
+
+For each item `i` and capacity `w`, you either:
+
+- **Skip item `i`** — keep `dp[i-1][w]`.
+- **Take it** (if it fits) — `dp[i-1][w - weights[i]] + values[i]`.
+
+Take the better option. This is the "0/1" — each item is used at most once.
+
+```
+dp[i][w] = max(dp[i-1][w], dp[i-1][w - weights[i]] + values[i])   if weights[i] <= w
+dp[i][w] = dp[i-1][w]                                             otherwise
+```
+
+## The space optimization (the classic trick)
+
+Row `i` only depends on row `i-1`. So you can use a single 1D array and iterate
+capacity **backwards** (`w` from high to low).
+
+:::warning
+The backward direction is not optional. If you loop capacity forward, you reuse
+the same item multiple times — that is *unbounded* knapsack. Going backward means
+`dp[w - weights[i]]` still holds the value from the *previous* item's row, which
+is exactly what 0/1 requires.
+:::
+
+:::tip
+"Two dimensions: item and capacity" is the template for a whole family of
+problems — subset sum, partition equal subset sum, target sum. Learn the shape
+once and you can recognize it everywhere.
+:::

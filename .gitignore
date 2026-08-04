@@ -1,0 +1,19 @@
+# ---- Secrets & local config ----
+.env
+.env.*
+!.env.example
+
+# ---- Runtime data: SQLite DB (user hashes + progress) ----
+data/
+
+# ---- Dependencies ----
+node_modules/
+
+# ---- Build output ----
+server/dist/
+web/dist/
+
+# ---- Logs & OS junk ----
+*.log
+.DS_Store
+Thumbs.db

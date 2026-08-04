@@ -1,0 +1,111 @@
+---
+id: fibonacci
+title: "Fibonacci — the seed of Dynamic Programming"
+difficulty: beginner
+order: 1
+tags: [recursion, memoization, tabulation]
+task: "Return the n-th Fibonacci number, where F(0) = 0, F(1) = 1, and F(n) = F(n-1) + F(n-2)."
+languages: [java, javascript, python]
+timeLimitMs: 2000
+signature:
+  java: "static int solve(int n)"
+  javascript: "function solve(n)"
+  python: "def solve(n: int) -> int"
+starter:
+  java: |
+    static int solve(int n) {
+        // F(0) = 0, F(1) = 1, F(n) = F(n-1) + F(n-2)
+        return 0;
+    }
+  javascript: |
+    function solve(n) {
+      // F(0) = 0, F(1) = 1, F(n) = F(n-1) + F(n-2)
+      return 0;
+    }
+  python: |
+    def solve(n: int) -> int:
+        # F(0) = 0, F(1) = 1, F(n) = F(n-1) + F(n-2)
+        return 0
+tests:
+  public:
+    - name: "fib(0)"
+      args: [0]
+      expected: 0
+    - name: "fib(1)"
+      args: [1]
+      expected: 1
+    - name: "fib(10)"
+      args: [10]
+      expected: 55
+  private:
+    - name: "fib(20)"
+      args: [20]
+      expected: 6765
+    - name: "fib(40)"
+      args: [40]
+      expected: 102334155
+    - name: "fib(45)"
+      args: [45]
+      expected: 1134903170
+solution: |
+  def solve(n: int) -> int:
+      if n <= 1:
+          return n
+      a, b = 0, 1
+      for _ in range(2, n + 1):
+          a, b = b, a + b
+      return b
+hints:
+  - "Start from the definition: write the naive recursive function first. Get it correct, then add caching."
+  - "The cache key is n. Before recursing, check if n is already stored."
+  - "Bottom-up: initialize a list of length n+1, set index 0 and 1, then loop from 2 to n."
+  - "You only ever need the last two values — track two variables, not a full list."
+---
+
+Fibonacci is the simplest problem that shows the two ideas every DP problem is
+built on: **overlapping subproblems** and **optimal substructure**. Master this
+and you have the vocabulary for everything that follows.
+
+## The naive recursion
+
+The definition is itself a recursion: `F(n) = F(n-1) + F(n-2)`. Write it exactly
+as written and it works — but it is *slow*. Try tracing `fib(5)` on paper and
+count how many times you compute `fib(2)`.
+
+:::example
+`fib(5)` needs `fib(4)` and `fib(3)`. `fib(4)` needs `fib(3)` and `fib(2)`.
+`fib(3)` needs `fib(2)` and `fib(1)`. The same tiny subproblems repeat over and
+over. By `fib(10)`, you are computing `fib(2)` dozens of times.
+:::
+
+The runtime explodes to **O(2^n)**. That is the problem DP solves.
+
+## Overlapping subproblems
+
+`fib(2)` appears many times inside `fib(10)`. You are redoing work you already
+did. The insight of DP: **compute each subproblem once, remember it, reuse it.**
+That single change turns an exponential problem into a linear one.
+
+## Memoization (top-down)
+
+Keep the recursion, add a cache. Before computing `fib(n)`, check the cache. If
+it is there, return it. If not, compute it and store it. This is called
+*memoization* — O(n) time, O(n) space. In Java, a `HashMap<Integer, Long>` works
+well.
+
+## Tabulation (bottom-up)
+
+The other direction: compute the small cases first and build up. Start with
+`F(0)` and `F(1)`, then fill `F(2)`, `F(3)`, ... in order. No recursion, no
+stack overflow.
+
+:::tip
+You only ever need the last two values. Instead of a full table, keep two
+variables (`a`, `b`) and slide them forward. That shrinks space to O(1).
+:::
+
+## Which style should I use?
+
+For learning, try memoization first — it matches how you think about a problem
+recursively. Then rewrite the same problem bottom-up. Both are valid, and
+interviewers often expect you to be able to do both.
