@@ -4,6 +4,7 @@ import { api } from "./api";
 import type { User } from "./types";
 import Login from "./components/Login";
 import Nav from "./components/Nav";
+import CourseIndex from "./components/CourseIndex";
 import CourseDashboard from "./components/CourseDashboard";
 import LessonView from "./components/LessonView";
 
@@ -31,6 +32,10 @@ export default function App() {
         />
         <Route
           path="/"
+          element={user ? <CourseIndex /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/course/:courseId"
           element={user ? <CourseDashboard /> : <Navigate to="/login" replace />}
         />
         <Route

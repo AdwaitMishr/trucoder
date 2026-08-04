@@ -1,17 +1,18 @@
+import { PiCheck, PiX, PiWarning } from "react-icons/pi";
 import type { RunResult, SubmitResult, TestResult } from "../types";
 
 function TestRow({ t }: { t: TestResult }) {
   if (t.passed) {
     return (
       <div className="test-row pass">
-        <span className="dot">✓</span>
+        <span className="dot"><PiCheck size={13} /></span>
         <span>{t.name}</span>
       </div>
     );
   }
   return (
     <div className="test-row fail">
-      <span className="dot">✗</span>
+      <span className="dot"><PiX size={13} /></span>
       <div className="test-body">
         <div>{t.name}</div>
         {t.error && <pre className="test-error">{t.error}</pre>}
@@ -44,6 +45,7 @@ export default function ResultPanel({
     return (
       <div className="results">
         <div className={`verdict ${accepted ? "ok" : "err"}`}>
+          {accepted ? <PiCheck size={15} /> : <PiWarning size={15} />}
           {label}
           <span className="verdict-detail">
             {submit.privatePassed}/{submit.privateTotal} hidden
@@ -64,6 +66,7 @@ export default function ResultPanel({
   return (
     <div className="results">
       <div className={`verdict ${allPass ? "ok" : ""}`}>
+        {allPass ? <PiCheck size={15} /> : <PiWarning size={15} />}
         {run.compileError ? "compile error" : allPass ? "public tests pass" : "public test results"}
       </div>
       {run.compileError && <pre className="block-error">{run.compileError}</pre>}

@@ -3,11 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
     <title>TruCoder</title>
+    <script>
+      // Apply the saved theme before React loads to avoid a flash of the wrong palette.
+      (function () {
+        try {
+          var t = localStorage.getItem("tc:theme");
+          if (t) document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
     <link
       rel="icon"
-      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%23323437'/><text x='32' y='43' font-family='monospace' font-size='28' font-weight='bold' fill='%23e2b714' text-anchor='middle'>&gt;_</text></svg>"
     />
   </head>
   <body>

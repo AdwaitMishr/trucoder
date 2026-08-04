@@ -1,4 +1,5 @@
 import Editor from "@monaco-editor/react";
+import { useTheme } from "../theme";
 import type { Lang } from "../types";
 
 const MONACO_LANG: Record<Lang, string> = {
@@ -16,13 +17,16 @@ export default function CodeEditor({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { theme } = useTheme();
+  const monacoTheme = theme.kind === "dark" ? "vs-dark" : "vs";
+
   return (
     <Editor
       height="100%"
       language={MONACO_LANG[language]}
       value={value}
       onChange={(v) => onChange(v ?? "")}
-      theme="light"
+      theme={monacoTheme}
       options={{
         fontSize: 14,
         minimap: { enabled: false },
@@ -30,8 +34,8 @@ export default function CodeEditor({
         automaticLayout: true,
         tabSize: 4,
         padding: { top: 14, bottom: 14 },
-        fontFamily:
-          'ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace',
+        cursorBlinking: "smooth",
+        fontFamily: "ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace",
       }}
     />
   );

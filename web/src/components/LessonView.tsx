@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import {
+  PiArrowLeft,
+  PiCheck,
+  PiPlay,
+  PiPaperPlaneRight,
+} from "react-icons/pi";
 import { api, ApiError } from "../api";
 import type { Lang, Lesson, RunResult, SubmitResult } from "../types";
 import CodeEditor from "./CodeEditor";
@@ -125,11 +131,15 @@ export default function LessonView() {
   return (
     <div className="lesson-page">
       <div className="lesson-head">
-        <Link to="/" className="back">
-          ← course
+        <Link to={`/course/${courseId}`} className="back">
+          <PiArrowLeft size={14} /> course
         </Link>
         <span className="lesson-head-title">{p.title}</span>
-        {p.progress.solved && <span className="solved-badge">solved</span>}
+        {p.progress.solved && (
+          <span className="solved-badge">
+            <PiCheck size={11} /> solved
+          </span>
+        )}
       </div>
 
       <div className="split">
@@ -160,7 +170,7 @@ export default function LessonView() {
               )}
             </div>
             {hintsShown === 0 ? (
-              <p className="muted small">stuck? reveal a nudge toward the recurrence.</p>
+              <p className="muted small">stuck? reveal a nudge toward the solution.</p>
             ) : (
               <ul className="hint-list">
                 {p.hints.slice(0, hintsShown).map((h, i) => (
@@ -201,10 +211,10 @@ export default function LessonView() {
 
           <div className="actions">
             <button className="btn run" onClick={doRun} disabled={busy !== null}>
-              {busy === "run" ? "running…" : "▶ run"}
+              <PiPlay size={14} /> {busy === "run" ? "running…" : "run"}
             </button>
             <button className="btn submit" onClick={doSubmit} disabled={busy !== null}>
-              {busy === "submit" ? "submitting…" : "submit"}
+              <PiPaperPlaneRight size={14} /> {busy === "submit" ? "submitting…" : "submit"}
             </button>
             <span className="muted small">run = visible tests · submit = hidden too</span>
           </div>

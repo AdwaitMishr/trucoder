@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PiTerminal } from "react-icons/pi";
 import { api, ApiError } from "../api";
 import type { User } from "../types";
 
@@ -25,7 +26,12 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
-        <div className="login-brand">trucoder</div>
+        <div className="login-brand">
+          <span className="brand-mark">
+            <PiTerminal size={18} />
+          </span>
+          trucoder
+        </div>
         <p className="login-sub">a calm place to learn, properly</p>
         <label>
           <span>username</span>

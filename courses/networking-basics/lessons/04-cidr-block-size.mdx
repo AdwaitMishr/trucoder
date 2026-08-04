@@ -1,0 +1,90 @@
+---
+id: cidr-block-size
+title: "CIDR Block Size"
+difficulty: easy
+order: 4
+tags: [cidr, powers-of-two]
+task: "Given a CIDR prefix length n (0 to 32), return the total number of IP addresses in the block: 2^(32 - n)."
+languages: [java, javascript, python]
+timeLimitMs: 2000
+signature:
+  java: "static long solve(int n)"
+  javascript: "function solve(n)"
+  python: "def solve(n: int) -> int"
+starter:
+  java: |
+    static long solve(int n) {
+        // Return the number of addresses in a /n block (2^(32-n)). Use long.
+        return 0L;
+    }
+  javascript: |
+    function solve(n) {
+        // Return the number of addresses in a /n block (2^(32-n)).
+        return 0;
+    }
+  python: |
+    def solve(n: int) -> int:
+        # Return the number of addresses in a /n block (2^(32-n)).
+        return 0
+tests:
+  public:
+    - name: "/24"
+      args: [24]
+      expected: 256
+    - name: "/8"
+      args: [8]
+      expected: 16777216
+    - name: "/0"
+      args: [0]
+      expected: 4294967296
+    - name: "/32"
+      args: [32]
+      expected: 1
+  private:
+    - name: "/16"
+      args: [16]
+      expected: 65536
+    - name: "/20"
+      args: [20]
+      expected: 4096
+    - name: "/1"
+      args: [1]
+      expected: 2147483648
+    - name: "/30"
+      args: [30]
+      expected: 4
+solution: |
+  def solve(n: int) -> int:
+      return 1 << (32 - n)
+hints:
+  - "Each host bit doubles the number of addresses."
+  - "With 32 − n host bits, the block holds 2^(32 − n) addresses."
+  - "Write it as a bit shift: 1 << (32 − n)."
+---
+
+A `/24` block isn't 24 addresses — it's `2^(32 − 24) = 2^8 = 256`. Each host
+bit doubles the size of the block. This is pure powers of two.
+
+## The rule
+
+`/n` leaves `32 − n` bits for hosts. The block has:
+
+```
+2^(32 − n)   addresses
+```
+
+| prefix | host bits | addresses |
+|--------|-----------|-----------|
+| /24    | 8         | 256       |
+| /16    | 16        | 65,536    |
+| /0     | 32        | 4,294,967,296 (the whole IPv4 space) |
+
+:::warning
+`/0` gives `2^32 = 4294967296`, which **overflows a Java `int`**. Return a
+`long` in Java.
+:::
+
+## In code
+
+`2^(32 − n)` is a single bit shift: `1 << (32 − n)`. That's the whole problem.
+No loop needed.

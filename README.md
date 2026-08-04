@@ -19,8 +19,11 @@ generic enough for any topic.
   an isolated sandbox container.
 - **Auth** is real: scrypt-hashed passwords, opaque session tokens in httpOnly
   cookies, per-user progress in SQLite.
-- **UI** is a calm, minimal light theme (monkeytype-flavoured) built with React +
-  Monaco.
+- **UI** is a calm, minimal, fully themeable light/dark interface (monkeytype
+  style) built with React + Monaco. Themes are CSS-variable palettes switched
+  via `data-theme` and remembered in localStorage; six are bundled (warm, dark,
+  dracula, forest, ocean, olive). The home page lists every course under
+  `courses/`, each with live progress.
 
 ## Layout
 

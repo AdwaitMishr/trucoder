@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { PiArrowLeft, PiCheck } from "react-icons/pi";
 import { api } from "../api";
-import type { CourseDetail, CourseSummary, Difficulty } from "../types";
+import type { CourseDetail, Difficulty } from "../types";
 import Markdown from "./Markdown";
 
 const DIFF_LABEL: Record<Difficulty, string> = {
@@ -12,63 +13,24 @@ const DIFF_LABEL: Record<Difficulty, string> = {
 };
 
 export default function CourseDashboard() {
-  const [courses, setCourses] = useState<CourseSummary[] | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.courses().then((r) => {
-      setCourses(r.courses);
-      if (r.courses.length === 1) setSelectedId(r.courses[0].id);
-    });
-  }, []);
-
-  if (!courses) return <div className="boot">trucoder</div>;
-  if (courses.length === 0) {
-    return (
-      <div className="page">
-        <div className="empty">
-          <div className="empty-title">no courses yet</div>
-          <p className="muted">
-            Add a course under <code>courses/&lt;id&gt;/</code> — see{" "}
-            <code>courses/AGENTS.md</code>. TruCoder picks it up automatically.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="page">
-      {courses.length > 1 && !selectedId && (
-        <div className="course-index">
-          {courses.map((c) => (
-            <button key={c.id} className="course-card" onClick={() => setSelectedId(c.id)}>
-              <div className="course-card-title">{c.title}</div>
-              <div className="muted">{c.description}</div>
-              <div className="course-card-meta">
-                {c.solved}/{c.lessonCount} done
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-      {selectedId && <CourseDetailView id={selectedId} />}
-    </div>
-  );
-}
-
-function CourseDetailView({ id }: { id: string }) {
+  const { courseId = "" } = useParams();
   const [course, setCourse] = useState<CourseDetail | null>(null);
+
   useEffect(() => {
-    api.course(id).then(setCourse);
-  }, [id]);
+    api.course(courseId).then(setCourse);
+  }, [courseId]);
 
   if (!course) return <div className="boot">trucoder</div>;
 
-  const pct = course.lessons.length ? (course.lessons.filter((l) => l.solved).length / course.lessons.length) * 100 : 0;
+  const done = course.lessons.filter((l) => l.solved).length;
+  const pct = course.lessons.length ? Math.round((done / course.lessons.length) * 100) : 0;
 
   return (
-    <main className="course">
+    <div className="page">
+      <Link to="/" className="back">
+        <PiArrowLeft size={14} /> all courses
+      </Link>
+
       <header className="course-head">
         <h1>{course.title}</h1>
         <p className="muted">{course.description}</p>
@@ -76,8 +38,10 @@ function CourseDetailView({ id }: { id: string }) {
 
       <div className="progress">
         <div className="progress-label">
-          <span>{course.lessons.filter((l) => l.solved).length} of {course.lessons.length} lessons</span>
-          <span className="muted">{Math.round(pct)}%</span>
+          <span>
+            {done} of {course.lessons.length} lessons
+          </span>
+          <span className="muted">{pct}%</span>
         </div>
         <div className="progress-track">
           <div className="progress-fill" style={{ width: `${pct}%` }} />
@@ -93,12 +57,9 @@ function CourseDetailView({ id }: { id: string }) {
       <ol className="roadmap">
         {course.lessons.map((l) => (
           <li key={l.id}>
-            <Link
-              to={`/course/${course.id}/lessons/${l.id}`}
-              className="lesson-row"
-            >
+            <Link to={`/course/${course.id}/lessons/${l.id}`} className="lesson-row">
               <span className={`lesson-state ${l.solved ? "done" : ""}`}>
-                {l.solved ? "✓" : String(l.order).padStart(2, "0")}
+                {l.solved ? <PiCheck size={16} /> : String(l.order).padStart(2, "0")}
               </span>
               <span className="lesson-info">
                 <span className="lesson-title">{l.title}</span>
@@ -117,6 +78,6 @@ function CourseDetailView({ id }: { id: string }) {
           </li>
         ))}
       </ol>
-    </main>
+    </div>
   );
 }

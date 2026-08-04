@@ -1,0 +1,98 @@
+---
+id: ipv4-to-int
+title: "IPv4 to Integer"
+difficulty: beginner
+order: 2
+tags: [ipv4, big-endian, bits]
+task: "Convert a dotted-quad IPv4 address into its 32-bit unsigned integer value (big-endian): (a << 24) | (b << 16) | (c << 8) | d."
+languages: [java, javascript, python]
+timeLimitMs: 2000
+signature:
+  java: "static long solve(String ip)"
+  javascript: "function solve(ip)"
+  python: "def solve(ip: str) -> int"
+starter:
+  java: |
+    static long solve(String ip) {
+        // Return the IPv4 address as a 32-bit unsigned integer (use long: values exceed int).
+        return 0L;
+    }
+  javascript: |
+    function solve(ip) {
+        // Return the IPv4 address as a 32-bit unsigned integer.
+        return 0;
+    }
+  python: |
+    def solve(ip: str) -> int:
+        # Return the IPv4 address as a 32-bit unsigned integer.
+        return 0
+tests:
+  public:
+    - name: "zero"
+      args: ["0.0.0.0"]
+      expected: 0
+    - name: "first host"
+      args: ["0.0.0.1"]
+      expected: 1
+    - name: "all ones"
+      args: ["255.255.255.255"]
+      expected: 4294967295
+    - name: "private range"
+      args: ["192.168.1.1"]
+      expected: 3232235777
+  private:
+    - name: "loopback-ish"
+      args: ["10.0.0.1"]
+      expected: 167772161
+    - name: "link-local range"
+      args: ["172.16.0.1"]
+      expected: 2886729729
+    - name: "ascending"
+      args: ["1.2.3.4"]
+      expected: 16909060
+    - name: "dns"
+      args: ["8.8.8.8"]
+      expected: 134744072
+solution: |
+  def solve(ip: str) -> int:
+      a, b, c, d = map(int, ip.split("."))
+      return (a << 24) | (b << 16) | (c << 8) | d
+hints:
+  - "An IPv4 address is one 32-bit number, sliced into four 8-bit chunks."
+  - "Write it as a * a where each octet sits in its own byte: a in byte 3, b in byte 2, c in byte 1, d in byte 0."
+  - "Shift each octet left by its byte position, then OR them together: (a<<24)|(b<<16)|(c<<8)|d."
+---
+
+Every IP address you've ever seen is secretly one 32-bit integer. This lesson
+makes that visible.
+
+## One number, four bytes
+
+`192.168.1.1` in binary is:
+
+```
+11000000 . 10101000 . 00000001 . 00000001
+```
+
+Push those four 8-bit chunks together and you get a single 32-bit number:
+
+```
+11000000101010000000000100000001  =  3232235777
+```
+
+This is **big-endian**: the leftmost octet is the most significant byte.
+
+:::warning
+The result can be up to `2^32 − 1 = 4294967295`, which is **larger than a Java
+`int`** (max 2147483647). Return a `long` in Java, or the high bits wrap around
+to a negative number.
+:::
+
+## The formula
+
+Give each octet a name — `a.b.c.d` — and shift each into its own byte:
+
+`(a << 24) | (b << 16) | (c << 8) | d`
+
+`<< 24` puts `a` at the top byte, `<< 16` puts `b` next, and so on. The `|`
+stitches them together.
