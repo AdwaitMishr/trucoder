@@ -179,7 +179,8 @@ export default function LessonView() {
         className="split-group"
       >
         <Panel defaultSize={zen ? 38 : 42} minSize={zen ? 18 : 28} className="lesson-content">
-          <div className="task">
+          <div className="lesson-scroll">
+            <div className="task">
             <span className="task-label">task</span>
             <p>{p.task}</p>
             <div className="sigs">
@@ -220,6 +221,7 @@ export default function LessonView() {
                 )}
               </ul>
             )}
+          </div>
           </div>
         </Panel>
 

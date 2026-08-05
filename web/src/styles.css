@@ -280,10 +280,15 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 .resize-handle.handle-v::after { width: 44px; height: 2px; }
 
 .lesson-content {
-  overflow-y: auto; padding: 6px 8px 60px;
+  /* Panel container. react-resizable-panels forces overflow:hidden inline here,
+     so scrolling happens in the inner .lesson-scroll. */
+  display: flex; flex-direction: column; min-height: 0;
+}
+.lesson-scroll {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 6px 8px 60px;
   /* borderless — content sits directly on the page for a calm, minimal look */
 }
-.lesson-content > * { max-width: 640px; }
+.lesson-scroll > * { max-width: 640px; }
 
 .task {
   background: var(--surface); border-radius: 6px;
