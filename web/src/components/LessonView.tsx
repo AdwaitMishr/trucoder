@@ -154,7 +154,7 @@ export default function LessonView() {
         autoSaveId="trucoder-lesson-split"
         className="split-group"
       >
-        <Panel defaultSize={50} minSize={28} className="lesson-content">
+        <Panel defaultSize={42} minSize={28} className="lesson-content">
           <div className="task">
             <span className="task-label">task</span>
             <p>{p.task}</p>
@@ -201,7 +201,7 @@ export default function LessonView() {
 
         <PanelResizeHandle className="resize-handle" />
 
-        <Panel defaultSize={50} minSize={32} className="workbench">
+        <Panel defaultSize={58} minSize={42} className="workbench">
           <div className="toolbar">
             {LANGS.filter((l) => p.starterCode[l.id]).map((l) => (
               <button

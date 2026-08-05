@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import Editor from "@monaco-editor/react";
 import { useTheme } from "../theme";
+import { THEMES, type ThemeDef } from "../themes";
 import type { Lang } from "../types";
 
 const MONACO_LANG: Record<Lang, string> = {
@@ -8,6 +9,44 @@ const MONACO_LANG: Record<Lang, string> = {
   javascript: "javascript",
   python: "python",
 };
+
+function hexToRgba(hex: string, a: number): string {
+  const n = hex.replace("#", "");
+  const r = parseInt(n.slice(0, 2), 16);
+  const g = parseInt(n.slice(2, 4), 16);
+  const b = parseInt(n.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+/** Build a Monaco editor theme that mirrors a TruCoder theme: the chrome
+ *  (background, foreground, caret, selection, line numbers, gutter, widgets)
+ *  is tinted from the theme palette while token colors are inherited from the
+ *  matching light/dark base so syntax highlighting stays crisp. */
+function defineEditorTheme(monaco: any, t: ThemeDef) {
+  const c = t.colors;
+  monaco.editor.defineTheme(`trucoder-${t.id}`, {
+    base: t.kind === "dark" ? "vs-dark" : "vs",
+    inherit: true,
+    rules: [],
+    colors: {
+      "editor.background": c.bg,
+      "editor.foreground": c.ink,
+      "editorCursor.foreground": c.caret,
+      "editor.selectionBackground": hexToRgba(c.accent, 0.28),
+      "editor.inactiveSelectionBackground": hexToRgba(c.accent, 0.1),
+      "editor.lineHighlightBackground": c.surface2,
+      "editorLineNumber.foreground": c.muted,
+      "editorLineNumber.activeForeground": c.ink,
+      "editorGutter.background": c.bg,
+      "editorWidget.background": c.surface,
+      "editorWidget.border": c.hairline,
+      "editorIndentGuide.background1": c.hairline,
+      "editorIndentGuide.activeBackground1": hexToRgba(c.muted, 0.5),
+      "scrollbarSlider.background": hexToRgba(c.muted, 0.3),
+      "scrollbarSlider.hoverBackground": hexToRgba(c.muted, 0.45),
+    },
+  });
+}
 
 /** Turn off Monaco's JS/TS diagnostics. The sandbox (not Monaco) is the judge,
  *  and the harness stubs are fragments (and start with unused parameters), so
@@ -51,11 +90,9 @@ export default function CodeEditor({
   onChange: (v: string) => void;
 }) {
   const { theme } = useTheme();
-  const monacoTheme = theme.kind === "dark" ? "vs-dark" : "vs";
 
   // When the language switches, Monaco's worker re-evaluates the model and can
-  // add diagnostics asynchronously — disable them and clear any that appear,
-  // including ones the worker emits a beat after the switch.
+  // add diagnostics asynchronously — disable them and clear any that appear.
   useEffect(() => {
     const monaco = (window as any).__tcMonaco;
     const ed = (window as any).__tcEditor;
@@ -68,9 +105,14 @@ export default function CodeEditor({
     return () => clearTimeout(t);
   }, [language]);
 
+  function beforeMount(monaco: any) {
+    (window as any).__tcMonaco = monaco;
+    THEMES.forEach((t) => defineEditorTheme(monaco, t));
+    disableDiagnostics(monaco);
+  }
+
   function handleMount(editor: any, monaco: any) {
     (window as any).__tcEditor = editor;
-    (window as any).__tcMonaco = monaco;
     disableDiagnostics(monaco);
     const model = editor.getModel?.();
     if (model) {
@@ -80,23 +122,26 @@ export default function CodeEditor({
   }
 
   return (
-    <Editor
-      height="100%"
-      language={MONACO_LANG[language]}
-      value={value}
-      onChange={(v) => onChange(v ?? "")}
-      theme={monacoTheme}
-      onMount={handleMount}
-      options={{
-        fontSize: 14,
-        minimap: { enabled: false },
-        scrollBeyondLastLine: false,
-        automaticLayout: true,
-        tabSize: 4,
-        padding: { top: 14, bottom: 14 },
-        cursorBlinking: "smooth",
-        fontFamily: "ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace",
-      }}
-    />
+    <div className="editor-surface">
+      <Editor
+        height="100%"
+        language={MONACO_LANG[language]}
+        value={value}
+        onChange={(v) => onChange(v ?? "")}
+        theme={`trucoder-${theme.id}`}
+        beforeMount={beforeMount}
+        onMount={handleMount}
+        options={{
+          fontSize: 14,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+          automaticLayout: true,
+          tabSize: 4,
+          padding: { top: 14, bottom: 14 },
+          cursorBlinking: "smooth",
+          fontFamily: "'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+        }}
+      />
+    </div>
   );
 }

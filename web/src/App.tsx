@@ -4,7 +4,6 @@ import { api } from "./api";
 import type { User } from "./types";
 import Login from "./components/Login";
 import Nav from "./components/Nav";
-import Footer from "./components/Footer";
 import CourseIndex from "./components/CourseIndex";
 import CourseDashboard from "./components/CourseDashboard";
 import LessonView from "./components/LessonView";
@@ -50,7 +49,6 @@ export default function App() {
           />
         </Routes>
       </div>
-      {user && <Footer />}
     </div>
   );
 }
