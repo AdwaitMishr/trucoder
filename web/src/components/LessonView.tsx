@@ -155,6 +155,68 @@ export default function LessonView() {
     }
   }
 
+  async function markRead() {
+    setBusy("submit");
+    setError("");
+    try {
+      await api.markRead(courseId, lessonId);
+      setLesson((prev) =>
+        prev ? { ...prev, progress: { ...prev.progress, solved: true } } : prev
+      );
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "failed to mark as read");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // Content-only lesson (type: content) — no editor, no exercise. Just the
+  // lesson body, with a "mark as read" completion action.
+  if (!p.hasExercise) {
+    return (
+      <div className="lesson-page lesson-page-zen">
+        <div className="lesson-head">
+          <div className="lesson-head-top">
+            <Link to={`/course/${courseId}`} className="back">
+              <PiArrowLeft size={14} /> course
+            </Link>
+          </div>
+          <div className="lesson-head-title-row">
+            <h1 className="lesson-head-title">{p.title}</h1>
+            {p.progress.solved && (
+              <span className="solved-badge">
+                <PiCheck size={11} /> read
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="zen-body">
+          <div className="zen-content">
+            <div className="lesson-body">
+              <Markdown>{p.body}</Markdown>
+            </div>
+            <div className="read-actions">
+              {p.progress.solved ? (
+                <span className="read-done">
+                  <PiCheck size={14} /> completed
+                </span>
+              ) : (
+                <button
+                  className="btn submit"
+                  onClick={markRead}
+                  disabled={busy !== null}
+                >
+                  <PiCheck size={14} /> {busy === "submit" ? "marking…" : "mark as read"}
+                </button>
+              )}
+            </div>
+            {error && <div className="form-error">{error}</div>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const tabs = (
     <div className="editor-tabs">
       {LANGS.filter((l) => p.starterCode[l.id]).map((l) => (

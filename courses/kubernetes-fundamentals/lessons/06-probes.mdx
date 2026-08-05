@@ -1,0 +1,91 @@
+---
+id: probes
+title: "Probes"
+type: content
+difficulty: easy
+order: 6
+tags: [probes, readiness, liveness]
+---
+
+A container is running ≠ a container is useful. It might still be warming up,
+waiting on a database, or deadlocked. **Probes** are Kubernetes asking the
+container the health question, on a schedule.
+
+## Three questions, three probes
+
+| Probe | Question | Consequence of failure |
+|-------|----------|------------------------|
+| `startupProbe` | "have you finished starting?" | container is restarted |
+| `readinessProbe` | "can you serve traffic?" | pod is removed from Service endpoints (keeps running) |
+| `livenessProbe` | "are you still alive?" | container is killed and restarted |
+
+Readiness is the one you feel in traffic: a NotReady pod stops receiving
+requests but keeps running. Liveness is the one that fixes hangs: a stuck
+process eventually gets killed and replaced.
+
+## The knobs
+
+```yaml
+spec:
+  containers:
+    - name: web
+      image: nginx:1.27
+      readinessProbe:
+        httpGet:
+          path: /healthz
+          port: 8080
+        initialDelaySeconds: 5   # wait 5s before the first probe
+        periodSeconds: 10        # probe every 10s after that
+        failureThreshold: 3      # 3 consecutive failures -> NotReady
+```
+
+Three numbers to know:
+
+- `initialDelaySeconds` — grace period for startup.
+- `periodSeconds` — how often the probe runs.
+- `failureThreshold` — consecutive failures before the probe "fails" the pod.
+
+## The timeline
+
+With `initialDelaySeconds: 5, periodSeconds: 10, failureThreshold: 3`, and
+every probe failing:
+
+```
+t = 5    probe 1 (failure 1)
+t = 15   probe 2 (failure 2)
+t = 25   probe 3 (failure 3)  -> NotReady at t = 25
+```
+
+`initialDelay + period × (threshold − 1)`. The `− 1` is because the first probe
+*is* failure one — you only wait `threshold − 1` more periods after the delay.
+
+## The commands
+
+```bash
+# see probe status in the pod's conditions
+kubectl describe pod web
+
+# the pod's recent events, in order
+kubectl get events --sort-by=.lastTimestamp
+
+# did the service actually pick it up?
+kubectl get endpoints
+```
+
+`kubectl describe pod` shows `Conditions: Ready True/False` and any probe
+failures in the events. That is the fastest way to see *why* a pod is not
+serving.
+
+:::warning
+Do not make a liveness probe depend on something that is slow or flaky (a
+database, a cache). One slow dependency = liveness failures = restarts = a
+crash loop that looks like an outage. Liveness should test "is the process
+healthy", not "is the world healthy".
+:::
+
+:::tip
+Probe with the right tool: `httpGet` for HTTP services, `tcpSocket` for raw
+TCP (databases, queues), `exec` for anything else. A `/healthz` endpoint that
+returns 200 is the industry default — and keep it cheap; it runs every few
+seconds on every pod.
+:::

@@ -1,126 +1,90 @@
 ---
 id: taints-and-tolerations
 title: "Taints & Tolerations"
+type: content
 difficulty: medium
 order: 8
 tags: [scheduling, taints, tolerations]
-task: "A toleration tolerates a taint when: the keys match (or the toleration key is \"*\"), AND the values match (or the toleration value is empty), AND the effects match (or the toleration effect is empty). Both are strings in key=value:effect form, where value or effect may be empty, e.g. \"gpu=true:NoSchedule\" or \"gpu=:NoSchedule\". Return true if the toleration tolerates the taint."
-languages: [java, javascript, python]
-timeLimitMs: 2000
-signature:
-  java: "static boolean solve(String taint, String toleration)"
-  javascript: "function solve(taint, toleration)"
-  python: "def solve(taint: str, toleration: str) -> bool"
-starter:
-  java: |
-    static boolean solve(String taint, String toleration) {
-        // Return true if the toleration tolerates the taint.
-        return false;
-    }
-  javascript: |
-    function solve(taint, toleration) {
-        // Return true if the toleration tolerates the taint.
-        return false;
-    }
-  python: |
-    def solve(taint: str, toleration: str) -> bool:
-        # Return true if the toleration tolerates the taint.
-        return False
-tests:
-  public:
-    - name: "exact match"
-      args: ["gpu=true:NoSchedule", "gpu=true:NoSchedule"]
-      expected: true
-    - name: "value wildcard"
-      args: ["gpu=true:NoSchedule", "gpu=:NoSchedule"]
-      expected: true
-    - name: "wrong effect"
-      args: ["gpu=true:NoSchedule", "gpu=true:NoExecute"]
-      expected: false
-    - name: "wrong value"
-      args: ["gpu=true:NoSchedule", "gpu=false:NoSchedule"]
-      expected: false
-  private:
-    - name: "effect wildcard"
-      args: ["gpu=true:NoSchedule", "gpu=true:"]
-      expected: true
-    - name: "key wildcard"
-      args: ["gpu=true:NoSchedule", "*=:NoSchedule"]
-      expected: true
-    - name: "unrelated key"
-      args: ["gpu=true:NoSchedule", "db=:NoSchedule"]
-      expected: false
-    - name: "prefer effect, wrong value"
-      args: ["spot=true:PreferNoSchedule", "spot=false:PreferNoSchedule"]
-      expected: false
-    - name: "fully tolerant"
-      args: ["spot=true:PreferNoSchedule", "spot=:"]
-      expected: true
-solution: |
-  def solve(taint: str, toleration: str) -> bool:
-      def parse(s: str):
-          keyval, effect = s.split(":")
-          key, _, value = keyval.partition("=")
-          return key, value, effect
-
-      tk, tv, te = parse(taint)
-      ok, ov, oe = parse(toleration)
-      return (ok == "*" or ok == tk) and (ov == "" or ov == tv) and (oe == "" or oe == te)
-hints:
-  - "Split each string into three parts: key, value, and effect."
-  - "A toleration matches when all three parts are compatible: key equal (or '*'), value equal (or empty), effect equal (or empty)."
-  - "An empty value or effect on the toleration means 'any'. Check each part independently."
 ---
 
-Taints are how a cluster says **"keep off"** to pods. A node with
-`gpu=true:NoSchedule` will not schedule ordinary pods onto itself. A pod that
-*needs* the GPU opts back in with a matching **toleration** — the explicit
-"yes, I accept this."
+Taints are how a node says **"keep off."** Tolerations are how a pod says
+"actually, I accept that." Together they control which pods can land on which
+nodes — the foundation of dedicated nodes, GPU pools, and spot instances.
 
-## The format
+## The command
 
-Both sides are `key=value:effect`:
+```bash
+# put a taint on a node: key=value:effect
+kubectl taint nodes node-1 gpu=true:NoSchedule
 
-- `key` — what the taint is about (`gpu`, `spot`, `db`).
-- `value` — the specific value (may be **empty** on a toleration: "any value
-  is fine").
-- `effect` — what the taint does: `NoSchedule` (don't schedule), `NoExecute`
-  (evict running pods), `PreferNoSchedule` (soft preference). May be **empty**
-  on a toleration: "any effect is fine".
+# remove it (trailing dash)
+kubectl taint nodes node-1 gpu=true:NoSchedule-
 
-## The matching rules
+# see the taints on a node
+kubectl describe node node-1 | grep Taints
+```
 
-A toleration tolerates a taint when **all three** parts line up:
+After that command, ordinary pods refuse to schedule onto `node-1` — and the
+kube-scheduler will not even try, unless a pod carries a matching toleration.
 
-| Part | Toleration matches if… |
-|------|------------------------|
-| key | equal to taint key, OR toleration key is `*` |
-| value | equal to taint value, OR toleration value is empty |
-| effect | equal to taint effect, OR toleration effect is empty |
+## The three effects
+
+| Effect | Behavior |
+|--------|----------|
+| `NoSchedule` | block *new* scheduling (existing pods stay) |
+| `NoExecute` | evict pods already running without a toleration |
+| `PreferNoSchedule` | soft preference — avoid if possible |
+
+`NoSchedule` is safe to add to a live node. `NoExecute` is not — it evicts
+pods immediately.
+
+## The toleration
+
+A pod opts in with a `toleration` that matches the taint on key, value, and
+effect:
+
+```yaml
+spec:
+  tolerations:
+    - key: gpu
+      operator: Exists    # any value is fine
+      effect: NoSchedule
+```
+
+Two operators:
+
+- `Equal` — tolerates only a specific value (`value: "true"`).
+- `Exists` — tolerates any value (no `value` field).
+
+Leaving `effect` out tolerates *any* effect. The matching rule, in one line:
+
+```
+key matches AND (value matches OR value is wildcarded) AND
+(effect matches OR effect is wildcarded)
+```
 
 :::example
 Taint `gpu=true:NoSchedule`:
 
 | Toleration | Tolerates? | Why |
 |------------|-----------|-----|
-| `gpu=true:NoSchedule` | yes | exact match |
-| `gpu=:NoSchedule` | yes | value empty = any value |
-| `gpu=true:` | yes | effect empty = any effect |
-| `*=:NoSchedule` | yes | key `*` = any key |
-| `gpu=false:NoSchedule` | no | value differs |
-| `gpu=true:NoExecute` | no | effect differs |
-| `db=:NoSchedule` | no | key differs |
+| `key: gpu, operator: Equal, value: "true", effect: NoSchedule` | yes | exact |
+| `key: gpu, operator: Exists, effect: NoSchedule` | yes | any value |
+| `key: gpu, operator: Equal, value: "true"` (no effect) | yes | any effect |
+| `key: gpu, operator: Equal, value: "false", effect: NoSchedule` | no | value differs |
+| `key: db, operator: Exists, effect: NoSchedule` | no | key differs |
 :::
 
 :::warning
-The three conditions are ANDed — a toleration that matches the key but not the
-effect does **not** tolerate the taint. It is not "any one match wins"; all
-three parts must be satisfied.
+Tolerations do **not** *select* nodes — they only *allow* scheduling onto
+tainted ones. A pod with a toleration is not forced onto that node; it just
+becomes eligible. If you want pods to land somewhere specific, use node
+affinity or `nodeSelector`.
 :::
 
 :::tip
-`NoExecute` is the sharp one: it evicts pods that are already running without
-the toleration. `NoSchedule` only blocks *new* scheduling — which is why
-`NoSchedule` taints are safe to add to a live node, and `NoExecute` taints are
-not.
+The classic production pattern: taint dedicated nodes with
+`dedicated=workers:NoSchedule`, and let the workloads that belong there carry
+the matching toleration. The rest of the fleet cannot leak onto them — the
+taint is the fence, the toleration is the gate.
 :::

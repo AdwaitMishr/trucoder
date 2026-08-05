@@ -3,45 +3,41 @@
 Read the global `../AGENTS.md` first — it defines the file format and grading
 contract. This file adds the specifics of *this* course.
 
-## What this course teaches
+## Structure: reading + code
 
-A hands-on introduction to Kubernetes ideas, taught by solving small problems
-in code. Concepts introduced in order:
+This course deliberately mixes lesson types — Kubernetes is mostly *commands
+and YAML*, not algorithms, so most lessons are `type: content` (reading) and
+only two are coding exercises:
 
-1. **Resource units** — parsing `Ki`/`Mi`/`Gi`/`Ti` (binary) vs `K`/`M`/`G` (SI).
-2. **Labels & selectors** — `matchLabels` semantics = subset match on key/value
-   pairs.
-3. **Desired state** — the controller loop reconciles current toward desired;
-   the exercise is the signed delta.
-4. **Rolling update** — `maxUnavailable` as a percentage rounds *down*.
-5. **Service DNS** — `name.namespace.svc.cluster.local`.
-6. **Readiness probes** — NotReady after `initialDelay + period × (threshold − 1)`
-   seconds of consecutive failures.
-7. **HPA math** — `max(1, ceil(replicas × utilization / target))`.
-8. **Taints & tolerations** — match on key + effect, value optional; empty
-   value or effect on the toleration acts as a wildcard.
+| # | Lesson | Type | Idea |
+|---|--------|------|------|
+| 1 | Cluster architecture | content | control plane vs nodes, kubectl |
+| 2 | Pods | content | smallest unit, lifecycle, manifests |
+| 3 | Resource units | code | Ki/Mi/Gi binary vs K/M/G SI parsing |
+| 4 | Deployments | content | desired state, replicas, rolling update |
+| 5 | Services | content | selectors, DNS, port-forward |
+| 6 | Probes | content | readiness vs liveness, timing |
+| 7 | HPA math | code | ceil(replicas × util / target), min 1 |
+| 8 | Taints & tolerations | content | scheduling constraints |
 
-## Conventions specific to this course
+Rule for adding lessons: if the idea is expressed in commands, manifests, or
+concepts → `type: content` with real `kubectl` commands and YAML in fenced
+blocks. If the idea has genuine arithmetic worth practicing → a coding lesson.
+Do not force a topic into `solve()`.
 
-- Map-like data (labels, selectors, taints) is **encoded as strings**, not
-  structured types, because the Java harness only supports scalar and array
-  parameters:
-  - Labels/selectors: comma-separated `key=value` pairs, e.g.
-    `"app=web,env=prod"`.
-  - Taints/tolerations: `key=value:effect` with an **empty** value or effect
-    allowed, e.g. `"gpu=:NoSchedule"` or `"gpu=true:"`. Empty side = wildcard.
-- Lesson 1 returns **`long` in Java** (byte counts exceed `int` range).
-  Lessons 2 and 8 return `boolean`; lesson 5 returns `String`.
-- The reference `solution` is Python; Java/JS starters must be equivalent logic.
-- Keep all test values below `2^53` so bare YAML numbers compare exactly.
+## Conventions for the coding lessons
+
+- Map-like data is encoded as strings (Java harness limitation):
+  - Labels/selectors: comma-separated `key=value` pairs.
+  - Taints/tolerations (if ever a code lesson again): `key=value:effect` with
+    empty value/effect allowed; empty side = wildcard.
+- Resource-units returns **`long` in Java** (byte counts exceed `int`).
+- The reference `solution` is Python; Java/JS starters must be equivalent.
+- Keep test values below `2^53`.
 
 ## Pedagogy
 
-Each lesson body is short: the mental model → a worked example → a callout
-pointing at the common mistake. Two lessons need extra care:
-- Lesson 6 (probes): the contract is `initialDelay + period × (threshold − 1)`
-  — the *first* probe runs at `initialDelay`, so the failure is confirmed one
-  period short of the naive formula. The task string states this exactly.
-- Lesson 8 (taints): Java's `split` drops trailing empty strings, so the
-  reference logic must split with a negative limit. Warn learners about the
-  `key=value:effect` format with possibly-empty parts.
+Content lessons teach: the concept → the `kubectl` command → the YAML → a
+worked example/callout. The two code lessons keep the short mental-model style
+of the DP course: model → example → `:::warning` on the common mistake
+(probe timing `− 1`, HPA integer ceil, multiply-before-divide).

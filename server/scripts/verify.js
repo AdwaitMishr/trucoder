@@ -12,8 +12,8 @@ const { submit } = require("../dist/judge");
     console.log(`\n== ${course.title} ==`);
     for (const lesson of course.lessons) {
       if (!lesson.solution) {
-        console.log(`  SKIP ${lesson.id} (no reference solution)`);
-        fail += 1;
+        // Content-only lessons have no tests to run — not a failure.
+        console.log(`  SKIP ${lesson.id} (content — no exercise)`);
         continue;
       }
       const res = await submit(lesson, "python", lesson.solution);

@@ -39,6 +39,7 @@ coursesRouter.get("/:courseId", (req, res) => {
       difficulty: l.difficulty,
       order: l.order,
       tags: l.tags,
+      hasExercise: l.hasExercise,
       solved: Boolean(p?.solved),
       attemptCount: p?.attempt_count ?? 0,
     };

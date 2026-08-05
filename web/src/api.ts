@@ -60,4 +60,10 @@ export const api = {
       language,
       code,
     }),
+
+  markRead: (courseId: string, lessonId: string) =>
+    post<{ solved: boolean }>(
+      `/api/courses/${courseId}/lessons/${lessonId}/read`,
+      {}
+    ),
 };

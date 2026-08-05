@@ -41,17 +41,20 @@ function loadLesson(courseId: string, file: string): Lesson | null {
     const { data, content } = parseFrontmatter(file);
     const d = data as Record<string, any>;
 
-    if (!d.id || !d.title || !d.task) {
-      throw new Error("missing required fields: id, title, task");
+    if (!d.id || !d.title) {
+      throw new Error("missing required fields: id, title");
     }
     if (d.difficulty && !DIFFS.has(d.difficulty)) {
       throw new Error(`unknown difficulty '${d.difficulty}'`);
     }
 
+    const starterMap = normalizeLangMap(d.starter);
+    const hasExercise = d.type !== "content" && Object.keys(starterMap).length > 0;
+
     const languages: Lang[] = (d.languages ?? []).filter((l: string) =>
       SUPPORTED_LANGS.has(l as Lang)
     );
-    if (languages.length === 0) languages.push("java");
+    if (hasExercise && languages.length === 0) languages.push("java");
 
     const mapTests = (arr: unknown[]): TestCase[] =>
       (arr ?? []).map((t) => ({
@@ -70,10 +73,11 @@ function loadLesson(courseId: string, file: string): Lesson | null {
       difficulty: (d.difficulty ?? "easy") as Difficulty,
       order: typeof d.order === "number" ? d.order : Infinity,
       tags: Array.isArray(d.tags) ? d.tags.map(String) : [],
-      task: String(d.task),
+      hasExercise,
+      task: String(d.task ?? ""),
       languages,
       signature: normalizeLangMap(d.signature),
-      starterCode: normalizeLangMap(d.starter),
+      starterCode: starterMap,
       publicTests,
       privateTests,
       timeLimitMs: typeof d.timeLimitMs === "number" ? d.timeLimitMs : 2000,

@@ -15,6 +15,8 @@ export interface Lesson {
   difficulty: Difficulty;
   order: number;
   tags: string[];
+  /** True when the lesson has a coding exercise (signature/starter/tests). */
+  hasExercise: boolean;
   task: string;
   languages: Lang[];
   signature: Partial<Record<Lang, string>>;

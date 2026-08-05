@@ -100,18 +100,49 @@ Use container directives for callouts. See section 6.
 |---|---|---|---|
 | `id` | yes | string | Unique within the course. lowercase-hyphens. |
 | `title` | yes | string | Human title shown in the roadmap and header. |
+| `type` | no | enum | `content` = reading-only lesson (no coding exercise). See §3.1. Omit for a normal coding lesson. |
 | `difficulty` | yes | enum | `beginner` \| `easy` \| `medium` \| `hard` |
 | `order` | yes | int | Position in the course. Files are also ordered by filename; `order` wins for display. |
 | `tags` | no | list[string] | Concepts this lesson teaches. Shown on the roadmap. |
-| `task` | yes | string | The one-line problem statement shown above the editor. |
-| `languages` | yes | list | Which languages you provide starter + signature for. Supported: `java`, `javascript`, `python`. |
+| `task` | yes* | string | The one-line problem statement shown above the editor. *Not required for `type: content`.* |
+| `languages` | yes* | list | Which languages you provide starter + signature for. Supported: `java`, `javascript`, `python`. *Not required for `type: content`.* |
 | `timeLimitMs` | no | int | Wall-clock budget per submission (default `2000`). |
-| `signature` | yes | map | The function signature the learner must implement, per language. **The function must be named `solve`.** |
-| `starter` | yes | map | Editable starter code, per language. Use the YAML `\|` block scalar so indentation is preserved. |
-| `tests.public` | yes | list | Visible tests (shown to the learner, used by **Run**). |
-| `tests.private` | yes | list | Hidden tests (used by **Submit** only). At least one. |
+| `signature` | yes* | map | The function signature the learner must implement, per language. **The function must be named `solve`.** *Not required for `type: content`.* |
+| `starter` | yes* | map | Editable starter code, per language. Use the YAML `\|` block scalar so indentation is preserved. *Not required for `type: content`.* |
+| `tests.public` | yes* | list | Visible tests (shown to the learner, used by **Run**). *Not required for `type: content`.* |
+| `tests.private` | yes* | list | Hidden tests (used by **Submit** only). At least one. *Not required for `type: content`.* |
 | `hints` | no | list[string] | Progressive hints. Revealed one at a time in the UI. Start vague, get more specific. |
 | `solution` | no | string | A reference solution. **Never displayed to the learner** — it is for agents/tools and for verifying the tests. |
+
+### 3.1 Content-only lessons (`type: content`)
+
+Not every lesson needs to be a coding problem — command-heavy topics (Kubernetes,
+Docker, git) are better taught as reading material. A content lesson has:
+
+```mdx
+---
+id: cluster-architecture
+title: "Cluster Architecture"
+type: content
+difficulty: beginner
+order: 1
+tags: [cluster, kubectl]
+---
+
+Write the teaching content here. Use `kubectl` commands and YAML in fenced
+code blocks — that IS the content.
+```
+
+- Only `id`, `title`, and the body are required. No `signature`/`starter`/
+  `tests`/`task`.
+- The UI renders the body full-width (no editor, no run/submit, no zen toggle)
+  and shows a **mark as read** button at the end. Marking read counts as solved
+  for course progress, exactly like passing an exercise.
+- Content lessons still take `difficulty`, `order`, and `tags` — they appear in
+  the roadmap (with a book icon and a `reading` tag) like any other lesson.
+- Mix freely: `type: content` for concepts/commands, normal lessons for the
+  parts that are genuinely algorithmic. Do not force a topic into a coding
+  problem just to fill a template.
 
 ### Test case shape
 
@@ -258,8 +289,9 @@ pedagogy, and test quality. When in doubt, mirror it.
 
 - [ ] Course directory is `courses/<id>/` with `course.mdx` and `lessons/`.
 - [ ] Course `AGENTS.md` documents the pedagogy and conventions.
-- [ ] Every lesson has `id`, `title`, `difficulty`, `order`, `task`,
-      `languages`, `signature`, `starter`, `tests.public`, `tests.private`.
+- [ ] Every lesson has `id` and `title`; coding lessons also have `task`,
+      `languages`, `signature`, `starter`, `tests.public`, `tests.private`;
+      content lessons set `type: content` and carry the material in the body.
 - [ ] `hints` are progressive (vague → specific) when present.
 - [ ] Function is named `solve` in every language; Java is `static`.
 - [ ] `expected` matches `solve(...args)` for every test (verified via §8).

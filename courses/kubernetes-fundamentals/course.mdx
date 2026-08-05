@@ -1,39 +1,45 @@
 ---
 id: kubernetes-fundamentals
 title: "Kubernetes Fundamentals"
-description: "A hands-on introduction to the ideas behind Kubernetes: resource units, labels and selectors, the controller loop, rolling updates, service DNS, probes, autoscaling, and scheduling — each locked in with a small coding exercise."
+description: "A hands-on introduction to Kubernetes: cluster architecture, pods, deployments, services, probes, autoscaling, and scheduling. Mostly reading with real kubectl commands and YAML — plus two small coding exercises where the math genuinely matters."
 difficultyLevels: [beginner, easy, medium]
 ---
 
 # How to use this course
 
 Kubernetes sounds like a wall of acronyms: Pods, Deployments, Services, HPAs.
-Strip the jargon away and it is a small set of *ideas* — and every idea has a
-tiny piece of logic behind it. That logic is what you will code here.
+Strip the jargon away and it is a small set of *ideas* — and every idea is
+either a command you run or a number you reason about.
 
-Work through the lessons **in order**. Each one teaches one idea:
+Most lessons here are **reading**: the concept, the `kubectl` commands, and the
+YAML that makes it real. Read them like the docs you wish existed — then run
+the commands on a cluster (or `minikube`/`kind` on your laptop) to make them
+stick. Two lessons are **coding exercises**, kept only where the math is
+genuinely worth practicing: resource units and HPA math.
 
-1. Parse a resource request (`128Mi`) into bytes.
-2. Decide whether a label selector matches a pod.
-3. Reconcile desired state vs. what is actually running.
-4. Bound a rolling update with `maxUnavailable`.
-5. Build a service's cluster-local DNS name.
-6. Work out when a failing readiness probe marks a pod NotReady.
-7. Compute the replica count an autoscaler wants.
-8. Decide whether a toleration lets a pod onto a tainted node.
+Work through the lessons **in order**:
+
+1. Cluster architecture — who is who, and how `kubectl` talks to it.
+2. Pods — the smallest unit Kubernetes schedules.
+3. Resource units — what `128Mi` actually means (code).
+4. Deployments — desired state, replicas, rolling updates.
+5. Services — stable names, selectors, DNS.
+6. Probes — readiness vs liveness, and the timing math.
+7. HPA math — the autoscaler's formula (code).
+8. Taints & tolerations — who is allowed on which node.
 
 By the end you will read a Deployment manifest and see *why* every number is
-there — because you have written the code behind it.
+there — and you will know the command to type when something misbehaves.
 
 ## The roadmap
 
-| # | Lesson | The idea it introduces |
-|---|--------|------------------------|
-| 1 | Resource units | `Ki`/`Mi`/`Gi` binary vs `K`/`M`/`G` SI |
-| 2 | Labels & selectors | matchLabels = subset match |
-| 3 | Desired state | the controller loop |
-| 4 | Rolling update | maxUnavailable, percentage rounding |
-| 5 | Service DNS | `name.namespace.svc.cluster.local` |
-| 6 | Readiness probes | period, threshold, initial delay |
-| 7 | HPA math | `ceil(replicas × util / target)`, min 1 |
-| 8 | Taints & tolerations | key/value/effect matching rules |
+| # | Lesson | The idea it introduces | Type |
+|---|--------|------------------------|------|
+| 1 | Cluster architecture | control plane vs nodes, `kubectl` | reading |
+| 2 | Pods | the smallest unit, lifecycle, manifests | reading |
+| 3 | Resource units | `Ki`/`Mi`/`Gi` binary vs `K`/`M`/`G` SI | code |
+| 4 | Deployments | desired state, replicas, rolling update | reading |
+| 5 | Services | selectors, DNS, port-forward | reading |
+| 6 | Probes | readiness vs liveness, timing | reading |
+| 7 | HPA math | `ceil(replicas × util / target)`, min 1 | code |
+| 8 | Taints & tolerations | scheduling constraints | reading |

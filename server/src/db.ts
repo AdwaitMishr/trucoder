@@ -138,6 +138,25 @@ export function getProgress(
     .get(userId, courseId, lessonId) as ProgressRow | undefined;
 }
 
+/** Mark a content-only lesson as read (progress solved, no submission row). */
+export function markLessonRead(
+  userId: number,
+  courseId: string,
+  lessonId: string
+): void {
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO progress
+       (user_id, course_id, lesson_id, solved, attempt_count, solved_at, last_attempt_at)
+     VALUES (?, ?, ?, 1, 0, ?, ?)
+     ON CONFLICT(user_id, course_id, lesson_id) DO UPDATE SET
+       solved = 1,
+       solved_at = CASE WHEN progress.solved_at IS NULL
+                        THEN excluded.solved_at ELSE progress.solved_at END,
+       last_attempt_at = excluded.last_attempt_at`
+  ).run(userId, courseId, lessonId, now, now);
+}
+
 export function recordSubmission(input: {
   userId: number;
   courseId: string;

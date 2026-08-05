@@ -17,6 +17,7 @@ export interface LessonMeta {
   difficulty: Difficulty;
   order: number;
   tags: string[];
+  hasExercise: boolean;
   solved: boolean;
   attemptCount: number;
 }
@@ -43,6 +44,7 @@ export interface Lesson {
   difficulty: Difficulty;
   order: number;
   tags: string[];
+  hasExercise: boolean;
   task: string;
   languages: Lang[];
   signature: Partial<Record<Lang, string>>;

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { getLesson } from "../courses/loader";
 import type { Lang } from "../courses/types";
-import { getProgress, recordSubmission } from "../db";
+import { getProgress, markLessonRead, recordSubmission } from "../db";
 import { runPublic, submit } from "../judge";
 
 export const lessonsRouter = Router({ mergeParams: true });
@@ -40,6 +40,7 @@ lessonsRouter.get("/:lessonId", (req, res) => {
     difficulty: lesson.difficulty,
     order: lesson.order,
     tags: lesson.tags,
+    hasExercise: lesson.hasExercise,
     task: lesson.task,
     languages: lesson.languages,
     signature: lesson.signature,
@@ -65,11 +66,29 @@ function ensureSupported(lesson: ReturnType<typeof getLesson>, lang: Lang) {
   );
 }
 
+/** Mark a content-only lesson as read (no coding exercise). */
+lessonsRouter.post("/:lessonId/read", (req, res) => {
+  const userId = req.userId!;
+  const { courseId, lessonId } = paramsOf(req);
+  const lesson = getLesson(courseId, lessonId);
+  if (!lesson) return res.status(404).json({ error: "lesson not found" });
+  if (lesson.hasExercise) {
+    return res
+      .status(400)
+      .json({ error: "this lesson has a coding exercise — solve it instead" });
+  }
+  markLessonRead(userId, courseId, lessonId);
+  res.json({ solved: true });
+});
+
 /** Run the visible public tests (fast feedback while coding). */
 lessonsRouter.post("/:lessonId/run", async (req, res) => {
   const { courseId, lessonId } = paramsOf(req);
   const lesson = getLesson(courseId, lessonId);
   if (!lesson) return res.status(404).json({ error: "lesson not found" });
+  if (!lesson.hasExercise) {
+    return res.status(400).json({ error: "this lesson has no coding exercise" });
+  }
   const body = parseBody(req.body);
   if (!body) return res.status(400).json({ error: "invalid body" });
   if (!ensureSupported(lesson, body.lang)) {
@@ -88,6 +107,9 @@ lessonsRouter.post("/:lessonId/submit", async (req, res) => {
   const { courseId, lessonId } = paramsOf(req);
   const lesson = getLesson(courseId, lessonId);
   if (!lesson) return res.status(404).json({ error: "lesson not found" });
+  if (!lesson.hasExercise) {
+    return res.status(400).json({ error: "this lesson has no coding exercise" });
+  }
   const body = parseBody(req.body);
   if (!body) return res.status(400).json({ error: "invalid body" });
   if (!ensureSupported(lesson, body.lang)) {

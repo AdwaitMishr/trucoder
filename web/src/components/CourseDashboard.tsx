@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { PiArrowLeft, PiCheck, PiCaretRight } from "react-icons/pi";
+import { PiArrowLeft, PiBookOpen, PiCheck, PiCaretRight } from "react-icons/pi";
 import { api } from "../api";
 import type { CourseDetail, Difficulty } from "../types";
 import Markdown from "./Markdown";
@@ -59,11 +59,18 @@ export default function CourseDashboard() {
           <li key={l.id}>
             <Link to={`/course/${course.id}/lessons/${l.id}`} className="lesson-row">
               <span className={`lesson-state ${l.solved ? "done" : ""}`}>
-                {l.solved ? <PiCheck size={16} /> : String(l.order).padStart(2, "0")}
+                {l.solved ? (
+                  <PiCheck size={16} />
+                ) : l.hasExercise ? (
+                  String(l.order).padStart(2, "0")
+                ) : (
+                  <PiBookOpen size={15} />
+                )}
               </span>
               <span className="lesson-info">
                 <span className="lesson-title">{l.title}</span>
                 <span className="lesson-tags">
+                  {!l.hasExercise && <span className="tag">reading</span>}
                   {l.tags.map((t) => (
                     <span key={t} className="tag">
                       {t}

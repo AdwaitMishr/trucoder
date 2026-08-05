@@ -398,6 +398,16 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 .hint-list { margin: 12px 0 0; padding-left: 20px; }
 .hint-list li { margin-bottom: 8px; font-size: 14px; }
 
+/* content-only lessons: completion action at the end of the reading */
+.read-actions {
+  margin-top: 40px; padding-top: 22px;
+  border-top: 1px solid var(--hairline);
+}
+.read-done {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--ok); font-weight: 600; font-size: 13.5px;
+}
+
 /* ---- workbench ---- */
 .workbench {
   display: flex; flex-direction: column; min-height: 0; overflow: hidden;
