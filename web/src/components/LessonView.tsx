@@ -6,6 +6,7 @@ import {
   PiCheck,
   PiPlay,
   PiPaperPlaneRight,
+  PiRows,
 } from "react-icons/pi";
 import { api, ApiError } from "../api";
 import type { Lang, Lesson, RunResult, SubmitResult } from "../types";
@@ -33,7 +34,26 @@ export default function LessonView() {
   const [submit, setSubmit] = useState<SubmitResult | null>(null);
   const [busy, setBusy] = useState<"run" | "submit" | null>(null);
   const [error, setError] = useState("");
+  const [zen, setZen] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("tc:zen") === "1";
+    } catch {
+      return false;
+    }
+  });
   const byLang = useRef<Partial<Record<Lang, string>>>({});
+
+  function toggleZen() {
+    setZen((z) => {
+      const n = !z;
+      try {
+        localStorage.setItem("tc:zen", n ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return n;
+    });
+  }
 
   useEffect(() => {
     let active = true;
@@ -147,14 +167,18 @@ export default function LessonView() {
             <PiCheck size={11} /> solved
           </span>
         )}
+        <span className="spacer" />
+        <button className="ghost" onClick={toggleZen} title={zen ? "exit zen mode" : "zen mode"}>
+          <PiRows size={15} /> {zen ? "exit" : "zen"}
+        </button>
       </div>
 
       <PanelGroup
-        direction="horizontal"
-        autoSaveId="trucoder-lesson-split"
+        direction={zen ? "vertical" : "horizontal"}
+        autoSaveId={`trucoder-split-${zen ? "v" : "h"}`}
         className="split-group"
       >
-        <Panel defaultSize={42} minSize={28} className="lesson-content">
+        <Panel defaultSize={zen ? 38 : 42} minSize={zen ? 18 : 28} className="lesson-content">
           <div className="task">
             <span className="task-label">task</span>
             <p>{p.task}</p>
@@ -199,9 +223,9 @@ export default function LessonView() {
           </div>
         </Panel>
 
-        <PanelResizeHandle className="resize-handle" />
+        <PanelResizeHandle className={`resize-handle ${zen ? "handle-v" : ""}`} />
 
-        <Panel defaultSize={58} minSize={42} className="workbench">
+        <Panel defaultSize={zen ? 62 : 58} minSize={zen ? 30 : 42} className="workbench">
           <div className="toolbar">
             {LANGS.filter((l) => p.starterCode[l.id]).map((l) => (
               <button
