@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getLesson } from "../courses/loader";
+import { getCourse, getLesson } from "../courses/loader";
 import type { Lang } from "../courses/types";
 import { getProgress, markLessonRead, recordSubmission } from "../db";
 import { runPublic, submit } from "../judge";
@@ -33,6 +33,20 @@ lessonsRouter.get("/:lessonId", (req, res) => {
   if (!lesson) return res.status(404).json({ error: "lesson not found" });
   const p = getProgress(userId, lesson.courseId, lesson.id);
 
+  // Previous/next lesson within the course (ordered by `order`).
+  const ordered = (getCourse(lesson.courseId)?.lessons ?? []).sort(
+    (a, b) => a.order - b.order
+  );
+  const idx = ordered.findIndex((l) => l.id === lesson.id);
+  const prevLesson =
+    idx > 0
+      ? { id: ordered[idx - 1].id, title: ordered[idx - 1].title }
+      : null;
+  const nextLesson =
+    idx >= 0 && idx < ordered.length - 1
+      ? { id: ordered[idx + 1].id, title: ordered[idx + 1].title }
+      : null;
+
   res.json({
     id: lesson.id,
     courseId: lesson.courseId,
@@ -55,6 +69,10 @@ lessonsRouter.get("/:lessonId", (req, res) => {
     },
     lastCode: p?.last_code ?? null,
     lastLanguage: (p?.last_language as Lang) ?? null,
+    prevLesson,
+    nextLesson,
+    lessonIndex: idx,
+    lessonCount: ordered.length,
   });
 });
 

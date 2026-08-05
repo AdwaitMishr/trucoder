@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   PiArrowLeft,
+  PiArrowRight,
   PiCheck,
   PiPlay,
   PiPaperPlaneRight,
@@ -170,6 +171,40 @@ export default function LessonView() {
     }
   }
 
+  const navRow = (
+    <div className="lesson-nav">
+      {p.prevLesson ? (
+        <Link
+          to={`/course/${courseId}/lessons/${p.prevLesson.id}`}
+          className="ghost"
+          title={p.prevLesson.title}
+        >
+          <PiArrowLeft size={14} /> previous
+        </Link>
+      ) : (
+        <span className="ghost disabled" aria-disabled="true">
+          <PiArrowLeft size={14} /> previous
+        </span>
+      )}
+      <span className="nav-count">
+        {p.lessonIndex + 1} / {p.lessonCount}
+      </span>
+      {p.nextLesson ? (
+        <Link
+          to={`/course/${courseId}/lessons/${p.nextLesson.id}`}
+          className="ghost"
+          title={p.nextLesson.title}
+        >
+          next <PiArrowRight size={14} />
+        </Link>
+      ) : (
+        <span className="ghost disabled" aria-disabled="true">
+          next <PiArrowRight size={14} />
+        </span>
+      )}
+    </div>
+  );
+
   // Content-only lesson (type: content) — no editor, no exercise. Just the
   // lesson body, with a "mark as read" completion action.
   if (!p.hasExercise) {
@@ -211,6 +246,7 @@ export default function LessonView() {
               )}
             </div>
             {error && <div className="form-error">{error}</div>}
+            {navRow}
           </div>
         </div>
       </div>
@@ -299,6 +335,8 @@ export default function LessonView() {
           </ul>
         )}
       </div>
+
+      {navRow}
     </>
   );
 

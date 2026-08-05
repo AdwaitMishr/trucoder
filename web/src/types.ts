@@ -56,6 +56,11 @@ export interface Lesson {
   progress: { solved: boolean; attemptCount: number };
   lastCode: string | null;
   lastLanguage: Lang | null;
+  /** Previous/next lesson within the course (for course navigation). */
+  prevLesson: { id: string; title: string } | null;
+  nextLesson: { id: string; title: string } | null;
+  lessonIndex: number;
+  lessonCount: number;
 }
 
 export interface TestResult {
