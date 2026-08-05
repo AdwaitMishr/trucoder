@@ -4,6 +4,7 @@ import { api } from "./api";
 import type { User } from "./types";
 import Login from "./components/Login";
 import Nav from "./components/Nav";
+import Footer from "./components/Footer";
 import CourseIndex from "./components/CourseIndex";
 import CourseDashboard from "./components/CourseDashboard";
 import LessonView from "./components/LessonView";
@@ -23,30 +24,33 @@ export default function App() {
   }
 
   return (
-    <>
+    <div className="app-shell">
       {user && <Nav user={user} onLogout={() => setUser(null)} />}
-      <Routes>
-        <Route
-          path="/login"
-          element={user ? <Navigate to="/" replace /> : <Login onLogin={setUser} />}
-        />
-        <Route
-          path="/"
-          element={user ? <CourseIndex /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/course/:courseId"
-          element={user ? <CourseDashboard /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/course/:courseId/lessons/:lessonId"
-          element={user ? <LessonView /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="*"
-          element={<Navigate to={user ? "/" : "/login"} replace />}
-        />
-      </Routes>
-    </>
+      <div className="route-body">
+        <Routes>
+          <Route
+            path="/login"
+            element={user ? <Navigate to="/" replace /> : <Login onLogin={setUser} />}
+          />
+          <Route
+            path="/"
+            element={user ? <CourseIndex /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="/course/:courseId"
+            element={user ? <CourseDashboard /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="/course/:courseId/lessons/:lessonId"
+            element={user ? <LessonView /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="*"
+            element={<Navigate to={user ? "/" : "/login"} replace />}
+          />
+        </Routes>
+      </div>
+      {user && <Footer />}
+    </div>
   );
 }

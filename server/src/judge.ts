@@ -74,7 +74,8 @@ async function runBatch(
       return tests.map((t) => ({
         name: t.name,
         passed: false,
-        error: "time limit exceeded. Check for an infinite loop.",
+        error:
+          "time limit exceeded — your code was too slow for the hidden tests. Look for a faster approach (e.g. memoization).",
       }));
     }
     if (res.code !== 0) {
@@ -126,26 +127,32 @@ export async function submit(
   const runtimeError = publicTests.find((r) =>
     r.error?.startsWith("runtime error")
   )?.error;
+  const timedOut = results.some((r) =>
+    r.error?.startsWith("time limit exceeded")
+  );
 
   const publicPassed = publicTests.filter((r) => r.passed).length;
   const allPassed =
     compileError === undefined &&
     runtimeError === undefined &&
+    !timedOut &&
     publicPassed === publicTests.length &&
     privatePassed === privateTests.length;
 
   return {
     verdict: compileError
       ? "error"
-      : runtimeError
-        ? "error"
-        : allPassed
-          ? "accepted"
-          : "wrong",
+      : timedOut
+        ? "timeout"
+        : runtimeError
+          ? "error"
+          : allPassed
+            ? "accepted"
+            : "wrong",
     publicTests,
     privatePassed,
     privateTotal: privateTests.length,
     compileError,
-    error: compileError || runtimeError,
+    error: compileError || runtimeError || (timedOut ? "time limit exceeded" : undefined),
   };
 }

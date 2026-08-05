@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   PiArrowLeft,
   PiCheck,
@@ -79,6 +80,10 @@ export default function LessonView() {
     setCode(v);
     byLang.current[lang] = v;
     localStorage.setItem(storageKey(courseId, lessonId, lang), v);
+    // The displayed result no longer matches the code — drop it so the user
+    // doesn't read a stale "all tests passed" for code they just changed.
+    setRun(null);
+    setSubmit(null);
   }
 
   function resetCode() {
@@ -86,6 +91,8 @@ export default function LessonView() {
     byLang.current[lang] = starter;
     setCode(starter);
     localStorage.setItem(storageKey(courseId, lessonId, lang), starter);
+    setRun(null);
+    setSubmit(null);
   }
 
   async function doRun() {
@@ -142,8 +149,12 @@ export default function LessonView() {
         )}
       </div>
 
-      <div className="split">
-        <section className="lesson-content">
+      <PanelGroup
+        direction="horizontal"
+        autoSaveId="trucoder-lesson-split"
+        className="split-group"
+      >
+        <Panel defaultSize={50} minSize={28} className="lesson-content">
           <div className="task">
             <span className="task-label">task</span>
             <p>{p.task}</p>
@@ -186,9 +197,11 @@ export default function LessonView() {
               </ul>
             )}
           </div>
-        </section>
+        </Panel>
 
-        <section className="workbench">
+        <PanelResizeHandle className="resize-handle" />
+
+        <Panel defaultSize={50} minSize={32} className="workbench">
           <div className="toolbar">
             {LANGS.filter((l) => p.starterCode[l.id]).map((l) => (
               <button
@@ -221,8 +234,8 @@ export default function LessonView() {
 
           {error && <div className="form-error">{error}</div>}
           <ResultPanel run={run} submit={submit} />
-        </section>
-      </div>
+        </Panel>
+      </PanelGroup>
     </div>
   );
 }

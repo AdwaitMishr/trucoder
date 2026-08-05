@@ -14,7 +14,7 @@ export interface RunResult {
 }
 
 export interface SubmitResult {
-  verdict: "accepted" | "wrong" | "error";
+  verdict: "accepted" | "wrong" | "error" | "timeout";
   publicTests: TestResult[];
   privatePassed: number;
   privateTotal: number;

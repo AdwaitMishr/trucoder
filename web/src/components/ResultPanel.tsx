@@ -1,4 +1,4 @@
-import { PiCheck, PiX, PiWarning } from "react-icons/pi";
+import { PiCheck, PiX, PiWarning, PiTimer } from "react-icons/pi";
 import type { RunResult, SubmitResult, TestResult } from "../types";
 
 function TestRow({ t }: { t: TestResult }) {
@@ -39,6 +39,22 @@ export default function ResultPanel({
   submit: SubmitResult | null;
 }) {
   if (submit) {
+    if (submit.verdict === "timeout") {
+      return (
+        <div className="results">
+          <div className="verdict err">
+            <PiTimer size={15} /> time limit exceeded
+          </div>
+          <pre className="block-error">
+            too slow for the hidden tests. look for a faster approach — e.g.
+            memoize, or build the answer bottom-up.
+          </pre>
+          {submit.publicTests.map((t) => (
+            <TestRow key={t.name} t={t} />
+          ))}
+        </div>
+      );
+    }
     const accepted = submit.verdict === "accepted";
     const error = submit.verdict === "error";
     const label = accepted ? "all tests passed" : error ? "error" : "wrong answer";

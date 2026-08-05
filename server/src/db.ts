@@ -144,7 +144,7 @@ export function recordSubmission(input: {
   lessonId: string;
   language: string;
   code: string;
-  verdict: "accepted" | "wrong" | "error";
+  verdict: "accepted" | "wrong" | "error" | "timeout";
   publicPassed: number;
   publicTotal: number;
   privatePassed: number;
