@@ -37,6 +37,64 @@ export interface PublicTestCase {
   expected: string;
 }
 
+export interface CodeBlock {
+  type: "code";
+  task: string;
+  languages: Lang[];
+  signature: Partial<Record<Lang, string>>;
+  starterCode: Partial<Record<Lang, string>>;
+  publicTests: PublicTestCase[];
+  timeLimitMs: number;
+  hints: string[];
+}
+
+export interface MarkdownBlock {
+  type: "markdown";
+  content: string;
+}
+
+export interface McqBlock {
+  type: "mcq";
+  prompt: string;
+  options: string[];
+  explanation: string;
+}
+
+export interface MscqBlock {
+  type: "mscq";
+  prompt: string;
+  options: string[];
+  explanation: string;
+}
+
+export interface ImageBlock {
+  type: "image";
+  src: string;
+  alt: string;
+  caption?: string;
+}
+
+export interface FlowEdge {
+  from: number;
+  to: number;
+  label?: string;
+}
+export interface FlowchartBlock {
+  type: "flowchart";
+  title?: string;
+  nodes: string[];
+  edges: FlowEdge[];
+}
+
+export type QuizBlock = McqBlock | MscqBlock;
+export type Block =
+  | CodeBlock
+  | MarkdownBlock
+  | McqBlock
+  | MscqBlock
+  | ImageBlock
+  | FlowchartBlock;
+
 export interface Lesson {
   id: string;
   courseId: string;
@@ -45,18 +103,12 @@ export interface Lesson {
   order: number;
   tags: string[];
   hasExercise: boolean;
-  task: string;
-  languages: Lang[];
-  signature: Partial<Record<Lang, string>>;
-  starterCode: Partial<Record<Lang, string>>;
-  publicTests: PublicTestCase[];
-  timeLimitMs: number;
-  body: string;
-  hints: string[];
+  blocks: Block[];
+  /** Indices of quiz blocks the user has already answered correctly. */
+  solvedBlocks: number[];
   progress: { solved: boolean; attemptCount: number };
   lastCode: string | null;
   lastLanguage: Lang | null;
-  /** Previous/next lesson within the course (for course navigation). */
   prevLesson: { id: string; title: string } | null;
   nextLesson: { id: string; title: string } | null;
   lessonIndex: number;
@@ -83,6 +135,12 @@ export interface SubmitResult {
   privateTotal: number;
   compileError?: string;
   error?: string;
+}
+
+export interface AnswerResult {
+  correct: boolean;
+  explanation: string;
+  lessonSolved: boolean;
 }
 
 export interface User {

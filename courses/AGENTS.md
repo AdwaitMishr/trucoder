@@ -144,6 +144,82 @@ code blocks — that IS the content.
   parts that are genuinely algorithmic. Do not force a topic into a coding
   problem just to fill a template.
 
+### 3.2 Block-based lessons (`blocks:`)
+
+For maximum flexibility, define a lesson as an **ordered list of typed blocks**.
+This is the most extensible format — a lesson can combine reading, a coding
+exercise, quizzes, images, and flowcharts in any order:
+
+```mdx
+---
+id: deployments
+title: "Deployments"
+difficulty: easy
+order: 4
+tags: [deployments, rolling-update]
+blocks:
+  - type: markdown
+    content: |
+      Any markdown prose, including callouts and fenced code blocks.
+  - type: image
+    src: my-diagram.svg       # served from courses/<course-id>/assets/
+    alt: "What the image shows"
+    caption: "Optional caption under the image."
+  - type: flowchart
+    title: "optional diagram title"
+    nodes: ["Start", "Do the thing", "Done"]
+    edges:
+      - {from: 0, to: 1, label: "go"}
+      - {from: 1, to: 2, label: "finish"}
+  - type: mcq
+    prompt: "Which option is correct?"
+    options: ["A", "B", "C"]
+    answer: 1                     # index of the correct option
+    explanation: "Why — shown after a correct answer."
+  - type: mscq
+    prompt: "Which options are true?"
+    options: ["A", "B", "C", "D"]
+    answer: [0, 2]                # set of correct indices
+    explanation: "Why these are correct."
+  - type: code
+    task: "Implement solve(...)"
+    languages: [java, javascript, python]
+    signature: {java: "...", javascript: "...", python: "..."}
+    starter: {java: "|...", javascript: "|...", python: "|..."}
+    tests:
+      public: [{name: "basic", args: [1], expected: 1}]
+      private: [{name: "edge", args: [0], expected: 0}]
+    hints: ["First hint.", "Second hint."]
+    solution: |
+      def solve(n): return n
+---
+```
+
+Block types and rules:
+
+| Type | Purpose | Fields |
+|------|---------|--------|
+| `markdown` | prose/reading | `content` |
+| `code` | coding exercise (same fields as a legacy code lesson) | `task`, `languages`, `signature`, `starter`, `tests`, `hints`, `solution` |
+| `mcq` | single-choice question, server-graded | `prompt`, `options` (≥2), `answer` (index), `explanation` |
+| `mscq` | multi-select question, server-graded | `prompt`, `options` (≥2), `answer` (indices), `explanation` |
+| `image` | figure | `src` (relative to `courses/<id>/assets/`), `alt`, `caption?` |
+| `flowchart` | simple DAG diagram (rendered as inline SVG, no deps) | `title?`, `nodes` (≥1), `edges` (`{from, to, label?}`) |
+
+Rules:
+
+- `answer` fields and `solution` are **never sent to the learner** — grading is
+  server-side. A lesson is `solved` when all its graded blocks are solved:
+  code block = accepted submission; quiz blocks = all answered correctly.
+- Quiz-only lessons complete when every quiz block is answered correctly (a
+  **mark as read** escape hatch is still available in the UI).
+- A lesson may contain **at most one `code` block** (run/submit grade the
+  lesson). Multiple quizzes, images, and flowcharts are fine.
+- Flowchart `edges` reference node indices; `from`/`to` must be valid indices.
+  Avoid cycles (or keep them short — the renderer caps layout passes).
+- Legacy lessons (body + `starter`/`tests`, or `type: content`) are normalized
+  to blocks automatically — you do not need to convert existing courses.
+
 ### Test case shape
 
 Each test is:
@@ -291,10 +367,13 @@ pedagogy, and test quality. When in doubt, mirror it.
 - [ ] Course `AGENTS.md` documents the pedagogy and conventions.
 - [ ] Every lesson has `id` and `title`; coding lessons also have `task`,
       `languages`, `signature`, `starter`, `tests.public`, `tests.private`;
-      content lessons set `type: content` and carry the material in the body.
+      content lessons set `type: content`; rich lessons use `blocks:` (see §3.2).
 - [ ] `hints` are progressive (vague → specific) when present.
 - [ ] Function is named `solve` in every language; Java is `static`.
 - [ ] `expected` matches `solve(...args)` for every test (verified via §8).
+- [ ] Quiz `answer` indices are valid (within `options` range); mscq answers
+      are non-empty index lists.
+- [ ] Image `src` files exist under `courses/<id>/assets/`.
 - [ ] Big integers are quoted strings.
 - [ ] Body uses Markdown + directives (not raw HTML/JSX).
 - [ ] `node scripts/verify.js` reports `0 failed`.

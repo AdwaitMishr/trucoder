@@ -8,15 +8,9 @@ export interface TestCase {
   expected: string;
 }
 
-export interface Lesson {
-  id: string;
-  courseId: string;
-  title: string;
-  difficulty: Difficulty;
-  order: number;
-  tags: string[];
-  /** True when the lesson has a coding exercise (signature/starter/tests). */
-  hasExercise: boolean;
+/** A coding exercise block (the classic TruCoder lesson). */
+export interface CodeBlock {
+  type: "code";
   task: string;
   languages: Lang[];
   signature: Partial<Record<Lang, string>>;
@@ -24,11 +18,76 @@ export interface Lesson {
   publicTests: TestCase[];
   privateTests: TestCase[];
   timeLimitMs: number;
-  solution?: string;
-  /** Progressive hints (revealed one at a time in the UI). */
   hints: string[];
-  /** Markdown lesson body (served to the client, rendered there). */
-  body: string;
+  /** Reference solution — never sent to the client. */
+  solution?: string;
+}
+
+/** Prose block (markdown, callouts, code fences — the reading material). */
+export interface MarkdownBlock {
+  type: "markdown";
+  content: string;
+}
+
+/** Single-choice question. `answer` is the index of the correct option. */
+export interface McqBlock {
+  type: "mcq";
+  prompt: string;
+  options: string[];
+  answer: number;
+  explanation: string;
+}
+
+/** Multiple-select question. `answer` is the set of correct option indices. */
+export interface MscqBlock {
+  type: "mscq";
+  prompt: string;
+  options: string[];
+  answer: number[];
+  explanation: string;
+}
+
+/** Image block — src is relative to `courses/<courseId>/assets/`. */
+export interface ImageBlock {
+  type: "image";
+  src: string;
+  alt: string;
+  caption?: string;
+}
+
+/** Simple DAG flowchart rendered client-side (no external deps). */
+export interface FlowEdge {
+  from: number;
+  to: number;
+  label?: string;
+}
+export interface FlowchartBlock {
+  type: "flowchart";
+  title?: string;
+  nodes: string[];
+  edges: FlowEdge[];
+}
+
+export type QuizBlock = McqBlock | MscqBlock;
+export type Block =
+  | CodeBlock
+  | MarkdownBlock
+  | McqBlock
+  | MscqBlock
+  | ImageBlock
+  | FlowchartBlock;
+
+export interface Lesson {
+  id: string;
+  courseId: string;
+  title: string;
+  difficulty: Difficulty;
+  order: number;
+  tags: string[];
+  /** Ordered content blocks. A lesson is a sequence of typed blocks. */
+  blocks: Block[];
+  /** True when at least one block is a coding exercise. */
+  hasExercise: boolean;
 }
 
 export interface Course {

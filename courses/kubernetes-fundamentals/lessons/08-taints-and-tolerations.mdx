@@ -1,90 +1,108 @@
 ---
 id: taints-and-tolerations
 title: "Taints & Tolerations"
-type: content
 difficulty: medium
 order: 8
 tags: [scheduling, taints, tolerations]
+blocks:
+  - type: markdown
+    content: |
+      Taints are how a node says **"keep off."** Tolerations are how a pod says
+      "actually, I accept that." Together they control which pods can land on
+      which nodes — the foundation of dedicated nodes, GPU pools, and spot
+      instances.
+
+      ## The command
+
+      ```bash
+      # put a taint on a node: key=value:effect
+      kubectl taint nodes node-1 gpu=true:NoSchedule
+
+      # remove it (trailing dash)
+      kubectl taint nodes node-1 gpu=true:NoSchedule-
+
+      # see the taints on a node
+      kubectl describe node node-1 | grep Taints
+      ```
+
+      After that command, ordinary pods refuse to schedule onto `node-1` — and
+      the kube-scheduler will not even try, unless a pod carries a matching
+      toleration.
+
+      ## The three effects
+
+      | Effect | Behavior |
+      |--------|----------|
+      | `NoSchedule` | block *new* scheduling (existing pods stay) |
+      | `NoExecute` | evict pods already running without a toleration |
+      | `PreferNoSchedule` | soft preference — avoid if possible |
+
+      `NoSchedule` is safe to add to a live node. `NoExecute` is not — it
+      evicts pods immediately.
+
+      ## The toleration
+
+      A pod opts in with a `toleration` that matches the taint on key, value,
+      and effect:
+
+      ```yaml
+      spec:
+        tolerations:
+          - key: gpu
+            operator: Exists    # any value is fine
+            effect: NoSchedule
+      ```
+
+      Two operators:
+
+      - `Equal` — tolerates only a specific value (`value: "true"`).
+      - `Exists` — tolerates any value (no `value` field).
+
+      Leaving `effect` out tolerates *any* effect. The matching rule, in one
+      line:
+
+      ```
+      key matches AND (value matches OR value is wildcarded) AND
+      (effect matches OR effect is wildcarded)
+      ```
+
+      :::example
+      Taint `gpu=true:NoSchedule`:
+
+      | Toleration | Tolerates? | Why |
+      |------------|-----------|-----|
+      | `key: gpu, operator: Equal, value: "true", effect: NoSchedule` | yes | exact |
+      | `key: gpu, operator: Exists, effect: NoSchedule` | yes | any value |
+      | `key: gpu, operator: Equal, value: "true"` (no effect) | yes | any effect |
+      | `key: gpu, operator: Equal, value: "false", effect: NoSchedule` | no | value differs |
+      | `key: db, operator: Exists, effect: NoSchedule` | no | key differs |
+      :::
+
+      :::warning
+      Tolerations do **not** *select* nodes — they only *allow* scheduling
+      onto tainted ones. A pod with a toleration is not forced onto that node;
+      it just becomes eligible. If you want pods to land somewhere specific,
+      use node affinity or `nodeSelector`.
+      :::
+
+      :::tip
+      The classic production pattern: taint dedicated nodes with
+      `dedicated=workers:NoSchedule`, and let the workloads that belong there
+      carry the matching toleration. The rest of the fleet cannot leak onto
+      them — the taint is the fence, the toleration is the gate.
+      :::
+  - type: mcq
+    prompt: "Which toleration tolerates the taint gpu=true:NoSchedule?"
+    options:
+      - "gpu=false:NoSchedule"
+      - "gpu=true:NoExecute"
+      - "gpu=:NoSchedule"
+      - "db=:NoSchedule"
+    answer: 2
+    explanation: "Empty value on the toleration means 'any value', so gpu=:NoSchedule matches key and effect — and any value."
+  - type: mscq
+    prompt: "Which effects actively block or evict pods?"
+    options: ["NoSchedule", "PreferNoSchedule", "NoExecute", "ClusterIP"]
+    answer: [0, 2]
+    explanation: "NoSchedule blocks new scheduling; NoExecute evicts running pods. PreferNoSchedule is only a soft preference."
 ---
-
-Taints are how a node says **"keep off."** Tolerations are how a pod says
-"actually, I accept that." Together they control which pods can land on which
-nodes — the foundation of dedicated nodes, GPU pools, and spot instances.
-
-## The command
-
-```bash
-# put a taint on a node: key=value:effect
-kubectl taint nodes node-1 gpu=true:NoSchedule
-
-# remove it (trailing dash)
-kubectl taint nodes node-1 gpu=true:NoSchedule-
-
-# see the taints on a node
-kubectl describe node node-1 | grep Taints
-```
-
-After that command, ordinary pods refuse to schedule onto `node-1` — and the
-kube-scheduler will not even try, unless a pod carries a matching toleration.
-
-## The three effects
-
-| Effect | Behavior |
-|--------|----------|
-| `NoSchedule` | block *new* scheduling (existing pods stay) |
-| `NoExecute` | evict pods already running without a toleration |
-| `PreferNoSchedule` | soft preference — avoid if possible |
-
-`NoSchedule` is safe to add to a live node. `NoExecute` is not — it evicts
-pods immediately.
-
-## The toleration
-
-A pod opts in with a `toleration` that matches the taint on key, value, and
-effect:
-
-```yaml
-spec:
-  tolerations:
-    - key: gpu
-      operator: Exists    # any value is fine
-      effect: NoSchedule
-```
-
-Two operators:
-
-- `Equal` — tolerates only a specific value (`value: "true"`).
-- `Exists` — tolerates any value (no `value` field).
-
-Leaving `effect` out tolerates *any* effect. The matching rule, in one line:
-
-```
-key matches AND (value matches OR value is wildcarded) AND
-(effect matches OR effect is wildcarded)
-```
-
-:::example
-Taint `gpu=true:NoSchedule`:
-
-| Toleration | Tolerates? | Why |
-|------------|-----------|-----|
-| `key: gpu, operator: Equal, value: "true", effect: NoSchedule` | yes | exact |
-| `key: gpu, operator: Exists, effect: NoSchedule` | yes | any value |
-| `key: gpu, operator: Equal, value: "true"` (no effect) | yes | any effect |
-| `key: gpu, operator: Equal, value: "false", effect: NoSchedule` | no | value differs |
-| `key: db, operator: Exists, effect: NoSchedule` | no | key differs |
-:::
-
-:::warning
-Tolerations do **not** *select* nodes — they only *allow* scheduling onto
-tainted ones. A pod with a toleration is not forced onto that node; it just
-becomes eligible. If you want pods to land somewhere specific, use node
-affinity or `nodeSelector`.
-:::
-
-:::tip
-The classic production pattern: taint dedicated nodes with
-`dedicated=workers:NoSchedule`, and let the workloads that belong there carry
-the matching toleration. The rest of the fleet cannot leak onto them — the
-taint is the fence, the toleration is the gate.
-:::

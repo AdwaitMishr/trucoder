@@ -1,91 +1,110 @@
 ---
 id: services
 title: "Services"
-type: content
 difficulty: easy
 order: 5
 tags: [services, selectors, dns]
+blocks:
+  - type: markdown
+    content: |
+      Pods come and go and get new IPs every time. A **Service** is the stable
+      name in front of a moving set of Pods — traffic reaches the Service, the
+      Service forwards to whatever Pods match it right now.
+
+      ## The selector: how a service finds pods
+
+      A Service picks its Pods with a **label selector**. A selector matches a
+      Pod when **every** `key=value` pair in it exists on the Pod with the same
+      value. Extra labels on the Pod are fine.
+
+      ```
+      selector:  app=web
+      pods:      app=web, tier=frontend   -> included
+                 app=api                   -> excluded (no app=web)
+      ```
+
+      ```yaml
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: web
+      spec:
+        selector:
+          app: web
+        ports:
+          - port: 80          # what the service listens on
+            targetPort: 8080  # where the pod actually listens
+      ```
+
+      :::warning
+      The selector must match the Deployment's pod labels — usually `app:
+      <name>` on both. If a Service shows no endpoints, nine times out of ten
+      the selector typo'd. `kubectl get endpoints` shows you immediately.
+      :::
+
+      ## Service types
+
+      | Type | Reachable from | Notes |
+      |------|----------------|-------|
+      | `ClusterIP` | inside the cluster | the default; a stable cluster-internal IP |
+      | `NodePort` | outside, via `nodeIP:port` | exposes a port on every node |
+      | `LoadBalancer` | the internet | cloud provider wires up a real LB → NodePort → Service |
+
+      ## The DNS name
+
+      Every Service gets a name in the cluster's DNS:
+
+      ```
+      <service-name>.<namespace>.svc.cluster.local
+      ```
+
+      So `web` in `default` resolves to `web.default.svc.cluster.local`. A pod
+      in the *same* namespace can just use `web`; anything else uses the full
+      name. That is why `redis.default.svc.cluster.local:6379` shows up in
+      config files.
+
+      ## The commands
+
+      ```bash
+      kubectl get services          # or: kubectl get svc
+      kubectl get endpoints         # which pods the service currently targets
+      kubectl describe svc web
+
+      # expose an existing deployment as a service
+      kubectl expose deployment web --port=80 --target-port=8080
+
+      # reach a service from your laptop (no LoadBalancer needed)
+      kubectl port-forward svc/web 8080:80
+      ```
+
+      :::tip
+      `kubectl port-forward` is the developer's best friend: it tunnels your
+      local machine straight to a service or pod. You can develop against a
+      cluster service as if it were localhost — no public exposure required.
+      :::
+
+      :::example
+      A pod wants to call the `api` service in the `payments` namespace:
+      `http://api.payments.svc.cluster.local` — stable forever, while the pods
+      behind it change IPs constantly. The Service is the address; the selector
+      is the address book.
+      :::
+  - type: mcq
+    prompt: "Which selector matches a pod labeled app=web, tier=frontend?"
+    options:
+      - "app=api"
+      - "tier=frontend, app=web"
+      - "tier=db"
+      - "app=web, env=prod"
+    answer: 1
+    explanation: "A selector matches when every pair is present with the same value — order does not matter, and extra pod labels are fine."
+  - type: mcq
+    prompt: "A Service named api in the payments namespace resolves to…"
+    options:
+      - "api.payments.svc.cluster.local"
+      - "payments.api.svc.cluster.local"
+      - "api.svc.payments.cluster.local"
+      - "payments.api.cluster.local"
+    answer: 0
+    explanation: "The pattern is name.namespace.svc.cluster.local — service name first, then the namespace, then the fixed svc.cluster.local tail."
 ---
-
-Pods come and go and get new IPs every time. A **Service** is the stable name
-in front of a moving set of Pods — traffic reaches the Service, the Service
-forwards to whatever Pods match it right now.
-
-## The selector: how a service finds pods
-
-A Service picks its Pods with a **label selector**. A selector matches a Pod
-when **every** `key=value` pair in it exists on the Pod with the same value.
-Extra labels on the Pod are fine.
-
-```
-selector:  app=web
-pods:      app=web, tier=frontend   -> included
-           app=api                   -> excluded (no app=web)
-```
-
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: web
-spec:
-  selector:
-    app: web
-  ports:
-    - port: 80          # what the service listens on
-      targetPort: 8080  # where the pod actually listens
-```
-
-:::warning
-The selector must match the Deployment's pod labels — usually `app: <name>`
-on both. If a Service shows no endpoints, nine times out of ten the selector
-typo'd. `kubectl get endpoints` shows you immediately.
-:::
-
-## Service types
-
-| Type | Reachable from | Notes |
-|------|----------------|-------|
-| `ClusterIP` | inside the cluster | the default; a stable cluster-internal IP |
-| `NodePort` | outside, via `nodeIP:port` | exposes a port on every node |
-| `LoadBalancer` | the internet | cloud provider wires up a real LB → NodePort → Service |
-
-## The DNS name
-
-Every Service gets a name in the cluster's DNS:
-
-```
-<service-name>.<namespace>.svc.cluster.local
-```
-
-So `web` in `default` resolves to `web.default.svc.cluster.local`. A pod in
-the *same* namespace can just use `web`; anything else uses the full name.
-That is why `redis.default.svc.cluster.local:6379` shows up in config files.
-
-## The commands
-
-```bash
-kubectl get services          # or: kubectl get svc
-kubectl get endpoints         # which pods the service currently targets
-kubectl describe svc web
-
-# expose an existing deployment as a service
-kubectl expose deployment web --port=80 --target-port=8080
-
-# reach a service from your laptop (no LoadBalancer needed)
-kubectl port-forward svc/web 8080:80
-```
-
-:::tip
-`kubectl port-forward` is the developer's best friend: it tunnels your local
-machine straight to a service or pod. You can develop against a cluster
-service as if it were localhost — no public exposure required.
-:::
-
-:::example
-A pod wants to call the `api` service in the `payments` namespace:
-
-`http://api.payments.svc.cluster.local` — stable forever, while the pods
-behind it change IPs constantly. The Service is the address; the selector is
-the address book.
-:::

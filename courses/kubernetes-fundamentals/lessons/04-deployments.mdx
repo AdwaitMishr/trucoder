@@ -1,117 +1,140 @@
 ---
 id: deployments
 title: "Deployments"
-type: content
 difficulty: easy
 order: 4
 tags: [deployments, replicas, rolling-update]
+blocks:
+  - type: markdown
+    content: |
+      A Pod is mortal. A **Deployment** is the answer: it declares *how many
+      copies of a pod should exist*, and it keeps the world matching that
+      number no matter what happens.
+
+      ## The idea: desired state
+
+      A Deployment is a loop in YAML form:
+
+      ```
+      desired replicas: 3
+      current replicas: 2   <- a pod died
+      action: create 1 more
+      ```
+
+      That loop — observe, compare, act — is called **reconciliation**, and the
+      controller-manager runs it constantly. You never tell Kubernetes to "fix
+      the pod"; you declare `replicas: 3` and it converges.
+
+      ## The manifest
+
+      ```yaml
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: web
+      spec:
+        replicas: 3
+        selector:
+          matchLabels:
+            app: web
+        template:
+          metadata:
+            labels:
+              app: web
+          spec:
+            containers:
+              - name: web
+                image: nginx:1.27
+                ports:
+                  - containerPort: 80
+      ```
+
+      Three parts to read:
+
+      - `replicas` — the desired count.
+      - `selector.matchLabels` — which pods this Deployment owns (must match
+        the template's labels).
+      - `template` — the pod blueprint; change the image here to update the app.
+
+      ## The commands
+
+      ```bash
+      # create from a file
+      kubectl apply -f deployment.yaml
+
+      # the big three
+      kubectl get deployments
+      kubectl get pods
+      kubectl rollout status deployment/web
+
+      # scale: the declarative way
+      kubectl scale deployment web --replicas=5
+
+      # roll out a new image (edit the manifest, then)
+      kubectl apply -f deployment.yaml
+      kubectl rollout undo deployment/web   # back to the previous version
+      ```
+
+      :::tip
+      `kubectl rollout status` is the command to watch during an update — it
+      prints progress until every new pod is ready. If an update goes
+      sideways, `kubectl rollout undo` is your undo button.
+      :::
+
+      ## Rolling updates
+
+      When you change the image, a Deployment does not delete everything at
+      once. It rolls: new pods come up while old pods serve traffic, and the
+      two knobs bound the blast radius:
+
+      ```yaml
+      spec:
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxUnavailable: 1      # at most 1 pod down at any time
+            maxSurge: 1            # at most 1 extra pod above desired
+      ```
+
+      - `maxUnavailable` — how many may be down during the update (absolute or %).
+      - `maxSurge` — how many may exist *above* the desired count.
+
+      Setting both to `1` means: one new pod starts, one old pod stops, repeat.
+      The service never empties.
+
+      :::warning
+      Do not hand-delete pods "to test" a Deployment. The controller sees the
+      gap and immediately creates replacements — the pod you deleted is back in
+      seconds. That is the feature working correctly. To remove pods, scale the
+      Deployment or delete it.
+      :::
+
+      :::example
+      `replicas: 5`, `maxUnavailable: 1`, `maxSurge: 1`: during an update the
+      Deployment may have 4 old + 1 new, or 5 old + 1 new — but never fewer
+      than 4 serving and never more than 6 total. That is the whole
+      rolling-update contract in one sentence.
+      :::
+  - type: flowchart
+    title: "a rolling update"
+    nodes: ["Update starts", "Create new pod", "New pod ready", "Terminate old pod", "Rollout complete"]
+    edges:
+      - {from: 0, to: 1, label: "surge +1"}
+      - {from: 1, to: 2, label: "readiness probe passes"}
+      - {from: 2, to: 3, label: "unavailable -1"}
+      - {from: 3, to: 4, label: "repeat until all replaced"}
+  - type: mcq
+    prompt: "replicas: 10, maxUnavailable: 25% — how many pods may be down during the update?"
+    options: ["1", "2", "3", "25"]
+    answer: 1
+    explanation: "floor(10 × 25 / 100) = floor(2.5) = 2. Percentages round down."
+  - type: mscq
+    prompt: "Which statements about rolling updates are true?"
+    options:
+      - "New pods become ready before old ones are all terminated"
+      - "maxSurge caps how many extra pods may exist above desired"
+      - "maxUnavailable may be written as a percentage"
+      - "A Deployment replaces all pods at once by default"
+    answer: [0, 1, 2]
+    explanation: "The default strategy is RollingUpdate, which is incremental: maxSurge bounds the upside, maxUnavailable bounds the downside."
 ---
-
-A Pod is mortal. A **Deployment** is the answer: it declares *how many copies of
-a pod should exist*, and it keeps the world matching that number no matter what
-happens.
-
-## The idea: desired state
-
-A Deployment is a loop in YAML form:
-
-```
-desired replicas: 3
-current replicas: 2   <- a pod died
-action: create 1 more
-```
-
-That loop — observe, compare, act — is called **reconciliation**, and the
-controller-manager runs it constantly. You never tell Kubernetes to "fix the
-pod"; you declare `replicas: 3` and it converges.
-
-## The manifest
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: web
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: web
-  template:
-    metadata:
-      labels:
-        app: web
-    spec:
-      containers:
-        - name: web
-          image: nginx:1.27
-          ports:
-            - containerPort: 80
-```
-
-Three parts to read:
-
-- `replicas` — the desired count.
-- `selector.matchLabels` — which pods this Deployment owns (must match the
-  template's labels).
-- `template` — the pod blueprint; change the image here to update the app.
-
-## The commands
-
-```bash
-# create from a file
-kubectl apply -f deployment.yaml
-
-# the big three
-kubectl get deployments
-kubectl get pods
-kubectl rollout status deployment/web
-
-# scale: the declarative way
-kubectl scale deployment web --replicas=5
-
-# roll out a new image (edit the manifest, then)
-kubectl apply -f deployment.yaml
-kubectl rollout undo deployment/web   # back to the previous version
-```
-
-:::tip
-`kubectl rollout status` is the command to watch during an update — it prints
-progress until every new pod is ready. If an update goes sideways,
-`kubectl rollout undo` is your undo button.
-:::
-
-## Rolling updates
-
-When you change the image, a Deployment does not delete everything at once. It
-rolls: new pods come up while old pods serve traffic, and the two knobs bound
-the blast radius:
-
-```yaml
-spec:
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1      # at most 1 pod down at any time
-      maxSurge: 1            # at most 1 extra pod above desired
-```
-
-- `maxUnavailable` — how many may be down during the update (absolute or %).
-- `maxSurge` — how many may exist *above* the desired count.
-
-Setting both to `1` means: one new pod starts, one old pod stops, repeat. The
-service never empties.
-
-:::warning
-Do not hand-delete pods "to test" a Deployment. The controller sees the gap
-and immediately creates replacements — the pod you deleted is back in seconds.
-That is the feature working correctly. To remove pods, scale the Deployment or
-delete it.
-:::
-
-:::example
-`replicas: 5`, `maxUnavailable: 1`, `maxSurge: 1`: during an update the
-Deployment may have 4 old + 1 new, or 5 old + 1 new — but never fewer than 4
-serving and never more than 6 total. That is the whole rolling-update contract
-in one sentence.
-:::

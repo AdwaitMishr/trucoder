@@ -417,6 +417,62 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 .lesson-nav .ghost.disabled { opacity: 0.4; cursor: default; pointer-events: none; }
 .nav-count { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); }
 
+/* quiz blocks (mcq / mscq) */
+.quiz {
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 6px;
+  padding: 16px 18px; margin: 22px 0;
+}
+.quiz-done { border-color: color-mix(in srgb, var(--ok) 45%, var(--hairline)); }
+.quiz-label {
+  display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--muted); font-family: var(--font-mono); margin-bottom: 8px;
+}
+.quiz-prompt { margin: 0 0 12px; font-size: 15px; font-weight: 500; }
+.quiz-options { display: flex; flex-direction: column; gap: 6px; }
+.quiz-opt {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  background: var(--bg); border: 1px solid var(--hairline); border-radius: 6px;
+  padding: 9px 12px; font-family: inherit; font-size: 13.5px; color: var(--ink);
+  cursor: pointer; transition: border-color 0.15s, background 0.15s;
+}
+.quiz-opt:hover:not(:disabled) { border-color: var(--muted); }
+.quiz-opt.sel { border-color: var(--accent); background: var(--accent-soft); }
+.quiz-opt:disabled { cursor: default; }
+.quiz-key {
+  flex-shrink: 0; width: 20px; height: 20px; border-radius: 4px;
+  border: 1px solid var(--hairline); display: inline-flex; align-items: center;
+  justify-content: center; font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+}
+.quiz-opt.sel .quiz-key { border-color: var(--accent); color: var(--accent); }
+.quiz-opt-text { flex: 1; }
+.quiz-opt-mark { color: var(--ok); flex-shrink: 0; }
+.quiz-actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.quiz-feedback { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.quiz-feedback.ok { color: var(--ok); margin-top: 12px; }
+.quiz-feedback.bad { color: var(--err); font-size: 12.5px; }
+
+/* flowchart blocks (inline SVG) */
+.flowchart { margin: 22px 0; }
+.flowchart-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--muted); font-family: var(--font-mono); margin-bottom: 8px;
+}
+.flowchart-scroll { overflow-x: auto; }
+.flowchart-svg { display: block; max-width: 100%; height: auto; }
+.flow-node { fill: var(--surface); stroke: var(--hairline); stroke-width: 1.5; }
+.flow-node-label { fill: var(--ink); font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+.flow-edge { stroke: var(--muted); stroke-width: 1.5; }
+.flow-edge-label { fill: var(--muted); font-family: var(--font-mono); font-size: 10px; }
+.flow-arrow { fill: var(--muted); }
+
+/* image blocks */
+.block-image { margin: 22px 0; }
+.block-image img {
+  display: block; max-width: 100%;
+  border: 1px solid var(--hairline); border-radius: 6px;
+}
+.block-image figcaption { margin-top: 8px; color: var(--muted); font-size: 12.5px; }
+
 /* ---- workbench ---- */
 .workbench {
   display: flex; flex-direction: column; min-height: 0; overflow: hidden;

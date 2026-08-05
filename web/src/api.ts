@@ -1,4 +1,5 @@
 import type {
+  AnswerResult,
   CourseDetail,
   CourseSummary,
   Lang,
@@ -66,4 +67,15 @@ export const api = {
       `/api/courses/${courseId}/lessons/${lessonId}/read`,
       {}
     ),
+
+  answer: (courseId: string, lessonId: string, blockId: number, answers: number[]) =>
+    post<AnswerResult>(
+      `/api/courses/${courseId}/lessons/${lessonId}/answer`,
+      { blockId, answers }
+    ),
 };
+
+/** Absolute URL for a course asset (image blocks). */
+export function assetUrl(courseId: string, src: string): string {
+  return `/api/assets/courses/${courseId}/${src}`;
+}

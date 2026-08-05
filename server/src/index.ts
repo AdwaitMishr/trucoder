@@ -35,6 +35,14 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "trucoder", time: new Date().toISOString() });
 });
 
+// Course assets (images referenced by lesson blocks). Public — they are
+// course content, not user data.
+app.get("/api/assets/courses/:courseId/:file", (req, res) => {
+  const courseId = path.basename(req.params.courseId);
+  const file = path.basename(req.params.file);
+  res.sendFile(path.join(config.coursesDir, courseId, "assets", file));
+});
+
 // Everything else under /api requires a valid session cookie.
 app.use("/api", (req, res, next) => {
   const userId = resolveToken(req.cookies?.[config.cookieName]);

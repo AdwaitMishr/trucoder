@@ -1,5 +1,6 @@
-// Verify every course: run each lesson's reference solution against all its
-// public + private tests. A lesson is green only if its tests match its solution.
+// Verify every course: run each code block's reference solution against all
+// its public + private tests, and sanity-check quiz blocks. A lesson is green
+// only if its tests match its solution.
 process.env.DATA_DIR = "/tmp/trucoder-verify-data";
 const { scanCourses, getCourses } = require("../dist/courses/loader");
 const { submit } = require("../dist/judge");
@@ -11,12 +12,23 @@ const { submit } = require("../dist/judge");
   for (const course of getCourses()) {
     console.log(`\n== ${course.title} ==`);
     for (const lesson of course.lessons) {
-      if (!lesson.solution) {
-        // Content-only lessons have no tests to run — not a failure.
-        console.log(`  SKIP ${lesson.id} (content — no exercise)`);
+      const codeBlock = lesson.blocks.find((b) => b.type === "code");
+      if (!codeBlock) {
+        // Content/quiz lessons have no tests to run — not a failure.
+        const quizzes = lesson.blocks.filter(
+          (b) => b.type === "mcq" || b.type === "mscq"
+        );
+        console.log(
+          `  SKIP ${lesson.id} (${quizzes.length ? `${quizzes.length} quiz block(s)` : "content"})`
+        );
         continue;
       }
-      const res = await submit(lesson, "python", lesson.solution);
+      if (!codeBlock.solution) {
+        console.log(`  SKIP ${lesson.id} (code block has no reference solution)`);
+        fail += 1;
+        continue;
+      }
+      const res = await submit(codeBlock, "python", codeBlock.solution);
       if (res.verdict === "accepted") {
         pass += 1;
         console.log(

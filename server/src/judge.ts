@@ -1,5 +1,5 @@
 import { runInSandbox, type SandboxResult } from "./sandbox";
-import type { Lang, Lesson, TestCase } from "./courses/types";
+import type { CodeBlock, Lang, TestCase } from "./courses/types";
 import type { RunResult, SubmitResult, TestResult } from "./types";
 
 /**
@@ -51,7 +51,7 @@ function compileErrorFrom(lang: Lang, res: SandboxResult): string | undefined {
 }
 
 async function runBatch(
-  lesson: Lesson,
+  block: CodeBlock,
   lang: Lang,
   code: string,
   tests: TestCase[]
@@ -61,7 +61,7 @@ async function runBatch(
       language: lang,
       code,
       tests: tests.map((t) => ({ args: t.args })),
-      timeLimitMs: lesson.timeLimitMs,
+      timeLimitMs: block.timeLimitMs,
     });
     if (compileErrorFrom(lang, res)) {
       return tests.map((t) => ({
@@ -99,26 +99,26 @@ async function runBatch(
 }
 
 export async function runPublic(
-  lesson: Lesson,
+  block: CodeBlock,
   lang: Lang,
   code: string
 ): Promise<import("./types").RunResult> {
-  const results = await runBatch(lesson, lang, code, lesson.publicTests);
+  const results = await runBatch(block, lang, code, block.publicTests);
   const compileError = results.find((r) => r.error?.startsWith("compile error"))
     ?.error;
   return { publicTests: results, compileError };
 }
 
 export async function submit(
-  lesson: Lesson,
+  block: CodeBlock,
   lang: Lang,
   code: string
 ): Promise<import("./types").SubmitResult> {
-  const all = [...lesson.publicTests, ...lesson.privateTests];
-  const results = await runBatch(lesson, lang, code, all);
+  const all = [...block.publicTests, ...block.privateTests];
+  const results = await runBatch(block, lang, code, all);
 
-  const publicTests = results.slice(0, lesson.publicTests.length);
-  const privateTests = results.slice(lesson.publicTests.length);
+  const publicTests = results.slice(0, block.publicTests.length);
+  const privateTests = results.slice(block.publicTests.length);
   const privatePassed = privateTests.filter((r) => r.passed).length;
 
   const compileError = publicTests.find((r) =>

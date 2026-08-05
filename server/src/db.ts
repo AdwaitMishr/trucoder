@@ -57,6 +57,17 @@ db.exec(`
     compile_error TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS answers (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    course_id TEXT NOT NULL,
+    lesson_id TEXT NOT NULL,
+    block_id INTEGER NOT NULL,
+    correct INTEGER NOT NULL DEFAULT 0,
+    answer TEXT,
+    answered_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, course_id, lesson_id, block_id)
+  );
 `);
 
 // ---- users ----
@@ -155,6 +166,52 @@ export function markLessonRead(
                         THEN excluded.solved_at ELSE progress.solved_at END,
        last_attempt_at = excluded.last_attempt_at`
   ).run(userId, courseId, lessonId, now, now);
+}
+
+// ---- quiz block answers ----
+export interface AnswerRow {
+  user_id: number;
+  course_id: string;
+  lesson_id: string;
+  block_id: number;
+  correct: number;
+  answer: string | null;
+  answered_at: string;
+}
+
+/** Record a quiz block answer (upsert per block). */
+export function recordAnswer(
+  userId: number,
+  courseId: string,
+  lessonId: string,
+  blockId: number,
+  correct: boolean,
+  answerJson: string
+): void {
+  db.prepare(
+    `INSERT INTO answers
+       (user_id, course_id, lesson_id, block_id, correct, answer)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, course_id, lesson_id, block_id) DO UPDATE SET
+       correct = MAX(answers.correct, excluded.correct),
+       answer = excluded.answer,
+       answered_at = excluded.answered_at`
+  ).run(userId, courseId, lessonId, blockId, correct ? 1 : 0, answerJson);
+}
+
+/** Correctly-answered quiz block ids for a lesson. */
+export function getSolvedQuizBlocks(
+  userId: number,
+  courseId: string,
+  lessonId: string
+): Set<number> {
+  const rows = db
+    .prepare(
+      `SELECT block_id FROM answers
+       WHERE user_id = ? AND course_id = ? AND lesson_id = ? AND correct = 1`
+    )
+    .all(userId, courseId, lessonId) as { block_id: number }[];
+  return new Set(rows.map((r) => r.block_id));
 }
 
 export function recordSubmission(input: {

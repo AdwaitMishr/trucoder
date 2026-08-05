@@ -1,76 +1,101 @@
 ---
 id: cluster-architecture
 title: "Cluster Architecture"
-type: content
 difficulty: beginner
 order: 1
 tags: [cluster, control-plane, kubectl]
+blocks:
+  - type: markdown
+    content: |
+      Before you run a single command, know who is who. A Kubernetes cluster is
+      two kinds of machine working as one: the **control plane** that decides,
+      and the **worker nodes** that do.
+
+      ## The control plane: the brain
+
+      The control plane runs the four services that run the whole cluster. They
+      usually live on a few dedicated machines (or three in a managed cluster
+      like EKS or GKE):
+
+      | Component | Job |
+      |-----------|-----|
+      | `kube-apiserver` | The front door. Every command and every internal check goes through the API server. Nothing talks to the cluster without it. |
+      | `etcd` | The cluster's database — every object (pods, services, secrets) is stored here as key-value data. |
+      | `kube-scheduler` | Decides which node a new pod lands on, based on resources, taints, and affinity rules. |
+      | `kube-controller-manager` | Runs the controller loops that keep the cluster converging on what you declared. |
+
+      ## Worker nodes: the muscles
+
+      Every worker node runs three things:
+
+      | Component | Job |
+      |-----------|-----|
+      | `kubelet` | The node's agent. It talks to the API server, starts pods, and reports status. |
+      | container runtime | Actually runs the containers (containerd, CRI-O). |
+      | `kube-proxy` | Implements Service networking — the rules that route traffic to pods. |
+
+      The rule of thumb: **you never touch a worker node directly.** You talk to
+      the control plane, and the control plane tells the kubelets what to run.
+
+      ## kubectl: your one door
+
+      Everything you do, you do through `kubectl`, which talks to the API
+      server:
+
+      ```bash
+      # who are the nodes?
+      kubectl get nodes
+
+      # everything in every namespace
+      kubectl get pods -A
+
+      # what is running, right now, in this namespace?
+      kubectl get all
+      ```
+
+      :::tip
+      `kubectl get nodes` is the first command anyone should run on a new
+      cluster. One row per machine — `Ready` on every line means a healthy
+      fleet.
+      :::
+
+      ## Declarative, not imperative
+
+      The big mental shift: you don't tell Kubernetes *what to do*, you tell it
+      *what you want*. A manifest file describes the desired state, and you
+      apply it:
+
+      ```bash
+      kubectl apply -f deployment.yaml
+      ```
+
+      Kubernetes figures out how to get there and keeps itself there. The file
+      is the source of truth — not the sequence of commands you typed.
+
+      :::warning
+      `kubectl run` and `kubectl create` are handy for one-off experiments, but
+      a cluster managed by hand-typed commands drifts. Put everything in YAML
+      files, `apply` them, and keep them in git. That is the whole game.
+      :::
+  - type: image
+    src: control-plane.svg
+    alt: "Control plane components: kubectl talks to the API server, which talks to etcd, the scheduler, the controller manager, and every worker's kubelet"
+    caption: "The control plane decides; the workers do. Everything goes through the API server."
+  - type: flowchart
+    title: "how a kubectl command reaches a pod"
+    nodes: ["kubectl", "API server", "Scheduler", "kubelet", "Pod"]
+    edges:
+      - {from: 0, to: 1, label: "apply"}
+      - {from: 1, to: 2, label: "finds a node"}
+      - {from: 2, to: 3, label: "start"}
+      - {from: 3, to: 4, label: "running"}
+  - type: mcq
+    prompt: "Which control plane component stores the entire cluster state?"
+    options:
+      - "kube-apiserver"
+      - "etcd"
+      - "kube-scheduler"
+      - "kubelet"
+    answer: 1
+    explanation: "etcd is the cluster's key-value database. The API server is the door to it, but etcd is where the state actually lives."
 ---
-
-Before you run a single command, know who is who. A Kubernetes cluster is two
-kinds of machine working as one: the **control plane** that decides, and the
-**worker nodes** that do.
-
-## The control plane: the brain
-
-The control plane runs the four services that run the whole cluster. They
-usually live on a few dedicated machines (or three in a managed cluster like
-EKS or GKE):
-
-| Component | Job |
-|-----------|-----|
-| `kube-apiserver` | The front door. Every command and every internal check goes through the API server. Nothing talks to the cluster without it. |
-| `etcd` | The cluster's database — every object (pods, services, secrets) is stored here as key-value data. |
-| `kube-scheduler` | Decides which node a new pod lands on, based on resources, taints, and affinity rules. |
-| `kube-controller-manager` | Runs the controller loops that keep the cluster converging on what you declared. |
-
-## Worker nodes: the muscles
-
-Every worker node runs three things:
-
-| Component | Job |
-|-----------|-----|
-| `kubelet` | The node's agent. It talks to the API server, starts pods, and reports status. |
-| container runtime | Actually runs the containers (containerd, CRI-O). |
-| `kube-proxy` | Implements Service networking — the rules that route traffic to pods. |
-
-The rule of thumb: **you never touch a worker node directly.** You talk to the
-control plane, and the control plane tells the kubelets what to run.
-
-## kubectl: your one door
-
-Everything you do, you do through `kubectl`, which talks to the API server:
-
-```bash
-# who are the nodes?
-kubectl get nodes
-
-# everything in every namespace
-kubectl get pods -A
-
-# what is running, right now, in this namespace?
-kubectl get all
-```
-
-:::tip
-`kubectl get nodes` is the first command anyone should run on a new cluster.
-One row per machine — `Ready` on every line means a healthy fleet.
-:::
-
-## Declarative, not imperative
-
-The big mental shift: you don't tell Kubernetes *what to do*, you tell it
-*what you want*. A manifest file describes the desired state, and you apply it:
-
-```bash
-kubectl apply -f deployment.yaml
-```
-
-Kubernetes figures out how to get there and keeps itself there. The file is
-the source of truth — not the sequence of commands you typed.
-
-:::warning
-`kubectl run` and `kubectl create` are handy for one-off experiments, but a
-cluster managed by hand-typed commands drifts. Put everything in YAML files,
-`apply` them, and keep them in git. That is the whole game.
-:::

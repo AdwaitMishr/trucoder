@@ -1,108 +1,125 @@
 ---
 id: pods
 title: "Pods"
-type: content
 difficulty: beginner
 order: 2
 tags: [pods, containers, yaml]
+blocks:
+  - type: markdown
+    content: |
+      The Pod is the smallest thing Kubernetes schedules. Everything else —
+      Deployments, Jobs, DaemonSets — is a wrapper that creates Pods.
+
+      ## What a pod is
+
+      A Pod is **one or more containers that share a life**. They share:
+
+      - a network namespace (one IP, one set of ports),
+      - a hostname,
+      - storage volumes,
+      - the same node.
+
+      For 99% of cases, a Pod wraps **one container** — your app. The
+      two-container pattern exists (sidecars for logging, proxies, or secret
+      refresh), but you rarely start there.
+
+      ## The pod lifecycle
+
+      A Pod passes through states:
+
+      ```
+      Pending -> Running -> Succeeded | Failed
+      ```
+
+      - `Pending` — scheduled, images pulling, starting up.
+      - `Running` — containers up and executing.
+      - `Succeeded` — all containers finished with exit code 0 (a completed job).
+      - `Failed` — a container exited non-zero or the node gave up.
+
+      :::warning
+      A Pod is **mortal**. It does not survive a node crash, an eviction, or a
+      deliberate delete. Never depend on a Pod by name — that is what
+      Deployments are for (next lesson). If you find yourself restarting pods
+      by hand, you are using the wrong abstraction.
+      :::
+
+      ## Running a pod
+
+      The quick way — a throwaway, for experiments only:
+
+      ```bash
+      # run a pod named hello from the nginx image
+      kubectl run hello --image=nginx
+
+      # watch it come up
+      kubectl get pods
+
+      # more detail than you knew you needed
+      kubectl describe pod hello
+
+      # stream the logs
+      kubectl logs hello
+
+      # get a shell inside the container
+      kubectl exec -it hello -- /bin/sh
+
+      # it is gone forever
+      kubectl delete pod hello
+      ```
+
+      :::tip
+      `kubectl describe` is the debugging Swiss army knife. It shows the pod's
+      events: image pulls, container starts, and any error — in order. When
+      something is stuck, describe it before you guess.
+      :::
+
+      ## The pod manifest
+
+      The declarative way — a `pod.yaml` you keep in git:
+
+      ```yaml
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: hello
+        labels:
+          app: hello
+      spec:
+        containers:
+          - name: hello
+            image: nginx:1.27
+            ports:
+              - containerPort: 80
+      ```
+
+      ```bash
+      kubectl apply -f pod.yaml
+      ```
+
+      Note the `labels` — `app: hello`. Nothing finds a pod by name in
+      Kubernetes; things find pods by **labels**, and `kubectl apply` is how
+      the file becomes reality.
+
+      :::example
+      Try the journey with one pod: `apply` the manifest, `kubectl get pods`
+      until `Running`, `kubectl logs` it, then `kubectl delete pod` and watch
+      it vanish. That lifecycle — create, check, inspect, remove — is the
+      rhythm of everything that follows.
+      :::
+  - type: flowchart
+    title: "pod lifecycle"
+    nodes: ["Pending", "Running", "Succeeded", "Failed"]
+    edges:
+      - {from: 0, to: 1, label: "scheduled & started"}
+      - {from: 1, to: 2, label: "exit 0"}
+      - {from: 1, to: 3, label: "crash or node failure"}
+  - type: mcq
+    prompt: "What is a Pod?"
+    options:
+      - "the smallest unit Kubernetes schedules"
+      - "a group of nodes"
+      - "a container runtime"
+      - "a type of load balancer"
+    answer: 0
+    explanation: "A Pod is the smallest schedulable unit. Deployments and Services manage Pods; they do not replace them."
 ---
-
-The Pod is the smallest thing Kubernetes schedules. Everything else — Deployments,
-Jobs, DaemonSets — is a wrapper that creates Pods.
-
-## What a pod is
-
-A Pod is **one or more containers that share a life**. They share:
-
-- a network namespace (one IP, one set of ports),
-- a hostname,
-- storage volumes,
-- the same node.
-
-For 99% of cases, a Pod wraps **one container** — your app. The two-container
-pattern exists (sidecars for logging, proxies, or secret refresh), but you
-rarely start there.
-
-## The pod lifecycle
-
-A Pod passes through states:
-
-```
-Pending -> Running -> Succeeded | Failed
-```
-
-- `Pending` — scheduled, images pulling, starting up.
-- `Running` — containers up and executing.
-- `Succeeded` — all containers finished with exit code 0 (a completed job).
-- `Failed` — a container exited non-zero or the node gave up.
-
-:::warning
-A Pod is **mortal**. It does not survive a node crash, an eviction, or a
-deliberate delete. Never depend on a Pod by name — that is what Deployments
-are for (next lesson). If you find yourself restarting pods by hand, you are
-using the wrong abstraction.
-:::
-
-## Running a pod
-
-The quick way — a throwaway, for experiments only:
-
-```bash
-# run a pod named hello from the nginx image
-kubectl run hello --image=nginx
-
-# watch it come up
-kubectl get pods
-
-# more detail than you knew you needed
-kubectl describe pod hello
-
-# stream the logs
-kubectl logs hello
-
-# get a shell inside the container
-kubectl exec -it hello -- /bin/sh
-
-# it is gone forever
-kubectl delete pod hello
-```
-
-:::tip
-`kubectl describe` is the debugging Swiss army knife. It shows the pod's
-events: image pulls, container starts, and any error — in order. When
-something is stuck, describe it before you guess.
-:::
-
-## The pod manifest
-
-The declarative way — a `pod.yaml` you keep in git:
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: hello
-  labels:
-    app: hello
-spec:
-  containers:
-    - name: hello
-      image: nginx:1.27
-      ports:
-        - containerPort: 80
-```
-
-```bash
-kubectl apply -f pod.yaml
-```
-
-Note the `labels` — `app: hello`. Nothing finds a pod by name in Kubernetes;
-things find pods by **labels**, and `kubectl apply` is how the file becomes
-reality.
-
-:::example
-Try the journey with one pod: `apply` the manifest, `kubectl get pods` until
-`Running`, `kubectl logs` it, then `kubectl delete pod` and watch it vanish.
-That lifecycle — create, check, inspect, remove — is the rhythm of everything
-that follows.
-:::

@@ -1,7 +1,13 @@
 import { Router } from "express";
 import { getCourse, getLesson } from "../courses/loader";
-import type { Lang } from "../courses/types";
-import { getProgress, markLessonRead, recordSubmission } from "../db";
+import type { Block, CodeBlock, Lang, QuizBlock } from "../courses/types";
+import {
+  getProgress,
+  getSolvedQuizBlocks,
+  markLessonRead,
+  recordAnswer,
+  recordSubmission,
+} from "../db";
 import { runPublic, submit } from "../judge";
 
 export const lessonsRouter = Router({ mergeParams: true });
@@ -25,6 +31,39 @@ function paramsOf(req: {
   return { courseId: req.params.courseId ?? "", lessonId: req.params.lessonId };
 }
 
+/** Find the lesson's code block (a lesson has at most one). */
+function codeBlockOf(lesson: { blocks: Block[] }): CodeBlock | undefined {
+  return lesson.blocks.find((b) => b.type === "code") as CodeBlock | undefined;
+}
+
+/** Quiz blocks of a lesson, with their block indices (server-side ids). */
+function quizBlocksOf(lesson: { blocks: Block[] }): {
+  index: number;
+  block: QuizBlock;
+}[] {
+  return lesson.blocks
+    .map((b, i) => ({ index: i, block: b as QuizBlock }))
+    .filter(
+      (x): x is { index: number; block: QuizBlock } =>
+        x.block.type === "mcq" || x.block.type === "mscq"
+    );
+}
+
+/** Strip server-only fields (answers, solutions) before sending blocks. */
+function publicBlocks(lesson: { blocks: Block[] }): unknown[] {
+  return lesson.blocks.map((b) => {
+    if (b.type === "mcq" || b.type === "mscq") {
+      const { answer: _answer, ...rest } = b;
+      return rest;
+    }
+    if (b.type === "code") {
+      const { solution: _solution, privateTests: _priv, ...rest } = b;
+      return rest;
+    }
+    return b;
+  });
+}
+
 /** Full lesson content for learning (public tests visible, private hidden). */
 lessonsRouter.get("/:lessonId", (req, res) => {
   const userId = req.userId!;
@@ -32,6 +71,13 @@ lessonsRouter.get("/:lessonId", (req, res) => {
   const lesson = getLesson(courseId, lessonId);
   if (!lesson) return res.status(404).json({ error: "lesson not found" });
   const p = getProgress(userId, lesson.courseId, lesson.id);
+  const solvedQuizzes = getSolvedQuizBlocks(userId, lesson.courseId, lesson.id);
+  const quizBlocks = quizBlocksOf(lesson);
+
+  // A lesson is solved when its graded blocks are all solved:
+  // code block -> accepted submission (progress.solved); quizzes -> correct answers.
+  const codeSolved = lesson.hasExercise ? Boolean(p?.solved) : true;
+  const quizSolved = quizBlocks.every((q) => solvedQuizzes.has(q.index));
 
   // Previous/next lesson within the course (ordered by `order`).
   const ordered = (getCourse(lesson.courseId)?.lessons ?? []).sort(
@@ -55,16 +101,10 @@ lessonsRouter.get("/:lessonId", (req, res) => {
     order: lesson.order,
     tags: lesson.tags,
     hasExercise: lesson.hasExercise,
-    task: lesson.task,
-    languages: lesson.languages,
-    signature: lesson.signature,
-    starterCode: lesson.starterCode,
-    publicTests: lesson.publicTests,
-    timeLimitMs: lesson.timeLimitMs,
-    hints: lesson.hints,
-    body: lesson.body,
+    blocks: publicBlocks(lesson),
+    solvedBlocks: [...solvedQuizzes],
     progress: {
-      solved: Boolean(p?.solved),
+      solved: codeSolved && quizSolved,
       attemptCount: p?.attempt_count ?? 0,
     },
     lastCode: p?.last_code ?? null,
@@ -76,27 +116,75 @@ lessonsRouter.get("/:lessonId", (req, res) => {
   });
 });
 
-function ensureSupported(lesson: ReturnType<typeof getLesson>, lang: Lang) {
-  return (
-    lesson &&
-    lesson.signature[lang] &&
-    lesson.starterCode[lang]
-  );
-}
-
-/** Mark a content-only lesson as read (no coding exercise). */
+/** Mark a lesson with no graded blocks as read (no coding exercise). */
 lessonsRouter.post("/:lessonId/read", (req, res) => {
   const userId = req.userId!;
   const { courseId, lessonId } = paramsOf(req);
   const lesson = getLesson(courseId, lessonId);
   if (!lesson) return res.status(404).json({ error: "lesson not found" });
-  if (lesson.hasExercise) {
+  if (lesson.hasExercise || quizBlocksOf(lesson).length > 0) {
     return res
       .status(400)
-      .json({ error: "this lesson has a coding exercise — solve it instead" });
+      .json({ error: "this lesson has graded content — solve it instead" });
   }
   markLessonRead(userId, courseId, lessonId);
   res.json({ solved: true });
+});
+
+/** Grade a quiz block (mcq/mscq) and record the answer. */
+lessonsRouter.post("/:lessonId/answer", (req, res) => {
+  const userId = req.userId!;
+  const { courseId, lessonId } = paramsOf(req);
+  const lesson = getLesson(courseId, lessonId);
+  if (!lesson) return res.status(404).json({ error: "lesson not found" });
+
+  const body = req.body as { blockId?: unknown; answers?: unknown };
+  const blockId = Number(body?.blockId);
+  if (!Number.isInteger(blockId) || blockId < 0) {
+    return res.status(400).json({ error: "invalid blockId" });
+  }
+  const target = lesson.blocks[blockId];
+  if (!target || (target.type !== "mcq" && target.type !== "mscq")) {
+    return res.status(400).json({ error: "block is not a quiz" });
+  }
+  if (!Array.isArray(body?.answers) || body.answers.length === 0) {
+    return res.status(400).json({ error: "invalid answers" });
+  }
+  const answers = [...new Set(body.answers.map(Number))].sort((a, b) => a - b);
+  if (answers.some((a) => !Number.isInteger(a) || a < 0)) {
+    return res.status(400).json({ error: "invalid answer indices" });
+  }
+
+  let correct: boolean;
+  if (target.type === "mcq") {
+    correct = answers.length === 1 && answers[0] === target.answer;
+  } else {
+    const want = [...target.answer].sort((a, b) => a - b);
+    correct =
+      answers.length === want.length &&
+      answers.every((a, i) => a === want[i]);
+  }
+
+  recordAnswer(
+    userId,
+    lesson.courseId,
+    lesson.id,
+    blockId,
+    correct,
+    JSON.stringify(answers)
+  );
+
+  // A quiz-only lesson is complete when every quiz block is answered correctly.
+  const solvedQuizzes = getSolvedQuizBlocks(userId, lesson.courseId, lesson.id);
+  const quizSolved = quizBlocksOf(lesson).every((q) => solvedQuizzes.has(q.index));
+  const lessonSolved = !lesson.hasExercise && quizSolved;
+  if (lessonSolved) markLessonRead(userId, lesson.courseId, lesson.id);
+
+  res.json({
+    correct,
+    explanation: correct ? target.explanation : "",
+    lessonSolved,
+  });
 });
 
 /** Run the visible public tests (fast feedback while coding). */
@@ -104,16 +192,17 @@ lessonsRouter.post("/:lessonId/run", async (req, res) => {
   const { courseId, lessonId } = paramsOf(req);
   const lesson = getLesson(courseId, lessonId);
   if (!lesson) return res.status(404).json({ error: "lesson not found" });
-  if (!lesson.hasExercise) {
+  const block = codeBlockOf(lesson);
+  if (!block) {
     return res.status(400).json({ error: "this lesson has no coding exercise" });
   }
   const body = parseBody(req.body);
   if (!body) return res.status(400).json({ error: "invalid body" });
-  if (!ensureSupported(lesson, body.lang)) {
+  if (!block.signature[body.lang] || !block.starterCode[body.lang]) {
     return res.status(400).json({ error: `lesson does not support ${body.lang}` });
   }
   try {
-    res.json(await runPublic(lesson, body.lang, body.code));
+    res.json(await runPublic(block, body.lang, body.code));
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
@@ -125,16 +214,17 @@ lessonsRouter.post("/:lessonId/submit", async (req, res) => {
   const { courseId, lessonId } = paramsOf(req);
   const lesson = getLesson(courseId, lessonId);
   if (!lesson) return res.status(404).json({ error: "lesson not found" });
-  if (!lesson.hasExercise) {
+  const block = codeBlockOf(lesson);
+  if (!block) {
     return res.status(400).json({ error: "this lesson has no coding exercise" });
   }
   const body = parseBody(req.body);
   if (!body) return res.status(400).json({ error: "invalid body" });
-  if (!ensureSupported(lesson, body.lang)) {
+  if (!block.signature[body.lang] || !block.starterCode[body.lang]) {
     return res.status(400).json({ error: `lesson does not support ${body.lang}` });
   }
   try {
-    const result = await submit(lesson, body.lang, body.code);
+    const result = await submit(block, body.lang, body.code);
     recordSubmission({
       userId,
       courseId: lesson.courseId,
