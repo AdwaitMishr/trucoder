@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { PiArrowLeft, PiCheck } from "react-icons/pi";
+import { PiArrowLeft, PiCheck, PiCaretRight } from "react-icons/pi";
 import { api } from "../api";
 import type { CourseDetail, Difficulty } from "../types";
 import Markdown from "./Markdown";
@@ -74,6 +74,7 @@ export default function CourseDashboard() {
               <span className={`diff diff-${l.difficulty}`}>
                 {DIFF_LABEL[l.difficulty]}
               </span>
+              <PiCaretRight size={14} className="row-arrow" />
             </Link>
           </li>
         ))}

@@ -88,6 +88,15 @@ body {
 }
 ::selection { background: var(--selection); }
 
+/* keyboard focus — visible ring for a11y, on every interactive element */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+/* inputs already show a focus ring via box-shadow; avoid doubling */
+.login-card input:focus-visible { outline: none; }
+
 a { color: inherit; text-decoration: none; }
 code, pre, .mono { font-family: var(--font-mono); }
 .muted { color: var(--muted); }
@@ -172,6 +181,15 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
   font-size: 11px; color: var(--muted); text-transform: uppercase;
   letter-spacing: 0.08em; font-family: var(--font-mono);
 }
+.pw-wrap { position: relative; }
+.pw-wrap input { width: 100%; padding-right: 38px; }
+.pw-toggle {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  padding: 5px; border-radius: 4px; display: inline-flex; align-items: center;
+  transition: color 0.15s;
+}
+.pw-toggle:hover { color: var(--ink); }
 .login-card input {
   padding: 9px 12px; border: 1px solid var(--hairline); border-radius: var(--radius-sm);
   background: var(--bg); color: var(--ink); font-size: 14px; font-family: var(--font);
@@ -199,6 +217,20 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 .back:hover { color: var(--ink); }
 
 .course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 20px; }
+
+/* loading skeletons (home) */
+.skel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 20px; }
+.skel-card {
+  border-radius: var(--radius); background: var(--surface); box-shadow: var(--card);
+  padding: 18px; display: flex; flex-direction: column; gap: 12px;
+}
+.skel-line {
+  height: 12px; border-radius: 4px;
+  background: linear-gradient(90deg, var(--surface2) 25%, color-mix(in srgb, var(--surface2) 45%, var(--surface)) 50%, var(--surface2) 75%);
+  background-size: 200% 100%; animation: shimmer 1.4s infinite;
+}
+.skel-line.w60 { width: 60%; } .skel-line.w80 { width: 80%; } .skel-line.w40 { width: 40%; }
+@keyframes shimmer { to { background-position: -200% 0; } }
 .course-card {
   display: flex; flex-direction: column; gap: 8px;
   background: var(--surface); border-radius: var(--radius); box-shadow: var(--card);
@@ -236,6 +268,12 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
   transition: background 0.15s;
 }
 .lesson-row:hover { background: var(--surface); }
+.row-arrow {
+  flex-shrink: 0; color: var(--muted); opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity 0.15s, transform 0.15s;
+}
+.lesson-row:hover .row-arrow, .lesson-row:focus-visible .row-arrow { opacity: 1; transform: translateX(0); }
 .lesson-state {
   width: 28px; text-align: center; color: var(--muted); flex-shrink: 0;
   font-family: var(--font-mono); font-size: 13px;

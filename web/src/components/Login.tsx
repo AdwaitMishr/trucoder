@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { PiTerminal } from "react-icons/pi";
+import { PiTerminal, PiEye, PiEyeSlash } from "react-icons/pi";
 import { api, ApiError } from "../api";
 import type { User } from "../types";
 
 export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -44,12 +45,23 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
         </label>
         <label>
           <span>password</span>
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <span className="pw-wrap">
+            <input
+              type={showPw ? "text" : "password"}
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <button
+              type="button"
+              className="pw-toggle"
+              onClick={() => setShowPw((s) => !s)}
+              title={showPw ? "hide password" : "show password"}
+              aria-label={showPw ? "hide password" : "show password"}
+            >
+              {showPw ? <PiEyeSlash size={16} /> : <PiEye size={16} />}
+            </button>
+          </span>
         </label>
         {error && <div className="form-error">{error}</div>}
         <button type="submit" disabled={busy || !username || !password}>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { PiTerminal, PiPalette, PiSignOut, PiCheck } from "react-icons/pi";
 import { api } from "../api";
@@ -15,6 +15,16 @@ export default function Nav({
   const { themeId, setThemeId, theme } = useTheme();
   const [open, setOpen] = useState(false);
 
+  // close the theme picker on Escape
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   return (
     <header className="nav">
       <Link to="/" className="brand">
@@ -28,13 +38,19 @@ export default function Nav({
         <span className="nav-user">{user.username}</span>
 
         <div style={{ position: "relative" }}>
-          <button className="ghost" onClick={() => setOpen((o) => !o)} title="theme">
+          <button
+            className="ghost"
+            onClick={() => setOpen((o) => !o)}
+            title="theme"
+            aria-expanded={open}
+            aria-haspopup="menu"
+          >
             <PiPalette size={16} />
             {theme.name}
           </button>
           {open && <div className="pop-backdrop" onClick={() => setOpen(false)} />}
           {open && (
-            <div className="theme-pop">
+            <div className="theme-pop" role="menu" aria-label="theme picker">
               {THEMES.map((t) => (
                 <button
                   key={t.id}

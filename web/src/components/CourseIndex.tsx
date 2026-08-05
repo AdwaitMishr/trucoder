@@ -11,7 +11,26 @@ export default function CourseIndex() {
     api.courses().then((r) => setCourses(r.courses));
   }, []);
 
-  if (!courses) return <div className="boot">trucoder</div>;
+  if (!courses) {
+    return (
+      <div className="page">
+        <header className="page-head">
+          <h1>courses</h1>
+          <p>pick one and work through it at your own pace.</p>
+        </header>
+        <div className="skel-grid" aria-hidden="true">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="skel-card">
+              <div className="skel-line w60" />
+              <div className="skel-line w80" />
+              <div className="skel-line w80" />
+              <div className="skel-line w40" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page">
