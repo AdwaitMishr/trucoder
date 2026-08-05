@@ -243,19 +243,22 @@ export default function LessonView() {
   return (
     <div className={`lesson-page ${zen ? "lesson-page-zen" : ""}`}>
       <div className="lesson-head">
-        <Link to={`/course/${courseId}`} className="back">
-          <PiArrowLeft size={14} /> course
-        </Link>
-        <span className="lesson-head-title">{p.title}</span>
-        {p.progress.solved && (
-          <span className="solved-badge">
-            <PiCheck size={11} /> solved
-          </span>
-        )}
-        <span className="spacer" />
-        <button className="ghost" onClick={toggleZen} title={zen ? "exit zen mode" : "zen mode"}>
-          <PiRows size={15} /> {zen ? "exit" : "zen"}
-        </button>
+        <div className="lesson-head-top">
+          <Link to={`/course/${courseId}`} className="back">
+            <PiArrowLeft size={14} /> course
+          </Link>
+          <button className="ghost" onClick={toggleZen} title={zen ? "exit zen mode" : "zen mode"}>
+            <PiRows size={15} /> {zen ? "exit" : "zen"}
+          </button>
+        </div>
+        <div className="lesson-head-title-row">
+          <h1 className="lesson-head-title">{p.title}</h1>
+          {p.progress.solved && (
+            <span className="solved-badge">
+              <PiCheck size={11} /> solved
+            </span>
+          )}
+        </div>
       </div>
 
       {zen ? (

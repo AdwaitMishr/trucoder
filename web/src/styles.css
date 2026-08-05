@@ -258,13 +258,20 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 /* ---- lesson (Operate/Inspect surface) ---- */
 .lesson-page { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 16px 20px; gap: 12px; }
 .lesson-head {
-  display: flex; align-items: center; gap: 12px; padding: 2px;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 2px 2px 14px; border-bottom: 1px solid var(--hairline);
 }
-.lesson-head-title { font-weight: 600; font-size: 14.5px; letter-spacing: -0.01em; }
+.lesson-head-top { display: flex; align-items: center; justify-content: space-between; }
+.lesson-head-top .back { margin: 0; }
+.lesson-head-title-row { display: flex; align-items: center; gap: 12px; }
+.lesson-head-title {
+  font-size: 26px; font-weight: 650; letter-spacing: -0.02em;
+  line-height: 1.15; margin: 0;
+}
 .solved-badge {
   font-size: 10.5px; color: var(--ok); background: var(--ok-soft);
-  padding: 2px 9px; border-radius: 999px; font-weight: 600; font-family: var(--font-mono);
-  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 999px; font-weight: 600; font-family: var(--font-mono);
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
 }
 
 .split-group { flex: 1; min-height: 0; display: flex; gap: 0; }
@@ -312,13 +319,13 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
   display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em;
   color: var(--muted); margin-bottom: 8px; font-family: var(--font-mono);
 }
-.task p { margin: 0 0 12px; font-size: 15px; }
+.task p { margin: 0 0 12px; font-size: 16px; font-weight: 500; line-height: 1.55; }
 .sigs { display: flex; flex-direction: column; gap: 4px; }
 .sig { font-size: 12px; color: var(--ink); background: var(--surface2); padding: 2px 8px; border-radius: var(--radius-sm); }
 
 .lesson-body { font-size: 15px; }
-.lesson-body h2 { font-size: 18px; font-weight: 600; margin: 26px 0 10px; letter-spacing: -0.01em; }
-.lesson-body h3 { font-size: 15.5px; font-weight: 600; margin: 22px 0 8px; }
+.lesson-body h2 { font-size: 20px; font-weight: 650; letter-spacing: -0.015em; margin: 34px 0 10px; }
+.lesson-body h3 { font-size: 16px; font-weight: 600; letter-spacing: -0.005em; margin: 26px 0 8px; }
 .lesson-body p { margin: 0 0 14px; }
 .lesson-body ul, .lesson-body ol { margin: 0 0 14px; padding-left: 22px; }
 .lesson-body li { margin-bottom: 4px; }
@@ -347,7 +354,7 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 .callout-example { background: var(--surface); }
 .callout-example .callout-label { color: var(--muted); }
 
-.hints { margin-top: 26px; border-top: 1px solid var(--hairline); padding-top: 14px; }
+.hints { margin-top: 36px; border-top: 1px solid var(--hairline); padding-top: 16px; }
 .hints-head { display: flex; align-items: center; justify-content: space-between; }
 .hints-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; font-family: var(--font-mono); }
 .hint-list { margin: 12px 0 0; padding-left: 20px; }
