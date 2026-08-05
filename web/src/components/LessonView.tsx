@@ -155,8 +155,93 @@ export default function LessonView() {
     }
   }
 
+  const tabs = (
+    <div className="editor-tabs">
+      {LANGS.filter((l) => p.starterCode[l.id]).map((l) => (
+        <button
+          key={l.id}
+          className={`lang ${lang === l.id ? "active" : ""}`}
+          onClick={() => switchLang(l.id)}
+        >
+          {l.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  const editorWindow = (
+    <div className="editor-window">
+      <div className="editor-header">
+        {tabs}
+        <button className="ghost small-ghost" onClick={resetCode}>
+          reset
+        </button>
+      </div>
+      <CodeEditor language={lang} value={code} onChange={onCodeChange} />
+    </div>
+  );
+
+  const actionsRow = (
+    <div className="actions">
+      <button className="btn run" onClick={doRun} disabled={busy !== null}>
+        <PiPlay size={14} /> {busy === "run" ? "running…" : "run"}
+      </button>
+      <button className="btn submit" onClick={doSubmit} disabled={busy !== null}>
+        <PiPaperPlaneRight size={14} /> {busy === "submit" ? "submitting…" : "submit"}
+      </button>
+      <span className="muted small">run = visible tests · submit = hidden too</span>
+    </div>
+  );
+
+  const content = (
+    <>
+      <div className="task">
+        <span className="task-label">task</span>
+        <p>{p.task}</p>
+        <div className="sigs">
+          {LANGS.filter((l) => p.signature[l.id]).map((l) => (
+            <code key={l.id} className="sig">
+              {p.signature[l.id]}
+            </code>
+          ))}
+        </div>
+      </div>
+
+      <div className="lesson-body">
+        <Markdown>{p.body}</Markdown>
+      </div>
+
+      <div className="hints">
+        <div className="hints-head">
+          <span className="hints-title">hints</span>
+          {hintsShown === 0 && (
+            <button className="ghost" onClick={() => setHintsShown((n) => n + 1)}>
+              show a hint
+            </button>
+          )}
+        </div>
+        {hintsShown === 0 ? (
+          <p className="muted small">stuck? reveal a nudge toward the solution.</p>
+        ) : (
+          <ul className="hint-list">
+            {p.hints.slice(0, hintsShown).map((h, i) => (
+              <li key={i}>{h}</li>
+            ))}
+            {hintsShown < p.hints.length && (
+              <li>
+                <button className="ghost" onClick={() => setHintsShown((n) => n + 1)}>
+                  another hint →
+                </button>
+              </li>
+            )}
+          </ul>
+        )}
+      </div>
+    </>
+  );
+
   return (
-    <div className="lesson-page">
+    <div className={`lesson-page ${zen ? "lesson-page-zen" : ""}`}>
       <div className="lesson-head">
         <Link to={`/course/${courseId}`} className="back">
           <PiArrowLeft size={14} /> course
@@ -173,95 +258,34 @@ export default function LessonView() {
         </button>
       </div>
 
-      <PanelGroup
-        direction={zen ? "vertical" : "horizontal"}
-        autoSaveId={`trucoder-split-${zen ? "v" : "h"}`}
-        className="split-group"
-      >
-        <Panel defaultSize={zen ? 38 : 42} minSize={zen ? 18 : 28} className="lesson-content">
-          <div className="lesson-scroll">
-            <div className="task">
-            <span className="task-label">task</span>
-            <p>{p.task}</p>
-            <div className="sigs">
-              {LANGS.filter((l) => p.signature[l.id]).map((l) => (
-                <code key={l.id} className="sig">
-                  {p.signature[l.id]}
-                </code>
-              ))}
-            </div>
-          </div>
-
-          <div className="lesson-body">
-            <Markdown>{p.body}</Markdown>
-          </div>
-
-          <div className="hints">
-            <div className="hints-head">
-              <span className="hints-title">hints</span>
-              {hintsShown === 0 && (
-                <button className="ghost" onClick={() => setHintsShown((n) => n + 1)}>
-                  show a hint
-                </button>
-              )}
-            </div>
-            {hintsShown === 0 ? (
-              <p className="muted small">stuck? reveal a nudge toward the solution.</p>
-            ) : (
-              <ul className="hint-list">
-                {p.hints.slice(0, hintsShown).map((h, i) => (
-                  <li key={i}>{h}</li>
-                ))}
-                {hintsShown < p.hints.length && (
-                  <li>
-                    <button className="ghost" onClick={() => setHintsShown((n) => n + 1)}>
-                      another hint →
-                    </button>
-                  </li>
-                )}
-              </ul>
-            )}
-          </div>
-          </div>
-        </Panel>
-
-        <PanelResizeHandle className={`resize-handle ${zen ? "handle-v" : ""}`} />
-
-        <Panel defaultSize={zen ? 62 : 58} minSize={zen ? 30 : 42} className="workbench">
-          <div className="toolbar">
-            {LANGS.filter((l) => p.starterCode[l.id]).map((l) => (
-              <button
-                key={l.id}
-                className={`lang ${lang === l.id ? "active" : ""}`}
-                onClick={() => switchLang(l.id)}
-              >
-                {l.label}
-              </button>
-            ))}
-            <span className="spacer" />
-            <button className="ghost" onClick={resetCode}>
-              reset
-            </button>
-          </div>
-
-          <div className="editor-wrap">
-            <CodeEditor language={lang} value={code} onChange={onCodeChange} />
-          </div>
-
-          <div className="actions">
-            <button className="btn run" onClick={doRun} disabled={busy !== null}>
-              <PiPlay size={14} /> {busy === "run" ? "running…" : "run"}
-            </button>
-            <button className="btn submit" onClick={doSubmit} disabled={busy !== null}>
-              <PiPaperPlaneRight size={14} /> {busy === "submit" ? "submitting…" : "submit"}
-            </button>
-            <span className="muted small">run = visible tests · submit = hidden too</span>
-          </div>
-
+      {zen ? (
+        <div className="zen-body">
+          <div className="zen-content">{content}</div>
+          {editorWindow}
+          {actionsRow}
           {error && <div className="form-error">{error}</div>}
           <ResultPanel run={run} submit={submit} />
-        </Panel>
-      </PanelGroup>
+        </div>
+      ) : (
+        <PanelGroup
+          direction="horizontal"
+          autoSaveId="trucoder-split-h"
+          className="split-group"
+        >
+          <Panel defaultSize={42} minSize={28} className="lesson-content">
+            <div className="lesson-scroll">{content}</div>
+          </Panel>
+
+          <PanelResizeHandle className="resize-handle" />
+
+          <Panel defaultSize={58} minSize={42} className="workbench">
+            {editorWindow}
+            {actionsRow}
+            {error && <div className="form-error">{error}</div>}
+            <ResultPanel run={run} submit={submit} />
+          </Panel>
+        </PanelGroup>
+      )}
     </div>
   );
 }

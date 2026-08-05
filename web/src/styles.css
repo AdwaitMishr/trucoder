@@ -268,16 +268,30 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 }
 
 .split-group { flex: 1; min-height: 0; display: flex; gap: 0; }
-.resize-handle { width: 12px; flex: 0 0 auto; cursor: col-resize; position: relative; }
+.resize-handle {
+  width: 16px; flex: 0 0 auto; cursor: col-resize; position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.resize-handle::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 50%;
+  transform: translateX(-50%); width: 1px; background: var(--hairline);
+}
 .resize-handle::after {
-  content: ""; position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%, -50%); width: 2px; height: 44px; border-radius: 999px;
-  background: var(--hairline); transition: background 0.15s;
+  content: ""; width: 4px; height: 48px; border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+  transition: background 0.15s;
 }
 .resize-handle:hover::after,
 .resize-handle[data-resize-handle-active]::after { background: var(--accent); }
-.resize-handle.handle-v { width: auto; height: 12px; cursor: row-resize; }
-.resize-handle.handle-v::after { width: 44px; height: 2px; }
+
+/* zen: the editor becomes part of a single scrollable page */
+.lesson-page-zen { overflow-y: auto; }
+.zen-body {
+  display: flex; flex-direction: column; gap: 14px;
+  max-width: 860px; margin: 0 auto; padding: 4px 6px 80px; width: 100%;
+}
+.zen-content > * { max-width: 720px; }
+.lesson-page-zen .editor-window { flex: none; height: 68vh; min-height: 420px; }
 
 .lesson-content {
   /* Panel container. react-resizable-panels forces overflow:hidden inline here,
@@ -344,20 +358,26 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
   display: flex; flex-direction: column; min-height: 0; overflow: hidden;
   /* borderless — only the code editor carries its own framed box */
 }
-.toolbar { display: flex; align-items: center; gap: 4px; padding: 10px 14px; border-bottom: 1px solid var(--hairline); }
+.toolbar { display: none; }
+.editor-window {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  border: 1px solid var(--hairline); border-radius: var(--radius-lg);
+  overflow: hidden; background: var(--bg);
+}
+.editor-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 8px; background: var(--surface); border-bottom: 1px solid var(--hairline);
+}
+.editor-tabs { display: flex; align-items: center; gap: 2px; }
 .lang {
-  background: none; border: none; color: var(--muted); font-family: inherit;
-  font-size: 13px; padding: 6px 12px; border-radius: 4px; cursor: pointer;
+  background: none; border: none; color: var(--muted); font-family: var(--font-mono);
+  font-size: 12px; padding: 5px 11px; border-radius: 5px; cursor: pointer;
   transition: color 0.15s, background 0.15s;
 }
 .lang:hover { color: var(--ink); background: var(--surface2); }
-.lang.active { color: var(--accent); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
-
-.editor-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 10px; }
-.editor-surface {
-  flex: 1; min-height: 0; overflow: hidden;
-  border: 1px solid var(--hairline); border-radius: var(--radius-lg); background: var(--bg);
-}
+.lang.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.small-ghost { font-size: 12px; padding: 4px 8px; }
+.editor-surface { flex: 1; min-height: 0; overflow: hidden; }
 
 .actions { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--hairline); }
 .btn {
