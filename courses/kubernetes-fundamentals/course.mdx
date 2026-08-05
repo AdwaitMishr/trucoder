@@ -1,0 +1,39 @@
+---
+id: kubernetes-fundamentals
+title: "Kubernetes Fundamentals"
+description: "A hands-on introduction to the ideas behind Kubernetes: resource units, labels and selectors, the controller loop, rolling updates, service DNS, probes, autoscaling, and scheduling — each locked in with a small coding exercise."
+difficultyLevels: [beginner, easy, medium]
+---
+
+# How to use this course
+
+Kubernetes sounds like a wall of acronyms: Pods, Deployments, Services, HPAs.
+Strip the jargon away and it is a small set of *ideas* — and every idea has a
+tiny piece of logic behind it. That logic is what you will code here.
+
+Work through the lessons **in order**. Each one teaches one idea:
+
+1. Parse a resource request (`128Mi`) into bytes.
+2. Decide whether a label selector matches a pod.
+3. Reconcile desired state vs. what is actually running.
+4. Bound a rolling update with `maxUnavailable`.
+5. Build a service's cluster-local DNS name.
+6. Work out when a failing readiness probe marks a pod NotReady.
+7. Compute the replica count an autoscaler wants.
+8. Decide whether a toleration lets a pod onto a tainted node.
+
+By the end you will read a Deployment manifest and see *why* every number is
+there — because you have written the code behind it.
+
+## The roadmap
+
+| # | Lesson | The idea it introduces |
+|---|--------|------------------------|
+| 1 | Resource units | `Ki`/`Mi`/`Gi` binary vs `K`/`M`/`G` SI |
+| 2 | Labels & selectors | matchLabels = subset match |
+| 3 | Desired state | the controller loop |
+| 4 | Rolling update | maxUnavailable, percentage rounding |
+| 5 | Service DNS | `name.namespace.svc.cluster.local` |
+| 6 | Readiness probes | period, threshold, initial delay |
+| 7 | HPA math | `ceil(replicas × util / target)`, min 1 |
+| 8 | Taints & tolerations | key/value/effect matching rules |

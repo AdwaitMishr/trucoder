@@ -1,0 +1,114 @@
+---
+id: resource-units
+title: "Resource Units"
+difficulty: beginner
+order: 1
+tags: [resources, units, binary]
+task: "Parse a Kubernetes memory string into bytes. Suffixes are binary Ki/Mi/Gi/Ti (multiples of 1024) or SI K/M/G (multiples of 1000); a bare number means bytes. Return the byte count as a long."
+languages: [java, javascript, python]
+timeLimitMs: 2000
+signature:
+  java: "static long solve(String mem)"
+  javascript: "function solve(mem)"
+  python: "def solve(mem: str) -> int"
+starter:
+  java: |
+    static long solve(String mem) {
+        // Return the memory string ("128Mi", "1Gi", "512Ki", "2G") as bytes.
+        return 0L;
+    }
+  javascript: |
+    function solve(mem) {
+        // Return the memory string ("128Mi", "1Gi", "512Ki", "2G") as bytes.
+        return 0;
+    }
+  python: |
+    def solve(mem: str) -> int:
+        # Return the memory string ("128Mi", "1Gi", "512Ki", "2G") as bytes.
+        return 0
+tests:
+  public:
+    - name: "128 mebibytes"
+      args: ["128Mi"]
+      expected: 134217728
+    - name: "1 gibibyte"
+      args: ["1Gi"]
+      expected: 1073741824
+    - name: "half a kibibyte"
+      args: ["512Ki"]
+      expected: 524288
+  private:
+    - name: "1 tebibyte"
+      args: ["1Ti"]
+      expected: 1099511627776
+    - name: "2 gigabytes (SI)"
+      args: ["2G"]
+      expected: 2000000000
+    - name: "4 megabytes (SI)"
+      args: ["4M"]
+      expected: 4000000
+    - name: "no suffix"
+      args: ["256"]
+      expected: 256
+    - name: "zero"
+      args: ["0"]
+      expected: 0
+solution: |
+  def solve(mem: str) -> int:
+      units = {
+          "Ki": 1 << 10, "Mi": 1 << 20, "Gi": 1 << 30, "Ti": 1 << 40,
+          "K": 10**3, "M": 10**6, "G": 10**9,
+      }
+      for suffix, mult in units.items():
+          if mem.endswith(suffix):
+              return int(mem[: -len(suffix)]) * mult
+      return int(mem)
+hints:
+  - "A suffix is at most two characters at the end of the string."
+  - "Split the string into number + suffix, then look the suffix up in a table."
+  - "Binary units are powers of 1024 (Mi = 2^20); SI units are powers of 1000 (M = 10^6)."
+---
+
+Kubernetes never asks for `134217728`. It asks for `128Mi` — a string a human
+can read. Your job is to be the parser that turns it into bytes.
+
+## Two families of units
+
+The `i` in a suffix is the whole trick:
+
+| Suffix | Meaning | Multiplier |
+|--------|---------|-----------|
+| `Ki` | kibibyte | 1024 = 2^10 |
+| `Mi` | mebibyte | 1024^2 = 2^20 |
+| `Gi` | gibibyte | 1024^3 = 2^30 |
+| `Ti` | tebibyte | 1024^4 = 2^40 |
+| `K` | kilobyte | 1000 = 10^3 |
+| `M` | megabyte | 1000^2 = 10^6 |
+| `G` | gigabyte | 1000^3 = 10^9 |
+
+An `i` means **binary** — powers of 1024, because memory hardware counts in
+powers of two. No `i` means **SI** — powers of 1000, the units you met in
+school. `1Gi` is not `1000^3` bytes; it is `1024^3 = 1073741824`.
+
+:::example
+`128Mi` = 128 × 2^20 = 128 × 1048576 = **134217728** bytes.
+`2G` = 2 × 10^9 = **2000000000** bytes.
+:::
+
+## The algorithm
+
+1. Check each suffix in a table, from longest to shortest.
+2. When the string ends with it, parse the numeric prefix.
+3. Multiply the prefix by the suffix's multiplier.
+
+:::warning
+Check the two-character suffixes (`Ki`, `Mi`) the same way you check the
+one-character ones (`K`, `M`). A string like `128Mi` ends with `i`, so a naive
+`endsWith("M")` check will never fire on it — but always strip the *matched*
+suffix's exact length, not a hardcoded `1`.
+:::
+
+:::tip
+The byte count can exceed a 32-bit integer — `1Ti` is about 1.1 trillion. In
+Java, return a `long`.
+:::

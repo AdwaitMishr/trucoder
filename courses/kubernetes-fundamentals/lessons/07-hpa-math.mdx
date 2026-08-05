@@ -1,0 +1,109 @@
+---
+id: hpa-math
+title: "HPA Math"
+difficulty: medium
+order: 7
+tags: [autoscaling, hpa, ceil]
+task: "The Horizontal Pod Autoscaler computes desired replicas as ceil(replicas × currentUtilization / targetUtilization), with a minimum of 1. Given the three integers, return the desired replica count."
+languages: [java, javascript, python]
+timeLimitMs: 2000
+signature:
+  java: "static int solve(int replicas, int utilization, int target)"
+  javascript: "function solve(replicas, utilization, target)"
+  python: "def solve(replicas: int, utilization: int, target: int) -> int"
+starter:
+  java: |
+    static int solve(int replicas, int utilization, int target) {
+        // Return max(1, ceil(replicas * utilization / target)).
+        return 0;
+    }
+  javascript: |
+    function solve(replicas, utilization, target) {
+        // Return max(1, ceil(replicas * utilization / target)).
+        return 0;
+    }
+  python: |
+    def solve(replicas: int, utilization: int, target: int) -> int:
+        # Return max(1, ceil(replicas * utilization / target)).
+        return 0
+tests:
+  public:
+    - name: "at target"
+      args: [4, 50, 50]
+      expected: 4
+    - name: "overloaded"
+      args: [4, 80, 50]
+      expected: 7
+    - name: "underloaded stays"
+      args: [2, 30, 50]
+      expected: 2
+  private:
+    - name: "doubling"
+      args: [10, 100, 50]
+      expected: 20
+    - name: "almost idle"
+      args: [3, 1, 100]
+      expected: 1
+    - name: "zero utilization"
+      args: [100, 0, 50]
+      expected: 1
+    - name: "exact multiple"
+      args: [7, 75, 25]
+      expected: 21
+    - name: "single pod flooded"
+      args: [1, 95, 10]
+      expected: 10
+solution: |
+  def solve(replicas: int, utilization: int, target: int) -> int:
+      return max(1, (replicas * utilization + target - 1) // target)
+hints:
+  - "Desired = replicas × (utilization / target), but you must round the result UP."
+  - "An exact ceiling of a division can be written without floats: (a + b - 1) // b."
+  - "Never return 0 — the autoscaler never scales a workload to zero replicas; the floor is 1."
+---
+
+The Horizontal Pod Autoscaler (HPA) is a controller with a simple job: keep the
+average utilization of your pods near a target, by adding or removing replicas.
+
+## The formula
+
+```
+desiredReplicas = ceil(currentReplicas × currentUtilization / targetUtilization)
+```
+
+Read it as a proportion. If utilization is *double* the target, you need *twice*
+the pods:
+
+```
+currentUtilization / targetUtilization = 80 / 50 = 1.6
+4 replicas × 1.6 = 6.4  ->  ceil ->  7 replicas
+```
+
+:::example
+- 4 replicas at 80% CPU, target 50%: 4 × 1.6 = 6.4 → **7**.
+- 4 replicas at 50%, target 50%: ratio 1.0 → **4**. No change.
+- 2 replicas at 30%, target 50%: 2 × 0.6 = 1.2 → ceil → 2 → **2**. (The ratio
+  says 1.2 pods, but pods are indivisible — and the floor is 1.)
+:::
+
+## Two traps
+
+**Rounding.** `ceil` matters. 6.4 pods means 7 — 6 pods would still be
+overloaded. Always round up.
+
+**The floor.** The HPA never scales a workload to zero replicas. Whatever the
+math says, the answer is at least **1**. (That is also why "zero utilization"
+still returns 1, not 0.)
+
+:::warning
+Do not use floating-point division naively in Java: `4 * 80 / 50` with integer
+arithmetic truncates to 6, and you lose the ceil. Either compute
+`(replicas * utilization + target - 1) / target` or convert to double and use
+`Math.ceil` — then clamp to at least 1.
+:::
+
+:::tip
+The HPA also has a `maxReplicas` cap — the formula proposes a number, and the
+controller clamps it to `[1, maxReplicas]`. Here the upper clamp is your
+problem, not the autoscaler's.
+:::

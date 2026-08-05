@@ -1,0 +1,98 @@
+---
+id: service-dns
+title: "Service DNS"
+difficulty: easy
+order: 5
+tags: [services, namespaces, dns]
+task: "Build the cluster-local DNS name of a Service: name + \".\" + namespace + \".svc.cluster.local\". Given the service name and its namespace, return the fully qualified domain name."
+languages: [java, javascript, python]
+timeLimitMs: 2000
+signature:
+  java: "static String solve(String name, String namespace)"
+  javascript: "function solve(name, namespace)"
+  python: "def solve(name: str, namespace: str) -> str"
+starter:
+  java: |
+    static String solve(String name, String namespace) {
+        // Return the FQDN: name.namespace.svc.cluster.local
+        return "";
+    }
+  javascript: |
+    function solve(name, namespace) {
+        // Return the FQDN: name.namespace.svc.cluster.local
+        return "";
+    }
+  python: |
+    def solve(name: str, namespace: str) -> str:
+        # Return the FQDN: name.namespace.svc.cluster.local
+        return ""
+tests:
+  public:
+    - name: "default namespace"
+      args: ["web", "default"]
+      expected: "web.default.svc.cluster.local"
+    - name: "prod api"
+      args: ["api", "prod"]
+      expected: "api.prod.svc.cluster.local"
+  private:
+    - name: "multi-word service"
+      args: ["redis-cache", "payments"]
+      expected: "redis-cache.payments.svc.cluster.local"
+    - name: "short names"
+      args: ["a", "b"]
+      expected: "a.b.svc.cluster.local"
+    - name: "kube-system"
+      args: ["metrics-server", "kube-system"]
+      expected: "metrics-server.kube-system.svc.cluster.local"
+solution: |
+  def solve(name: str, namespace: str) -> str:
+      return f"{name}.{namespace}.svc.cluster.local"
+hints:
+  - "It is pure string concatenation with three dots."
+  - "The fixed tail is .svc.cluster.local. The variable part is name.namespace before it."
+---
+
+Pods come and go; their IP addresses change every time. A **Service** is a
+stable name in front of a moving set of Pods. To make that name usable, the
+cluster's DNS server answers it — everywhere.
+
+## The name
+
+Every Service in a namespace gets an automatic DNS record:
+
+```
+<service-name>.<namespace>.svc.cluster.local
+```
+
+Walk it right to left:
+
+- `cluster.local` — the cluster's private DNS zone (never resolves off-cluster).
+- `svc` — "this is a Service", as opposed to a Pod or a headless endpoint.
+- `<namespace>` — namespaces are the *scoping* layer: the same service name can
+  exist in two namespaces, and the namespace part disambiguates them.
+- `<service-name>` — the Service's own name.
+
+:::example
+Service `web` in the `default` namespace:
+
+`web.default.svc.cluster.local`
+
+A pod in the *same* namespace can skip the namespace — the short name `web`
+resolves too. A pod in another namespace must use the full name.
+:::
+
+## Why namespaces matter
+
+Two teams can both have a `payments` service if each lives in its own
+namespace. The DNS name makes the address unique: `payments.team-a.svc...`
+versus `payments.team-b.svc...`. Without the namespace, the name would collide.
+
+:::warning
+Do not swap the order. It is `name.namespace`, not `namespace.name`. And do not
+forget the dots — the three pieces join with dots, not with nothing.
+:::
+
+:::tip
+`svc.cluster.local` is a fixed tail. If you ever see it, you know the record
+names a Service inside the cluster — and that the lookup will never leave it.
+:::
