@@ -1,5 +1,6 @@
-import { PiCheck, PiX, PiWarning, PiTimer } from "react-icons/pi";
+import { PiCheck, PiX, PiTimer } from "react-icons/pi";
 import type { RunResult, SubmitResult, TestResult } from "../types";
+import Mascot from "./Mascot";
 
 function TestRow({ t }: { t: TestResult }) {
   if (t.passed) {
@@ -31,6 +32,15 @@ function TestRow({ t }: { t: TestResult }) {
   );
 }
 
+/** The verdict mood: correct = happy :D, everything else = red grimace. */
+function VerdictFace({ ok }: { ok: boolean }) {
+  return ok ? (
+    <Mascot state="correct" size={15} className="mascot-ok" />
+  ) : (
+    <Mascot state="wrong" size={15} />
+  );
+}
+
 export default function ResultPanel({
   run,
   submit,
@@ -43,6 +53,7 @@ export default function ResultPanel({
       return (
         <div className="results">
           <div className="verdict err">
+            <VerdictFace ok={false} />
             <PiTimer size={15} /> time limit exceeded
           </div>
           <pre className="block-error">
@@ -61,7 +72,7 @@ export default function ResultPanel({
     return (
       <div className="results">
         <div className={`verdict ${accepted ? "ok" : "err"}`}>
-          {accepted ? <PiCheck size={15} /> : <PiWarning size={15} />}
+          <VerdictFace ok={accepted} />
           {label}
           <span className="verdict-detail">
             {submit.privatePassed}/{submit.privateTotal} hidden
@@ -81,8 +92,8 @@ export default function ResultPanel({
   const allPass = run.publicTests.length > 0 && run.publicTests.every((t) => t.passed);
   return (
     <div className="results">
-      <div className={`verdict ${allPass ? "ok" : ""}`}>
-        {allPass ? <PiCheck size={15} /> : <PiWarning size={15} />}
+      <div className={`verdict ${allPass ? "ok" : "err"}`}>
+        <VerdictFace ok={allPass && !run.compileError} />
         {run.compileError ? "compile error" : allPass ? "public tests pass" : "public test results"}
       </div>
       {run.compileError && <pre className="block-error">{run.compileError}</pre>}

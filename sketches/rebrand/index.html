@@ -364,6 +364,75 @@
 
 </div>
 
+<h2>mascot states — chip, one character many moods</h2>
+<style>
+  .st-card { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .st-card .st-name { font-family:'Geist Mono',monospace; font-size:12px; font-weight:600; }
+  .st-card .st-why { color:var(--muted); font-size:11px; text-align:center; }
+  .eye-l { transform-box: fill-box; transform-origin: center; }
+  .eye-r { transform-box: fill-box; transform-origin: center; }
+  @keyframes st-blink { 0%,92%,100% { transform: scaleY(1); } 95%,97% { transform: scaleY(0.12); } }
+  .st-idle .eye-l, .st-idle .eye-r { animation: st-blink 4.5s infinite; }
+  .st-idle .eye-r { animation-delay: 0.08s; }
+  @keyframes st-dot { 0%,100% { opacity: 1; } 40%,60% { opacity: 0.15; } }
+  .st-run .dot1 { animation: st-dot 1.1s infinite; }
+  .st-run .dot2 { animation: st-dot 1.1s 0.18s infinite; }
+  .st-run .dot3 { animation: st-dot 1.1s 0.36s infinite; }
+  @keyframes st-pop { 0% { transform: scale(1); } 35% { transform: scale(1.12); } 100% { transform: scale(1); } }
+  .st-ok { animation: st-pop 0.5s ease-out infinite; }
+  @keyframes st-shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-1.4px); } 40% { transform: translateX(1.4px); } 60% { transform: translateX(-1px); } 80% { transform: translateX(1px); } }
+  .st-bad { animation: st-shake 0.9s ease-in-out infinite; }
+</style>
+<div class="grid" id="states">
+
+  <div class="card st-card st-idle">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="2.5" width="20" height="19" rx="5.5"/>
+      <path class="eye-l" d="M7.3 8.4 L9.7 10.3 L7.3 12.2"/>
+      <path class="eye-r" d="M16.7 8.4 L14.3 10.3 L16.7 12.2"/>
+      <path d="M9.2 15.2 H14.8"/>
+    </svg>
+    <div class="st-name">idle</div>
+    <div class="st-why">topbar, login, boot — blinks every ~4s</div>
+  </div>
+
+  <div class="card st-card st-run">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="2.5" width="20" height="19" rx="5.5"/>
+      <path d="M7.3 8.4 L9.7 10.3 L7.3 12.2"/>
+      <path d="M16.7 8.4 L14.3 10.3 L16.7 12.2"/>
+      <path class="dot1" d="M9.2 15.4 H10.4"/>
+      <path class="dot2" d="M11.6 15.4 H12.8"/>
+      <path class="dot3" d="M14 15.4 H15.2"/>
+    </svg>
+    <div class="st-name">running</div>
+    <div class="st-why">mouth becomes a terminal … loader — run/submit buttons</div>
+  </div>
+
+  <div class="card st-card st-ok">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="2.5" width="20" height="19" rx="5.5"/>
+      <path d="M7.4 9.6 Q8.5 8.2 9.6 9.6"/>
+      <path d="M14.4 9.6 Q15.5 8.2 16.6 9.6"/>
+      <path d="M7.8 15.2 A4.2 4.2 0 0 0 16.2 15.2 Z" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="st-name">correct</div>
+    <div class="st-why">happy closed eyes + open :D grin — pops when you solve it</div>
+  </div>
+
+  <div class="card st-card st-bad">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="2.5" width="20" height="19" rx="5.5"/>
+      <path d="M7.2 8.6 L9.9 10.8 L7.2 13"/>
+      <path d="M16.8 8.6 L14.1 10.8 L16.8 13"/>
+      <path d="M9.6 15.4 L10.8 16.6 L12 15.4 L13.2 16.6 L14.4 15.4"/>
+    </svg>
+    <div class="st-name">wrong</div>
+    <div class="st-why">steeper eyes + gritted-teeth mouth — shakes on failure</div>
+  </div>
+
+</div>
+
 <h2>wordmark treatments</h2>
 <div class="wordmark-row">
 

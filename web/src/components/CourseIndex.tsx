@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { PiBookOpen, PiArrowRight } from "react-icons/pi";
+import { PiArrowRight } from "react-icons/pi";
 import { api } from "../api";
 import type { CourseSummary } from "../types";
+import Mascot from "./Mascot";
 
 export default function CourseIndex() {
   const [courses, setCourses] = useState<CourseSummary[] | null>(null);
@@ -54,7 +55,7 @@ export default function CourseIndex() {
             return (
               <Link key={c.id} to={`/course/${c.id}`} className="course-card">
                 <div className="course-card-title">
-                  <PiBookOpen size={18} />
+                  <Mascot size={18} />
                   {c.title}
                 </div>
                 <div className="course-card-desc">{c.description}</div>

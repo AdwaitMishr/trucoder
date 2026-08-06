@@ -7,6 +7,7 @@ import Nav from "./components/Nav";
 import CourseIndex from "./components/CourseIndex";
 import CourseDashboard from "./components/CourseDashboard";
 import LessonView from "./components/LessonView";
+import Mascot from "./components/Mascot";
 
 export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -19,7 +20,12 @@ export default function App() {
   }, []);
 
   if (user === undefined) {
-    return <div className="boot">trucoder</div>;
+    return (
+      <div className="boot">
+        <Mascot size={26} />
+        <span>trucoder</span>
+      </div>
+    );
   }
 
   return (

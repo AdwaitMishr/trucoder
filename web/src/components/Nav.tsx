@@ -4,6 +4,7 @@ import { PiPalette, PiSignOut, PiCheck, PiGearSix } from "react-icons/pi";
 import { api } from "../api";
 import { THEMES, useTheme } from "../theme";
 import type { User } from "../types";
+import Mascot from "./Mascot";
 import SettingsModal from "./SettingsModal";
 
 export default function Nav({
@@ -30,6 +31,7 @@ export default function Nav({
   return (
     <header className="nav">
       <Link to="/" className="brand">
+        <Mascot size={22} />
         <span className="brand-tru">tru</span>
         <span className="brand-coder">coder</span>
       </Link>

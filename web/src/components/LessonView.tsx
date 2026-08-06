@@ -18,6 +18,7 @@ import type {
 import CodeWorkbench from "./CodeWorkbench";
 import FlowchartBlock from "./FlowchartBlock";
 import Markdown from "./Markdown";
+import Mascot from "./Mascot";
 import QuizBlock from "./QuizBlock";
 
 const LANGS: { id: Lang; label: string }[] = [
@@ -240,7 +241,7 @@ export default function LessonView() {
           <h1 className="lesson-head-title">{p.title}</h1>
           {p.progress.solved && (
             <span className="solved-badge">
-              <PiCheck size={11} />
+              <Mascot state="correct" size={12} className="mascot-ok" />
               {codeBlock ? "solved" : hasGradedBlocks ? "completed" : "read"}
             </span>
           )}

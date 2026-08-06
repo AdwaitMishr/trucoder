@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { PiPlay, PiPaperPlaneRight } from "react-icons/pi";
 import { api, ApiError } from "../api";
 import type { CodeBlock, Lang, RunResult, SubmitResult } from "../types";
 import CodeEditor from "./CodeEditor";
+import Mascot from "./Mascot";
 import ResultPanel from "./ResultPanel";
 
 const LANGS: { id: Lang; label: string }[] = [
@@ -148,10 +148,12 @@ export default function CodeWorkbench({
 
       <div className="actions">
         <button className="btn run" onClick={doRun} disabled={busy !== null}>
-          <PiPlay size={14} /> {busy === "run" ? "running…" : "run"}
+          <Mascot size={14} state={busy === "run" ? "running" : "idle"} />
+          {busy === "run" ? "running…" : "run"}
         </button>
         <button className="btn submit" onClick={doSubmit} disabled={busy !== null}>
-          <PiPaperPlaneRight size={14} /> {busy === "submit" ? "submitting…" : "submit"}
+          <Mascot size={14} state={busy === "submit" ? "running" : "idle"} />
+          {busy === "submit" ? "submitting…" : "submit"}
         </button>
         <span className="muted small">run = visible tests · submit = hidden too</span>
       </div>
