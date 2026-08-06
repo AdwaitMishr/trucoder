@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { PiPlay, PiPaperPlaneRight } from "react-icons/pi";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, ApiError } from "../api";
 import type { CodeBlock, Lang, RunResult, SubmitResult } from "../types";
 import CodeEditor from "./CodeEditor";
@@ -129,19 +128,17 @@ export default function CodeWorkbench({
     <>
       <div className="editor-window">
         <div className="editor-header">
-          <Tabs
-            value={lang}
-            onValueChange={(v) => switchLang(v as Lang)}
-            className="lang-tabs"
-          >
-            <TabsList className="lang-tablist">
-              {LANGS.filter((l) => block.starterCode[l.id]).map((l) => (
-                <TabsTrigger key={l.id} value={l.id}>
-                  {l.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          <div className="editor-tabs">
+            {LANGS.filter((l) => block.starterCode[l.id]).map((l) => (
+              <button
+                key={l.id}
+                className={`lang ${lang === l.id ? "active" : ""}`}
+                onClick={() => switchLang(l.id)}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
           <button className="ghost small-ghost" onClick={resetCode}>
             reset
           </button>

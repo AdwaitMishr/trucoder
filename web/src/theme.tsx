@@ -26,9 +26,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       /* ignore */
     }
     document.documentElement.setAttribute("data-theme", themeId);
-    // shadcn `dark:` variant switch — colors still come from data-theme vars.
-    document.documentElement.classList.toggle("dark", theme.kind === "dark");
-  }, [themeId, theme.kind]);
+  }, [themeId]);
 
   return <Ctx.Provider value={{ theme, themeId, setThemeId }}>{children}</Ctx.Provider>;
 }

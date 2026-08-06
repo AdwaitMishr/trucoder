@@ -1,19 +1,3 @@
-/* Full Tailwind (theme + preflight + utilities). The @tailwindcss/vite
-   plugin only generates utilities with the full import; partial imports
-   (theme/utilities only) produced an empty utilities layer. Preflight is
-   patched below — the app is hand-styled and needs browser-ish defaults
-   for content (list bullets, figure margins, inline images). */
-@import "tailwindcss";
-
-@custom-variant dark (&:is(.dark *));
-
-/* ---- preflight patch ----
-   Restore the UA defaults the app's content styles assume. Explicit app
-   styles always override these. */
-ol, ul, menu { list-style: revert; }
-blockquote, figure { margin: revert; }
-img, svg, video, canvas, audio, iframe, embed, object { display: revert; vertical-align: revert; }
-
 /* TruCoder — Geist / Vercel-discipline theming.
    Restrained geometry: only the Monaco editor carries real rounding (12px);
    everything else stays 4–8px. Surfaces are flat and connected, separated by
@@ -86,79 +70,6 @@ img, svg, video, canvas, audio, iframe, embed, object { display: revert; vertica
   --surface: #f8f7f1; --surface2: #efede3; --hairline: #e0ded1;
   --accent: #6b7a3c; --accent-ink: #f8f7f1; --caret: #6b7a3c;
   --ok: #5e8c4c; --err: #b0483a;
-}
-
-/* ---- shadcn/ui theme variables ----
-   The app already owns --muted and --accent (text/brand colors), so shadcn
-   gets a prefixed set. These are defined once in :root as REFERENCES to the
-   app palette — CSS custom properties resolve at use time, so every
-   data-theme picks up the right values automatically. The @theme inline
-   block below maps Tailwind tokens (bg-muted, text-popover-foreground, ...)
-   to these variables so the shadcn components use them. */
-:root {
-  --radius: 0.5rem;
-  --sd-background: var(--bg);
-  --sd-foreground: var(--ink);
-  --sd-card: var(--surface);
-  --sd-card-foreground: var(--ink);
-  --sd-popover: var(--surface);
-  --sd-popover-foreground: var(--ink);
-  --sd-primary: var(--accent);
-  --sd-primary-foreground: var(--accent-ink);
-  --sd-secondary: var(--surface2);
-  --sd-secondary-foreground: var(--ink);
-  --sd-muted: var(--surface2);
-  --sd-muted-foreground: var(--muted);
-  --sd-accent: var(--surface2);
-  --sd-accent-foreground: var(--ink);
-  --sd-destructive: var(--err);
-  --sd-destructive-foreground: #ffffff;
-  --sd-border: var(--hairline);
-  --sd-input: var(--hairline);
-  --sd-ring: color-mix(in oklab, var(--accent) 55%, transparent);
-}
-
-@theme inline {
-  --color-background: var(--sd-background);
-  --color-foreground: var(--sd-foreground);
-  --color-card: var(--sd-card);
-  --color-card-foreground: var(--sd-card-foreground);
-  --color-popover: var(--sd-popover);
-  --color-popover-foreground: var(--sd-popover-foreground);
-  --color-primary: var(--sd-primary);
-  --color-primary-foreground: var(--sd-primary-foreground);
-  --color-secondary: var(--sd-secondary);
-  --color-secondary-foreground: var(--sd-secondary-foreground);
-  --color-muted: var(--sd-muted);
-  --color-muted-foreground: var(--sd-muted-foreground);
-  --color-accent: var(--sd-accent);
-  --color-accent-foreground: var(--sd-accent-foreground);
-  --color-destructive: var(--sd-destructive);
-  --color-destructive-foreground: var(--sd-destructive-foreground);
-  --color-border: var(--sd-border);
-  --color-input: var(--sd-input);
-  --color-ring: var(--sd-ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-}
-
-/* ---- dialog animations ----
-   tw-animate-css' enter keyframe resets transform, which overrides the
-   dialog's centering translate(-50%,-50%) and makes it fly toward the
-   corner. Self-contained keyframes that keep the centering. */
-[data-slot="dialog-overlay"][data-state="open"] { animation: tc-fade-in 0.18s ease-out; }
-[data-slot="dialog-overlay"][data-state="closed"] { animation: tc-fade-out 0.14s ease-in forwards; }
-[data-slot="dialog-content"][data-state="open"] { animation: tc-dialog-in 0.18s ease-out; }
-[data-slot="dialog-content"][data-state="closed"] { animation: tc-dialog-out 0.14s ease-in forwards; }
-@keyframes tc-fade-in { from { opacity: 0; } }
-@keyframes tc-fade-out { to { opacity: 0; } }
-@keyframes tc-dialog-in {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
-}
-@keyframes tc-dialog-out {
-  to { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
 }
 
 /* ---- scrollbars: themed, quiet, theme-aware ----
@@ -278,9 +189,8 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
   margin-left: -5px;
 }
 .swatch-dots span:first-child { margin-left: 0; }
-.theme-menu { min-width: 180px; }
-.theme-swatch { display: flex; align-items: center; gap: 10px; }
-.theme-swatch .name { flex: 1; text-transform: lowercase; }
+.theme-swatch .name { flex: 1; text-align: left; text-transform: lowercase; }
+.pop-backdrop { position: fixed; inset: 0; z-index: 20; }
 
 /* ---- login ---- */
 .login-wrap { display: flex; align-items: center; justify-content: center; min-height: 100dvh; padding: 24px; }
@@ -453,6 +363,7 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 .resize-handle[data-resize-handle-active]::after { background: var(--accent); }
 
 /* zen: the editor becomes part of a single scrollable page */
+.lesson-page-zen { overflow-y: auto; }
 .zen-body {
   display: flex; flex-direction: column; gap: 14px;
   max-width: 860px; margin: 0 auto; padding: 4px 6px 80px; width: 100%;
@@ -599,62 +510,69 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 }
 .block-image figcaption { margin-top: 8px; color: var(--muted); font-size: 12.5px; }
 
-/* ---- settings modal (shadcn Dialog + Tabs layout) ---- */
-.settings-dialog {
-  width: min(680px, 94vw); max-width: min(680px, 94vw);
-  height: min(480px, 82dvh);
-  padding: 0; overflow: hidden; gap: 0;
-  background: var(--sd-card); border-color: var(--sd-border);
+/* ---- settings modal ---- */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal {
+  width: min(680px, 94vw); height: min(480px, 82vh);
+  background: var(--surface); border: 1px solid var(--hairline);
+  border-radius: 10px; display: flex; overflow: hidden;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
 }
-.settings-tabs { display: flex; width: 100%; height: 100%; }
-.settings-tablist {
-  width: 180px; flex-shrink: 0; flex-direction: column; align-items: stretch;
-  justify-content: flex-start; gap: 2px; height: 100%;
-  background: var(--bg); border-right: 1px solid var(--hairline);
-  border-radius: 0; padding: 18px 10px;
+.modal-sidebar {
+  width: 180px; flex-shrink: 0; background: var(--bg);
+  border-right: 1px solid var(--hairline);
+  padding: 18px 10px; display: flex; flex-direction: column; gap: 2px;
 }
-.settings-tablist .settings-tab-label {
-  display: flex; align-items: center; gap: 9px;
+.modal-sidebar h2 {
+  margin: 0 10px 10px; font-size: 13px; font-weight: 600;
+  letter-spacing: 0.02em; color: var(--ink);
 }
-.settings-tablist [data-slot="tabs-trigger"] {
-  justify-content: flex-start; text-align: left; gap: 9px;
-  padding: 8px 10px; font-size: 13px; border-radius: 6px;
-  color: var(--muted);
+.modal-sidebar button {
+  display: flex; align-items: center; gap: 9px; text-align: left;
+  padding: 8px 10px; font-size: 13px; font-family: inherit;
+  color: var(--muted); background: none; border: none; border-radius: 6px;
+  cursor: pointer;
 }
-.settings-tablist [data-slot="tabs-trigger"][data-state="active"] {
-  background: var(--surface2); color: var(--ink);
-}
-.settings-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.settings-head {
+.modal-sidebar button:hover { color: var(--ink); }
+.modal-sidebar button.active { background: var(--surface2); color: var(--ink); }
+.modal-main { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 26px; }
+.modal-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 24px; border-bottom: 1px solid var(--hairline); margin: 0;
+  margin-bottom: 6px;
 }
-.settings-head [data-slot="dialog-title"] { font-size: 15px; font-weight: 600; }
-.settings-close {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px; border-radius: 6px;
-  color: var(--muted);
-}
-.settings-close:hover { color: var(--ink); background: var(--surface2); }
-.settings-body {
-  flex: 1; min-height: 0; overflow-y: auto; padding: 6px 26px 22px;
-}
+.modal-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
 .settings-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: 20px; padding: 13px 0; border-bottom: 1px solid var(--hairline);
 }
 .settings-row:last-child { border-bottom: none; }
-.settings-row-text { min-width: 0; }
 .settings-label { font-size: 13.5px; }
 .settings-desc { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .settings-select {
-  width: 168px; height: 30px; font-size: 12.5px;
+  background: var(--bg); color: var(--ink);
+  border: 1px solid var(--hairline); border-radius: 6px;
+  padding: 5px 8px; font-size: 12.5px; font-family: inherit; cursor: pointer;
 }
+.settings-select:hover { border-color: var(--muted); }
+.toggle {
+  width: 36px; height: 20px; border-radius: 999px; border: none;
+  background: var(--hairline); position: relative; cursor: pointer;
+  transition: background 0.15s; flex-shrink: 0;
+}
+.toggle.on { background: var(--accent); }
+.toggle-knob {
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  border-radius: 50%; background: #fff; transition: left 0.15s;
+}
+.toggle.on .toggle-knob { left: 18px; }
 .settings-note {
   display: flex; align-items: flex-start; gap: 8px;
   font-size: 12px; color: var(--muted);
-  background: var(--surface2); border: 1px solid var(--hairline);
+  background: var(--bg); border: 1px solid var(--hairline);
   border-radius: 6px; padding: 10px 12px; margin: 10px 0 16px;
 }
 .shortcut-row {
@@ -693,23 +611,13 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
   padding: 5px 8px; background: var(--surface); border-bottom: 1px solid var(--hairline);
 }
 .editor-tabs { display: flex; align-items: center; gap: 2px; }
-.lang-tabs { display: flex; }
-.lang-tablist {
-  display: flex; align-items: center; gap: 2px; padding: 0;
-  background: none; border-radius: 5px;
+.lang {
+  background: none; border: none; color: var(--muted); font-family: var(--font-mono);
+  font-size: 12px; padding: 5px 11px; border-radius: 5px; cursor: pointer;
+  transition: color 0.15s, background 0.15s;
 }
-.lang-tablist [data-slot="tabs-trigger"] {
-  font-family: var(--font-mono); font-size: 12px; line-height: 1;
-  padding: 5px 11px; border-radius: 5px;
-  color: var(--muted); background: none;
-  box-shadow: none; border: none;
-}
-.lang-tablist [data-slot="tabs-trigger"]:hover {
-  color: var(--ink); background: var(--surface2);
-}
-.lang-tablist [data-slot="tabs-trigger"][data-state="active"] {
-  color: var(--accent); background: var(--accent-soft); font-weight: 600;
-}
+.lang:hover { color: var(--ink); background: var(--surface2); }
+.lang.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 .small-ghost { font-size: 12px; padding: 4px 8px; }
 .editor-surface { flex: 1; min-height: 0; overflow: hidden; }
 
