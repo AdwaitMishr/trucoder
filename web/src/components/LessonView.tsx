@@ -254,19 +254,21 @@ export default function LessonView() {
               {flow.map(renderBlock)}
               {navRow}
             </div>
-            <CodeWorkbench
-              courseId={courseId}
-              lessonId={lessonId}
-              block={codeBlock}
-              lastLanguage={p.lastLanguage}
-              onAccepted={() =>
-                setLesson((prev) =>
-                  prev
-                    ? { ...prev, progress: { ...prev.progress, solved: true } }
-                    : prev
-                )
-              }
-            />
+            <div className="zen-editor">
+              <CodeWorkbench
+                courseId={courseId}
+                lessonId={lessonId}
+                block={codeBlock}
+                lastLanguage={p.lastLanguage}
+                onAccepted={() =>
+                  setLesson((prev) =>
+                    prev
+                      ? { ...prev, progress: { ...prev.progress, solved: true } }
+                      : prev
+                  )
+                }
+              />
+            </div>
           </div>
         ) : (
           <PanelGroup
