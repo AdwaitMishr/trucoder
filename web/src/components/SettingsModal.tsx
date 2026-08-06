@@ -1,11 +1,28 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
-  PiXBold,
   PiCode,
   PiKeyboard,
   PiFlask,
   PiWarning,
 } from "react-icons/pi";
+import { XIcon } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import {
   FONT_PRESETS,
   useSettings,
@@ -13,48 +30,6 @@ import {
 } from "../settings";
 
 type Section = "editor" | "shortcuts" | "advanced";
-
-function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      className={`toggle ${on ? "on" : ""}`}
-      onClick={() => onChange(!on)}
-    >
-      <span className="toggle-knob" />
-    </button>
-  );
-}
-
-function Select<T extends string | number>({
-  value,
-  options,
-  onChange,
-}: {
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (v: T) => void;
-}) {
-  return (
-    <select
-      className="settings-select"
-      value={String(value)}
-      onChange={(e) => {
-        const raw = e.target.value;
-        const opt = options.find((o) => String(o.value) === raw);
-        if (opt) onChange(opt.value);
-      }}
-    >
-      {options.map((o) => (
-        <option key={String(o.value)} value={String(o.value)}>
-          {o.label}
-        </option>
-      ))}
-    </select>
-  );
-}
 
 function Row({
   label,
@@ -67,7 +42,7 @@ function Row({
 }) {
   return (
     <div className="settings-row">
-      <div>
+      <div className="settings-row-text">
         <div className="settings-label">{label}</div>
         {desc && <div className="settings-desc">{desc}</div>}
       </div>
@@ -93,124 +68,138 @@ export default function SettingsModal({
   const { settings, update, reset } = useSettings();
   const [section, setSection] = useState<Section>("editor");
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="modal" role="dialog" aria-modal="true" aria-label="settings">
-        <div className="modal-sidebar">
-          <h2>Settings</h2>
-          <button
-            className={section === "editor" ? "active" : ""}
-            onClick={() => setSection("editor")}
-          >
-            <PiCode size={15} /> Code Editor
-          </button>
-          <button
-            className={section === "shortcuts" ? "active" : ""}
-            onClick={() => setSection("shortcuts")}
-          >
-            <PiKeyboard size={15} /> Shortcuts
-          </button>
-          <button
-            className={section === "advanced" ? "active" : ""}
-            onClick={() => setSection("advanced")}
-          >
-            <PiFlask size={15} /> Advanced
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="settings-dialog" showCloseButton={false}>
+        <Tabs
+          orientation="vertical"
+          value={section}
+          onValueChange={(v) => setSection(v as Section)}
+          className="settings-tabs"
+        >
+          <TabsList className="settings-tablist">
+            <TabsTrigger value="editor">
+              <PiCode size={15} />
+              <span>Code Editor</span>
+            </TabsTrigger>
+            <TabsTrigger value="shortcuts">
+              <PiKeyboard size={15} />
+              <span>Shortcuts</span>
+            </TabsTrigger>
+            <TabsTrigger value="advanced">
+              <PiFlask size={15} />
+              <span>Advanced</span>
+            </TabsTrigger>
+          </TabsList>
 
-        <div className="modal-main">
-          <div className="modal-head">
-            <h3>
-              {section === "editor"
-                ? "Code Editor"
-                : section === "shortcuts"
-                  ? "Shortcuts"
-                  : "Advanced"}
-            </h3>
-            <button className="ghost" onClick={onClose} title="close">
-              <PiXBold size={16} />
-            </button>
-          </div>
+          <div className="settings-panel">
+            <DialogHeader className="settings-head">
+              <DialogTitle>
+                {section === "editor"
+                  ? "Code Editor"
+                  : section === "shortcuts"
+                    ? "Shortcuts"
+                    : "Advanced"}
+              </DialogTitle>
+              <DialogClose className="settings-close" title="close">
+                <XIcon size={16} />
+              </DialogClose>
+            </DialogHeader>
 
-          {section === "editor" && (
-            <div className="settings-body">
+            <TabsContent value="editor" className="settings-body">
               <Row label="Font">
                 <Select
                   value={settings.font}
-                  options={FONT_PRESETS.map((f) => ({ value: f, label: f }))}
-                  onChange={(font) => update({ font })}
-                />
+                  onValueChange={(font) =>
+                    update({ font: font as EditorSettings["font"] })
+                  }
+                >
+                  <SelectTrigger className="settings-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FONT_PRESETS.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Row>
               <Row label="Font size">
                 <Select
-                  value={settings.fontSize}
-                  options={[12, 13, 14, 15, 16, 18, 20, 22].map((n) => ({
-                    value: n,
-                    label: `${n}px`,
-                  }))}
-                  onChange={(fontSize) => update({ fontSize })}
-                />
+                  value={String(settings.fontSize)}
+                  onValueChange={(v) => update({ fontSize: Number(v) })}
+                >
+                  <SelectTrigger className="settings-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[12, 13, 14, 15, 16, 18, 20, 22].map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n}px
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Row>
               <Row label="Font ligatures" desc="connects character pairs (fi, ->, =>)">
-                <Toggle
-                  on={settings.ligatures}
-                  onChange={(v) => update({ ligatures: v })}
+                <Switch
+                  checked={settings.ligatures}
+                  onCheckedChange={(v) => update({ ligatures: v })}
                 />
               </Row>
               <Row label="Key binding" desc="vi-style modal editing">
-                <Select<EditorSettings["keyBinding"]>
+                <Select
                   value={settings.keyBinding}
-                  options={[
-                    { value: "standard", label: "Standard" },
-                    { value: "vim", label: "Vim" },
-                  ]}
-                  onChange={(keyBinding) => update({ keyBinding })}
-                />
+                  onValueChange={(v) =>
+                    update({ keyBinding: v as EditorSettings["keyBinding"] })
+                  }
+                >
+                  <SelectTrigger className="settings-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="vim">Vim</SelectItem>
+                  </SelectContent>
+                </Select>
               </Row>
               <Row label="Tab size">
-                <Select<EditorSettings["tabSize"]>
-                  value={settings.tabSize}
-                  options={[
-                    { value: 2, label: "2 spaces" },
-                    { value: 4, label: "4 spaces" },
-                    { value: 8, label: "8 spaces" },
-                  ]}
-                  onChange={(tabSize) => update({ tabSize })}
-                />
+                <Select
+                  value={String(settings.tabSize)}
+                  onValueChange={(v) =>
+                    update({ tabSize: Number(v) as EditorSettings["tabSize"] })
+                  }
+                >
+                  <SelectTrigger className="settings-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="2">2 spaces</SelectItem>
+                    <SelectItem value="4">4 spaces</SelectItem>
+                    <SelectItem value="8">8 spaces</SelectItem>
+                  </SelectContent>
+                </Select>
               </Row>
               <Row label="Word wrap" desc="wrap long lines instead of scrolling">
-                <Toggle
-                  on={settings.wordWrap}
-                  onChange={(v) => update({ wordWrap: v })}
+                <Switch
+                  checked={settings.wordWrap}
+                  onCheckedChange={(v) => update({ wordWrap: v })}
                 />
               </Row>
-              <Row label="Relative line numbers" desc="count lines from the cursor">
-                <Toggle
-                  on={settings.relativeLineNumbers}
-                  onChange={(v) => update({ relativeLineNumbers: v })}
+              <Row
+                label="Relative line numbers"
+                desc="count lines from the cursor"
+              >
+                <Switch
+                  checked={settings.relativeLineNumbers}
+                  onCheckedChange={(v) => update({ relativeLineNumbers: v })}
                 />
               </Row>
-            </div>
-          )}
+            </TabsContent>
 
-          {section === "shortcuts" && (
-            <div className="settings-body">
+            <TabsContent value="shortcuts" className="settings-body">
               <div className="settings-note">
                 These shortcuts work while the editor is focused.
               </div>
@@ -220,11 +209,9 @@ export default function SettingsModal({
                   <span>{s.action}</span>
                 </div>
               ))}
-            </div>
-          )}
+            </TabsContent>
 
-          {section === "advanced" && (
-            <div className="settings-body">
+            <TabsContent value="advanced" className="settings-body">
               <div className="settings-note">
                 <PiWarning size={13} />
                 <span>
@@ -233,14 +220,14 @@ export default function SettingsModal({
                 </span>
               </div>
               <Row label="Reset all settings" desc="back to factory defaults">
-                <button className="btn run" onClick={reset}>
+                <Button variant="destructive" size="sm" onClick={reset}>
                   reset
-                </button>
+                </Button>
               </Row>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+            </TabsContent>
+          </div>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   );
 }

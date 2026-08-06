@@ -1,16 +1,22 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  PiTerminal,
-  PiPalette,
-  PiSignOut,
-  PiCheck,
-  PiGearSix,
-} from "react-icons/pi";
+import { PiTerminal, PiPalette, PiSignOut, PiCheck, PiGearSix } from "react-icons/pi";
 import { api } from "../api";
 import { THEMES, useTheme } from "../theme";
 import type { User } from "../types";
 import SettingsModal from "./SettingsModal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function Nav({
   user,
@@ -20,18 +26,7 @@ export default function Nav({
   onLogout: () => void;
 }) {
   const { themeId, setThemeId, theme } = useTheme();
-  const [open, setOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-
-  // close the theme picker on Escape
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
 
   return (
     <header className="nav">
@@ -45,59 +40,62 @@ export default function Nav({
       <div className="nav-right">
         <span className="nav-user">{user.username}</span>
 
-        <button
-          className="ghost"
-          onClick={() => setSettingsOpen(true)}
-          title="settings"
-        >
-          <PiGearSix size={16} />
-        </button>
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="ghost"
+                onClick={() => setSettingsOpen(true)}
+                title="settings"
+              >
+                <PiGearSix size={16} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>settings</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
-        <div style={{ position: "relative" }}>
-          <button
-            className="ghost"
-            onClick={() => setOpen((o) => !o)}
-            title="theme"
-            aria-expanded={open}
-            aria-haspopup="menu"
-          >
+        <DropdownMenu>
+          <DropdownMenuTrigger className="ghost" title="theme">
             <PiPalette size={16} />
             {theme.name}
-          </button>
-          {open && <div className="pop-backdrop" onClick={() => setOpen(false)} />}
-          {open && (
-            <div className="theme-pop" role="menu" aria-label="theme picker">
-              {THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  className={`theme-swatch ${t.id === themeId ? "active" : ""}`}
-                  onClick={() => {
-                    setThemeId(t.id);
-                    setOpen(false);
-                  }}
-                >
-                  <span className="swatch-dots">
-                    <span style={{ background: t.colors.bg }} />
-                    <span style={{ background: t.colors.accent }} />
-                  </span>
-                  <span className="name">{t.name}</span>
-                  {t.id === themeId && <PiCheck size={14} />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="theme-menu">
+            {THEMES.map((t) => (
+              <DropdownMenuItem
+                key={t.id}
+                className="theme-swatch"
+                onSelect={() => setThemeId(t.id)}
+              >
+                <span className="swatch-dots">
+                  <span style={{ background: t.colors.bg }} />
+                  <span style={{ background: t.colors.accent }} />
+                </span>
+                <span className="name">{t.name}</span>
+                {t.id === themeId && <PiCheck size={14} />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        <button
-          className="ghost"
-          onClick={async () => {
-            await api.logout().catch(() => {});
-            onLogout();
-          }}
-        >
-          <PiSignOut size={16} />
-          sign out
-        </button>
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="ghost"
+                onClick={async () => {
+                  await api.logout().catch(() => {});
+                  onLogout();
+                }}
+                title="sign out"
+              >
+                <PiSignOut size={16} />
+                sign out
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>sign out</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </header>

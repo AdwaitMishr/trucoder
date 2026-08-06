@@ -1,11 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
       // monaco-vim's dist imports this bare subpath, which monaco's exports
       // map cannot resolve; point it at a shim that re-exports the same
       // monaco instance (see src/monaco-shim.ts).
