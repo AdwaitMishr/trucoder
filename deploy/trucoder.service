@@ -1,0 +1,21 @@
+[Unit]
+Description=TruCoder - interactive coding course platform
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=simple
+User=adith
+WorkingDirectory=/home/adith/trucoder/server
+# Pin the Node binary: nvm's node may mismatch the better-sqlite3 ABI.
+ExecStart=/usr/bin/node /home/adith/trucoder/server/dist/index.js
+EnvironmentFile=/home/adith/trucoder/.env
+Environment=DATA_DIR=/home/adith/trucoder/data
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
