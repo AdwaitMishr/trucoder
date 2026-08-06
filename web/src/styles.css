@@ -9,6 +9,7 @@
   --font: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
     Consolas, "Liberation Mono", monospace;
+  --font-brand: "Space Mono", var(--font-mono);
 
   /* ---- geometry ---- */
   --radius-sm: 2px;   /* flat panels, inline code */
@@ -39,6 +40,22 @@
   --err-soft: color-mix(in srgb, var(--err) 12%, var(--bg));
   --selection: color-mix(in srgb, var(--accent) 25%, transparent);
   --d-easy: color-mix(in srgb, var(--ok) 60%, var(--accent));
+}
+
+/* Brand font (Space Mono, self-hosted) — the wordmark lockup uses it. */
+@font-face {
+  font-family: "Space Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/space-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/space-mono-700.woff2") format("woff2");
 }
 
 [data-theme="dark"] {
@@ -130,7 +147,7 @@ code, pre, .mono { font-family: var(--font-mono); }
 /* ---- boot / loading ---- */
 .boot {
   display: flex; align-items: center; justify-content: center;
-  min-height: 100dvh; color: var(--muted); font-family: var(--font-mono);
+  min-height: 100dvh; color: var(--muted); font-family: var(--font-brand);
   letter-spacing: 0.3em; text-transform: lowercase; font-size: 13px;
   animation: breathe 1.6s ease-in-out infinite;
 }
@@ -150,13 +167,20 @@ code, pre, .mono { font-family: var(--font-mono); }
   padding: 10px 24px; border-bottom: 1px solid var(--hairline);
 }
 .nav .brand {
-  display: flex; align-items: center; gap: 9px;
-  font-family: var(--font-mono); font-weight: 600; font-size: 15px; letter-spacing: -0.01em;
+  position: relative;
+  display: flex; align-items: center;
+  font-family: var(--font-brand); font-weight: 700; font-size: 16px; letter-spacing: -0.02em;
 }
-.brand-mark {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; border-radius: 6px; color: var(--accent);
-  background: var(--accent-soft); font-size: 14px;
+/* two accents derived from the theme: "tru" is the accent, "coder" is the
+   accent blended toward the ink — readable in every theme */
+.brand-tru { color: var(--accent); }
+.brand-coder { color: color-mix(in oklab, var(--accent) 45%, var(--ink)); }
+/* accent dot, top-right of the wordmark — the blinking cursor */
+.nav .brand::after,
+.login-brand::after {
+  content: ""; position: absolute; top: 0.04em; right: -0.55em;
+  width: 0.3em; height: 0.3em; border-radius: 50%;
+  background: var(--accent);
 }
 .nav-right { position: relative; display: flex; align-items: center; gap: 8px; }
 .nav-user { color: var(--muted); font-size: 12.5px; font-family: var(--font-mono); }
@@ -199,8 +223,9 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
   padding: 32px; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--card);
 }
 .login-brand {
-  display: flex; align-items: center; gap: 10px; font-family: var(--font-mono);
-  font-size: 22px; font-weight: 600; letter-spacing: -0.02em;
+  position: relative; width: fit-content;
+  display: flex; align-items: center; gap: 10px; font-family: var(--font-brand);
+  font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
 }
 .login-sub { color: var(--muted); font-size: 13px; margin: -8px 0 8px; }
 .login-card label { display: flex; flex-direction: column; gap: 6px; }
@@ -234,7 +259,10 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 
 /* ---- home: course index ---- */
 .page { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; overflow-y: auto; }
-.page-head h1 { font-size: 28px; font-weight: 650; letter-spacing: -0.02em; margin: 0 0 4px; }
+.page-head h1 {
+  font-size: 34px; font-weight: 700; letter-spacing: -0.02em;
+  font-family: var(--font-brand); margin: 0 0 6px;
+}
 .page-head p { margin: 0; color: var(--muted); font-size: 14px; }
 .back {
   display: inline-flex; align-items: center; gap: 6px;
@@ -336,7 +364,8 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 .lesson-head-top .back { margin: 0; }
 .lesson-head-title-row { display: flex; align-items: center; gap: 12px; }
 .lesson-head-title {
-  font-size: 26px; font-weight: 650; letter-spacing: -0.02em;
+  font-family: var(--font-brand);
+  font-size: 32px; font-weight: 700; letter-spacing: -0.02em;
   line-height: 1.15; margin: 0;
 }
 .solved-badge {
@@ -399,8 +428,14 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 .sig { font-size: 12px; color: var(--ink); background: var(--surface2); padding: 2px 8px; border-radius: var(--radius-sm); }
 
 .lesson-body { font-size: 15px; }
-.lesson-body h2 { font-size: 20px; font-weight: 650; letter-spacing: -0.015em; margin: 34px 0 10px; }
-.lesson-body h3 { font-size: 16px; font-weight: 600; letter-spacing: -0.005em; margin: 26px 0 8px; }
+.lesson-body h2 {
+  font-family: var(--font-brand);
+  font-size: 24px; font-weight: 700; letter-spacing: -0.015em; margin: 34px 0 10px;
+}
+.lesson-body h3 {
+  font-family: var(--font-brand);
+  font-size: 18px; font-weight: 700; letter-spacing: -0.005em; margin: 26px 0 8px;
+}
 .lesson-body p { margin: 0 0 14px; }
 .lesson-body ul, .lesson-body ol { margin: 0 0 14px; padding-left: 22px; }
 .lesson-body li { margin-bottom: 4px; }
@@ -528,8 +563,8 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
   padding: 18px 10px; display: flex; flex-direction: column; gap: 2px;
 }
 .modal-sidebar h2 {
-  margin: 0 10px 10px; font-size: 13px; font-weight: 600;
-  letter-spacing: 0.02em; color: var(--ink);
+  margin: 0 10px 10px; font-size: 14px; font-weight: 700;
+  letter-spacing: 0.02em; color: var(--ink); font-family: var(--font-brand);
 }
 .modal-sidebar button {
   display: flex; align-items: center; gap: 9px; text-align: left;
@@ -544,7 +579,7 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 6px;
 }
-.modal-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.modal-head h3 { margin: 0; font-size: 17px; font-weight: 700; font-family: var(--font-brand); }
 .settings-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: 20px; padding: 13px 0; border-bottom: 1px solid var(--hairline);

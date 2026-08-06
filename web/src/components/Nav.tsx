@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  PiTerminal,
-  PiPalette,
-  PiSignOut,
-  PiCheck,
-  PiGearSix,
-} from "react-icons/pi";
+import { PiPalette, PiSignOut, PiCheck, PiGearSix } from "react-icons/pi";
 import { api } from "../api";
 import { THEMES, useTheme } from "../theme";
 import type { User } from "../types";
@@ -36,10 +30,8 @@ export default function Nav({
   return (
     <header className="nav">
       <Link to="/" className="brand">
-        <span className="brand-mark">
-          <PiTerminal size={16} />
-        </span>
-        trucoder
+        <span className="brand-tru">tru</span>
+        <span className="brand-coder">coder</span>
       </Link>
 
       <div className="nav-right">

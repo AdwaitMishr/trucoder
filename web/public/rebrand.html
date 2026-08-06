@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TruCoder — rebrand options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- self-hosted woff2 (Google Fonts is blocked in the test browser; the app would self-host the pick anyway) -->
+<style>
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/geist-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/geist-mono-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/geist-mono-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fira Code";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/fira-code-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fira Code";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/fira-code-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/ibm-plex-mono-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/space-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/space-mono-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Martian Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/martian-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Martian Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/martian-mono-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Sometype Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/sometype-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Sometype Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/sometype-mono-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "DM Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/dm-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "DM Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/dm-mono-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fragment Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/fragment-mono-400.woff2") format("woff2");
+}
+</style>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #17181a; --surface: #1e1f21; --surface2: #252628;
+    --ink: #d7d6d0; --muted: #6f7073; --hairline: #2e3034;
+    --accent: #e2b714; --accent-soft: rgba(226, 183, 20, 0.12);
+    --ok: #4fae6a;
+  }
+  body {
+    font-family: "Geist", system-ui, sans-serif;
+    background: var(--bg); color: var(--ink);
+    -webkit-font-smoothing: antialiased; line-height: 1.5;
+    padding: 48px 40px 80px; max-width: 1080px; margin: 0 auto;
+  }
+  h1 { font-size: 26px; font-weight: 650; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 13.5px; margin: 6px 0 40px; }
+  .mono { font-family: "Geist Mono", monospace; }
+  h2 {
+    font-size: 12px; font-weight: 500; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted);
+    margin: 44px 0 18px; padding-bottom: 10px; border-bottom: 1px solid var(--hairline);
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: 10px; padding: 22px 16px 16px; text-align: center;
+    cursor: pointer; transition: border-color .15s, transform .15s;
+  }
+  .card:hover { transform: translateY(-2px); border-color: var(--muted); }
+  .card.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .card svg { display: block; margin: 0 auto 14px; color: var(--accent); }
+  .card .name { font-family: "Geist Mono", monospace; font-size: 13px; font-weight: 600; }
+  .card .why { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .card .tag {
+    display: inline-block; margin-top: 10px; font-size: 10px; font-family: "Geist Mono", monospace;
+    color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 2px 8px;
+  }
+  .wordmark-row { display: flex; flex-direction: column; gap: 0; }
+  .wm {
+    display: flex; align-items: center; gap: 18px;
+    padding: 14px 16px; border: 1px solid var(--hairline); border-radius: 10px;
+    margin-bottom: 10px; background: var(--surface); cursor: pointer;
+  }
+  .wm:hover { border-color: var(--muted); }
+  .wm.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .wm .spec { color: var(--muted); font-size: 11.5px; font-family: "Geist Mono", monospace; min-width: 210px; }
+  .wm .spec b { color: var(--ink); font-weight: 500; }
+  .navmock {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--surface); border: 1px solid var(--hairline);
+    border-radius: 10px; padding: 10px 18px; margin-bottom: 10px;
+  }
+  .navmock .brand { display: flex; align-items: center; gap: 9px; }
+  .navmock .lock { color: var(--muted); font-size: 11.5px; font-family: "Geist Mono", monospace; }
+  .navmock .right { display: flex; align-items: center; gap: 8px; }
+  .navmock .ghost {
+    width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--hairline);
+    background: none; color: var(--muted);
+  }
+  .navmock .user { color: var(--muted); font-size: 12.5px; font-family: "Geist Mono", monospace; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .mark { display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; }
+  .mark.chip { width: 24px; height: 24px; background: var(--accent-soft); color: var(--accent); }
+  .mark.chip svg { display: block; }
+</style>
+</head>
+<body>
+
+<h1>trucoder — rebrand options</h1>
+<p class="sub">mascot + wordmark candidates. click anything to select it (just for fun). dark theme palette, Geist / Geist Mono.</p>
+
+<h2>applied — the pick (space mono + tru|coder + dot)</h2>
+<div class="navmock">
+  <div class="brand" style="position:relative">
+    <span style="font-family:'Space Mono',monospace;font-weight:700;font-size:16px;letter-spacing:-0.02em;color:var(--accent)">tru</span><span style="font-family:'Space Mono',monospace;font-weight:700;font-size:16px;letter-spacing:-0.02em;color:color-mix(in oklab, var(--accent) 45%, var(--ink))">coder</span>
+    <span style="position:absolute;top:3px;right:-10px;width:5px;height:5px;border-radius:50%;background:var(--accent)"></span>
+  </div>
+  <span class="lock">tru = accent · coder = accent→ink mix · dot = cursor</span>
+  <div class="right"><span class="user">adith</span><span class="ghost"></span><span class="ghost"></span></div>
+</div>
+<p class="note" style="font-family:'Space Mono',monospace;font-weight:700;font-size:34px;letter-spacing:-0.02em;color:var(--ink);margin:14px 0 0">courses</p>
+<p class="note" style="font-family:'Space Mono',monospace;font-weight:700;font-size:32px;letter-spacing:-0.02em;color:var(--ink);margin:4px 0 0">Lesson titles, section headings, modal heads — all Space Mono 700, bigger</p>
+
+<h2>mascot candidates — 24×24 grid, minimal, terminal-native</h2>
+<div class="grid" id="mascots">
+
+  <div class="card" onclick="pick('mascot','prompt')">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="1.2" y="1.2" width="21.6" height="21.6" rx="6.5"/>
+      <circle cx="8" cy="9.3" r="1.05" fill="currentColor" stroke="none"/>
+      <circle cx="16" cy="9.3" r="1.05" fill="currentColor" stroke="none"/>
+      <path d="M10.2 14.6l2.1-2.1 2.1 2.1"/>
+    </svg>
+    <div class="name">prompt</div>
+    <div class="why">the chip stays, the <span class="mono">&gt;</span> becomes a mouth</div>
+    <span class="tag">closest to current</span>
+  </div>
+
+  <div class="card" onclick="pick('mascot','cursor')">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="2.5" width="20" height="19" rx="5.5"/>
+      <rect x="6.6" y="8" width="3.4" height="3.4" rx="1" fill="currentColor" stroke="none"/>
+      <rect x="14" y="8" width="3.4" height="3.4" rx="1" fill="currentColor" stroke="none"/>
+      <path d="M8.6 15c1.9 1.5 4.9 1.5 6.8 0"/>
+    </svg>
+    <div class="name">cursor</div>
+    <div class="why">the blinking block cursor, with a face</div>
+    <span class="tag">most mascot-y</span>
+  </div>
+
+  <div class="card" onclick="pick('mascot','chevcat')">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="13.8" r="8.6"/>
+      <path d="M5.6 9.4L2.6 4.6l5.4 2.2"/>
+      <path d="M18.4 9.4l3-4.8-5.4 2.2"/>
+      <circle cx="9.2" cy="13" r="1.05" fill="currentColor" stroke="none"/>
+      <circle cx="14.8" cy="13" r="1.05" fill="currentColor" stroke="none"/>
+      <path d="M10.2 16.9h3.6"/>
+    </svg>
+    <div class="name">chevcat</div>
+    <div class="why">ears are <span class="mono">&lt;</span> and <span class="mono">&gt;</span></div>
+    <span class="tag">the cute one</span>
+  </div>
+
+  <div class="card" onclick="pick('mascot','window')">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="1" y="3.5" width="22" height="19" rx="5"/>
+      <circle cx="4.8" cy="6.4" r="0.8" fill="currentColor" stroke="none"/>
+      <circle cx="7.6" cy="6.4" r="0.8" fill="currentColor" stroke="none"/>
+      <circle cx="10.4" cy="6.4" r="0.8" fill="currentColor" stroke="none"/>
+      <path d="M5.6 12.4l2.6 2.6-2.6 2.6"/>
+      <circle cx="15.4" cy="12.6" r="1" fill="currentColor" stroke="none"/>
+      <circle cx="18.9" cy="12.6" r="1" fill="currentColor" stroke="none"/>
+      <path d="M15.4 17.6c1.2 1.1 2.8 1.1 4 0"/>
+    </svg>
+    <div class="name">window</div>
+    <div class="why">a terminal window with a face in the screen</div>
+    <span class="tag">most literal</span>
+  </div>
+
+  <div class="card" onclick="pick('mascot','cyclops')">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 5.2l8 6.8-8 6.8"/>
+      <circle cx="10.6" cy="12" r="1.8" fill="currentColor" stroke="none"/>
+      <path d="M14.6 14.4c1.3.9 2.8.9 4.1 0"/>
+    </svg>
+    <div class="name">cyclops</div>
+    <div class="why">the prompt itself is the face</div>
+    <span class="tag">most minimal</span>
+  </div>
+
+</div>
+
+<h2>kimi k3 concepts — designed by the subagent</h2>
+<div class="grid" id="kimi">
+
+  <div class="card" onclick="pick('mascot','blink')">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 19h14"/>
+      <circle cx="9" cy="10" r="1.1" fill="currentColor" stroke="none"/>
+      <circle cx="15" cy="10" r="1.1" fill="currentColor" stroke="none"/>
+    </svg>
+    <div class="name">blink</div>
+    <div class="why">the underscore cursor with eyes — the prompt waiting for input</div>
+    <span class="tag">kimi's pick · most ownable</span>
+  </div>
+
+  <div class="card" onclick="pick('mascot','caret')">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 4v10"/>
+      <path d="M8 16.5c1.2 1 2.6 1.5 4 1.5s2.8-.5 4-1.5"/>
+    </svg>
+    <div class="name">caret</div>
+    <div class="why">the blinking insert beam with a smile under it</div>
+    <span class="tag">two strokes total</span>
+  </div>
+
+  <div class="card" onclick="pick('mascot','promptd')">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 8l4 4-4 4"/>
+      <path d="M13 16h6"/>
+    </svg>
+    <div class="name">promptd</div>
+    <div class="why"><span class="mono">&gt;</span> as a winking eye, <span class="mono">_</span> as the mouth — the prompt itself</div>
+    <span class="tag">pure glyphs</span>
+  </div>
+
+</div>
+
+<h2>wordmark treatments</h2>
+<div class="wordmark-row">
+
+  <div class="wm" onclick="pick('wm','baseline')">
+    <span class="spec"><b>baseline</b> — Geist Mono 600 · 15px · ls -0.01em (current)</span>
+    <span class="mono" style="font-size:15px;font-weight:600;letter-spacing:-0.01em">trucoder</span>
+  </div>
+
+  <div class="wm" onclick="pick('wm','monobig')">
+    <span class="spec"><b>mono big</b> — Geist Mono 600 · 20px · ls -0.02em</span>
+    <span class="mono" style="font-size:20px;font-weight:600;letter-spacing:-0.02em">trucoder</span>
+  </div>
+
+  <div class="wm" onclick="pick('wm','sans')">
+    <span class="spec"><b>sans</b> — Geist 650 · 22px · ls -0.03em (vercel-ish)</span>
+    <span style="font-size:22px;font-weight:650;letter-spacing:-0.03em">trucoder</span>
+  </div>
+
+  <div class="wm" onclick="pick('wm','prefix')">
+    <span class="spec"><b>prompt prefix</b> — accent <span class="mono">&gt;</span> + Geist Mono 600 · 16px</span>
+    <span><span style="color:var(--accent);font-family:'Geist Mono',monospace;font-weight:700;font-size:16px">&gt;</span><span class="mono" style="font-size:16px;font-weight:600;letter-spacing:-0.01em">trucoder</span></span>
+  </div>
+
+  <div class="wm" onclick="pick('wm','caps')">
+    <span class="spec"><b>caps wide</b> — Geist Mono 500 · 12px · ls +0.14em</span>
+    <span class="mono" style="font-size:12px;font-weight:500;letter-spacing:0.14em">TRUCODER</span>
+  </div>
+
+  <div class="wm" onclick="pick('wm','dot')">
+    <span class="spec"><b>accent dot</b> — Geist Mono 600 · 16px + accent .</span>
+    <span class="mono" style="font-size:16px;font-weight:600;letter-spacing:-0.01em">trucoder<span style="color:var(--accent)">.</span></span>
+  </div>
+
+</div>
+
+<h2>mono fonts for the wordmark — 17px, weight 600</h2>
+<div class="wordmark-row">
+
+  <div class="wm" onclick="pick('wm','geist-mono')">
+    <span class="spec"><b>Geist Mono</b> — current · neutral, crisp, Vercel-native</span>
+    <span class="mono" style="font-size:17px;font-weight:600;letter-spacing:-0.01em">trucoder</span>
+  </div>
+
+  <div class="wm" onclick="pick('wm','jetbrains')">
+    <span class="spec"><b>JetBrains Mono</b> — developer-favorite, softly rounded, very readable</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:600;letter-spacing:-0.01em">trucoder</span>
+  </div>
+
+  <div class="wm" onclick="pick('wm','fira')">
+    <span class="spec"><b>Fira Code</b> — the ligature font, quirky, pairs with the ligature setting</span>
+    <span style="font-family:'Fira Code',monospace;font-size:17px;font-weight:600;letter-spacing:-0.01em">trucoder</span>
+  </div>
+
+  <div class="wm" onclick="pick('wm','plex')">
+    <span class="spec"><b>IBM Plex Mono</b> — corporate-technical, wide, IBM design language</span>
+    <span style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;letter-spacing:-0.01em">trucoder</span>
+  </div>
+
+  <div class="wm" onclick="pick('wm','space')">
+    <span class="spec"><b>Space Mono</b> — retro-terminal, dotted details, playful</span>
+    <span style="font-family:'Space Mono',monospace;font-size:17px;font-weight:700;letter-spacing:-0.01em">trucoder</span>
+  </div>
+
+  <div class="wm" onclick="pick('wm','martian')">
+    <span class="spec"><b>Martian Mono</b> — ultra-geometric, squared, hard-tech</span>
+    <span style="font-family:'Martian Mono',monospace;font-size:17px;font-weight:600;letter-spacing:-0.01em">trucoder</span>
+  </div>
+
+  <div class="wm" onclick="pick('wm','fragment')">
+    <span class="spec"><b>Fragment Mono</b> — sharp, condensed, utilitarian (Helvetica-of-monos)</span>
+    <span style="font-family:'Fragment Mono',monospace;font-size:17px;font-weight:400;letter-spacing:-0.01em">trucoder</span>
+  </div>
+
+  <div class="wm" onclick="pick('wm','sometype')">
+    <span class="spec"><b>Sometype Mono</b> — warm humanist mono, friendlier</span>
+    <span style="font-family:'Sometype Mono',monospace;font-size:17px;font-weight:600;letter-spacing:-0.01em">trucoder</span>
+  </div>
+
+  <div class="wm" onclick="pick('wm','dmmono')">
+    <span class="spec"><b>DM Mono</b> — light, elegant, low-contrast</span>
+    <span style="font-family:'DM Mono',monospace;font-size:17px;font-weight:500;letter-spacing:-0.01em">trucoder</span>
+  </div>
+
+</div>
+
+<h2>lockups at true topbar scale (36px nav)</h2>
+
+<div class="navmock">
+  <div class="brand">
+    <span class="mark chip" style="width:24px;height:24px">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 8l4 4-4 4"/></svg>
+    </span>
+    <span class="mono" style="font-size:15px;font-weight:600;letter-spacing:-0.01em">trucoder</span>
+  </div>
+  <span class="lock">1 · prompt chip + baseline</span>
+  <div class="right"><span class="user">adith</span><span class="ghost"></span><span class="ghost"></span></div>
+</div>
+
+<div class="navmock">
+  <div class="brand">
+    <span class="mark chip">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2.5" width="20" height="19" rx="5.5"/><rect x="6.6" y="8" width="3.4" height="3.4" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="8" width="3.4" height="3.4" rx="1" fill="currentColor" stroke="none"/><path d="M8.6 15c1.9 1.5 4.9 1.5 6.8 0"/></svg>
+    </span>
+    <span style="font-size:19px;font-weight:650;letter-spacing:-0.03em">trucoder</span>
+  </div>
+  <span class="lock">2 · cursor + sans</span>
+  <div class="right"><span class="user">adith</span><span class="ghost"></span><span class="ghost"></span></div>
+</div>
+
+<div class="navmock">
+  <div class="brand">
+    <span class="mark chip">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.8" r="8.6"/><path d="M5.6 9.4L2.6 4.6l5.4 2.2"/><path d="M18.4 9.4l3-4.8-5.4 2.2"/><circle cx="9.2" cy="13" r="1.05" fill="currentColor" stroke="none"/><circle cx="14.8" cy="13" r="1.05" fill="currentColor" stroke="none"/><path d="M10.2 16.9h3.6"/></svg>
+    </span>
+    <span><span style="color:var(--accent);font-family:'Geist Mono',monospace;font-weight:700;font-size:15px">&gt;</span><span class="mono" style="font-size:15px;font-weight:600;letter-spacing:-0.01em">trucoder</span></span>
+  </div>
+  <span class="lock">3 · chevcat + prompt prefix</span>
+  <div class="right"><span class="user">adith</span><span class="ghost"></span><span class="ghost"></span></div>
+</div>
+
+<div class="navmock">
+  <div class="brand">
+    <span class="mark chip">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3.5" width="22" height="19" rx="5"/><circle cx="4.8" cy="6.4" r="0.8" fill="currentColor" stroke="none"/><circle cx="7.6" cy="6.4" r="0.8" fill="currentColor" stroke="none"/><circle cx="10.4" cy="6.4" r="0.8" fill="currentColor" stroke="none"/><path d="M5.6 12.4l2.6 2.6-2.6 2.6"/><circle cx="15.4" cy="12.6" r="1" fill="currentColor" stroke="none"/><circle cx="18.9" cy="12.6" r="1" fill="currentColor" stroke="none"/><path d="M15.4 17.6c1.2 1.1 2.8 1.1 4 0"/></svg>
+    </span>
+    <span class="mono" style="font-size:17px;font-weight:600;letter-spacing:-0.02em">trucoder</span>
+  </div>
+  <span class="lock">4 · window + mono big</span>
+  <div class="right"><span class="user">adith</span><span class="ghost"></span><span class="ghost"></span></div>
+</div>
+
+<p class="note">mascots are single-path-friendly SVGs (stroke = currentColor), so they inherit the accent color in all six themes. mono font candidates are loaded from Google Fonts for the comparison — the app itself only ships Geist / Geist Mono today; a picked font would be self-hosted (~50-100KB woff2).</p>
+
+<script>
+  let sel = { mascot: null, wm: null };
+  function pick(group, id) {
+    sel[group] = id;
+    const all = group === 'mascot' ? document.querySelectorAll('.card') : document.querySelectorAll('.wm');
+    all.forEach(el => el.classList.remove('sel'));
+    all.forEach(el => {
+      if (el.querySelector('.name')?.textContent === id || el.querySelector('.spec b')?.textContent === id) {
+        el.classList.add('sel');
+      }
+    });
+  }
+</script>
+</body>
+</html>
