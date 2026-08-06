@@ -335,9 +335,9 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
   display: flex; flex-direction: column; gap: 14px;
   max-width: 860px; margin: 0 auto; padding: 4px 6px 80px; width: 100%;
 }
-.zen-content > * { max-width: 720px; }
-/* the workbench shares the content column's margins — same max-width */
-.zen-editor { width: 100%; max-width: 720px; }
+.zen-content > * { max-width: 860px; }
+/* the workbench shares the content column's width — aligned margins */
+.zen-editor { width: 100%; max-width: 860px; }
 .lesson-page-zen .editor-window { flex: none; height: 68vh; min-height: 420px; }
 
 .lesson-content {
