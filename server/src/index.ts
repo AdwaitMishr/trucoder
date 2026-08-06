@@ -8,6 +8,7 @@ import { config } from "./config";
 import { hashPassword, resolveToken } from "./auth";
 import { countUsers, createUser } from "./db";
 import { scanCourses, watchCourses } from "./courses/loader";
+import { preflightSandbox } from "./sandbox";
 import { authRouter } from "./routes/auth";
 import { coursesRouter } from "./routes/courses";
 import { lessonsRouter } from "./routes/lessons";
@@ -27,6 +28,8 @@ if (countUsers() === 0) {
 // Load courses from disk (agent-authored .mdx content).
 scanCourses();
 watchCourses();
+// Non-fatal: warns in the logs if the sandbox image is missing.
+preflightSandbox();
 
 app.use("/api/auth", authRouter);
 

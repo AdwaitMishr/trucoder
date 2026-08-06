@@ -55,7 +55,7 @@ async function runBatch(
   lang: Lang,
   code: string,
   tests: TestCase[]
-): Promise<TestResult[]> {
+): Promise<{ results: TestResult[]; sandboxError?: string }> {
   try {
     const res = await runInSandbox({
       language: lang,
@@ -63,38 +63,50 @@ async function runBatch(
       tests: tests.map((t) => ({ args: t.args })),
       timeLimitMs: block.timeLimitMs,
     });
+    // Infrastructure failure (docker/image/daemon) — not the learner's fault.
+    if (res.sandboxError) {
+      return { results: [], sandboxError: res.sandboxError };
+    }
     if (compileErrorFrom(lang, res)) {
-      return tests.map((t) => ({
-        name: t.name,
-        passed: false,
-        error: `compile error:\n${compileErrorFrom(lang, res)!.slice(0, 2000)}`,
-      }));
+      return {
+        results: tests.map((t) => ({
+          name: t.name,
+          passed: false,
+          error: `compile error:\n${compileErrorFrom(lang, res)!.slice(0, 2000)}`,
+        })),
+      };
     }
     if (res.timedOut) {
-      return tests.map((t) => ({
-        name: t.name,
-        passed: false,
-        error:
-          "time limit exceeded — your code was too slow for the hidden tests. Look for a faster approach (e.g. memoization).",
-      }));
+      return {
+        results: tests.map((t) => ({
+          name: t.name,
+          passed: false,
+          error:
+            "time limit exceeded — your code was too slow for the hidden tests. Look for a faster approach (e.g. memoization).",
+        })),
+      };
     }
     if (res.code !== 0) {
-      return tests.map((t) => ({
+      return {
+        results: tests.map((t) => ({
+          name: t.name,
+          passed: false,
+          error: `runtime error (exit ${res.code}):\n${(res.stderr || "").slice(
+            0,
+            2000
+          )}`,
+        })),
+      };
+    }
+    return { results: parseResults(res.stdout, tests) };
+  } catch (err) {
+    return {
+      results: tests.map((t) => ({
         name: t.name,
         passed: false,
-        error: `runtime error (exit ${res.code}):\n${(res.stderr || "").slice(
-          0,
-          2000
-        )}`,
-      }));
-    }
-    return parseResults(res.stdout, tests);
-  } catch (err) {
-    return tests.map((t) => ({
-      name: t.name,
-      passed: false,
-      error: `runner error: ${(err as Error).message}`,
-    }));
+        error: `runner error: ${(err as Error).message}`,
+      })),
+    };
   }
 }
 
@@ -103,7 +115,13 @@ export async function runPublic(
   lang: Lang,
   code: string
 ): Promise<import("./types").RunResult> {
-  const results = await runBatch(block, lang, code, block.publicTests);
+  const { results, sandboxError } = await runBatch(
+    block,
+    lang,
+    code,
+    block.publicTests
+  );
+  if (sandboxError) return { publicTests: [], sandboxError };
   const compileError = results.find((r) => r.error?.startsWith("compile error"))
     ?.error;
   return { publicTests: results, compileError };
@@ -115,7 +133,16 @@ export async function submit(
   code: string
 ): Promise<import("./types").SubmitResult> {
   const all = [...block.publicTests, ...block.privateTests];
-  const results = await runBatch(block, lang, code, all);
+  const { results, sandboxError } = await runBatch(block, lang, code, all);
+  if (sandboxError) {
+    return {
+      verdict: "error",
+      publicTests: [],
+      privatePassed: 0,
+      privateTotal: block.privateTests.length,
+      sandboxError,
+    };
+  }
 
   const publicTests = results.slice(0, block.publicTests.length);
   const privateTests = results.slice(block.publicTests.length);

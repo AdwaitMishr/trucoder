@@ -1,7 +1,6 @@
 import { execFile } from "child_process";
 import { buildHarness } from "./util/harness";
 import type { Lang } from "./courses/types";
-
 /**
  * Code sandbox backed by an isolated container.
  *
@@ -49,6 +48,76 @@ export interface SandboxResult {
   timedOut: boolean;
   /** Set when compilation failed (Java). Entrypoint exits 2 on compile fail. */
   compileError?: string;
+  /**
+   * Infrastructure failure — NOT the learner's fault (docker missing, daemon
+   * down, image missing, output overflow). When set, the run never reached
+   * the learner's code, so the result carries no per-test verdicts.
+   */
+  sandboxError?: string;
+}
+
+/**
+ * Verify at boot that the sandbox image exists, so a missing image surfaces
+ * in the logs instead of as a confusing runtime error on the first run.
+ * Non-fatal: the server still boots (grading just fails with a clear error).
+ */
+export function preflightSandbox(): void {
+  execFile("docker", ["image", "inspect", SANDBOX_IMAGE], (err) => {
+    if (err) {
+      console.warn(
+        `[trucoder] WARNING: sandbox image '${SANDBOX_IMAGE}' not found — ` +
+          `grading will fail until it is built. Run: ` +
+          `docker build -t ${SANDBOX_IMAGE} sandbox-image/`
+      );
+    } else {
+      console.log(`[trucoder] sandbox image '${SANDBOX_IMAGE}' present`);
+    }
+  });
+}
+
+const DOCKER_STDERR_PATTERNS: { re: RegExp; message: string }[] = [
+  {
+    re: /Cannot connect to the Docker daemon/i,
+    message:
+      "sandbox unavailable — the Docker daemon is not running. Start it and try again.",
+  },
+  {
+    re: /No such image|pull access denied|repository does not exist/i,
+    message:
+      `sandbox image missing (${SANDBOX_IMAGE}) — build it with: ` +
+      `docker build -t ${SANDBOX_IMAGE} sandbox-image/`,
+  },
+  {
+    re: /permission denied|Is your user in the "docker" group/i,
+    message:
+      "sandbox unavailable — docker permission denied. The app user must be in the docker group.",
+  },
+];
+
+/** Classify a failed docker invocation into a human-readable sandbox error. */
+function classifySandboxError(e: {
+  code?: string | number;
+  killed?: boolean;
+  signal?: string;
+} | null, stderr: string): string | undefined {
+  // The docker binary itself is missing.
+  if (e && e.code === "ENOENT") {
+    return "sandbox unavailable — the docker binary was not found. Is Docker installed and in PATH?";
+  }
+  // execFile kills the child on stdout overflow — that is NOT a timeout and
+  // NOT the learner's fault; 8MB of captured output is a harness limit.
+  if (e && e.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
+    return "program output exceeded the 8 MB capture limit — the harness cannot receive it.";
+  }
+  const stderrText = stderr || "";
+  for (const p of DOCKER_STDERR_PATTERNS) {
+    if (p.re.test(stderrText)) return p.message;
+  }
+  // exit 125 is docker's "container failed to start" bucket (daemon-side).
+  if (typeof e?.code === "number" && e.code === 125) {
+    return `sandbox container failed to start (exit 125): ${stderrText.slice(0, 300) || "no detail from docker"}`;
+  }
+  return undefined;
 }
 
 export function runInSandbox(options: SandboxRunOptions): Promise<SandboxResult> {
@@ -97,7 +166,22 @@ export function runInSandbox(options: SandboxRunOptions): Promise<SandboxResult>
         maxBuffer: 8 * 1024 * 1024,
       },
       (err, stdout, stderr) => {
-        const e = err as { code?: number; killed?: boolean; signal?: string } | null;
+        const e = err as {
+          code?: string | number;
+          killed?: boolean;
+          signal?: string;
+        } | null;
+        const sandboxError = classifySandboxError(e, stderr || "");
+        if (sandboxError) {
+          resolve({
+            stdout: stdout || "",
+            stderr: stderr || "",
+            code: typeof e?.code === "number" ? e.code : 1,
+            timedOut: false,
+            sandboxError,
+          });
+          return;
+        }
         const code =
           e && typeof e.code === "number" ? e.code : e ? (e.killed ? 137 : 1) : 0;
         const timedOut = code === 124 || code === 137;

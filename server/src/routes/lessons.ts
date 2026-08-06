@@ -202,7 +202,11 @@ lessonsRouter.post("/:lessonId/run", async (req, res) => {
     return res.status(400).json({ error: `lesson does not support ${body.lang}` });
   }
   try {
-    res.json(await runPublic(block, body.lang, body.code));
+    const result = await runPublic(block, body.lang, body.code);
+    if (result.sandboxError) {
+      return res.status(503).json({ error: result.sandboxError });
+    }
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
@@ -225,6 +229,10 @@ lessonsRouter.post("/:lessonId/submit", async (req, res) => {
   }
   try {
     const result = await submit(block, body.lang, body.code);
+    if (result.sandboxError) {
+      // Infrastructure failure — not a valid attempt; do not record it.
+      return res.status(503).json({ error: result.sandboxError });
+    }
     recordSubmission({
       userId,
       courseId: lesson.courseId,

@@ -11,6 +11,8 @@ export interface TestResult {
 export interface RunResult {
   publicTests: TestResult[];
   compileError?: string;
+  /** Infrastructure failure (docker/image/daemon) — not the learner's fault. */
+  sandboxError?: string;
 }
 
 export interface SubmitResult {
@@ -20,4 +22,6 @@ export interface SubmitResult {
   privateTotal: number;
   compileError?: string;
   error?: string;
+  /** Infrastructure failure (docker/image/daemon) — not the learner's fault. */
+  sandboxError?: string;
 }
