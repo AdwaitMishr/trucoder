@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { PiTerminal, PiPalette, PiSignOut, PiCheck } from "react-icons/pi";
+import {
+  PiTerminal,
+  PiPalette,
+  PiSignOut,
+  PiCheck,
+  PiGearSix,
+} from "react-icons/pi";
 import { api } from "../api";
 import { THEMES, useTheme } from "../theme";
 import type { User } from "../types";
+import SettingsModal from "./SettingsModal";
 
 export default function Nav({
   user,
@@ -14,6 +21,7 @@ export default function Nav({
 }) {
   const { themeId, setThemeId, theme } = useTheme();
   const [open, setOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // close the theme picker on Escape
   useEffect(() => {
@@ -36,6 +44,14 @@ export default function Nav({
 
       <div className="nav-right">
         <span className="nav-user">{user.username}</span>
+
+        <button
+          className="ghost"
+          onClick={() => setSettingsOpen(true)}
+          title="settings"
+        >
+          <PiGearSix size={16} />
+        </button>
 
         <div style={{ position: "relative" }}>
           <button
@@ -83,6 +99,7 @@ export default function Nav({
           sign out
         </button>
       </div>
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </header>
   );
 }

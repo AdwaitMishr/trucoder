@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { useTheme } from "../theme";
 import { THEMES, type ThemeDef } from "../themes";
+import { FONT_STACKS, useSettings } from "../settings";
 import type { Lang } from "../types";
 
 const MONACO_LANG: Record<Lang, string> = {
@@ -90,6 +91,11 @@ export default function CodeEditor({
   onChange: (v: string) => void;
 }) {
   const { theme } = useTheme();
+  const { settings } = useSettings();
+  const editorRef = useRef<any>(null);
+  const statusRef = useRef<HTMLDivElement | null>(null);
+  const vimRef = useRef<any>(null);
+  const [editorReady, setEditorReady] = useState(false);
 
   // When the language switches, Monaco's worker re-evaluates the model and can
   // add diagnostics asynchronously — disable them and clear any that appear.
@@ -105,6 +111,34 @@ export default function CodeEditor({
     return () => clearTimeout(t);
   }, [language]);
 
+  // Vim key bindings (monaco-vim). Loaded lazily — the chunk only downloads
+  // when vim mode is enabled. Runs when the setting changes or the editor
+  // finishes mounting (the editor arrives asynchronously after first render).
+  useEffect(() => {
+    if (!editorReady) return;
+    const ed = editorRef.current;
+    if (!ed) return;
+    if (settings.keyBinding === "vim") {
+      let cancelled = false;
+      import("../vendor/monaco-vim.cjs")
+        .then(({ initVimMode }) => {
+          if (cancelled || !editorRef.current) return;
+          vimRef.current?.dispose?.();
+          vimRef.current = initVimMode(editorRef.current, statusRef.current);
+        })
+        .catch((err) => {
+          console.warn("vim mode failed to load:", err);
+        });
+      return () => {
+        cancelled = true;
+        vimRef.current?.dispose?.();
+        vimRef.current = null;
+      };
+    }
+    vimRef.current?.dispose?.();
+    vimRef.current = null;
+  }, [settings.keyBinding, editorReady]);
+
   function beforeMount(monaco: any) {
     (window as any).__tcMonaco = monaco;
     THEMES.forEach((t) => defineEditorTheme(monaco, t));
@@ -112,6 +146,7 @@ export default function CodeEditor({
   }
 
   function handleMount(editor: any, monaco: any) {
+    editorRef.current = editor;
     (window as any).__tcEditor = editor;
     disableDiagnostics(monaco);
     const model = editor.getModel?.();
@@ -119,6 +154,7 @@ export default function CodeEditor({
       clearMarkers(monaco, model);
       setTimeout(() => clearMarkers(monaco, model), 500);
     }
+    setEditorReady(true);
   }
 
   return (
@@ -132,16 +168,21 @@ export default function CodeEditor({
         beforeMount={beforeMount}
         onMount={handleMount}
         options={{
-          fontSize: 14,
+          fontFamily: FONT_STACKS[settings.font],
+          fontSize: settings.fontSize,
+          fontLigatures: settings.ligatures,
+          tabSize: settings.tabSize,
+          insertSpaces: true,
+          wordWrap: settings.wordWrap ? "on" : "off",
+          lineNumbers: settings.relativeLineNumbers ? "relative" : "on",
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
           automaticLayout: true,
-          tabSize: 4,
           padding: { top: 14, bottom: 14 },
           cursorBlinking: "smooth",
-          fontFamily: "'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
         }}
       />
+      <div ref={statusRef} className="vim-statusbar" />
     </div>
   );
 }

@@ -110,6 +110,19 @@ export default function CodeWorkbench({
     }
   }
 
+  // Ctrl/Cmd+Enter = run, Ctrl/Cmd+Shift+Enter = submit.
+  // Re-registered every render so the handlers always see the latest code.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key !== "Enter") return;
+      e.preventDefault();
+      if (e.shiftKey) doSubmit();
+      else doRun();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   return (
     <>
       <div className="editor-window">
