@@ -1,9 +1,22 @@
 import { useEffect, useRef, useState } from "react";
+import confetti from "canvas-confetti";
 import { api, ApiError } from "../api";
 import type { CodeBlock, Lang, RunResult, SubmitResult } from "../types";
 import CodeEditor from "./CodeEditor";
 import Mascot from "./Mascot";
 import ResultPanel from "./ResultPanel";
+
+/** A quiet, tasteful celebration: theme-colored confetti from the bottom.
+ *  Respects prefers-reduced-motion — no confetti there. */
+function celebrate() {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const css = getComputedStyle(document.documentElement);
+  const colors = [css.getPropertyValue("--accent"), css.getPropertyValue("--ok"), css.getPropertyValue("--ink")].map((c) => c.trim());
+  const base = { colors, disableForReducedMotion: true, zIndex: 120 };
+  confetti({ ...base, particleCount: 70, spread: 75, origin: { x: 0.2, y: 0.75 }, startVelocity: 42, ticks: 160, scalar: 0.9 });
+  confetti({ ...base, particleCount: 70, spread: 75, origin: { x: 0.8, y: 0.75 }, startVelocity: 42, ticks: 160, scalar: 0.9 });
+  setTimeout(() => confetti({ ...base, particleCount: 40, spread: 100, startVelocity: 28, ticks: 140, scalar: 0.8 }), 250);
+}
 
 const LANGS: { id: Lang; label: string }[] = [
   { id: "java", label: "Java" },
@@ -103,7 +116,10 @@ export default function CodeWorkbench({
     try {
       const res = await api.submit(courseId, lessonId, lang, code);
       setSubmit(res);
-      if (res.verdict === "accepted") onAccepted();
+      if (res.verdict === "accepted") {
+        onAccepted();
+        celebrate();
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "submit failed");
     } finally {
