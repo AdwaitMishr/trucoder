@@ -34,7 +34,7 @@ type CourseMap = Map<string, Course>;
 let cache: CourseMap = new Map();
 let loadErrors: Record<string, string> = {};
 
-const SUPPORTED_LANGS = new Set<Lang>(["java", "javascript", "python"]);
+const SUPPORTED_LANGS = new Set<Lang>(["java", "javascript", "python", "cpp"]);
 const DIFFS = new Set<string>(["beginner", "easy", "medium", "hard"]);
 
 /** Convert a frontmatter `expected` value to a compact JSON string. */

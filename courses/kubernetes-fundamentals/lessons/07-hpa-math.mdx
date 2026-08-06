@@ -4,13 +4,14 @@ title: "HPA Math"
 difficulty: medium
 order: 7
 tags: [autoscaling, hpa, ceil]
-task: "The Horizontal Pod Autoscaler computes desired replicas as ceil(replicas × currentUtilization / targetUtilization), with a minimum of 1. Given the three integers, return the desired replica count."
-languages: [java, javascript, python]
-timeLimitMs: 2000
+languages: [java, javascript, python, cpp]
 signature:
   java: "static int solve(int replicas, int utilization, int target)"
   javascript: "function solve(replicas, utilization, target)"
   python: "def solve(replicas: int, utilization: int, target: int) -> int"
+  cpp: "int solve(int replicas, int utilization, int target)"
+task: "The Horizontal Pod Autoscaler computes desired replicas as ceil(replicas × currentUtilization / targetUtilization), with a minimum of 1. Given the three integers, return the desired replica count."
+timeLimitMs: 2000
 starter:
   java: |
     static int solve(int replicas, int utilization, int target) {
@@ -26,6 +27,11 @@ starter:
     def solve(replicas: int, utilization: int, target: int) -> int:
         # Return max(1, ceil(replicas * utilization / target)).
         return 0
+  cpp: |
+    int solve(int replicas, int utilization, int target) {
+        // Return max(1, ceil(replicas * utilization / target)).
+        return 0;
+    }
 tests:
   public:
     - name: "at target"

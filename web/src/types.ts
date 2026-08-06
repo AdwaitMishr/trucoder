@@ -1,4 +1,4 @@
-export type Lang = "java" | "javascript" | "python";
+export type Lang = "java" | "javascript" | "python" | "cpp";
 export type Difficulty = "beginner" | "easy" | "medium" | "hard";
 
 export interface CourseSummary {

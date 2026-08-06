@@ -152,9 +152,9 @@ block type, propose it there first.
 - Backend: Node 20 + Express + TypeScript + SQLite (better-sqlite3).
 - Frontend: Vite + React + TypeScript, `@monaco-editor/react`, `react-markdown`
   (+ remark-gfm, remark-directive for callouts), react-router.
-- Sandbox: Docker image `trucoder-sandbox` (JDK 17 + Node + Python + Gson) run
-  with `--network none`, read-only rootfs, mem/CPU/pids caps, `--cap-drop ALL`.
-  (Piston/Judge0 are amd64-only, so they don't run on arm64 — see the
-  `arm64-code-sandbox` skill.)
+- Sandbox: Docker image `trucoder-sandbox` (JDK 17 + g++/C++17 + Node + Python +
+  Gson + nlohmann/json) run with `--network none`, read-only rootfs, mem/CPU/pids
+  caps, `--cap-drop ALL`. (Piston/Judge0 are amd64-only, so they don't run on
+  arm64 — see the `arm64-code-sandbox` skill.)
 
 [Conventional Commits]: https://www.conventionalcommits.org/

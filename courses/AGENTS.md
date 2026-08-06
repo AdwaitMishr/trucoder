@@ -105,7 +105,7 @@ Use container directives for callouts. See section 6.
 | `order` | yes | int | Position in the course. Files are also ordered by filename; `order` wins for display. |
 | `tags` | no | list[string] | Concepts this lesson teaches. Shown on the roadmap. |
 | `task` | yes* | string | The one-line problem statement shown above the editor. *Not required for `type: content`.* |
-| `languages` | yes* | list | Which languages you provide starter + signature for. Supported: `java`, `javascript`, `python`. *Not required for `type: content`.* |
+| `languages` | yes* | list | Which languages you provide starter + signature for. Supported: `java`, `javascript`, `python`, `cpp`. *Not required for `type: content`.* |
 | `timeLimitMs` | no | int | Wall-clock budget per submission (default `2000`). |
 | `signature` | yes* | map | The function signature the learner must implement, per language. **The function must be named `solve`.** *Not required for `type: content`.* |
 | `starter` | yes* | map | Editable starter code, per language. Use the YAML `\|` block scalar so indentation is preserved. *Not required for `type: content`.* |
@@ -219,6 +219,30 @@ Rules:
   Avoid cycles (or keep them short — the renderer caps layout passes).
 - Legacy lessons (body + `starter`/`tests`, or `type: content`) are normalized
   to blocks automatically — you do not need to convert existing courses.
+
+### C++ conventions (`cpp`)
+
+C++ is compiled with `g++ -std=c++17 -O2` in the sandbox. The driver is fully
+generic — it converts each JSON arg to the exact parameter type you declare, so
+any `solve` signature works. Use this type mapping:
+
+| Lesson data | C++ parameter type |
+|-------------|--------------------|
+| integer | `int` or `long long` |
+| decimal | `double` |
+| boolean | `bool` |
+| string | `std::string` |
+| array of integers | `std::vector<int>` or `std::vector<long long>` |
+| array of strings | `std::vector<std::string>` |
+
+- `<string>`, `<vector>`, and `<algorithm>` are available; include anything else
+  you need (the sandbox has the full C++17 stdlib).
+- The return type maps the same way (e.g. `std::string` for strings, `long long`
+  for byte counts, `std::vector<...>` for arrays).
+- `solve` must be declared exactly once, at global scope, with the arity the
+  tests use (1–6 parameters).
+- Compile failures and per-test runtime errors surface like Java: the learner
+  sees the g++ diagnostic or the exception message.
 
 ### Test case shape
 

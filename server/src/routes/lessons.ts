@@ -16,7 +16,7 @@ function parseBody(body: unknown): { lang: Lang; code: string } | null {
   const b = body as { language?: unknown; code?: unknown };
   if (
     typeof b?.language !== "string" ||
-    !["java", "javascript", "python"].includes(b.language)
+    !["java", "javascript", "python", "cpp"].includes(b.language)
   ) {
     return null;
   }

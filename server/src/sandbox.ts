@@ -143,7 +143,7 @@ export function runInSandbox(options: SandboxRunOptions): Promise<SandboxResult>
     "--security-opt",
     "no-new-privileges",
     "--tmpfs",
-    "/tmp:rw,size=128m,mode=1777",
+    "/tmp:rw,size=128m,mode=1777,exec",
     "-e",
     `SOURCE_B64=${Buffer.from(source, "utf8").toString("base64")}`,
     "-e",
@@ -191,7 +191,9 @@ export function runInSandbox(options: SandboxRunOptions): Promise<SandboxResult>
           code,
           timedOut,
           compileError:
-            options.language === "java" && code === 2 ? stderr || undefined : undefined,
+            (options.language === "java" || options.language === "cpp") && code === 2
+              ? stderr || undefined
+              : undefined,
         });
       }
     );

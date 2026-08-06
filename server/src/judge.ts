@@ -47,7 +47,8 @@ function parseResults(stdout: string, tests: TestCase[]): TestResult[] {
 }
 
 function compileErrorFrom(lang: Lang, res: SandboxResult): string | undefined {
-  return lang === "java" && res.code === 2 ? res.stderr : undefined;
+  // Compilers (java, cpp) exit 2 on compile failure; interpreters don't compile.
+  return (lang === "java" || lang === "cpp") && res.code === 2 ? res.stderr : undefined;
 }
 
 async function runBatch(

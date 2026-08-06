@@ -12,6 +12,7 @@ case "${LANG:-}" in
   java)        file=Main.java ;;
   javascript)  file=main.js ;;
   python)      file=main.py ;;
+  cpp)         file=main.cpp ;;
   *) echo "unsupported language: ${LANG:-}"; exit 2 ;;
 esac
 
@@ -32,5 +33,11 @@ case "${LANG:-}" in
     ;;
   python)
     exec timeout -s KILL -k 2 "$SECS" python3 main.py
+    ;;
+  cpp)
+    if ! timeout -s KILL -k 2 "${COMPILE_SECS:-20}" g++ -std=c++17 -O2 -I/opt -o main main.cpp; then
+      exit 2  # compile failure -> distinct from runtime exit codes
+    fi
+    exec timeout -s KILL -k 2 "$SECS" ./main
     ;;
 esac

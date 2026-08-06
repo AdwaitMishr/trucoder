@@ -9,6 +9,7 @@ const MONACO_LANG: Record<Lang, string> = {
   java: "java",
   javascript: "javascript",
   python: "python",
+  cpp: "cpp",
 };
 
 function hexToRgba(hex: string, a: number): string {

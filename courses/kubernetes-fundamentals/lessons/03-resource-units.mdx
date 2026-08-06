@@ -4,13 +4,14 @@ title: "Resource Units"
 difficulty: beginner
 order: 3
 tags: [resources, units, binary]
-task: "Parse a Kubernetes memory string into bytes. Suffixes are binary Ki/Mi/Gi/Ti (multiples of 1024) or SI K/M/G (multiples of 1000); a bare number means bytes. Return the byte count as a long."
-languages: [java, javascript, python]
-timeLimitMs: 2000
+languages: [java, javascript, python, cpp]
 signature:
   java: "static long solve(String mem)"
   javascript: "function solve(mem)"
   python: "def solve(mem: str) -> int"
+  cpp: "long long solve(std::string mem)"
+task: "Parse a Kubernetes memory string into bytes. Suffixes are binary Ki/Mi/Gi/Ti (multiples of 1024) or SI K/M/G (multiples of 1000); a bare number means bytes. Return the byte count as a long."
+timeLimitMs: 2000
 starter:
   java: |
     static long solve(String mem) {
@@ -26,6 +27,11 @@ starter:
     def solve(mem: str) -> int:
         # Return the memory string ("128Mi", "1Gi", "512Ki", "2G") as bytes.
         return 0
+  cpp: |
+    long long solve(std::string mem) {
+        // Return the memory string ("128Mi", "1Gi", "512Ki", "2G") as bytes.
+        return 0;
+    }
 tests:
   public:
     - name: "128 mebibytes"

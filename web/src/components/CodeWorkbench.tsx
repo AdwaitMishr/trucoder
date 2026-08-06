@@ -9,6 +9,7 @@ const LANGS: { id: Lang; label: string }[] = [
   { id: "java", label: "Java" },
   { id: "javascript", label: "JavaScript" },
   { id: "python", label: "Python" },
+  { id: "cpp", label: "C++" },
 ];
 
 function storageKey(courseId: string, lessonId: string, lang: Lang) {
