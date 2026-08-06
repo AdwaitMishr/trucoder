@@ -17,3 +17,13 @@ web/dist/
 *.log
 .DS_Store
 Thumbs.db
+
+# ---- Local course content ----
+# Courses are personal learning content: by default they stay on the author's
+# machine. Only the authoring contract (AGENTS.md) and the sample course are
+# tracked. To share a course through git, force-add it:
+#   git add -f courses/<course-id>/
+courses/*
+!courses/AGENTS.md
+!courses/kubernetes-fundamentals/
+!courses/kubernetes-fundamentals/**
