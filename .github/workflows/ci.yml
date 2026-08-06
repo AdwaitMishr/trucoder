@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build sandbox image (for grading)
+        run: docker build -t trucoder-sandbox:latest sandbox-image/
+
+      - name: Server — deps + typecheck
+        run: |
+          cd server
+          npm ci
+          npm run build
+
+      - name: Web — deps + typecheck + build
+        run: |
+          cd web
+          npm ci
+          npm run build
+
+      - name: Verify every tracked lesson's solution vs its tests
+        run: |
+          cd server
+          node scripts/verify.js

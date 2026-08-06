@@ -4,7 +4,11 @@
   "private": true,
   "description": "TruCoder - self-hosted interactive coding course platform",
   "scripts": {
-    "build:web": "cd web && npm install && npm run build",
-    "build": "npm run build:web"
+    "setup": "./setup.sh",
+    "build:server": "cd server && npm run build",
+    "build:web": "cd web && npm run build",
+    "build": "npm run build:server && npm run build:web",
+    "verify": "cd server && npm run verify",
+    "start": "cd server && npm start"
   }
 }
