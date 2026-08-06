@@ -49,6 +49,17 @@ export const THEMES: ThemeDef[] = [
     },
   },
   {
+    id: "frost",
+    name: "frost",
+    kind: "dark",
+    colors: {
+      bg: "#0d1520", ink: "#dbe7f5", muted: "#7d8fa6",
+      surface: "#131e2c", surface2: "#1a2838", hairline: "#24344a",
+      accent: "#7cc0ff", accentInk: "#0d1520", caret: "#7cc0ff",
+      ok: "#5fbf8f", err: "#e0656f",
+    },
+  },
+  {
     id: "dracula",
     name: "dracula",
     kind: "dark",
