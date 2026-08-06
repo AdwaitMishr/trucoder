@@ -252,7 +252,6 @@ export default function LessonView() {
           <div className="zen-body">
             <div className="zen-content">
               {flow.map(renderBlock)}
-              {navRow}
             </div>
             <div className="zen-editor">
               <CodeWorkbench
@@ -269,6 +268,7 @@ export default function LessonView() {
                 }
               />
             </div>
+            {navRow}
           </div>
         ) : (
           <PanelGroup

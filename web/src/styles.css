@@ -338,6 +338,8 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 .zen-content > * { max-width: 860px; }
 /* the workbench shares the content column's width — aligned margins */
 .zen-editor { width: 100%; max-width: 860px; }
+/* zen nav row closes the page below the editor */
+.zen-body > .lesson-nav { width: 100%; max-width: 860px; }
 .lesson-page-zen .editor-window { flex: none; height: 68vh; min-height: 420px; }
 
 .lesson-content {
