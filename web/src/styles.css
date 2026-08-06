@@ -175,7 +175,7 @@ code, pre, .mono { font-family: var(--font-mono); }
 .nav .brand {
   position: relative;
   display: flex; align-items: center;
-  font-family: var(--font-brand); font-weight: 700; font-size: 16px; letter-spacing: -0.02em;
+  font-family: var(--font-brand); font-weight: 700; font-size: 20px; letter-spacing: -0.02em;
 }
 /* two accents derived from the theme: "tru" is the accent, "coder" is the
    accent blended toward the ink — readable in every theme */
