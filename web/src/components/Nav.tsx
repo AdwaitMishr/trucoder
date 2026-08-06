@@ -49,7 +49,7 @@ export default function Nav({
 
         <div style={{ position: "relative" }}>
           <button
-            className="ghost"
+            className="ghost theme-btn"
             onClick={() => setOpen((o) => !o)}
             title="theme"
             aria-expanded={open}

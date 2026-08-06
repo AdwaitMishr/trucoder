@@ -4,6 +4,8 @@ import {
   PiCode,
   PiKeyboard,
   PiFlask,
+  PiPalette,
+  PiCheck,
   PiWarning,
 } from "react-icons/pi";
 import {
@@ -11,8 +13,9 @@ import {
   useSettings,
   type EditorSettings,
 } from "../settings";
+import { THEMES, useTheme } from "../theme";
 
-type Section = "editor" | "shortcuts" | "advanced";
+type Section = "editor" | "shortcuts" | "advanced" | "theme";
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -91,6 +94,7 @@ export default function SettingsModal({
   onClose: () => void;
 }) {
   const { settings, update, reset } = useSettings();
+  const { themeId, setThemeId } = useTheme();
   const [section, setSection] = useState<Section>("editor");
 
   useEffect(() => {
@@ -121,6 +125,12 @@ export default function SettingsModal({
             <PiCode size={15} /> Code Editor
           </button>
           <button
+            className={section === "theme" ? "active" : ""}
+            onClick={() => setSection("theme")}
+          >
+            <PiPalette size={15} /> Theme
+          </button>
+          <button
             className={section === "shortcuts" ? "active" : ""}
             onClick={() => setSection("shortcuts")}
           >
@@ -139,9 +149,11 @@ export default function SettingsModal({
             <h3>
               {section === "editor"
                 ? "Code Editor"
-                : section === "shortcuts"
-                  ? "Shortcuts"
-                  : "Advanced"}
+                : section === "theme"
+                  ? "Theme"
+                  : section === "shortcuts"
+                    ? "Shortcuts"
+                    : "Advanced"}
             </h3>
             <button className="ghost" onClick={onClose} title="close">
               <PiXBold size={16} />
@@ -206,6 +218,25 @@ export default function SettingsModal({
                   onChange={(v) => update({ relativeLineNumbers: v })}
                 />
               </Row>
+            </div>
+          )}
+
+          {section === "theme" && (
+            <div className="settings-body theme-grid">
+              {THEMES.map((t) => (
+                <button
+                  key={t.id}
+                  className={`theme-swatch ${t.id === themeId ? "active" : ""}`}
+                  onClick={() => setThemeId(t.id)}
+                >
+                  <span className="swatch-dots">
+                    <span style={{ background: t.colors.bg }} />
+                    <span style={{ background: t.colors.accent }} />
+                  </span>
+                  <span className="name">{t.name}</span>
+                  {t.id === themeId && <PiCheck size={14} />}
+                </button>
+              ))}
             </div>
           )}
 

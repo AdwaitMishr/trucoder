@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { PiArrowRight } from "react-icons/pi";
 import { api } from "../api";
 import type { CourseSummary } from "../types";
-import Mascot from "./Mascot";
 
 export default function CourseIndex() {
   const [courses, setCourses] = useState<CourseSummary[] | null>(null);
@@ -54,10 +53,7 @@ export default function CourseIndex() {
             const pct = c.lessonCount ? Math.round((c.solved / c.lessonCount) * 100) : 0;
             return (
               <Link key={c.id} to={`/course/${c.id}`} className="course-card">
-                <div className="course-card-title">
-                  <Mascot size={18} />
-                  {c.title}
-                </div>
+                <div className="course-card-title">{c.title}</div>
                 <div className="course-card-desc">{c.description}</div>
                 <div className="progress-track-sm">
                   <div className="progress-fill-sm" style={{ width: `${pct}%` }} />

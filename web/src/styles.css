@@ -251,9 +251,11 @@ code, pre, .mono { font-family: var(--font-mono); }
 }
 .nav .brand {
   position: relative;
-  display: flex; align-items: center; gap: 9px;
+  display: flex; align-items: center;
   font-family: var(--font-brand); font-weight: 700; font-size: 20px; letter-spacing: -0.02em;
 }
+/* the mascot owns the gap — the tru|coder spans must stay glued together */
+.nav .brand > .mascot { margin-right: 9px; }
 /* green tint for success contexts (badges, correct verdicts) */
 .mascot-ok { color: var(--ok); }
 /* on the solid accent submit button, the chip must flip to the accent ink */
@@ -293,6 +295,18 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
   transition: background 0.12s;
 }
 .theme-swatch:hover { background: var(--surface2); }
+
+/* theme picker inside the settings modal */
+.theme-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+}
+.theme-grid .theme-swatch { background: var(--surface); border: 1px solid var(--hairline); }
+
+/* on small screens the theme picker lives in settings; the topbar button hides */
+@media (max-width: 640px) {
+  .nav .theme-btn { display: none; }
+}
 .theme-swatch.active { color: var(--accent); font-weight: 600; }
 .swatch-dots { display: flex; }
 .swatch-dots span {
@@ -311,9 +325,10 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 }
 .login-brand {
   position: relative; width: fit-content;
-  display: flex; align-items: center; gap: 10px; font-family: var(--font-brand);
+  display: flex; align-items: center; font-family: var(--font-brand);
   font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
 }
+.login-brand > .mascot { margin-right: 10px; }
 .login-sub { color: var(--muted); font-size: 13px; margin: -8px 0 8px; }
 .login-card label { display: flex; flex-direction: column; gap: 6px; }
 .login-card label span {
