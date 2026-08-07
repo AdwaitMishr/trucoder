@@ -1,0 +1,674 @@
+---
+id: project-assembly-docker
+title: "Project 4: Assembly & Docker"
+difficulty: easy
+order: 13
+tags: [docker, express, deployment]
+blocks:
+  - type: markdown
+    content: |
+      # Project 4: Assembly & Docker
+
+      **Context.** Three lessons, three pieces: the cart domain, the checkout
+      pipeline, and the rate limiter. Today you **assemble the whole e-commerce
+      backend** — every file, wired end to end — and **ship it in Docker**:
+      an API container (Node 20 + Express) talking to a Postgres container
+      and a Redis container, orchestrated by `docker-compose.yml`. One
+      command, `docker compose up`, and the shop is open.
+
+      **What you are building this step.** The complete blueprint below is the
+      finished project. Read it top to bottom; every earlier lesson plugs in
+      somewhere. Your graded exercise is the last util the project needs:
+      **config validation** — the function that fails fast at boot when a
+      required environment variable is missing, instead of crashing on the
+      first request.
+
+      **Acceptance criteria**
+
+      - `docker compose up` starts api + postgres + redis; the API waits for
+        both databases via healthchecks.
+      - The full flow works over curl: register → login (JWT) → list products
+        → add to cart → checkout → duplicate checkout is replayed, not
+        duplicated → hammering the API eventually returns **429**.
+      - The API container runs as a **non-root user** and has a **HEALTHCHECK**.
+      - Missing env vars fail at boot with a clear message — that is `solve()`.
+  - type: markdown
+    content: |
+      ## The blueprint — project tree
+
+      ```
+      shop-api/
+      ├── package.json
+      ├── Dockerfile
+      ├── docker-compose.yml
+      ├── db/
+      │   ├── pool.js                 # pg connection pool
+      │   └── migrations/001_init.sql # schema sketch
+      ├── middleware/
+      │   ├── auth.js                 # JWT verify (lesson 6)
+      │   ├── rateLimiter.js          # sliding window (lesson 12)
+      │   └── errors.js               # notFound + errorHandler
+      ├── routes/
+      │   ├── auth.js  products.js  cart.js  orders.js
+      ├── controllers/
+      │   ├── authController.js  productsController.js
+      │   ├── cartController.js  ordersController.js
+      ├── services/
+      │   ├── authService.js          # bcrypt + JWT
+      │   ├── cartService.js          # merge + line totals (lesson 10)
+      │   └── orderService.js         # checkout transaction (lesson 11)
+      ├── utils/
+      │   ├── env.js                  # config validation → your solve()
+      │   ├── response.js             # one response envelope
+      │   └── orderId.js              # order id generator
+      ├── app.js                      # middleware wiring
+      └── server.js                   # bootstrap
+      ```
+
+      ## package.json
+
+      ```json
+      {
+        "name": "shop-api",
+        "version": "1.0.0",
+        "private": true,
+        "main": "server.js",
+        "scripts": {
+          "start": "node server.js",
+          "dev": "node --watch server.js"
+        },
+        "dependencies": {
+          "bcryptjs": "^2.4.3",
+          "express": "^4.19.2",
+          "jsonwebtoken": "^9.0.2",
+          "pg": "^8.12.0",
+          "redis": "^4.7.0",
+          "zod": "^3.23.8"
+        }
+      }
+      ```
+
+      ## app.js — the middleware wiring
+
+      ```js
+      const express = require('express');
+      const { rateLimiter } = require('./middleware/rateLimiter');
+      const { requireAuth } = require('./middleware/auth');
+      const { notFound, errorHandler } = require('./middleware/errors');
+
+      const app = express();
+
+      app.disable('x-powered-by');            // don't advertise the framework
+      app.use(express.json());
+
+      app.get('/health', (req, res) => res.json({ status: 'ok' })); // Docker HEALTHCHECK target
+
+      // chain: logger → rate limiter → routes (auth runs per-route where needed)
+      app.use('/api', requestLogger);
+      app.use('/api/auth', require('./routes/auth'));           // public
+      app.use('/api/products', require('./routes/products'));   // public catalog
+      app.use('/api/cart', requireAuth, rateLimiter({ limit: 120, windowMs: 60_000,
+        keyFn: (req) => `user:${req.user.id}` }), require('./routes/cart'));
+      app.use('/api/orders', requireAuth, rateLimiter({ limit: 30, windowMs: 60_000,
+        keyFn: (req) => `user:${req.user.id}` }), require('./routes/orders'));
+
+      app.use(notFound);
+      app.use(errorHandler);
+
+      module.exports = app;
+      ```
+
+      ## server.js — bootstrap
+
+      ```js
+      const app = require('./app');
+      const { env } = require('./utils/env'); // fails fast if config is bad
+
+      app.listen(env.PORT, () => {
+        console.log(`shop-api listening on :${env.PORT}`);
+      });
+      ```
+  - type: markdown
+    content: |
+      ## utils/ — env validation, response envelope, order ids
+
+      ```js
+      // utils/env.js — fail fast at boot, not on the first request.
+      // The missing-vars check is exactly your graded solve(vars, required).
+      const raw = { ...process.env };
+
+      const REQUIRED = ['PORT', 'DATABASE_URL', 'REDIS_URL', 'JWT_SECRET'];
+
+      // ── this is solve(vars, required): missing vars, in required order ──
+      const missing = REQUIRED.filter((name) => {
+        const value = raw[name];
+        return value === undefined || value === '';   // only KEY=value counts
+      });
+
+      if (missing.length > 0) {
+        console.error(`Missing required env vars: ${missing.join(', ')}`);
+        process.exit(1);
+      }
+
+      module.exports = {
+        env: {
+          PORT: Number(raw.PORT),
+          DATABASE_URL: raw.DATABASE_URL,
+          REDIS_URL: raw.REDIS_URL,
+          JWT_SECRET: raw.JWT_SECRET,
+        },
+      };
+      ```
+
+      ```js
+      // utils/response.js — one envelope for every response
+      const ok = (res, data, status = 200) => res.status(status).json({ data });
+      const fail = (res, code, message, status = 400) =>
+        res.status(status).json({ error: { code, message } });
+
+      module.exports = { ok, fail };
+      ```
+
+      ```js
+      // utils/orderId.js — short, sortable order ids
+      const { randomBytes } = require('crypto');
+
+      function orderId() {
+        return `ord_${Date.now().toString(36)}_${randomBytes(4).toString('hex')}`;
+      }
+
+      module.exports = { orderId };
+      ```
+
+      ## middleware/ — auth and errors (rateLimiter is in lesson 12)
+
+      ```js
+      // middleware/auth.js — JWT verify (stateless auth, lesson 6)
+      const jwt = require('jsonwebtoken');
+
+      function requireAuth(req, res, next) {
+        const header = req.headers.authorization || '';
+        const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+        if (!token) return res.status(401).json({ error: { code: 'UNAUTHORIZED' } });
+        try {
+          req.user = jwt.verify(token, process.env.JWT_SECRET); // { id, email }
+          next();
+        } catch {
+          res.status(401).json({ error: { code: 'UNAUTHORIZED' } });
+        }
+      }
+
+      module.exports = { requireAuth };
+      ```
+
+      ```js
+      // middleware/errors.js — terminal middleware
+      function notFound(req, res) {
+        res.status(404).json({ error: { code: 'NOT_FOUND' } });
+      }
+
+      function errorHandler(err, req, res, next) { // eslint-disable-line no-unused-vars
+        const status = err.status || 500;
+        if (status >= 500) console.error(err);
+        res.status(status).json({ error: { code: err.code || 'INTERNAL' } });
+      }
+
+      module.exports = { notFound, errorHandler };
+      ```
+  - type: markdown
+    content: |
+      ## db/ — pool and schema sketch
+
+      ```js
+      // db/pool.js
+      const { Pool } = require('pg');
+
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+      module.exports = { pool, query: (text, params) => pool.query(text, params) };
+      ```
+
+      ```sql
+      -- db/migrations/001_init.sql (sketch)
+      CREATE TABLE users (
+        id            BIGSERIAL PRIMARY KEY,
+        email         TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE TABLE products (
+        id        BIGSERIAL PRIMARY KEY,
+        name      TEXT NOT NULL,
+        price     BIGINT NOT NULL,                -- cents, never floats
+        available INT NOT NULL CHECK (available >= 0)
+      );
+
+      CREATE TABLE cart_items (
+        user_id    BIGINT NOT NULL REFERENCES users(id),
+        product_id BIGINT NOT NULL REFERENCES products(id),
+        qty        INT NOT NULL CHECK (qty >= 1),
+        PRIMARY KEY (user_id, product_id)
+      );
+
+      CREATE TABLE orders (
+        id             BIGSERIAL PRIMARY KEY,
+        user_id        BIGINT NOT NULL REFERENCES users(id),
+        status         TEXT NOT NULL,
+        total_cents    BIGINT NOT NULL,
+        idempotency_key TEXT UNIQUE NOT NULL,     -- lesson 11
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      ```
+
+      ## routes/ — thin, one file per resource
+
+      ```js
+      // routes/auth.js
+      const router = require('express').Router();
+      const authController = require('../controllers/authController');
+
+      router.post('/register', authController.register);
+      router.post('/login', authController.login);
+
+      module.exports = router;
+      ```
+
+      ```js
+      // routes/products.js
+      const router = require('express').Router();
+      const productsController = require('../controllers/productsController');
+
+      router.get('/', productsController.list);
+
+      module.exports = router;
+      ```
+
+      ```js
+      // routes/cart.js and routes/orders.js — as built in lessons 10 and 11
+      ```
+
+      ## controllers/ — thin: parse, delegate, respond
+
+      ```js
+      // controllers/authController.js
+      const authService = require('../services/authService');
+
+      async function register(req, res, next) {
+        try {
+          const user = await authService.register(req.body.email, req.body.password);
+          res.status(201).json({ data: user });
+        } catch (err) { next(err); }
+      }
+
+      async function login(req, res, next) {
+        try {
+          const token = await authService.login(req.body.email, req.body.password);
+          res.json({ data: { token } });
+        } catch (err) { next(err); }
+      }
+
+      module.exports = { register, login };
+      ```
+
+      ```js
+      // controllers/productsController.js
+      const { query } = require('../db/pool');
+
+      async function list(req, res, next) {
+        try {
+          const { rows } = await query(
+            'SELECT id, name, price, available FROM products ORDER BY id'
+          );
+          res.json({ data: rows });
+        } catch (err) { next(err); }
+      }
+
+      module.exports = { list };
+      ```
+
+      ```js
+      // controllers/cartController.js and ordersController.js — as built in lessons 10 and 11
+      ```
+
+      ## services/ — the business rules from lessons 10 and 11
+
+      ```js
+      // services/authService.js
+      const bcrypt = require('bcryptjs');
+      const jwt = require('jsonwebtoken');
+      const { query } = require('../db/pool');
+
+      async function register(email, password) {
+        const hash = await bcrypt.hash(password, 10);
+        const { rows } = await query(
+          'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email',
+          [email, hash]
+        );
+        return rows[0];
+      }
+
+      async function login(email, password) {
+        const { rows } = await query('SELECT * FROM users WHERE email = $1', [email]);
+        const user = rows[0];
+        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+          const err = new Error('invalid credentials');
+          err.status = 401;
+          throw err;
+        }
+        return jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, {
+          expiresIn: '1h',
+        });
+      }
+
+      module.exports = { register, login };
+      ```
+
+      ```js
+      // services/cartService.js — lesson 10: merge + line totals
+      async function addItem(userId, itemId, qty, price) {
+        const rows = await getItems(userId);
+        const updated = mergeLine(rows, itemId, qty, price); // ← solve() from lesson 10
+        await upsertItems(userId, updated);
+        return updated;
+      }
+      ```
+
+      ```js
+      // services/orderService.js — lesson 11: transaction + idempotency
+      async function checkout({ userId, items, idempotencyKey }) {
+        const claimed = await redis.set(idempotencyKey, 'pending', 'NX', 'EX', 3600);
+        if (!claimed) return { replayed: true, order: await getByKey(idempotencyKey) };
+
+        const [status, total] = decide(items, await stockSnapshot(), balanceFor(userId));
+        // status 0 → BEGIN / conditional stock UPDATE / INSERT order / COMMIT
+        // status 1 or 2 → 409 / 402, nothing reserved
+      }
+      ```
+  - type: markdown
+    content: |
+      ## Dockerfile
+
+      ```dockerfile
+      FROM node:20-alpine
+
+      WORKDIR /app
+
+      # install dependencies first so the layer cache survives code changes
+      COPY package*.json ./
+      RUN npm ci --omit=dev
+
+      COPY . .
+
+      # run as an unprivileged user — never as root in production
+      RUN addgroup -S app && adduser -S app -G app
+      USER app
+
+      EXPOSE 3000
+
+      # the platform can see when this container is actually healthy
+      HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+        CMD wget -qO- http://localhost:3000/health || exit 1
+
+      CMD ["node", "server.js"]
+      ```
+
+      ## docker-compose.yml
+
+      ```yaml
+      services:
+        api:
+          build: .
+          ports:
+            - "3000:3000"
+          environment:
+            PORT: "3000"
+            DATABASE_URL: postgres://shop:shop@postgres:5432/shop
+            REDIS_URL: redis://redis:6379
+            JWT_SECRET: change-me-in-prod
+          depends_on:
+            postgres:
+              condition: service_healthy
+            redis:
+              condition: service_healthy
+
+        postgres:
+          image: postgres:16-alpine
+          environment:
+            POSTGRES_USER: shop
+            POSTGRES_PASSWORD: shop
+            POSTGRES_DB: shop
+          volumes:
+            - pgdata:/var/lib/postgresql/data
+          healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U shop -d shop"]
+            interval: 5s
+            timeout: 3s
+            retries: 10
+
+        redis:
+          image: redis:7-alpine
+          volumes:
+            - redisdata:/data
+          healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 5s
+            timeout: 3s
+            retries: 10
+
+      volumes:
+        pgdata:
+        redisdata:
+      ```
+
+      Note the service names are DNS names: the API connects to `postgres:5432`
+      and `redis:6379` — not `localhost`, because each container has its own
+      network namespace. Compose gives them one shared network, and the
+      `depends_on.condition: service_healthy` gates the API's start on its
+      databases actually accepting connections.
+  - type: markdown
+    content: |
+      ## The curl walkthrough
+
+      ```bash
+      docker compose up --build
+
+      # 1. register a shopper
+      curl -s -X POST http://localhost:3000/api/auth/register \
+        -H 'Content-Type: application/json' \
+        -d '{"email":"ada@example.com","password":"hunter2hunter2"}'
+
+      # 2. login → grab the JWT
+      TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login \
+        -H 'Content-Type: application/json' \
+        -d '{"email":"ada@example.com","password":"hunter2hunter2"}' \
+        | jq -r .data.token)
+
+      # 3. browse the public catalog
+      curl -s http://localhost:3000/api/products
+
+      # 4. add to cart: 2 of product 1
+      curl -s -X POST http://localhost:3000/api/cart/items \
+        -H "Authorization: Bearer $TOKEN" \
+        -H 'Content-Type: application/json' \
+        -d '{"itemId":1,"qty":2}'
+
+      # 5. checkout with an idempotency key (controller reads req.body.items — lesson 11)
+      curl -s -X POST http://localhost:3000/api/orders \
+        -H "Authorization: Bearer $TOKEN" \
+        -H 'Content-Type: application/json' \
+        -H 'Idempotency-Key: order-ada-001' \
+        -d '{"items":[{"itemId":1,"qty":2}],"shippingAddress":"1 Main St"}'
+
+      # 6. same key again → replayed (200), no second order, no second charge
+      curl -s -X POST http://localhost:3000/api/orders \
+        -H "Authorization: Bearer $TOKEN" \
+        -H 'Content-Type: application/json' \
+        -H 'Idempotency-Key: order-ada-001' \
+        -d '{"items":[{"itemId":1,"qty":2}],"shippingAddress":"1 Main St"}'
+
+      # 7. hammer the API → eventually 429 Too Many Requests
+      for i in $(seq 1 70); do
+        curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/api/products
+      done | sort | uniq -c
+      #   60 200
+      #   10 429
+      ```
+
+      Every piece you built in lessons 10–12 shows up in that trace: the
+      cart's merge (step 4), the transaction and idempotency key (steps 5–6),
+      and the sliding-window limiter (step 7).
+  - type: markdown
+    content: |
+      ## The graded exercise
+
+      Implement `solve(vars, required)` — the config validator from
+      `utils/env.js`:
+
+      - `vars` — environment entries as strings, e.g. `"PORT=3000"`.
+      - `required` — the variable names the app needs.
+      - Return the names in `required` that are **missing**, in the order they
+        appear in `required`. Return `[]` when all are present.
+      - **Convention:** only `KEY=value` with a **non-empty** value counts as
+        present. `KEY=` (empty value) and an absent key are both missing.
+
+      :::example
+      `(["PORT=3000", "JWT_SECRET=abc"], ["PORT", "DB_URL"])`: PORT is present,
+      DB_URL is nowhere → `["DB_URL"]`.
+      :::
+
+      :::example
+      `(["A=1", "B=2"], ["A", "B"])`: both present → `[]`.
+      :::
+
+      **Private cases you should handle:** empty `vars` → every required name
+      is missing, in order; empty `required` → `[]`; an entry like `"PORT="`
+      with an empty value counts as **missing**; missing names must come back
+      in `required` order, not input order.
+  - type: code
+    task: "Implement solve(vars, required): return the required env var names that are missing from vars, in the order they appear in required. Convention: only KEY=value with a non-empty value counts as present; KEY= with an empty value counts as missing."
+    languages: [javascript, python]
+    signature:
+      javascript: "function solve(vars, required)"
+      python: "def solve(vars: list[str], required: list[str]) -> list[str]"
+    starter:
+      javascript: |
+        function solve(vars, required) {
+          // vars entries look like "PORT=3000". Return the required names
+          // that are missing, in required order. Only KEY=value with a
+          // non-empty value counts as present.
+          return [];
+        }
+      python: |
+        def solve(vars: list[str], required: list[str]) -> list[str]:
+            # vars entries look like "PORT=3000". Return the required names
+            # that are missing, in required order. Only KEY=value with a
+            # non-empty value counts as present.
+            return []
+    tests:
+      public:
+        - name: "one missing var"
+          args: [["PORT=3000", "JWT_SECRET=abc"], ["PORT", "DB_URL"]]
+          expected: ["DB_URL"]
+        - name: "all present"
+          args: [["A=1", "B=2"], ["A", "B"]]
+          expected: []
+      private:
+        - name: "empty vars"
+          args: [[], ["PORT", "DB_URL"]]
+          expected: ["PORT", "DB_URL"]
+        - name: "empty required"
+          args: [["A=1"], []]
+          expected: []
+        - name: "empty value counts as missing"
+          args: [["PORT=", "A=1"], ["PORT", "A"]]
+          expected: ["PORT"]
+        - name: "missing names keep required order"
+          args: [["B=1"], ["A", "B", "C"]]
+          expected: ["A", "C"]
+    hints:
+      - "Split each entry on the first '=' and keep the key only when a '=' exists and the value is non-empty."
+      - "Collect the present keys in a set, then walk `required` in order and collect the names not in the set."
+      - "Return [] when every required name is present — the order of the result is the order of `required`, not of `vars`."
+    solution: |
+      def solve(vars: list[str], required: list[str]) -> list[str]:
+          present = set()
+          for entry in vars:
+              key, sep, value = entry.partition("=")
+              if sep and value != "":
+                  present.add(key)
+          return [name for name in required if name not in present]
+  - type: flowchart
+    title: "deployment topology"
+    nodes: ["Client", "api container (node:20-alpine)", "postgres container", "redis container"]
+    edges:
+      - {from: 0, to: 1, label: "HTTP :3000"}
+      - {from: 1, to: 2, label: "pg pool :5432"}
+      - {from: 1, to: 3, label: "rate limit + idempotency :6379"}
+  - type: markdown
+    content: |
+      ## Interview questions
+
+      :::tip
+      **Interview question:** Why does the API container depend on Postgres's
+      *healthcheck* (`condition: service_healthy`) instead of plain
+      `depends_on: [postgres]`? Plain `depends_on` only waits for the
+      container to *start* — Postgres boots in seconds but takes longer to
+      accept connections, so the API would crash-loop on refused connections.
+      `service_healthy` gates startup on `pg_isready` succeeding, so the API
+      only starts when the database is actually ready. Same trick for Redis.
+      :::
+
+      :::tip
+      **Interview question:** The Dockerfile runs as a non-root user *and*
+      declares a HEALTHCHECK — what failure mode does each prevent? Root in a
+      container is still root on the host kernel for many operations: a
+      compromised app becomes a compromised host. A non-root `USER app`
+      shrinks that blast radius. The HEALTHCHECK gives the orchestrator a
+      truthful signal — a container whose process is alive but whose app is
+      wedged (stuck at 100% CPU, deadlocked pool) is reported unhealthy and
+      restarted, instead of silently serving errors.
+      :::
+
+      **Use case.** A fresh clone of the repo on a new machine — or a CI
+      pipeline — runs `docker compose up --build` and gets a working shop in
+      minutes, because every dependency (Postgres, Redis, env vars) is
+      declared in one file. That reproducibility is the entire point of
+      shipping with Docker: the production environment is a text file in git.
+  - type: mcq
+    prompt: "Why use docker-compose instead of three separate docker run commands?"
+    options:
+      - "Compose is faster at runtime."
+      - "One file declares all services, their network, volumes, and startup ordering — reproducible with a single command."
+      - "docker run cannot start Postgres."
+      - "Compose replaces Dockerfiles."
+    answer: 1
+    explanation: "Compose is the orchestration layer: services, shared network, volumes, healthcheck-gated startup — all declared in docker-compose.yml and applied with `docker compose up`."
+  - type: mcq
+    prompt: "Inside the api container, how does it reach Postgres?"
+    options:
+      - "http://localhost:5432"
+      - "postgres://shop:shop@postgres:5432/shop — the service name is the DNS name on the shared Compose network"
+      - "It cannot reach other containers."
+      - "Through the host machine's IP only"
+    answer: 1
+    explanation: "Each container has its own network namespace, so localhost is the container itself. Compose puts all services on one network where the service name resolves as a hostname."
+  - type: mcq
+    prompt: "The app boots with JWT_SECRET unset. What should happen?"
+    options:
+      - "Start anyway; the first login will fail."
+      - "Log a warning and continue."
+      - "Exit at boot with a clear list of missing vars — fail fast."
+      - "Generate a random secret at startup."
+    answer: 2
+    explanation: "Failing fast at boot (your solve() + process.exit) surfaces misconfiguration immediately, before any traffic. A random secret would invalidate every session on restart — worse than failing."
+  - type: mscq
+    prompt: "Which statements about the Dockerfile are true?"
+    options:
+      - "It runs the app as a non-root user."
+      - "It declares a HEALTHCHECK that curls /health."
+      - "It installs dependencies before copying the source, so code changes reuse the dependency layer."
+      - "It runs the app with npm run dev."
+    answer: [0, 1, 2]
+    explanation: "USER app, HEALTHCHECK against /health, and COPY package*.json before COPY . are all there. The CMD is node src/server.js — production start, not dev watch mode."
+---

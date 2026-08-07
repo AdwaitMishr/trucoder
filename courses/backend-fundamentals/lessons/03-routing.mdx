@@ -1,0 +1,232 @@
+---
+id: routing
+title: "Routing: Mapping URLs to Handlers"
+difficulty: easy
+order: 3
+tags: [routing, express, params]
+blocks:
+  - type: markdown
+    content: |
+      Routing is how a server decides **what code runs** when a request
+      arrives. If the HTTP method is the *what* (the client's intent — GET,
+      POST), the route is the *where* (which resource). Together they map to
+      a **handler**: a function that runs the business logic and returns a
+      response.
+
+      ```js
+      // Express: method + path -> handler
+      app.get('/products', (req, res) => {
+        res.json({ products: catalog.list() });
+      });
+      ```
+
+      ## Key points
+
+      - A route matches on **method AND path**: `GET /orders` and
+        `POST /orders` are different routes.
+      - The handler receives the request and produces the response.
+      - Routes can be static, dynamic (params), or decorated with query
+        strings.
+  - type: markdown
+    content: |
+      ## Static routes
+
+      Static routes are literal strings with no variable parts.
+      `/products` is always exactly `/products`:
+
+      - `GET /products` — list the catalog.
+      - `POST /orders` — create an order.
+
+      Every request to a static route hits the same handler with the same
+      shape.
+  - type: markdown
+    content: |
+      ## Dynamic routes & path parameters
+
+      Real APIs act on *specific* resources: "product 42", "order 2049".
+      Dynamic routes accept that variable directly in the URL:
+
+      - Request: `GET /products/42`
+      - Route definition: `GET /products/:id` (the `:id` is a **path
+        parameter**)
+      - The server extracts `"42"` and hands it to the handler as
+        `req.params.id`.
+
+      ```js
+      app.get('/products/:id', (req, res) => {
+        const id = req.params.id;   // "42" — always a string
+        const product = catalog.findById(id);
+        if (!product) {
+          return res.status(404).json({ error: { code: 'PRODUCT_NOT_FOUND' } });
+        }
+        res.json(product);
+      });
+      ```
+
+      Path parameters **identify which resource** you mean.
+  - type: markdown
+    content: |
+      ## Query strings
+
+      Query strings carry **metadata about the request**: filters, sorting,
+      and pagination — especially on GET, which has no body. They start
+      after a `?` as `key=value` pairs joined by `&`:
+
+      - `GET /products?page=2&sort=price` — second page, sorted by price.
+      - `GET /products?color=red&size=large` — filter the catalog.
+      - `GET /orders?status=pending` — filter by status.
+
+      ```js
+      app.get('/products', (req, res) => {
+        const page = Number(req.query.page) || 1;   // "2" arrives as a string
+        const sort = req.query.sort || 'popular';
+        res.json(catalog.list({ page, sort }));
+      });
+      ```
+
+      Why not path params for everything? Path params identify *which*
+      resource, while query params are *optional modifiers* — writing
+      `/api/search/javascript` technically works but breaks REST semantics.
+
+      **Use case:** the storefront's product grid calls
+      `GET /api/products?page=3&sort=price&inStock=true` — the resource is
+      still "products"; the query string just shapes how they're returned.
+  - type: flowchart
+    title: "path param vs query string"
+    nodes: ["GET /products/42?page=2&sort=price", "Path part: /products/42", "Matches /products/:id → req.params.id = '42'", "Query part: ?page=2&sort=price", "req.query = { page: '2', sort: 'price' }", "Identifies WHICH product", "Filters / sorts / paginates"]
+    edges:
+      - {from: 0, to: 1, label: "split URL"}
+      - {from: 1, to: 2, label: "route match"}
+      - {from: 2, to: 5, label: "which resource"}
+      - {from: 0, to: 3, label: "after ?"}
+      - {from: 3, to: 4, label: "parse pairs"}
+      - {from: 4, to: 6, label: "how to return"}
+  - type: markdown
+    content: |
+      ## Method + path matching, ordering, and 404s
+
+      A request only matches a route when **both** the method and the path
+      match. That's why `app.get('/orders')` and `app.post('/orders')` can
+      coexist.
+
+      **Order matters.** Frameworks check routes in registration order, so
+      specific routes must come before wildcards or catch-alls. A catch-all
+      registered first swallows everything after it.
+
+      When no route matches, don't leave the client hanging: define a
+      **catch-all** as the *last* route. It returns a consistent JSON 404.
+
+      ```js
+      // specific routes first
+      app.get('/products/:id', ...);
+      app.post('/orders', ...);
+
+      // catch-all LAST: anything unmatched -> JSON 404
+      app.use((req, res) => {
+        res.status(404).json({
+          error: { code: 'NOT_FOUND', message: `No route for ${req.method} ${req.path}` }
+        });
+      });
+      ```
+
+      :::tip
+      **Interview question:** How do you design a 404 in a REST API?
+      — Register a catch-all route as the very last route. It returns HTTP
+      404 with a JSON error envelope (a machine-readable code and a message),
+      so clients get the same predictable shape whether the resource is
+      missing or the URL is typo'd. Never return a bare HTML page from an
+      API.
+      :::
+  - type: flowchart
+    title: "route matching flow"
+    nodes: ["Request: GET /products/42", "Router: match method + path", "Specific route found", "Handler runs (business logic)", "Response to client", "No route matched", "Catch-all → 404 JSON"]
+    edges:
+      - {from: 0, to: 1, label: "method + URL"}
+      - {from: 1, to: 2, label: "match"}
+      - {from: 2, to: 3, label: "handler"}
+      - {from: 3, to: 4, label: "response"}
+      - {from: 1, to: 5, label: "no match"}
+      - {from: 5, to: 6, label: "fall through"}
+  - type: markdown
+    content: |
+      ## Nested routes and versioning
+
+      **Nested routes** mirror resource hierarchies in the URL — an order
+      belongs to a user:
+
+      - `GET /users/7/orders` — all orders of user 7.
+      - `GET /users/7/orders/2049` — order 2049, *and it must belong to user
+        7*.
+
+      Reading the URL tells you exactly which relationship is queried.
+
+      **Versioning** protects clients from breaking changes. Ship
+      `/api/v1/products` and `/api/v2/products` side by side, announce v1
+      deprecation, let clients migrate, then delete v1. A base path like
+      `/api/v1` also keeps routes tidy and signals that the route surface is
+      versioned.
+
+      :::tip
+      **Interview question:** Route params vs query strings — when do you use
+      which?
+      — Path params identify *which* resource you're addressing
+      (`/products/:id`), so they're a mandatory part of the resource
+      address. Query strings are optional modifiers — pagination, filtering,
+      sorting (`?page=2&sort=price`). Rule of thumb: if the URL is
+      meaningless without it, it's a path param; if it just shapes the
+      response, it's a query parameter.
+      :::
+
+      :::example
+      **Worked example — a shop's route table.** One Express app, one theme:
+
+      | Method | Route | What it does |
+      |---|---|---|
+      | GET | `/api/v1/products` | list catalog (`?page`, `?sort`, `?category`) |
+      | GET | `/api/v1/products/:id` | one product's detail page |
+      | POST | `/api/v1/cart/items` | add to cart (body: `{productId, qty}`) |
+      | GET | `/api/v1/orders/:id` | order status for the user |
+      | PATCH | `/api/v1/orders/:id/status` | admin updates fulfillment |
+      | * | catch-all | `404` JSON for everything else |
+
+      `GET /api/v1/products/42?page=1` matches the `:id` route with
+      `req.params.id === '42'`; the `?page=1` query is ignored by that
+      handler — params and query are read independently.
+      :::
+  - type: mcq
+    prompt: "Which route pattern matches GET /products/123?"
+    options:
+      - "/products/:id"
+      - "/products"
+      - "/products/:id/orders"
+      - "/products?page=2"
+    answer: 0
+    explanation: "The dynamic route /products/:id matches any single segment after /products/ and captures it as req.params.id."
+  - type: mcq
+    prompt: "For the request GET /products/42, what is req.params.id?"
+    options:
+      - "the string \"42\""
+      - "the number 42"
+      - "undefined"
+      - "the path /products/42"
+    answer: 0
+    explanation: "Path parameters are extracted from the URL as strings. Cast to a number when you need one."
+  - type: mcq
+    prompt: "Where do ?page=2&sort=price land in Express?"
+    options:
+      - "req.query"
+      - "req.params"
+      - "req.body"
+      - "req.headers"
+    answer: 0
+    explanation: "Everything after the ? is parsed into req.query as key-value string pairs."
+  - type: mscq
+    prompt: "Which are legitimate uses of query strings?"
+    options:
+      - "pagination"
+      - "sorting"
+      - "identifying a single resource"
+      - "filtering a list"
+    answer: [0, 1, 3]
+    explanation: "Query strings shape how a list is returned — page, sort, filters. Identifying a specific resource is the job of a path parameter."
+---

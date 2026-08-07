@@ -1,0 +1,231 @@
+---
+id: validation-and-transformations
+title: "Validation & Transformations"
+difficulty: easy
+order: 5
+tags: [validation, dto, sanitization]
+blocks:
+  - type: markdown
+    content: |
+      Every request body and query string is **untrusted input** — it
+      arrives over the internet from a client you don't control. Validation
+      and transformation are the gatekeeper standing between raw input and
+      your business logic.
+
+      In the three-layer architecture, validation lives in the **controller
+      layer** (the top): data must pass the pipeline *before* any service or
+      repository method runs.
+
+      Why bother? **Garbage in → garbage out — or a crash.** Send an integer
+      `0` where a `name` string belongs: it travels down to the service,
+      then to the database. The `TEXT` column rejects it, the query fails,
+      and the user gets an unhandled `500 Internal Server Error`. Validation
+      catches it at the front door and returns a clean `400 Bad Request`
+      explaining what's wrong.
+
+      **Use case:** the order form sends `qty: -3`; validation rejects it
+      with a per-field error before the checkout service ever sees it — no
+      bad rows, no negative totals.
+  - type: markdown
+    content: |
+      ## Types of validation
+
+      - **Presence** — the field exists and isn't empty (`required`).
+      - **Type** — the field is a string, number, boolean, or array of the
+        right inner type.
+      - **Syntactic (format)** — the string matches a pattern: email
+        (`user@example.com`), phone (country code + digits), date
+        (`YYYY-MM-DD`).
+      - **Semantic** — the value makes sense in the world: a birth date
+        can't be in the future; an age of 430 is a valid number but
+        impossible for a human.
+      - **Range** — numeric bounds: `price >= 0`, `qty` an integer between
+        1 and 99.
+      - **Complex / interdependent** — fields that depend on each other:
+        `password === password_confirmation`; if `married: true`, then
+        `partner_name` is required.
+
+      :::example
+      **E-commerce example — an order item must pass:**
+
+      | Rule | Kind |
+      |---|---|
+      | `productId` exists in the catalog | semantic |
+      | `productId` is an integer | type |
+      | `qty` is an integer between 1 and 99 | type + range |
+      | `price` is a number ≥ 0 | type + range |
+      | `email` matches `x@y.zz` | syntactic |
+
+      Only items that pass all rules reach the order service.
+      :::
+  - type: markdown
+    content: |
+      ## Transformation: cleaning and casting
+
+      Transformation alters incoming data into the exact shape the server
+      needs — and it must run **before** validation where it changes the
+      result.
+
+      - **Query params are always strings.** `GET /products?page=2`
+        delivers `"2"`, not `2`. A range check `page > 0` fails on the
+        string — cast first: `Number("2") → 2`, then validate.
+      - **Normalization** — clean up messy input: lowercase emails
+        (`User@Shop.com → user@shop.com`), trim whitespace, normalize phone
+        numbers (`+1 555 010 9999`).
+      - **Defaults** — a missing `sort` query defaults to `date`.
+
+      The pipeline is: **parse → transform → validate → pass a clean payload
+      down**.
+
+      :::tip
+      **Interview question:** What's the difference between client-side and
+      server-side validation?
+      — Frontend validation is for UX: instant red-text feedback without a
+      network round trip. Backend validation is for security and data
+      integrity — and it is non-negotiable. Anyone can bypass your React
+      form and hit the API directly with curl or Postman, so the backend
+      must never trust incoming data, no matter how strict the frontend is.
+      :::
+  - type: flowchart
+    title: "validation pipeline"
+    nodes: ["Raw input (body / query)", "Parse & deserialize", "Transform (trim, lowercase, cast)", "Validate (type, format, range, semantic)", "Valid?", "Build DTO", "Service / business logic", "Error response 400/422 + envelope"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "check all rules"}
+      - {from: 4, to: 5, label: "yes"}
+      - {from: 5, to: 6, label: "clean payload"}
+      - {from: 4, to: 7, label: "no"}
+  - type: markdown
+    content: |
+      ## DTOs: shaped payloads between layers
+
+      A **DTO (Data Transfer Object)** is the shaped, validated payload that
+      travels between layers. The raw request body is *not* passed to
+      services — instead:
+
+      1. The controller parses the raw body.
+      2. Validation + transformation produce a DTO.
+      3. The service receives the DTO and nothing else.
+
+      Why? The DTO is an explicit contract: the service knows exactly what
+      fields exist and what types they have, and unvalidated or hidden
+      fields can never leak into business logic. It also stops **mass
+      assignment** — an attacker sneaking extra fields like
+      `role: "admin"` into a registration payload. If the DTO only declares
+      `{name, email, password}`, the extra field is dropped.
+
+      :::tip
+      **Interview question:** What is a DTO and why use one?
+      — A DTO is a data-carrying object with a fixed, validated shape that
+      crosses layer boundaries — controller → service, service →
+      repository. It gives layers a typed contract, keeps raw/unvalidated
+      input out of business logic, and protects against mass assignment by
+      only carrying declared fields.
+      :::
+  - type: markdown
+    content: |
+      ## Error responses: one consistent envelope
+
+      Invalid input should return `400 Bad Request` (malformed — bad JSON,
+      wrong types) or `422 Unprocessable Entity` (well-formed but invalid
+      values). Always use the same shape so clients can parse errors
+      programmatically:
+
+      ```json
+      {
+        "error": {
+          "code": "VALIDATION_FAILED",
+          "message": "Invalid input",
+          "fields": {
+            "qty": "must be an integer between 1 and 99",
+            "price": "must be a number >= 0"
+          }
+        }
+      }
+      ```
+
+      - `code` — machine-readable, stable across versions.
+      - `message` — human-readable summary.
+      - `fields` — per-field details, great for forms.
+
+      **Allowlist vs denylist:** an allowlist defines exactly what's
+      permitted and rejects everything else — the secure default for fields,
+      enum values (`payment_method` ∈ {card, paypal, cod}), and routes. A
+      denylist blocks known bad inputs but misses everything new. For
+      validation, prefer allowlists.
+
+      :::example
+      **Worked example — POST /orders.** The client sends:
+
+      ```json
+      {
+        "items": [{ "productId": 42, "qty": 2, "price": -5 }],
+        "email": " USER@Shop.COM "
+      }
+      ```
+
+      1. **Transform**: email → `user@shop.com`; price stays a number.
+      2. **Validate**: email format ✓, productId exists ✓, qty in 1..99 ✓,
+         price `-5 < 0` ✗.
+      3. **Respond** `422` with the envelope above:
+         `fields.price = "must be a number >= 0"` — the service was never
+         called.
+      :::
+
+      :::tip
+      **Interview question:** When do you return 400 vs 422?
+      — 400 Bad Request for malformed requests: invalid JSON, wrong content
+      type, a field of the wrong type. 422 Unprocessable Entity for
+      well-formed requests whose *values* are invalid: negative price,
+      future birth date, unknown product id. Clients can then distinguish
+      "your request is broken" from "your request is fine but the data is
+      wrong".
+      :::
+  - type: flowchart
+    title: "error envelope"
+    nodes: ["Validation fails", "Error envelope", "code — machine-readable", "message — human-readable", "fields — per-field details", "Status 400 or 422"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 1, to: 3}
+      - {from: 1, to: 4}
+      - {from: 1, to: 5}
+  - type: mcq
+    prompt: "Where does validation belong?"
+    options:
+      - "the controller layer"
+      - "the service layer"
+      - "the repository layer"
+      - "only in the frontend"
+    answer: 0
+    explanation: "Validation is the controller layer's gatekeeper job — data must pass it before any service or repository code runs."
+  - type: mcq
+    prompt: "Which check is semantic validation?"
+    options:
+      - "age 430 for a human user"
+      - "email contains an @"
+      - "qty is an integer"
+      - "name is a string"
+    answer: 0
+    explanation: "A valid number that's impossible in the real world fails semantic validation. The others are type or syntactic checks."
+  - type: mcq
+    prompt: "What type do query parameters arrive as?"
+    options:
+      - "strings"
+      - "numbers"
+      - "booleans"
+      - "JSON objects"
+    answer: 0
+    explanation: "All query params are strings — '2' not 2. Transform (cast) before validating range checks."
+  - type: mscq
+    prompt: "Which are transformations?"
+    options:
+      - "trimming whitespace"
+      - "lowercasing an email"
+      - "casting '2' to 2"
+      - "rejecting a missing required field"
+    answer: [0, 1, 2]
+    explanation: "Transformations alter data into the right shape. Rejecting a missing field is validation, not transformation."
+---

@@ -1,0 +1,143 @@
+---
+id: api-design
+title: "REST API Design"
+difficulty: medium
+order: 7
+tags: [rest, api-design, versioning]
+blocks:
+  - type: markdown
+    content: |
+      ### What is REST?
+
+      REST (Representational State Transfer) — an architectural style for scalable web APIs (Roy Fielding, 2000). The six constraints:
+
+      - **Client–server** — UI and data are strictly separated.
+      - **Stateless** — the server remembers nothing between requests; every request carries everything it needs.
+      - **Uniform interface** — resources + standard HTTP verbs; the API is self-describing.
+      - **Layered system** — clients don't know (or care) if a load balancer or CDN sits in front.
+      - **Cacheable** — responses are explicitly labeled cacheable or not.
+      - **Code on demand** (optional) — the server may send executable code.
+
+      REST = *Representational* (JSON representation of a resource) + *State* (current properties, e.g. the items in a cart) + *Transfer* (moved with standard HTTP methods).
+
+      **Use case:** e-commerce APIs (Shopify, Stripe) are REST — clients act on resources (products, carts, orders) with plain HTTP verbs.
+  - type: markdown
+    content: |
+      ### Resource naming — nouns, plural, hierarchical
+
+      URL anatomy: `https://api.example.com/v1/orders` → scheme + subdomain + **version** + **resource path**.
+
+      - **Plural nouns, never verbs:** `/products`, `/orders` — not `/getOrders`.
+      - **Singular resources keep the plural path:** one order is `/orders/123`, not `/order/123`.
+      - **Hyphens, not underscores or spaces:** `/best-sellers`.
+      - **Slash = hierarchy:** `/users/42/orders` means "orders belonging to user 42".
+
+      ### Nested vs flat
+
+      - **Nest when the child only makes sense under its parent:** `/users/:id/orders` — an order needs a buyer.
+      - **Flatten when the child is a first-class resource:** `/products` and `/products/:id` — a product isn't owned by one user.
+
+      **Use case:** the storefront cart nests under the user (`/api/v1/users/:id/cart/items`), while the catalog stays flat (`/api/v1/products?q=...`).
+  - type: markdown
+    content: |
+      ### HTTP verbs → CRUD, and idempotency
+
+      **Idempotency** — calling the same request N times has the same side effect as calling it once.
+
+      - **GET** — read. List: `GET /orders` → `200` with an array (an empty list returns `[]`, **never 404**). Detail: `GET /orders/123` → `200` or `404`.
+      - **POST** — create: `POST /orders` → `201 Created` + the new object. **Non-idempotent** — every call creates a new resource.
+      - **PUT** — full replace; **PATCH** — partial update: `PATCH /orders/123` → `200` + the updated object. PUT is idempotent; PATCH is idempotent *in practice* (same partial update applied twice = same state) but not guaranteed by the spec — treat retries carefully.
+      - **DELETE** — `DELETE /orders/123` → `204 No Content`. Idempotent: repeating it 404s, but the server state is unchanged.
+      - **Custom actions** that aren't CRUD: `POST /orders/123/cancel` — POST is the open-ended verb.
+
+      **Use case:** retrying a checkout `POST` would create duplicate orders — which is exactly why payments get an `Idempotency-Key` (below).
+  - type: markdown
+    content: |
+      ### Status codes are the contract
+
+      `201` created · `204` deleted · `400` bad request · `401` unauthenticated · `403` forbidden · `404` missing · `409` conflict (state clash, e.g. order already shipped) · `422` validation failed · `429` rate-limited.
+
+      ### Error envelope — one consistent shape
+
+      Every error looks the same: `{"error": {"code": "ORDER_NOT_FOUND", "message": "Order 123 does not exist", "details": {"order_id": "123"}}}`. Clients switch on `code`, not on parsing free-text messages.
+
+      **Use case:** the storefront app renders `code`-specific UI (e.g. `OUT_OF_STOCK` → "remove item from cart" button) instead of string-matching error prose.
+  - type: flowchart
+    title: "Resource → endpoint mapping"
+    nodes: ["Design the e-commerce API", "Identify the nouns: products, carts, orders, users", "Pick the verb per action", "Create → POST /orders", "Read → GET /orders, GET /orders/:id", "Update → PATCH /orders/:id", "Delete → DELETE /orders/:id"]
+    edges:
+      - {from: 0, to: 1, label: "nouns first"}
+      - {from: 1, to: 2, label: "verbs"}
+      - {from: 2, to: 3, label: "new order"}
+      - {from: 2, to: 4, label: "fetch"}
+      - {from: 2, to: 5, label: "edit"}
+      - {from: 2, to: 6, label: "remove"}
+  - type: markdown
+    content: |
+      ### Versioning, pagination, filtering, idempotency
+
+      - **Versioning** — break backward compatibility explicitly: `/api/v1/orders` (URL versioning — simplest, most visible) or an `Accept: application/vnd.api+json;version=2` header. Never silently change v1 semantics under the same URL.
+      - **Pagination** — every list endpoint paginates: `?page=2&limit=20` (page/limit) or **cursor** (`?cursor=...`) for deep, stable pages. Sane defaults: `limit=10`, `page=1`.
+      - **Filtering & sorting** — query params: `?status=paid&sort_by=created_at&sort_order=desc`. Missing params rarely error — defaults kick in.
+      - **Consistency** — same field names everywhere (`description`, never `desc`), camelCase JSON, no abbreviations, OpenAPI/Swagger docs.
+      - **Idempotency for payments** — a retried `POST /payments` must not charge twice: the client sends an `Idempotency-Key` header; the server stores key → response and replays the same result for the same key.
+
+      **Use case:** the checkout button sends a generated `Idempotency-Key`; a network retry replays the stored result instead of double-charging.
+  - type: flowchart
+    title: "Cursor pagination flow"
+    nodes: ["GET /api/v1/orders?limit=20", "Server runs ORDER BY id, LIMIT 21", "Take 20 rows; a 21st row means more pages", "Return {data, next_cursor: last_id}", "Client requests ?cursor=<last_id>", "Server continues WHERE id < cursor", "next_cursor: null when no more rows"]
+    edges:
+      - {from: 0, to: 1, label: "query"}
+      - {from: 1, to: 2, label: "fetch"}
+      - {from: 2, to: 3, label: "encode"}
+      - {from: 3, to: 4, label: "next page"}
+      - {from: 4, to: 5, label: "WHERE id < cursor"}
+      - {from: 5, to: 6, label: "exhausted"}
+  - type: markdown
+    content: |
+      ### Worked example — /api/v1/orders end-to-end
+
+      1. `POST /api/v1/orders` — create an order: body `{items, shipping_address}` → `201` + full order object with `id` and status `pending`.
+      2. `GET /api/v1/orders?status=paid&page=1&limit=10` — list paid orders, first 10, response `{data, total, page, total_pages}`.
+      3. `GET /api/v1/orders/456` — one order → `200`; missing → `404` with the `ORDER_NOT_FOUND` error envelope.
+      4. `PATCH /api/v1/orders/456` — partial update (shipping address) → `200` + updated object; `409` if the order already shipped.
+      5. `DELETE /api/v1/orders/456` — cancel → `204`; the payment retry with the same `Idempotency-Key` returns the same result — no double charge.
+  - type: markdown
+    content: |
+      ### Interview questions
+
+      :::tip
+      **Interview question:** Walk me through the RESTful design for an e-commerce API.
+      — Identify the nouns first: products, carts, orders, users, payments. Then map verbs: `GET /api/v1/products` (paginated list), `GET /products/:id`, `POST /carts/:id/items`, `POST /orders` → `201`, `PATCH /orders/:id` → `200`, `DELETE /orders/:id` → `204`. Nest only where ownership is clear (`/users/:id/orders`), flatten the rest, use one error envelope, and put `Idempotency-Key` on payment endpoints.
+      :::
+
+      :::tip
+      **Interview question:** How would you version an API?
+      — The pragmatic choice is URL versioning (`/api/v1/...`): visible, cache-friendly, trivially routable. Freeze v1 and keep it additive; when breaking changes are needed, ship `/api/v2` and run both during migration, retiring v1 only after consumers move. Header-based versioning is cleaner long-term but less discoverable.
+      :::
+
+      :::tip
+      **Interview question:** Why is POST non-idempotent while DELETE is idempotent, and why does it matter for orders?
+      — POST creates a fresh resource on every call, so retrying a checkout POST would duplicate orders — hence the `Idempotency-Key` on payments. DELETE removes one resource; repeating it leaves server state identical (the second call just 404s), which makes retries safe by construction.
+      :::
+  - type: mcq
+    prompt: "Which endpoint follows REST conventions?"
+    options: ["GET /getProducts", "POST /api/v1/products", "/products/123/delete", "GET /product/123"]
+    answer: 1
+    explanation: "REST uses plural nouns plus verbs: POST /api/v1/products creates a product. /getProducts and /delete put verbs in the path, and /product breaks the plural-path convention."
+  - type: mcq
+    prompt: "POST /api/v1/orders succeeds. The correct response is..."
+    options: ["200 OK with an empty body", "201 Created with the new order object", "204 No Content", "404 Not Found"]
+    answer: 1
+    explanation: "A successful create returns 201 Created, and the body should carry the newly created resource (including its server-assigned id) so the client doesn't have to refetch."
+  - type: mcq
+    prompt: "An order update fails because the order has already been shipped. The best status code is..."
+    options: ["200 OK", "409 Conflict", "429 Too Many Requests", "500 Internal Server Error"]
+    answer: 1
+    explanation: "409 Conflict signals a state clash: the resource exists but can't be updated in its current state (already shipped). 429 is for rate limiting, 500 for server bugs, 200 would hide the failure."
+  - type: mscq
+    prompt: "Which statements about pagination are true? (select all that apply)"
+    options: ["List endpoints should always paginate to save bandwidth", "An empty list should return 404 Not Found", "Cursor pagination handles deep pages more stably than page/limit", "Sane defaults are limit=10, page=1"]
+    answer: [0, 2, 3]
+    explanation: "Lists always paginate; an empty list is still a successful list — return 200 with an empty array, never 404. Cursors survive inserts and deep offsets, unlike page numbers. Missing params should default rather than error."
+---
