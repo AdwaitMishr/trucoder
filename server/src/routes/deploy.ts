@@ -55,10 +55,17 @@ deployRouter.post("/_deploy", (req, res) => {
     }
     const head = (payload.after ?? "unknown").slice(0, 7);
     log(`webhook accepted push ${head} — spawning deploy`);
-    const child = spawn("bash", [path.join(__dirname, "../../scripts/deploy.sh")], {
+    const script = path.join(__dirname, "../../scripts/deploy.sh");
+    const child = spawn("bash", [script], {
       detached: true,
       stdio: "ignore",
       env: { ...process.env, DEPLOY_DIR: REPO_DIR },
+    });
+    // a missing script (e.g. the repo was checked out to a branch that
+    // predates the webhook) exits instantly with zero output — surface it
+    child.on("error", (err) => log(`deploy SPAWN ERROR: ${err.message}`));
+    child.on("exit", (code, signal) => {
+      if (code === 127) log(`deploy script NOT FOUND: ${script}`);
     });
     child.unref();
     res.status(202).json({ accepted: true, head });
