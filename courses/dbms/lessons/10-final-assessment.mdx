@@ -1,0 +1,172 @@
+---
+id: final-assessment
+title: "Final Assessment: Comprehensive DBMS Exam"
+difficulty: medium
+order: 10
+tags: [exam, revision]
+blocks:
+  - type: markdown
+    content: |
+      # Final Assessment
+
+      This exam covers **all nine lessons**: ACID & architecture, ER & keys,
+      normalization, SQL, transactions & concurrency, indexing & storage,
+      SQL interview patterns, and SQL vs NoSQL & CAP.
+
+      - 25 questions, grouped by topic; each **MCQ** has exactly **one**
+        correct answer, each **MSCQ** has **several**.
+      - No calculators — every numerical question is designed for hand
+        arithmetic, and explanations show the full working.
+      - Aim for **30–40 minutes**. Answers and explanations appear after you
+        submit.
+  - type: mcq
+    prompt: "A transfer debits account 1 and credits account 2; the credit fails, so the debit is undone too. Which ACID property is at work?"
+    options: ["Atomicity", "Consistency", "Isolation", "Durability"]
+    answer: 0
+    explanation: "Atomicity = all-or-nothing: a failed statement rolls back the whole transaction, so a partial transfer (money leaving account 1 without arriving at account 2) is never visible."
+  - type: mcq
+    prompt: "In a 3-tier architecture, where does business logic live?"
+    options: ["In the client", "In the application server", "In the database server", "Equally in all three tiers"]
+    answer: 1
+    explanation: "Client renders UI, application server holds business logic, database server stores data — the standard web stack (browser → API server → DB)."
+  - type: mcq
+    prompt: "After COMMIT returns, a crash must not undo the transaction. Which mechanism guarantees this?"
+    options: ["A write-ahead log flushed to disk before COMMIT returns", "An in-memory cache kept warm", "Rebuilding all indexes on restart", "Holding locks until the next checkpoint"]
+    answer: 0
+    explanation: "Durability comes from the WAL: the change is recorded on disk before COMMIT returns, so a power loss cannot undo it."
+  - type: mcq
+    prompt: "Given that StudentID and Email are each unique per row, which of these is a super key but NOT a candidate key?"
+    options: ["{StudentID}", "{StudentID, Name}", "{Email}", "{Name}"]
+    answer: 1
+    explanation: "{StudentID, Name} is unique (a super key) but not minimal — dropping Name still leaves a unique set — so it is not a candidate key. {StudentID} and {Email} are minimal, and {Name} is not unique at all."
+  - type: mcq
+    prompt: "A student enrolls in many courses and a course has many students. How is this M:N relationship modeled relationally?"
+    options: ["Add CourseID as a foreign key in the Student table", "Add StudentID as a foreign key in the Course table", "Create a junction table with a composite primary key of both foreign keys", "Duplicate student rows inside the Course table"]
+    answer: 2
+    explanation: "M:N needs a junction table (e.g. Enrolls(StudentID, CourseID, Grade)) whose primary key is the composite of both foreign keys; it also stores relationship attributes and stops duplicate pairs."
+  - type: mcq
+    prompt: "One department has many employees; each employee belongs to exactly one department. The cardinality is:"
+    options: ["1:1", "1:N", "M:N", "N:M"]
+    answer: 1
+    explanation: "One-to-many: one department relates to many employees, and each employee relates to one department. Modeled by putting the department's primary key as a foreign key in the employee table."
+  - type: mcq
+    prompt: "R(A, B, C, D) has FDs {A → B, AB → C, C → D}. Compute closures: which is the candidate key?"
+    options: ["A", "AB", "C", "ABC"]
+    answer: 0
+    explanation: "A⁺ = {A} → B via A → B → C via AB → C → D via C → D, so A⁺ = {A, B, C, D} and A alone is a minimal key. AB⁺ is also everything but is not minimal; C⁺ = {C, D} and ABC⁺ is not minimal."
+  - type: mcq
+    prompt: "R(A, B, C) has FDs {A → B, B → C}. Which normal form is it in?"
+    options: ["1NF", "2NF", "3NF", "BCNF"]
+    answer: 1
+    explanation: "A⁺ = {A, B, C} so the key is A — a single attribute, so no partial dependency and 2NF holds. A → B → C is a transitive dependency through non-prime attributes, so 3NF fails. The relation is 2NF."
+  - type: mcq
+    prompt: "Emp(EmpID, Project, Dept) holds (E1, P1, D1) and (E2, P1, D2). It is split into R1(EmpID, Project) and R2(Project, Dept). Is the decomposition lossless?"
+    options: ["Yes — the join recovers both original rows exactly", "No — the join fabricates the spurious row (E1, P1, D2)", "Yes — Project is a key of R2", "No — the join drops (E2, P1, D2)"]
+    answer: 1
+    explanation: "Joining on Project produces (E1, P1, D1), (E1, P1, D2), (E2, P1, D1), (E2, P1, D2) — two invented rows. Project is not a key of either fragment, so the decomposition is lossy."
+  - type: mcq
+    prompt: "Employee has 4 rows with dept_ids 10, 20, 10, 30; Department has 3 rows (10, 20, 40). What does SELECT COUNT(*) FROM Employee e LEFT JOIN Department d ON e.dept_id = d.dept_id return?"
+    options: ["3", "4", "5", "12"]
+    answer: 1
+    explanation: "LEFT JOIN keeps every left-side row: the 3 employees with matching departments plus Dave (dept 30, no department) with NULLs — 4 rows total. Legal (dept 40) is a right-side row and adds nothing."
+  - type: mcq
+    prompt: "Which statement about WHERE and HAVING is correct?"
+    options: ["WHERE filters groups after GROUP BY", "HAVING filters individual rows before grouping", "Aggregates such as AVG may appear in HAVING but not in WHERE", "HAVING is applied before WHERE in execution order"]
+    answer: 2
+    explanation: "WHERE filters rows before grouping; HAVING filters groups after GROUP BY. Aggregates are only legal in HAVING — WHERE AVG(salary) > 55000 is a syntax error."
+  - type: mcq
+    prompt: "Scores 90, 85, 85, 70 sorted DESC. What DENSE_RANK does the last row (score 70) get?"
+    options: ["2", "3", "4", "5"]
+    answer: 1
+    explanation: "DENSE_RANK: 90 → 1, 85 → 2, 85 → 2, 70 → 3. Ties share a rank and no numbers are skipped (RANK would give 70 → 4, ROW_NUMBER gives 4)."
+  - type: mcq
+    prompt: "Score table: (Ana, 90), (Ben, 85), (Cid, 85), (Dina, 70). What does SELECT score, COUNT(*) FROM Score GROUP BY score HAVING COUNT(*) = 2 return?"
+    options: ["(90, 1) and (85, 2)", "(85, 2)", "(85, 2) and (70, 1)", "(90, 1) and (70, 1)"]
+    answer: 1
+    explanation: "Groups: 90 → 1 row, 85 → 2 rows, 70 → 1 row. HAVING COUNT(*) = 2 keeps only the 85 group, so the result is a single row: (85, 2)."
+  - type: mcq
+    prompt: "T1 updates a row without committing; T2 reads the new value; T1 rolls back. Which anomaly did T2 experience?"
+    options: ["Dirty read", "Non-repeatable read", "Phantom read", "Lost update"]
+    answer: 0
+    explanation: "T2 read uncommitted data that vanished on rollback — the dirty read. Non-repeatable and phantom reads involve changes that were committed in between."
+  - type: mcq
+    prompt: "T1 runs SELECT COUNT(*) WHERE balance > 500 twice; between the runs T2 inserts a new matching row and commits, so the counts differ. Which anomaly is this?"
+    options: ["Dirty read", "Non-repeatable read", "Phantom read", "None — counts are allowed to change"]
+    answer: 2
+    explanation: "New rows appeared in a range result between two executions — the phantom read, allowed at READ COMMITTED and REPEATABLE READ, prevented only at SERIALIZABLE."
+  - type: mcq
+    prompt: "At which isolation level can a transaction read a value written by a transaction that has not yet committed?"
+    options: ["READ UNCOMMITTED", "READ COMMITTED", "REPEATABLE READ", "SERIALIZABLE"]
+    answer: 0
+    explanation: "READ UNCOMMITTED is the only level that allows dirty reads. READ COMMITTED and above only see committed data."
+  - type: mscq
+    prompt: "Which statements about 2PL and deadlocks are true?"
+    options: ["In 2PL, the growing phase only acquires locks and the shrinking phase only releases them", "2PL guarantees a serializable (conflict-serializable) schedule", "A cycle in the wait-for graph means deadlock", "In strict 2PL, a transaction may release locks before it commits"]
+    answer: [0, 1, 2]
+    explanation: "2PL splits acquisition and release into two phases and yields conflict-serializable schedules; a wait-for cycle is exactly how deadlock is detected. Strict 2PL holds locks until commit/abort, so the last statement is false."
+  - type: mcq
+    prompt: "A DB uses 4 KiB pages and each index entry (key + child pointer) is 16 bytes. How many rows are reachable at 3 levels of the B+ tree?"
+    options: ["65,536", "16,777,216 (≈16.7 million)", "1,048,576", "262,144"]
+    answer: 1
+    explanation: "Fanout = 4096 / 16 = 256. Three levels: 256³ = 256 × 256 × 256. Working: 256² = 65,536, then 65,536 × 256 = 16,777,216 ≈ 16.7 million."
+  - type: mcq
+    prompt: "Which statement about clustered and non-clustered indexes is true?"
+    options: ["A table can have several clustered indexes", "The clustered index determines the physical order of the table's rows", "A non-clustered index stores the table's data in key order", "Hash indexes are the best choice for range scans"]
+    answer: 1
+    explanation: "The clustered index IS the data layout — one per table, rows physically ordered by its key. Non-clustered indexes are separate key → pointer structures (many per table), and hash indexes cannot do range scans."
+  - type: mscq
+    prompt: "Which statements about B+ trees are true?"
+    options: ["All data rows live in leaf nodes", "Leaf nodes are linked in key order for efficient range scans", "Internal nodes store only keys, giving a higher fanout than a B-tree", "Data is stored in internal nodes, which speeds up range scans"]
+    answer: [0, 1, 2]
+    explanation: "B+ trees keep all data in leaves, link the leaves in key order, and keep internal nodes keys-only for high fanout. Storing data in internal nodes is a B-tree property and hurts range scans."
+  - type: mcq
+    prompt: "Every row in a table has the same salary. What does SELECT MAX(salary) FROM Employee WHERE salary < (SELECT MAX(salary) FROM Employee) return?"
+    options: ["The salary itself", "NULL", "0", "An error"]
+    answer: 1
+    explanation: "The subquery filters out every row (none is strictly below the max), so the aggregate runs over an empty set and returns NULL — never 0. This is the second-highest query's 'no second value' corner case."
+  - type: mcq
+    prompt: "dept 10 has salaries 80000, 60000, 55000, 35000; dept 20 has 50000, 50000, 45000; dept 30 has 40000. How many rows does the DENSE_RANK top-3-per-dept query (WHERE rk <= 3) return?"
+    options: ["5", "6", "7", "8"]
+    answer: 2
+    explanation: "DENSE_RANK: dept 10 → Carol 80000 (1), Alice 60000 (2), Gina 55000 (3); Hank 35000 (4) is cut. dept 20 → Bob (1), Eve (1), Finn (2) — the tie keeps all three. dept 30 → Dave (1). Total 3 + 3 + 1 = 7 rows."
+  - type: mcq
+    prompt: "Customer referee_id values are NULL, NULL, 2, NULL, 1, 2. How many rows does SELECT name FROM Customer WHERE referee_id != 2 return?"
+    options: ["1", "2", "4", "6"]
+    answer: 0
+    explanation: "NULL != 2 is UNKNOWN, not TRUE, so the three NULL referees are dropped along with the two referee-2 rows; only the referee-1 row (Zack) passes. Add OR referee_id IS NULL to get the correct 4."
+  - type: mcq
+    prompt: "A banking system must keep balances consistent and available. When a network partition occurs (and partitions are always possible), what actually happens?"
+    options: ["It rejects writes it cannot confirm, sacrificing availability (CP)", "It keeps both guarantees, because CA is achievable with the right configuration", "It serves stale balances from any replica and reconciles later (AP)", "It shuts down until the partition heals"]
+    answer: 0
+    explanation: "Partition tolerance is not optional in a distributed system, so 'CA' is a myth: during a partition you pick consistency or availability. Banking picks consistency — unconfirmable writes are rejected (CP)."
+  - type: mcq
+    prompt: "Which workload is the best fit for Redis?"
+    options: ["Caching session data with TTLs and INCR counters", "Storing normalized relational data queried with JOINs", "Ad-hoc analytical queries over petabytes", "ACID multi-row transactions for a customer ledger"]
+    answer: 0
+    explanation: "Redis is an in-memory key-value store: caching, sessions, counters, pub/sub, TTLs. Joins need SQL, analytics need columnar stores, and a ledger needs ACID — none of which Redis provides."
+  - type: markdown
+    content: |
+      ## After the exam — revision tips
+
+      - **Lessons 1–2:** recite ACID with the bank-transfer example and the
+        key ladder (super → candidate → primary) from memory.
+      - **Lesson 3:** re-derive each normal form on paper — FDs first, then
+        the ladder; know the lossless test (the common attribute must be a
+        key of one fragment).
+      - **Lesson 4:** re-run the join and window-function queries in a real
+        DB — row counts are the classic interview trap.
+      - **Lesson 5:** explain dirty / non-repeatable / phantom reads with the
+        concrete examples, and name the PostgreSQL (READ COMMITTED) and
+        MySQL (REPEATABLE READ) defaults.
+      - **Lesson 6:** redo the fanout arithmetic (4096 / 16 = 256;
+        256³ ≈ 16.7M) and the B+ vs B-tree argument (keys-only internals,
+        linked leaves).
+      - **Lesson 7:** name each interview pattern and its SQL in one breath —
+        second-highest (LIMIT 1 OFFSET 1 / MAX < MAX), top-N (DENSE_RANK),
+        anti-join (LEFT JOIN ... IS NULL), NULL traps (referee != 2),
+        running totals (SUM() OVER), division (HAVING COUNT(DISTINCT) = n).
+      - **Lesson 8:** explain CAP with two real systems (bank = CP,
+        feed = AP) and justify Redis for caching (in-memory, single-threaded).
+      - Weakest topic? Revisit that lesson and its quiz — then take this
+        exam again.
+---

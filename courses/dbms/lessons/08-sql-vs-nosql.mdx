@@ -1,0 +1,209 @@
+---
+id: sql-vs-nosql
+title: "SQL vs NoSQL & CAP"
+difficulty: medium
+order: 8
+tags: [nosql, cap, redis]
+blocks:
+  - type: markdown
+    content: |
+      ## SQL vs NoSQL — the comparison table
+
+      The first question in any data-store interview: what is each family
+      good at, and how do you choose?
+
+      | | SQL (relational) | NoSQL |
+      |---|---|---|
+      | Schema | Fixed, enforced (DDL); migrations required | Flexible / schema-less; fields vary per row |
+      | Scaling | Mostly vertical; sharding is hard and manual | Horizontal by design (shard / replicate) |
+      | Transactions | ACID, multi-row, multi-table | ACID per document; BASE at cluster scale |
+      | Relations | First-class via JOIN | Denormalize or embed; joins are avoided |
+      | Best for | Banking, ERP, anything needing strong consistency and joins | Caching, sessions, catalogs, time series, analytics |
+      | Examples | PostgreSQL, MySQL, Oracle | Redis, MongoDB, Cassandra, Neo4j |
+
+      **Use case:** interviewers rarely want a winner — they want you to weigh
+      consistency, write volume, schema stability, and query shape against
+      each other and then commit to an answer.
+  - type: markdown
+    content: |
+      ## CAP theorem
+
+      A distributed data store can guarantee at most **two of three**:
+
+      - **Consistency (C)** — every read sees the latest write (replicas agree).
+      - **Availability (A)** — every request gets a response, even if stale.
+      - **Partition tolerance (P)** — the system keeps working when nodes lose
+        contact with each other.
+
+      The catch: **partitions are not optional** — networks drop packets, so a
+      distributed system must tolerate them. That makes the real choice **CP
+      vs AP**, not "pick any two":
+
+      - **CP** (e.g. a bank ledger, single-leader replication): during a
+        partition the system **rejects writes** it cannot confirm, so replicas
+        never diverge. Consistency wins, availability dips.
+      - **AP** (e.g. a social-media feed, multi-leader): every replica **keeps
+        accepting writes** and reconciles later — availability wins, reads may
+        be briefly stale (eventual consistency).
+  - type: flowchart
+    title: "The CAP triangle"
+    nodes: ["CAP theorem", "Consistency (C): every read is the latest write", "Availability (A): every request gets an answer", "Partition tolerance (P): keeps working when nodes split", "CP: bank ledger — reject unconfirmed writes", "AP: social feed — serve stale, sync later"]
+    edges:
+      - {from: 0, to: 1, label: "pick"}
+      - {from: 0, to: 2, label: "pick"}
+      - {from: 0, to: 3, label: "not optional"}
+      - {from: 1, to: 4, label: "C over A"}
+      - {from: 2, to: 5, label: "A over C"}
+  - type: markdown
+    content: |
+      ## ACID vs BASE
+
+      | ACID (SQL) | BASE (NoSQL at scale) |
+      |---|---|
+      | **A**tomicity — all-or-nothing transactions | **B**asically **A**vailable — system stays up |
+      | **C**onsistency — invariants hold after every commit | **S**oft state — replicas may differ briefly |
+      | **I**solation — concurrent transactions don't interfere | **E**ventual consistency — replicas converge later |
+      | **D**urability — committed data survives crashes | No hard guarantee per write; trade-offs explicit |
+
+      BASE is not "worse ACID" — it is a different contract chosen when
+      availability and write throughput matter more than instant agreement.
+  - type: markdown
+    content: |
+      ## When to choose NoSQL
+
+      Choose **NoSQL** when:
+
+      - **High write throughput** — logging, events, IoT: millions of writes
+        per second shard naturally (Cassandra).
+      - **Flexible schema** — product catalogs where attributes change every
+        sprint (MongoDB documents).
+      - **Caching / hot paths** — sessions, rate-limit counters, leaderboards
+        (Redis, in front of your SQL DB).
+      - **Analytics over wide data** — columnar/wide-column layouts scan
+        billions of rows fast.
+
+      Stay with **SQL** when you need multi-row ACID transactions (money),
+      complex joins or ad-hoc reporting, or a stable schema with mature tooling.
+  - type: markdown
+    content: |
+      ## NoSQL types and when each shows up
+
+      - **Key-value — Redis.** Caching, session storage, counters (INCR),
+        pub/sub, TTLs (`SET key val EX 60`). Why so fast: everything lives
+        **in memory** (µs reads, no disk), and a **single-threaded event
+        loop** processes commands one at a time — no locking, no context
+        switches, and every command is O(1)-ish.
+      - **Document — MongoDB.** Flexible JSON-ish documents, embedded
+        sub-objects; great for catalogs and content where one entity is
+        naturally a whole tree.
+      - **Wide-column — Cassandra.** Rows with sparse, dynamic columns;
+        designed for **very high write throughput** and time-series data.
+      - **Graph — Neo4j.** Nodes + edges queried by traversal; "friends of
+        friends", path finding, recommendation hops.
+  - type: markdown
+    content: |
+      ## "Design a schema for X" — the e-commerce intro
+
+      Interviewers love an open-ended schema question. Take a mini
+      e-commerce: users, orders, products.
+
+      **SQL, normalized:**
+
+      ```sql
+      CREATE TABLE Users (id INT PRIMARY KEY, name VARCHAR(50));
+      CREATE TABLE Products (id INT PRIMARY KEY, name VARCHAR(50), price INT);
+      CREATE TABLE Orders (
+        id INT PRIMARY KEY, user_id INT REFERENCES Users(id), placed_at DATE
+      );
+      CREATE TABLE Order_Items (
+        order_id INT REFERENCES Orders(id),
+        product_id INT REFERENCES Products(id),
+        qty INT,
+        PRIMARY KEY (order_id, product_id)
+      );
+      -- an order is assembled with JOINs; price changes are consistent
+      -- everywhere because there is exactly one Products row
+      ```
+
+      **NoSQL, document (MongoDB-style):**
+
+      ```js
+      {
+        _id: 9001,
+        user: { id: 7, name: "Ana" },          // denormalized snapshot
+        items: [
+          { product_id: 12, name: "Keyboard", price: 80, qty: 1 }
+        ],
+        placed_at: "2024-01-15"
+      }
+      ```
+
+      Trade-off: one read returns the whole order (no joins), but the
+      product name/price are **copied** — if the price changes later, old
+      orders keep the old snapshot. That is the classic normalization vs
+      read-speed decision, and naming it out loud is the answer.
+  - type: flowchart
+    title: "Choosing SQL vs NoSQL"
+    nodes: ["New data store", "ACID + strong consistency required?", "Complex joins / ad-hoc analytics central?", "High write throughput / flexible schema?", "Use SQL (PostgreSQL)", "Use document store (MongoDB)", "Use wide-column (Cassandra) / key-value (Redis)"]
+    edges:
+      - {from: 0, to: 1, label: "yes"}
+      - {from: 0, to: 2, label: "no"}
+      - {from: 1, to: 4, label: "yes"}
+      - {from: 1, to: 3, label: "no"}
+      - {from: 2, to: 4, label: "yes"}
+      - {from: 2, to: 5, label: "no"}
+      - {from: 3, to: 5, label: "documents / KV"}
+      - {from: 3, to: 6, label: "massive writes"}
+  - type: markdown
+    content: |
+      ## Interview questions
+
+      :::tip
+      **Interview question:** Explain CAP with a real system. — Take a bank
+      ledger: it is CP — during a network partition it rejects writes it
+      cannot confirm so two ATMs can never disagree about a balance. Take a
+      social-media feed: it is AP — it keeps accepting posts everywhere and
+      reconciles later; a briefly stale follower count is fine. The trick is
+      that partition tolerance is not a choice: networks fail, so you only
+      really pick C or A during a partition.
+      :::
+
+      :::tip
+      **Interview question:** When would you use Redis? — When hot data must
+      be served in microseconds and fits in memory: caching (with TTLs so
+      keys expire), session storage, rate-limit counters (INCR), pub/sub for
+      lightweight fan-out, and sorted sets for leaderboards. It is fast
+      because it is in-memory and single-threaded — and that is also its
+      limit: no SQL joins, no multi-row transactions, and data is only as
+      durable as your persistence config.
+      :::
+
+      :::tip
+      **Interview question:** SQL or NoSQL for a new product — how do you
+      decide? — Start from requirements, not fashion: need ACID across
+      multiple rows (money, inventory) or complex joins → SQL. Expecting
+      massive write throughput, a schema that changes weekly, or read-heavy
+      hot paths → NoSQL. And name the middle ground: a SQL source of truth
+      with a Redis cache in front is the most common real architecture.
+      :::
+  - type: mcq
+    prompt: "During a network partition, what does a CP system do?"
+    options: ["Rejects writes it cannot confirm, so replicas never diverge", "Accepts writes on every replica and merges them later", "Automatically converts to AP until the partition heals", "Drops consistency and availability guarantees"]
+    answer: 0
+    explanation: "CP during a partition means choosing consistency: unconfirmable writes are refused (brief unavailability) so replicas stay in agreement. Accepting writes everywhere and merging later is the AP behavior."
+  - type: mcq
+    prompt: "Which workload is Redis best suited for?"
+    options: ["Caching session data with TTLs and INCR counters", "Storing the canonical customer ledger with ACID transfers", "Ad-hoc analytical queries over terabytes of history", "Path queries over a deeply interconnected social graph"]
+    answer: 0
+    explanation: "Redis is an in-memory key-value store: sessions with TTLs, counters, pub/sub, leaderboards. A ledger needs SQL's ACID, analytics need columnar/wide-column stores, and graph traversal needs a graph DB like Neo4j."
+  - type: mscq
+    prompt: "Which statements about Redis are true?"
+    options: ["Data lives in RAM, which is why reads are microseconds", "Commands run on a single-threaded event loop", "Keys can auto-expire via TTL", "It natively supports SQL JOINs across tables"]
+    answer: [0, 1, 2]
+    explanation: "Redis is in-memory and single-threaded (no locking overhead, O(1)-ish commands), and TTLs are a core feature. It has no SQL engine — joins and multi-row transactions are exactly what it is not for."
+  - type: mscq
+    prompt: "In which situations is NoSQL a better fit than SQL?"
+    options: ["A schema that changes frequently and varies per record", "Multi-row ACID transactions with complex joins", "Very high write throughput, e.g. event logs", "Caching hot data in front of a SQL database"]
+    answer: [0, 2, 3]
+    explanation: "Flexible schemas, massive write volume, and caching are NoSQL strengths. Multi-row ACID transactions with complex joins are the opposite — that is SQL's home turf."
+---
