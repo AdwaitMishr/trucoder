@@ -1,0 +1,212 @@
+---
+id: async-and-scaling-tools
+title: "Async & Scaling Tools"
+difficulty: medium
+order: 3
+tags: [kafka, consistent-hashing, rate-limiter]
+blocks:
+  - type: markdown
+    content: |
+      # Async & Scaling Tools
+
+      Three tools make a system scale past one machine: **queues** (decouple
+      work), **consistent hashing** (place data), and **rate limiters**
+      (protect the system). Then you implement the core of a rate limiter.
+
+      ## Message queues — why async
+
+      Synchronous calls chain failures and force the slowest step onto every
+      request. A queue breaks the chain: the producer drops a message and
+      moves on; workers consume at their own pace.
+
+      - **Decoupling** — the producer does not know the consumers (and vice
+        versa); add consumers without touching producers.
+      - **Buffering** — bursts are absorbed; workers catch up slowly.
+      - **Retries / DLQ** — failed messages are retried, then moved to a
+        dead-letter queue for inspection.
+
+      | | Kafka | SQS | RabbitMQ |
+      |---|---|---|---|
+      | Throughput | very high (100k+/s) | high (managed) | moderate |
+      | Ordering | per partition | not by default | per queue |
+      | Replay | yes (retention) | no | no |
+      | Model | log / stream | queue | queue + exchanges |
+      | Ops | self-hosted, complex | zero ops (AWS) | self-hosted, flexible routing |
+
+      **Delivery guarantees:** at-least-once (messages may duplicate → make
+      consumers **idempotent**) vs exactly-once (dedup by message ID).
+      Most systems ship at-least-once + idempotent consumers; exactly-once
+      costs throughput and complexity.
+
+      **Use case:** an order service emits `order_created` once; email,
+      search index, and analytics each consume it independently — one write
+      fans out to many systems.
+  - type: flowchart
+    title: "producer → queue → consumers"
+    nodes: ["Producer A", "Producer B", "Kafka topic", "Partition 0", "Partition 1", "Consumer group (workers)"]
+    edges:
+      - {from: 0, to: 2, label: "publish"}
+      - {from: 1, to: 2, label: "publish"}
+      - {from: 2, to: 3, label: "key-hash"}
+      - {from: 2, to: 4, label: "key-hash"}
+      - {from: 3, to: 5, label: "consume"}
+      - {from: 4, to: 5, label: "consume"}
+  - type: markdown
+    content: |
+      ## Consistent hashing
+
+      Naive sharding — `server = hash(key) % N` — rehashes **every** key when
+      a node joins or leaves. **Consistent hashing** puts nodes on a hash
+      ring: `hash(key)` lands somewhere on the ring, and you walk **clockwise**
+      to the first node — that node owns the key.
+
+      - Adding/removing a node only rehashes its **neighbours'** keys
+        (~1/N of keys instead of all of them).
+      - **Virtual nodes:** each physical node occupies several ring
+        positions, so keys spread evenly even with few machines.
+      - Used by DynamoDB, Cassandra, and every cache cluster (Redis Cluster).
+
+      ## Sharding & replication
+
+      Shard by a **partition key** (e.g. `user_id`) so one user's data lives
+      together. The key choice matters: sharding by `timestamp` makes one
+      shard hot (a **hotspot**); sharding by `user_id` spreads writes evenly.
+      Each shard runs **leader/follower**: writes go to the leader, **read
+      replicas** serve reads, and a **quorum** (majority of nodes ack) trades
+      latency for durability.
+
+      **Use case:** a 100M-row user table — shard by `user_id`; each shard
+      has a leader + 2 replicas; writes hit the leader, reads hit replicas.
+
+      ## Rate limiting
+
+      A rate limiter answers: *may this request pass?* — per user, per IP, or
+      per API key.
+
+      - **Token bucket:** bucket holds `capacity` tokens, refilled at
+        `refill_per_sec`. Each request needs 1 token. Allows bursts up to
+        capacity, smooth long-run rate. Simple and memory-light — the
+        default.
+      - **Sliding window:** count requests in the last window (log or
+        counter) — precise, but needs timestamps (memory) or a per-window
+        Redis counter (small boundary error).
+      - **Distributed:** a shared **Redis** keeps one bucket per key with
+        atomic check-and-consume (Lua script), so N servers agree.
+      - **Over limit:** respond **429 Too Many Requests** with
+        `Retry-After`.
+
+      **Use case:** an API allows 100 req/min per user — the Redis token
+      bucket lets 100 burst, then 100/min forever, across all app servers.
+
+      Now implement the token bucket yourself:
+  - type: code
+    task: "Implement a token-bucket rate limiter. solve(timestamps, capacity, refill_per_sec) returns a boolean per request: True if allowed, False if denied. The bucket starts full with `capacity` tokens. Between consecutive timestamps it refills by refill_per_sec per elapsed second, capped at capacity. Each allowed request consumes exactly 1 token. timestamps is a non-decreasing list of integer seconds."
+    languages: [python, javascript, java]
+    signature:
+      python: "def solve(timestamps: list[int], capacity: int, refill_per_sec: int) -> list[bool]"
+      javascript: "function solve(timestamps, capacity, refillPerSec)"
+      java: "static boolean[] solve(int[] timestamps, int capacity, int refillPerSec)"
+    starter:
+      python: |
+        def solve(timestamps: list[int], capacity: int, refill_per_sec: int) -> list[bool]:
+            # Start full; refill between timestamps; consume 1 token per allowed request.
+            return []
+      javascript: |
+        function solve(timestamps, capacity, refillPerSec) {
+          // Start full; refill between timestamps; consume 1 token per allowed request.
+          return [];
+        }
+      java: |
+        static boolean[] solve(int[] timestamps, int capacity, int refillPerSec) {
+            // Start full; refill between timestamps; consume 1 token per allowed request.
+            return new boolean[0];
+        }
+    tests:
+      public:
+        - name: "burst in same second"
+          args: [[0, 0, 0, 0], 2, 1]
+          expected: [true, true, false, false]
+        - name: "steady state"
+          args: [[0, 1, 2, 3], 2, 1]
+          expected: [true, true, true, true]
+      private:
+        - name: "empty input"
+          args: [[], 5, 1]
+          expected: []
+        - name: "burst with gap"
+          args: [[0, 10, 20], 1, 1]
+          expected: [true, true, true]
+        - name: "long sequence"
+          args: [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 3, 2]
+          expected: [true, true, true, true, true, true, true, true, true, true]
+    hints:
+      - "Track two things: the current token count and the previous timestamp. The bucket starts full."
+      - "Between two timestamps add (t - last) * refill_per_sec tokens, then cap the count at capacity."
+      - "Consume exactly 1 token when you allow a request; deny (no consumption) when tokens < 1."
+    solution: |
+      def solve(timestamps: list[int], capacity: int, refill_per_sec: int) -> list[bool]:
+          tokens = capacity
+          last = None
+          out = []
+          for t in timestamps:
+              if last is not None:
+                  tokens = min(capacity, tokens + (t - last) * refill_per_sec)
+              last = t
+              if tokens >= 1:
+                  out.append(True)
+                  tokens -= 1
+              else:
+                  out.append(False)
+          return out
+  - type: markdown
+    content: |
+      **Worked example:** `solve([0, 0, 0, 0], 2, 1)`.
+
+      ```
+      t=0: bucket has 2 tokens → allow → 1 left
+      t=0: same second, no refill → 1 token → allow → 0 left
+      t=0: 0 tokens → deny
+      t=0: 0 tokens → deny
+      result: [true, true, false, false]
+      ```
+
+      :::tip
+      **Interview question:** How would you rate-limit across multiple
+      servers? — "Keep the bucket in a shared Redis: key = user id, value =
+      token count + last refill timestamp. Use a small Lua script (or
+      INCR + EXPIRE for a sliding counter) so check-and-consume is atomic,
+      and return 429 with Retry-After when the bucket is empty."
+      :::
+
+      :::tip
+      **Interview question:** Kafka vs SQS — which and why? — "Kafka when I
+      need high throughput, replay, or strict per-partition ordering (chat,
+      events, analytics). SQS when I want a fully managed queue with an
+      exactly-once option and no ops burden — at the cost of no ordering by
+      default."
+      :::
+  - type: mcq
+    prompt: "Capacity 4, refill 2/s. Requests arrive at t = 0, 0, 1, 1. Which are allowed?"
+    options: ["All four", "Only the first two", "Only the first three", "None"]
+    answer: 0
+    explanation: "t=0: 4→allow→3; t=0: no refill→3→allow→2; t=1: refill +2→min(4,4)=4→allow→3; t=1: 3→allow→2. All four pass — the burst uses saved tokens, the refill restores them."
+  - type: mcq
+    prompt: "What do virtual nodes do in consistent hashing?"
+    options: ["Replicate data to another node", "Give one physical node several ring positions for an even spread", "Store a copy of the hash function", "Route keys to the nearest data centre"]
+    answer: 1
+    explanation: "Virtual nodes = multiple ring positions per physical node, so a small number of machines still spreads keys evenly."
+  - type: mcq
+    prompt: "Which delivery guarantee forces consumers to be idempotent?"
+    options: ["At-least-once", "Exactly-once", "At-most-once", "No guarantee"]
+    answer: 0
+    explanation: "At-least-once may redeliver a message, so consumers must tolerate duplicates. Exactly-once removes that burden but costs throughput."
+  - type: mscq
+    prompt: "Which statements about Kafka are true?"
+    options:
+      - "Ordering is guaranteed per partition"
+      - "Messages can be replayed from retention"
+      - "Exactly-once is the default guarantee"
+      - "Throughput is very high (100k+ messages/s)"
+    answer: [0, 1, 3]
+    explanation: "Kafka is a partitioned log: ordering per partition, replay from retention, very high throughput. Exactly-once is opt-in and expensive, not the default."
+---

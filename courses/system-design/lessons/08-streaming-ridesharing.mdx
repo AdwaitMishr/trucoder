@@ -1,0 +1,98 @@
+---
+id: streaming-ridesharing
+title: "Design: Streaming & Ride-Sharing"
+difficulty: medium
+order: 8
+tags: [cdn, dash, geohash, uber]
+blocks:
+  - type: markdown
+    content: |
+      # Design: Video Streaming (Netflix) & Ride-Sharing (Uber)
+
+      **Concept.** Two classic designs in one lesson: (A) serving video to millions without melting your origin, and (B) matching riders to drivers in real time using a spatial index. Both hinge on one idea each: **CDN + adaptive bitrate** for video, **geohash + heartbeats** for rides.
+
+      **Use case:** Netflix/YouTube-style streaming is the canonical CDN + DASH
+      question; Uber/Ola-style matching is the standard geo-system design —
+      both appear in product-company loops (Google, Amazon, and Indian
+      product cos) and as system-design fundamentals everywhere.
+
+      ## (A) Netflix-style video streaming
+
+      **Why a CDN.** Video is the heaviest traffic on the internet. An origin server can't serve 1M concurrent streams — edges cache popular content close to users (pull CDN: first request fetches from origin, then serves locally). Netflix preloads its whole catalog to edges (push CDN).
+
+      **Adaptive bitrate (DASH/HLS).** One fixed quality is wrong: a user on 3G can't stream 1080p (endless buffering), and a user on fiber wastes bandwidth on 240p. So the video is transcoded into **multiple bitrates** (240p → 1080p) and split into **2–6 s segments**; the client measures throughput and requests the next segment at the best bitrate, switching seamlessly mid-playback.
+
+      **Transcoding pipeline.** Upload → transcode into variants → segment each variant → store (S3) → replicate to CDN edges. Heavy CPU/GPU work, so it runs as an async job queue.
+
+      **DRM.** Encrypt segments + license server that issues keys only to authorized clients (one line for interviews).
+
+      **Worked numerical — bandwidth.** 1M concurrent streams × 4 Mbps average = 4,000,000 Mbps = **4 Tbps** egress. No origin survives that — this is why edge caching exists (a single 2-h movie at 4 Mbps ≈ 4 Mbps × 7,200 s ≈ 28.8 Gb ≈ **3.6 GB** per stream).
+
+      :::tip
+      **Interview question:** "Why adaptive bitrate and not one quality?" — Available bandwidth varies per user and over time. A fixed high bitrate buffers constantly on slow networks; a fixed low bitrate wastes fast connections. DASH/HLS encodes the video once into several bitrate variants, splits it into small segments, and lets the client pick the best bitrate per segment based on measured throughput — smooth playback on any network.
+      :::
+  - type: flowchart
+    title: "DASH adaptive bitrate"
+    nodes: ["Uploaded video", "Transcode to 240p / 480p / 720p / 1080p", "Split into 2–6 s segments", "Store + replicate to CDN edges", "Client fetches manifest (.mpd / .m3u8)", "Client measures bandwidth each segment", "Switch quality seamlessly"]
+    edges:
+      - {from: 0, to: 1, label: "encode"}
+      - {from: 1, to: 2, label: "segment"}
+      - {from: 2, to: 3, label: "replicate"}
+      - {from: 3, to: 4, label: "manifest"}
+      - {from: 4, to: 5, label: "stream"}
+      - {from: 5, to: 6, label: "adapt"}
+  - type: markdown
+    content: |
+      ## (B) Uber-style ride-sharing
+
+      **Geospatial index.** Drivers are points on a map; finding "drivers near this rider" is a 2D spatial query.
+      - **Geohash:** encode (lat, lng) into a single string; nearby points share prefixes. Query the rider's cell + 8 neighbor cells. Simple, shardable by prefix.
+      - **Quadtree:** recursively subdivide space into quadrants; good for uneven density (city vs countryside), but more complex to shard.
+
+      **Driver location updates.** The driver app pushes location over a **WebSocket** every few seconds (heartbeat); the ride service writes it to the geohash index and an in-memory driver store. Old heartbeats expire (driver offline).
+
+      **Matching.** Ride request → query rider's geohash cell + neighbors → score candidates by ETA → send offers (a driver accepts → trip created → surge pricing can inflate the multiplier when supply < demand, one line).
+
+      **Worked numerical — write scale.** 100k active drivers updating every 4 s: 100,000 / 4 = **25k location writes/sec** into the geo index — a sharded in-memory store, not a relational DB. Matching reads are far fewer (requests are rare vs heartbeats).
+
+      :::tip
+      **Interview question:** "How does Uber find nearby drivers?" — Drivers push location updates over WebSocket every few seconds into a geohash (or quadtree) index. On a ride request, the service hashes the rider's coordinates, queries that cell plus the 8 neighboring cells to handle boundary cases, scores the candidates by distance/ETA, and sends match offers to the closest ones.
+      :::
+
+      ## Bonus: GenAI / RAG design (2024–26 trend)
+
+      **RAG pipeline.** Documents → **ingest → chunk → embed → vector DB** (FAISS/Pinecone) at index time. At query time: **retrieve top-k chunks → optional rerank → LLM generates with context** → answer. This grounds the model in your data and avoids retraining.
+
+      **Serving.** Stream tokens over **SSE** (server-sent events) so the user sees the first token in ~1s; rate-limit per tier (token bucket); cache identical completions (Redis) to cut cost.
+
+      **Cost estimation.** 1M requests/day × 1,500 tokens each (500 in + 1,000 out) = **1.5B tokens/day**. At $0.30/M input + $0.60/M output: 1M × (500 × 0.30 + 1,000 × 0.60) / 1e6 = 1M × (0.00015 + 0.0006) = **$750/day**. Always price input and output separately.
+  - type: flowchart
+    title: "Ride-matching flow"
+    nodes: ["Driver app: location heartbeat every 4 s (WebSocket)", "Update geohash index + driver store", "Rider requests a ride", "Query rider's geohash cell + 8 neighbors", "Score drivers by ETA / distance", "Send match offers → driver accepts → trip"]
+    edges:
+      - {from: 0, to: 1, label: "heartbeat"}
+      - {from: 1, to: 2, label: "live index"}
+      - {from: 2, to: 3, label: "spatial query"}
+      - {from: 3, to: 4, label: "candidates"}
+      - {from: 4, to: 5, label: "offer"}
+  - type: mcq
+    prompt: "1M concurrent video streams at an average 4 Mbps each need how much total egress bandwidth?"
+    options: ["4 Gbps", "40 Gbps", "400 Gbps", "4 Tbps"]
+    answer: 3
+    explanation: "1,000,000 × 4 Mbps = 4,000,000 Mbps = 4e12 bps = 4 Tbps. This is why CDN edge caching exists — the origin alone could never serve that."
+  - type: mcq
+    prompt: "Why does DASH/HLS encode video into multiple bitrates split into short segments?"
+    options: ["Because storage is cheaper than encoding", "So the client can switch quality per segment based on measured bandwidth, avoiding buffering or waste", "Because DRM requires it", "So the CDN can dedupe segments"]
+    answer: 1
+    explanation: "Network bandwidth varies per user and over time. Per-segment switching (2–6 s segments, 240p–1080p variants) keeps playback smooth on any connection — one fixed quality either buffers or wastes data."
+  - type: mcq
+    prompt: "To find nearby drivers, the matching service queries…"
+    options: ["All drivers in the country via a SQL join", "The rider's geohash cell plus the 8 neighboring cells", "Only the closest driver by rating", "The driver with the lowest surge multiplier"]
+    answer: 1
+    explanation: "Driver locations live in a geohash/quadtree index updated by WebSocket heartbeats; matching reads the rider's cell + 8 neighbors (boundary cases) and scores candidates by ETA."
+  - type: mcq
+    prompt: "In a RAG chatbot, what is the correct order of operations at query time?"
+    options: ["Generate → retrieve → rerank", "Retrieve top-k chunks → (rerank) → LLM generates with context", "Embed the query into the vector DB and skip retrieval", "Fine-tune the LLM on every query"]
+    answer: 1
+    explanation: "RAG = retrieve-then-generate: embed the query, retrieve top-k similar chunks from the vector DB (FAISS/Pinecone), optionally rerank, then the LLM answers grounded in those chunks."
+---

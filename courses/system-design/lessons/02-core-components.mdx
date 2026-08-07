@@ -1,0 +1,162 @@
+---
+id: core-components
+title: "Core Components"
+difficulty: easy
+order: 2
+tags: [load-balancer, cache, cdn]
+blocks:
+  - type: markdown
+    content: |
+      # Core Components
+
+      Three boxes sit in front of almost every real system: a **load
+      balancer**, a **cache**, and a **CDN**. Know what each does and when it
+      earns its keep.
+
+      ## Load balancers
+
+      A load balancer (LB) spreads requests across a pool of servers and
+      hides the pool behind one address.
+
+      | | L4 (transport) | L7 (application) |
+      |---|---|---|
+      | Routes on | IP + port | HTTP path, host, headers |
+      | Sees | packets | full requests |
+      | Extras | fast, low overhead | TLS termination, sticky sessions, path-based routing |
+      | Use | TCP, databases, any protocol | web APIs, microservices |
+
+      **Algorithms:**
+      - **Round robin** — simplest, ignores current load.
+      - **Least connections** — send to the least busy server (good for
+        long-lived connections).
+      - **IP hash** — same client IP → same server (session stickiness).
+      - **Weighted** — bigger servers get proportionally more traffic.
+
+      **Health checks:** the LB pings `/healthz`; dead nodes are removed from
+      rotation. **SPOF:** the LB itself must be redundant — an active/passive
+      pair sharing a virtual IP, so a failed LB fails over in seconds.
+
+      **Use case:** front every tier — an L7 LB in front of the API (TLS
+      termination + `/api/*` routing), an L4 LB in front of the DB read
+      replicas.
+  - type: flowchart
+    title: "L4 vs L7 load balancing"
+    nodes: ["Client request", "L4 LB: IP + port", "L7 LB: HTTP path / host", "TLS termination + sticky sessions", "Backend pool"]
+    edges:
+      - {from: 0, to: 1, label: "TCP"}
+      - {from: 0, to: 2, label: "HTTP"}
+      - {from: 1, to: 4, label: "forward"}
+      - {from: 2, to: 4, label: "route by path"}
+  - type: markdown
+    content: |
+      ## Caching
+
+      **Redis** is the default cache: in-memory key-value, sub-millisecond
+      reads, TTLs, atomic operations — sized so the hot set fits in RAM.
+
+      **Write strategies:**
+
+      | Strategy | Read | Write | Risk |
+      |---|---|---|---|
+      | **Cache-aside** | miss → DB → populate cache | write DB, invalidate cache | stale window, cold-start stampede |
+      | **Write-through** | cache always fresh | write cache + DB together | write latency; cache holds cold data |
+      | **Write-back** | cache always fresh | write cache, flush to DB later | data loss if the cache dies |
+
+      **Eviction:** LRU (least recently used — the default), LFU (least
+      frequently used), or TTL (expiry — simplest, most common).
+
+      - **Cache stampede:** a hot key expires and thousands of misses hit the
+        DB at once → lock/mutex around repopulation, or TTL + jitter.
+      - **Cache penetration:** requests for keys that do not exist bypass the
+        cache every time → cache nulls briefly, or use a Bloom filter.
+
+      **Use case:** read-heavy hot data — a URL shortener caches the top 20%
+      of codes and serves ~80% of reads from Redis.
+  - type: flowchart
+    title: "cache-aside read flow"
+    nodes: ["Read request", "Redis lookup", "Cache hit?", "Return cached value", "Query DB", "Write value to cache", "Return value"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "yes"}
+      - {from: 2, to: 4, label: "no"}
+      - {from: 4, to: 5, label: "populate"}
+      - {from: 4, to: 6}
+      - {from: 5, to: 6}
+  - type: markdown
+    content: |
+      ## CDN (Content Delivery Network)
+
+      A CDN caches static content (images, video, JS/CSS) at **edge servers**
+      near the user, so the browser hits a nearby node instead of your origin
+      data centre.
+
+      - **Pull CDN:** the edge fetches from origin on first request and
+        caches with a **TTL**. Automatic, simple — the default.
+      - **Push CDN:** you upload content to the edges in advance. More
+        control, more ops — for big files and planned events.
+      - **Invalidation:** TTL expiry or explicit purge; best practice is
+        content-addressed filenames (`app.8f3a2c.js`) so a deploy is just new
+        URLs.
+      - **Routing:** DNS/anycast points the client at the nearest edge, never
+        your origin IP.
+
+      **Use case:** any read-mostly static payload — cut origin load ~90% and
+      latency from ~200 ms to ~20 ms for a global audience.
+
+      ## SQL vs NoSQL — the design decision
+
+      - **SQL (Postgres/MySQL):** joins, transactions, ACID, ad-hoc queries.
+        Use for money, orders, anything relational. Scales via read replicas,
+        then sharding.
+      - **NoSQL:** key-value (Redis/DynamoDB), document (MongoDB),
+        wide-column (Cassandra). Horizontal scale and high write throughput
+        are native; you give up joins and transactions.
+      - **Rule of thumb:** start SQL unless the access pattern is "read/write
+        by key" or the write scale demands NoSQL. Chat messages, tweets,
+        sessions → NoSQL; users, orders, payments → SQL.
+
+      :::tip
+      **Interview question:** Cache-aside vs write-through — when which? —
+      "Cache-aside: write to the DB and invalidate the cache; the next read
+      repopulates it. Best for read-heavy workloads — the cache only holds
+      what is actually read. Write-through keeps the cache always fresh at
+      the cost of write latency and caching cold data. Default to
+      cache-aside; choose write-through when stale reads are unacceptable."
+      :::
+
+      :::tip
+      **Interview question:** Why do we need a CDN? — "Three reasons:
+      latency — an edge node 50 ms away beats an origin 300 ms away;
+      origin load — edges absorb the bulk of static traffic; availability —
+      edges keep serving cached content during origin outages."
+      :::
+  - type: mcq
+    prompt: "Which load-balancing algorithm keeps a client on the same server across requests?"
+    options: ["Round robin", "IP hash", "Least connections", "Weighted"]
+    answer: 1
+    explanation: "IP hash maps the client's IP to a server deterministically — that is session stickiness without a shared session store."
+  - type: mcq
+    prompt: "On a cache-aside READ MISS, what happens?"
+    options: ["Return a stale cached value", "Query the DB, populate the cache, return the value", "Write cache and DB together", "Flush the cache to the DB"]
+    answer: 1
+    explanation: "Cache-aside: miss → query DB → write the value into the cache → return it. Writes go to the DB with cache invalidation."
+  - type: mscq
+    prompt: "Which statements about a PULL CDN are true?"
+    options:
+      - "The edge fetches content from origin on first request"
+      - "You upload content to the edges in advance"
+      - "TTL controls how long edges keep content"
+      - "DNS routes users to the nearest edge"
+    answer: [0, 2, 3]
+    explanation: "Pull = edge fetches on demand and caches until the TTL expires; routing is via DNS/anycast. Uploading in advance is a PUSH CDN."
+  - type: mscq
+    prompt: "When is NoSQL the right choice over SQL?"
+    options:
+      - "Money transfers that must be ACID"
+      - "Chat messages read and written by key, never joined"
+      - "Ad-hoc reporting with arbitrary joins"
+      - "Very high write throughput at horizontal scale"
+    answer: [1, 3]
+    explanation: "NoSQL wins on key-based access and write scale. ACID transactions and ad-hoc joins are SQL strengths — pick SQL for those."
+---
