@@ -649,12 +649,43 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 
 /* flowchart blocks (inline SVG) */
 .flowchart { margin: 22px 0; }
+.flowchart-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .flowchart-title {
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
-  color: var(--muted); font-family: var(--font-mono); margin-bottom: 8px;
+  color: var(--muted); font-family: var(--font-mono); margin-bottom: 0;
 }
 .flowchart-scroll { overflow-x: auto; }
 .flowchart-svg { display: block; max-width: 100%; height: auto; }
+.flow-expand {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; margin-left: auto; flex-shrink: 0;
+  color: var(--muted); background: none; border: none; border-radius: 6px;
+  cursor: pointer;
+}
+.flow-expand:hover { color: var(--ink); background: var(--surface2); }
+/* fullscreen overlay: diagram at NATURAL size (readable), scroll to pan */
+.flowchart-overlay {
+  position: fixed; inset: 0; z-index: 130;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex; align-items: center; justify-content: center; padding: 18px;
+}
+.flowchart-overlay-box {
+  background: var(--surface); border: 1px solid var(--hairline);
+  border-radius: 10px; display: flex; flex-direction: column;
+  max-width: min(1400px, 96vw); max-height: 94vh; overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+.flowchart-overlay-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--hairline);
+}
+.flowchart-overlay-head .flow-expand { margin-left: 0; }
+.flowchart-overlay-title {
+  font-family: var(--font-mono); font-size: 12.5px; color: var(--ink);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.flowchart-overlay-body { overflow: auto; padding: 22px; display: flex; overscroll-behavior: contain; }
+.flowchart-overlay-body .flowchart-svg { max-width: none; flex-shrink: 0; margin: auto; }
 .flow-node { fill: var(--surface); stroke: var(--hairline); stroke-width: 1.5; }
 .flow-node-label { fill: var(--ink); font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
 .flow-edge { stroke: var(--muted); stroke-width: 1.5; }
