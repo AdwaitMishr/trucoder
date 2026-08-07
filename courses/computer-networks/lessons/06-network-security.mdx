@@ -1,0 +1,207 @@
+---
+id: network-security
+title: "Network Security — Crypto, TLS & Attacks"
+difficulty: medium
+order: 6
+tags: [tls, encryption, security]
+blocks:
+  - type: markdown
+    content: |
+      Security provides **confidentiality** (nobody reads it), **integrity** (nobody
+      changes it) and **authentication** (it really is the server). Two kinds of
+      encryption do the heavy lifting.
+
+      ## Symmetric vs asymmetric encryption
+
+      | | Symmetric (AES) | Asymmetric (RSA / ECC) |
+      |---|-----------------|------------------------|
+      | Keys | one shared key | key pair: public + private |
+      | Speed | very fast (hardware-accelerated) | slow (modular exponentiation) |
+      | Problem | key distribution — how do both sides share the key secretly? | solves distribution, but too slow for bulk data |
+      | Uses | encrypting the actual data | key exchange, digital signatures |
+
+      ## Hybrid encryption — how TLS combines them
+
+      The handshake uses **asymmetric** crypto (RSA, or ECDHE key exchange) to agree on
+      a **session key**; all application data is then encrypted with **symmetric AES**
+      using that key. Best of both: secure distribution (asymmetric) + speed (symmetric).
+
+      **Use case:** every `https://` connection. You never encrypt a whole download with
+      RSA — you use RSA to ship the AES key, and AES to ship the bytes.
+  - type: markdown
+    content: |
+      ## SSL/TLS handshake (5 steps)
+
+      1. **Client hello** — TLS version, cipher suites, client random.
+      2. **Server hello** — chosen cipher, server random, and the server's **certificate**.
+      3. **Certificate check** — the client verifies the certificate against trusted CAs
+         (chain of trust), confirming the public key really belongs to the server.
+      4. **Key exchange** — the client sends the **premaster secret** (encrypted with the
+         server's public key) — or ECDHE parameters; both sides compute the **same AES
+         session key** from the premaster + the two randoms.
+      5. **Encrypted session** — `Finished` messages, then AES-encrypted application
+         data. (TLS 1.3: 1-RTT, fewer round trips, forward-secret ciphers only.)
+
+      ## Certificates & CAs — why we trust the server
+
+      A certificate binds a **public key to an identity** and is digitally signed by a
+      **CA**. Your browser ships the public keys of root CAs and verifies server certs by
+      following the **chain of trust**: server ← intermediate ← root CA. You trust the
+      CA, not the server directly — that is exactly what stops a stranger's key from
+      passing itself off as example.com's.
+  - type: markdown
+    content: |
+      ## Firewalls
+
+      - **Packet-filtering** — stateless; checks header fields (IP, port, protocol)
+        against rules. Fast, but blind to context.
+      - **Stateful** — tracks connection state (e.g. saw SYN, so allow the return
+        traffic). The default for most office/home firewalls.
+      - **Application proxy / gateway** — inspects the payload (HTTP, SQL…), terminates
+        and re-originates connections. Deepest inspection, highest cost.
+
+      ## VPNs
+
+      A VPN creates an **encrypted tunnel** between two endpoints over the public
+      internet (IPsec or TLS-based). A remote laptop ↔ corporate gateway: traffic is
+      encrypted so the ISP or rogue WiFi cannot read it, and the remote host appears to
+      be inside the office network.
+
+      **Use case:** the layered answer — "stateful firewall at the perimeter, an
+      application proxy for sensitive services, and a VPN for remote workers."
+  - type: markdown
+    content: |
+      ## Common attacks
+
+      - **DoS vs DDoS** — one attacker overwhelms a server vs a **botnet** of many
+        machines (much harder to block by IP). **SYN flood**: send many SYN segments and
+        never finish the handshake → the server's half-open connection table fills →
+        legitimate clients cannot connect. Defenses: SYN cookies, short timeouts.
+      - **Amplification** — the attacker sends a small query with a *spoofed victim IP*
+        to an open server (DNS/NTP); the big reply floods the victim.
+
+      ### Worked numerical: DNS amplification
+
+      Query = 60 bytes, response = 3000 bytes. Amplification factor = 3000 / 60 =
+      **50×**. An attacker spoofing the victim's IP in 1000 queries makes the victim
+      absorb 1000 × 3000 = **3,000,000 bytes ≈ 3.0 MB (2.9 MiB)** of traffic it never asked for.
+
+      - **MITM (man-in-the-middle)** — the attacker sits between Alice and Bob, reading
+        and altering traffic while impersonating each side to the other. Defense: TLS
+        with proper certificate verification (PKI), mutual TLS for APIs.
+      - **SQL injection** — user input is concatenated into a SQL query, changing its
+        structure: `WHERE user = '$input'` with `input = ' OR '1'='1` logs you in as
+        anyone (or dumps the table). Defense: **parameterized queries** (structure and
+        data stay separate), input validation, least-privilege DB accounts.
+      - **XSS** — the attacker injects client-side script into a page that *other* users
+        view; the script steals cookies/sessions. Defense: escape output, sanitize
+        input, Content-Security-Policy.
+
+      **HTTPS vs plaintext:** over HTTP, anyone on the path — rogue WiFi, ISP, a MITM —
+      can read and modify everything. HTTPS encrypts the whole payload, so eavesdroppers
+      see only ciphertext.
+
+      :::tip
+      **Interview question:** Explain the TLS handshake. — Client hello (version,
+      ciphers, random) → server hello with its certificate → client verifies the
+      certificate against trusted CAs → key exchange (premaster secret encrypted with
+      the server's public key, or ECDHE) → both sides derive the same AES session key →
+      encrypted data flows. One-line summary: "asymmetric crypto to agree on a key,
+      symmetric crypto to use it."
+      :::
+
+      :::tip
+      **Interview question:** How does SQL injection work, and how do you prevent it? —
+      If user input is concatenated into a query string, a crafted value like
+      `' OR '1'='1` changes the query's structure and can bypass authentication or
+      exfiltrate data. Prevention: **parameterized queries / prepared statements** (the
+      database treats input as data, never as SQL), input validation/whitelisting,
+      escaping, and least-privilege database accounts. Never build SQL by string
+      concatenation.
+      :::
+  - type: flowchart
+    title: "TLS handshake sequence"
+    nodes: ["Client hello — TLS version, cipher suites, client random", "Server hello — chosen cipher, server random + certificate", "Client verifies certificate (chain of trust to a root CA)", "Key exchange — premaster secret, encrypted with server's public key (or ECDHE)", "Both sides derive the same AES session key", "Encrypted application data (symmetric AES)"]
+    edges:
+      - {from: 0, to: 1, label: "1-RTT"}
+      - {from: 1, to: 2, label: "verify"}
+      - {from: 2, to: 3, label: "trusted"}
+      - {from: 3, to: 4, label: "derive"}
+      - {from: 4, to: 5, label: "secure channel"}
+  - type: flowchart
+    title: "Man-in-the-middle attack"
+    nodes: ["Alice sends request to Bob", "Mallory intercepts (rogue WiFi / ARP spoofing)", "Mallory relays an edited request to Bob, posing as Alice", "Bob replies — to Mallory (he believes she is Alice)", "Mallory reads/alters, forwards to Alice", "Neither party detects it — without TLS there is no authentication"]
+    edges:
+      - {from: 0, to: 1, label: "intercepted"}
+      - {from: 1, to: 2, label: "impersonates"}
+      - {from: 2, to: 3, label: "reply"}
+      - {from: 3, to: 4, label: "tamper"}
+      - {from: 4, to: 5, label: "undetected"}
+  - type: mcq
+    prompt: "In a TLS handshake, what does the client's certificate check actually confirm?"
+    options: ["That the server's public key really belongs to the server (chain of trust to a CA)", "That the client hello was encrypted", "That the AES session key needs no randomness", "That the client is authenticated to the CA"]
+    answer: 0
+    explanation: "The certificate binds a public key to an identity and is signed by a CA. The client follows the chain of trust to a root CA it already trusts — that is what prevents a MITM's key from impersonating the real server."
+  - type: mcq
+    prompt: "Why does TLS encrypt application data with AES rather than RSA?"
+    options: ["AES (symmetric) is orders of magnitude faster for bulk data; RSA only exchanges the key", "RSA keys are too short", "AES is the only algorithm browsers support", "RSA cannot encrypt data at all"]
+    answer: 0
+    explanation: "Asymmetric crypto is slow (modular exponentiation) and unsuitable for megabytes of data. TLS is hybrid: RSA/ECDHE exchanges the key during the handshake, then AES encrypts the actual traffic."
+  - type: mcq
+    prompt: "Which best describes a SYN flood attack?"
+    options: ["Attacker sends many SYN segments and never completes the handshake, exhausting the server's half-open connection table", "Attacker injects SQL into a login form", "Attacker reflects big DNS responses at a victim", "Attacker guesses the AES session key"]
+    answer: 0
+    explanation: "Each SYN creates a half-open connection in the server's table; never sending the final ACK fills it so legitimate clients cannot connect. SQL injection is a separate attack, and DNS reflection is amplification (option 2)."
+  - type: mscq
+    prompt: "Which defenses stop SQL injection?"
+    options: ["Parameterized queries / prepared statements", "Input validation and escaping", "Least-privilege database accounts", "Disabling JavaScript in the browser"]
+    answer: [0, 1, 2]
+    explanation: "Prepared statements keep SQL structure and data separate; validation/escaping neutralize crafted input; least-privilege accounts limit the blast radius of a successful injection. Disabling JavaScript is an XSS mitigation, not an SQLi defense."
+  - type: markdown
+    content: |
+      ## TLS 1.3 — the modern handshake
+
+      - **1-RTT handshake:** the client hello carries an ECDHE **key share**; the server
+        replies with its certificate and Finished — the full handshake takes **one round
+        trip** instead of TLS 1.2's two, and both sides derive the session key
+        immediately.
+      - **0-RTT resumption:** with a previously shared PSK, the client sends
+        **application data in its very first flight** (e.g. a GET) — zero added round
+        trips on repeat visits. Trade-off: **replay risk** — a captured 0-RTT message
+        can be replayed. Mitigations: idempotent requests only, anti-replay windows,
+        never 0-RTT for state-changing requests.
+      - **Forward secrecy is mandatory:** only ephemeral key exchange (**ECDHE**) is
+        allowed, so a stolen long-term private key cannot decrypt past sessions.
+        **RSA key exchange was removed** — with static RSA, the server's private key
+        decrypts *every* recorded session, so one compromise exposed the whole history.
+      - Legacy leftovers removed too: CBC ciphers, renegotiation, compression — fewer
+        options, fewer attacks.
+
+      ## Web security in one screen
+
+      - **CORS preflight:** before a non-simple cross-origin request (custom headers,
+        PUT/DELETE), the browser sends an **OPTIONS** preflight asking the server which
+        origins/methods are allowed; the real request proceeds only if the server
+        approves. The server's `Access-Control-Allow-Origin` header is the policy; the
+        browser enforces it.
+      - **CSRF + SameSite cookies:** CSRF = a malicious site triggers state-changing
+        requests using the victim's cookies. Defenses: **SameSite** cookies (Lax/Strict
+        stop cross-site sends), CSRF tokens, Origin/Referer checks.
+      - **SSRF:** the server is tricked into fetching an attacker-chosen URL (e.g. the
+        cloud metadata endpoint `http://169.254.169.254/`). Defenses: allowlist
+        destinations, block link-local/metadata IPs, never trust raw user-supplied URLs.
+      - **Cookie flags:** **HttpOnly** (JavaScript can't read it — defeats XSS cookie
+        theft) and **Secure** (only sent over HTTPS).
+      - **DNS over HTTPS (DoH):** DNS queries travel inside HTTPS to a DoH resolver, so
+        ISPs and on-path attackers can't see or tamper with them — DNS privacy.
+  - type: mcq
+    prompt: "Why did TLS 1.3 remove RSA key exchange and make ECDHE mandatory?"
+    options: ["With static RSA, a stolen server private key decrypts every past recorded session; ephemeral ECDHE gives forward secrecy", "RSA is slower than AES", "RSA cannot sign certificates", "ECDHE requires fewer bits than RSA"]
+    answer: 0
+    explanation: "Static RSA derives the session key from the server's long-term private key — steal it once and decrypt the entire history. ECDHE generates ephemeral per-session keys, so compromising the long-term key reveals nothing about past sessions: forward secrecy."
+  - type: mcq
+    prompt: "An XSS script is stealing a user's session cookie. Which cookie flag blocks the theft, and which defense stops the XSS itself?"
+    options: ["HttpOnly (JavaScript can't read the cookie) + escaping/output-encoding of user input", "Secure flag + HTTPS", "SameSite=Strict + CORS headers", "DNS over HTTPS + TLS 1.3"]
+    answer: 0
+    explanation: "HttpOnly makes the cookie invisible to document.cookie, so injected scripts cannot read it; proper output escaping/encoding stops the XSS from executing in the first place. Secure is about transport, SameSite is about CSRF-style cross-site requests — neither blocks script reads."
+---

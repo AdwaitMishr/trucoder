@@ -1,0 +1,223 @@
+---
+id: modern-cpp-stl
+title: "Modern C++ & STL"
+difficulty: medium
+order: 6
+tags: [smart-pointers, raii, stl, move-semantics]
+blocks:
+  - type: markdown
+    content: |
+      ### Smart pointers
+
+      - **`std::unique_ptr<T>`** — *exclusive* ownership: the object is destroyed
+        when the unique_ptr dies; the copy constructor is **deleted** — transfer
+        ownership with `std::move`. Zero overhead vs a raw pointer.
+      - **`std::shared_ptr<T>`** — *shared* ownership: a reference count; copying
+        increments it, destruction decrements it, and the **last owner** destroys
+        the object. Prefer `std::make_shared<T>(...)` — one allocation and
+        exception-safe.
+      - **`std::weak_ptr<T>`** — a *non-owning observer*: `lock()` returns a
+        `shared_ptr` (or null if the object died), `expires()` checks liveness.
+        It **breaks reference cycles** — two `shared_ptr`s pointing at each other
+        would never free.
+      - Never use `new` when a smart pointer (or `make_*`) can do the job.
+
+      **Use case:** a factory returns `std::unique_ptr<Shape>`; a cache hands out
+      `shared_ptr` to shared configs; a parent owns children via `unique_ptr` and
+      children hold a `weak_ptr` back to the parent.
+  - type: flowchart
+    title: "Ownership transfer with unique_ptr"
+    nodes: ["u1 owns the object", "std::move(u1) — cast to rvalue", "u2 = std::move(u1): ownership moves", "u1 is now empty (nullptr)", "exactly one owner — no double delete"]
+    edges:
+      - {from: 0, to: 1, label: "transfer"}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "source nulled"}
+      - {from: 2, to: 4, label: "single owner"}
+  - type: flowchart
+    title: "Reference counting with shared_ptr"
+    nodes: ["shared_ptr p1 — use_count 1", "copy p1 → p2 — use_count 2", "p1 destroyed — use_count 1", "p2 destroyed — use_count 0", "object destroyed and freed"]
+    edges:
+      - {from: 0, to: 1, label: "copy"}
+      - {from: 1, to: 2, label: "p1 out of scope"}
+      - {from: 2, to: 3, label: "p2 out of scope"}
+      - {from: 3, to: 4, label: "last owner frees"}
+  - type: markdown
+    content: |
+      ### RAII — Resource Acquisition Is Initialization
+
+      - **Acquire the resource in the constructor, release it in the
+        destructor** — the resource's lifetime equals the object's lifetime.
+      - Applies to: heap memory, file handles, mutex locks, sockets, DB
+        connections.
+      - **Why it is exception-safe:** when an exception unwinds the stack,
+        destructors of local objects run automatically — no manual
+        try/catch/cleanup paths to forget.
+
+      **Use case:** `std::lock_guard` locks the mutex at construction and unlocks
+      it at destruction — even if the guarded body throws, the mutex is released.
+  - type: markdown
+    content: |
+      ### STL containers — one line each
+
+      - **`std::vector`** — contiguous dynamic array; O(1) indexing and amortized
+        push_back; cache-friendly; **the default choice**.
+      - **`std::list`** — doubly-linked list; O(1) insert/erase *anywhere*,
+        O(n) search; pick it only for frequent middle insertions with stable
+        iterators.
+      - **`std::deque`** — double-ended queue; O(1) push/pop at *both* ends, with
+        indexed access.
+      - **`std::map`** — sorted key→value (red-black tree); O(log n)
+        lookup/insert; iteration in key order.
+      - **`std::unordered_map`** — hash table; O(1) *average* lookup; keys
+        unordered.
+      - **`std::set`** — sorted *unique* keys; O(log n) membership tests.
+
+      **Use case:** vector for a buffer you grow; unordered_map for a lookup
+      table; set for "is this ID known?"; map when you also need sorted iteration.
+  - type: markdown
+    content: |
+      ### STL algorithms & lambdas
+
+      - `std::sort(begin, end)` — O(n log n); `std::find` — linear search;
+        `std::binary_search` — logarithmic, but the range **must already be
+        sorted**; `std::accumulate` — fold (sum, etc.).
+      - **Lambda:** `[capture](params) -> ret { body }` — capture by value `[=]`
+        or by reference `[&]`:
+
+      ```cpp
+      std::sort(v.begin(), v.end(),
+                [](int a, int b) { return a > b; });   // descending
+      ```
+
+      **Use case:** sort a `std::vector<Employee>` by salary with a one-line
+      lambda comparator instead of writing a named function.
+  - type: markdown
+    content: |
+      ### Const correctness
+
+      - **const member function** — `double area() const` — promises not to
+        modify the object; required to call methods on const objects/references.
+      - **const reference parameters** — read without copying:
+        `void print(const std::string& s);`
+      - **`mutable` member** — may be modified even in a const method (caches,
+        counters, lock guards).
+      - Pointer constness: `const int* p` (pointee is const) vs
+        `int* const p` (pointer itself is const).
+
+      **Use case:** mark every getter `const` and take parameters by `const&` —
+      the compiler then enforces your non-mutation promises everywhere.
+  - type: markdown
+    content: |
+      ### Move semantics & std::move
+
+      - `std::move(x)` is **just a cast to an rvalue reference** — it does *not*
+        move anything and does *not* copy anything; it only makes `x` *eligible*
+        for a move.
+      - The **move constructor** then steals the resource (takes the pointer,
+        nulls the source) instead of deep-copying; the source is left in a
+        valid-but-unspecified state (usually empty).
+      - **Why it matters:** returning / passing big objects no longer
+        deep-copies — a big performance win.
+      - Move-only types: `unique_ptr`, `std::thread`, `std::fstream`.
+
+      **Use case:** `return std::move(local)`-style transfers (usually implicit
+      via return value optimization) let a function hand a huge vector to its
+      caller without copying it.
+  - type: markdown
+    content: |
+      ### **Interview questions**
+
+      :::tip
+      **Interview question:** unique_ptr vs shared_ptr vs weak_ptr — when do you
+      use which? — unique_ptr: exclusive ownership, movable but not copyable —
+      the default choice. shared_ptr: shared ownership via a reference count —
+      copies keep the object alive until the last owner dies. weak_ptr: a
+      non-owning observer that `lock()`s — used to break reference cycles so
+      shared_ptr graphs can actually be freed.
+      :::
+
+      :::tip
+      **Interview question:** what does std::move actually do (and what does it
+      NOT do)? — It performs a cast to an rvalue reference
+      (`std::remove_reference_t<T>&&`); it does NOT move, copy, or delete
+      anything. It merely makes the object *eligible* for a move — the actual
+      resource transfer happens in the move constructor / move assignment that
+      the compiler then selects.
+      :::
+
+      - `shared_ptr` costs a control block (refcount) per object — prefer
+        `unique_ptr` unless ownership is genuinely shared.
+      - After a move, always treat the source as empty — do not rely on its
+        contents.
+  - type: code
+    task: "Implement solve(v), which returns the sorted UNIQUE elements of v using STL (in C++: std::sort + std::unique, or std::set). The parameter is passed by value, so you may modify it."
+    languages: [cpp, python]
+    signature:
+      cpp: "std::vector<int> solve(std::vector<int> v)"
+      python: "def solve(v: list[int]) -> list[int]"
+    starter:
+      cpp: |
+        #include <vector>
+        #include <algorithm>
+
+        std::vector<int> solve(std::vector<int> v) {
+            return {};
+        }
+      python: |
+        def solve(v: list[int]) -> list[int]:
+            return []
+    tests:
+      public:
+        - name: "with-duplicates"
+          args: [[3, 1, 2, 1, 3]]
+          expected: [1, 2, 3]
+        - name: "single"
+          args: [[5]]
+          expected: [5]
+      private:
+        - name: "empty"
+          args: [[]]
+          expected: []
+        - name: "all-same"
+          args: [[2, 2, 2]]
+          expected: [2]
+        - name: "negatives"
+          args: [[-1, 5, -1, 0]]
+          expected: [-1, 0, 5]
+    hints:
+      - "Sort the vector, then remove consecutive duplicates — std::unique moves them to the end, then v.erase(std::unique(v.begin(), v.end()), v.end()) removes them (the erase-remove idiom)."
+      - "Alternative: insert everything into a std::set, which keeps unique elements sorted, then copy it into the result vector."
+    solution: |
+      def solve(v: list[int]) -> list[int]:
+          return sorted(set(v))
+  - type: mcq
+    prompt: "Which smart pointer has EXCLUSIVE ownership and cannot be copied (only moved)?"
+    options: ["shared_ptr", "unique_ptr", "weak_ptr", "vector"]
+    answer: 1
+    explanation: "unique_ptr deletes its copy constructor — ownership is exclusive and transfers via std::move. shared_ptr copies increment a refcount, weak_ptr is a non-owning observer, and vector is a container, not a smart pointer."
+  - type: mcq
+    prompt: "Why does weak_ptr exist?"
+    options: ["It owns objects more efficiently than shared_ptr", "To observe a shared_ptr-managed object without owning it — breaking reference cycles so shared_ptr graphs can actually be freed", "To make unique_ptr copyable", "It is a raw pointer with bounds checking"]
+    answer: 1
+    explanation: "weak_ptr does not own: it cannot keep the object alive. lock() returns a shared_ptr if the object is still alive. Its main purpose is breaking cycles — two shared_ptrs pointing at each other would otherwise leak forever."
+  - type: mscq
+    prompt: "Which statements about RAII are true?"
+    options: ["The resource is acquired in the constructor and released in the destructor", "RAII makes code exception-safe because destructors run during stack unwinding", "RAII requires wrapping every resource use in try/catch", "std::lock_guard is an RAII example — it unlocks the mutex even if the scope throws"]
+    answer: [0, 1, 3]
+    explanation: "Acquire-in-ctor / release-in-dtor is the definition of RAII (true). Stack unwinding runs destructors, so resources are released on exceptions (true). lock_guard is the canonical example (true). RAII exists precisely to REMOVE the need for try/catch cleanup — the third option is false."
+  - type: mcq
+    prompt: "What does std::move(x) actually do?"
+    options: ["It immediately transfers x's resources into a temporary", "It casts x to an rvalue reference so a move constructor/assignment can steal its resources — the cast itself moves nothing", "It deep-copies x", "It deletes x and nulls the pointer"]
+    answer: 1
+    explanation: "std::move is a cast (to T&&), nothing more. The resource transfer happens in the move constructor/assignment the compiler then picks. It never copies and never deletes."
+  - type: mscq
+    prompt: "Which statements about smart-pointer gotchas are true?"
+    options: ["Two shared_ptrs pointing at each other form a reference cycle that never frees — break it with a weak_ptr on one side", "std::make_shared<T>(...) performs ONE allocation (object + control block), while new T + shared_ptr performs two", "shared_ptr's control block (refcount) is thread-safe — copies/destruction across threads are safe; the pointed-to object itself is NOT automatically protected", "A shared_ptr and a raw pointer to the same object have identical ownership semantics"]
+    answer: [0, 1, 2]
+    explanation: "A shared_ptr cycle leaks forever — weak_ptr breaks it (true). make_shared does one allocation for the object and control block together (true). The refcount is atomic, so shared_ptr copies/destruction are thread-safe, but the pointee needs its own mutex/atomic (true). A raw pointer owns nothing — the last option is false."
+  - type: mcq
+    prompt: "A function guarantees: 'if an exception is thrown, the object is left in a valid but unspecified state and no resources leak'. Which exception-safety level is that?"
+    options: ["No-throw guarantee", "Strong guarantee (commit-or-rollback)", "Basic guarantee", "No guarantee"]
+    answer: 2
+    explanation: "Basic guarantee: invariants hold and nothing leaks, but the object's state may have changed. Strong: the operation fully succeeds or the object is unchanged (commit-or-rollback). No-throw: the function never throws. No guarantee: anything can happen, including a half-constructed object."
+---

@@ -249,3 +249,8 @@ blocks:
     options: ["A logical address is split into a page number and an offset", "A page table is shared by all processes", "Only internal fragmentation occurs (on the last page)", "Segmentation and paging both eliminate external fragmentation"]
     answer: [0, 2]
     explanation: "Logical address = page number + offset; the page table is per-process; only the last page of a program is partially used (internal fragmentation) while frames are all full-sized (no external fragmentation). Segmentation can still suffer external fragmentation."
+  - type: mcq
+    prompt: "In a multilevel-paging system, a memory reference causes a TLB miss. What happens next?"
+    options: ["A page fault is raised immediately and the page is swapped in from disk", "The hardware walks the (multi-level) page table to fetch the translation, caches it in the TLB, and only faults if the PTE marks the page not resident", "The MMU flushes the entire TLB and retries the reference", "The process is preempted and moved to the waiting queue"]
+    answer: 1
+    explanation: "A TLB miss means the page→frame translation is not cached. The hardware walks the page table (with multilevel paging that is 2–4 extra memory accesses through the page directories), finds the frame, caches the entry, and retries — one slow reference, nanoseconds, not a disk access. A page fault is a different, far costlier event: only when the PTE's present bit is 0 does the OS swap the page in from disk (milliseconds). TLB flushes happen on context switches, not on individual misses."

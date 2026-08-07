@@ -1,0 +1,171 @@
+---
+id: debugging-and-real-world-networking
+title: "Debugging & Real-World Networking"
+difficulty: easy
+order: 7
+tags: [troubleshooting, tcpdump, traceroute]
+blocks:
+  - type: markdown
+    content: |
+      Debugging is the interview topic that proves you understand layers: every tool
+      targets a specific layer, and reading its output tells you where the stack breaks.
+
+      ## ping — ICMP echo (L3 reachability)
+
+      - Sends an **ICMP echo request**; a reply proves the host is **reachable at the
+        network layer** and routers along the path forward ICMP.
+      - What it does **NOT** prove: that the app works. A server can answer ping while
+        port 443 is closed (firewall) or the web app is crashing (L7).
+      - Caveat: many firewalls drop ICMP, so `ping fails` ≠ host down — it only means
+        ICMP is unanswered.
+
+      ## traceroute — mapping the path with TTL
+
+      - **Mechanism:** send probes with **TTL = 1, 2, 3, …**. Every router decrements
+        the TTL; the router that decrements it to **0 discards the packet** and replies
+        **ICMP time-exceeded**, revealing its own IP.
+      - The TTL=1 probe dies at the first router, TTL=2 at the second — so each hop
+        identifies itself in order.
+      - Platforms: Windows `tracert` uses **ICMP echo** probes; Linux/macOS
+        `traceroute` uses **UDP** by default (the destination replies ICMP
+        port-unreachable when the final probe arrives). `* * *` = a router that does
+        not reply (common; firewalls).
+      - TTL also explains the default TTL of 64/128 on packets: it bounds routing loops.
+
+      **Use case:** `ping` answers "is it reachable?"; `traceroute` answers "via which
+      path, and where does the path break?"
+  - type: markdown
+    content: |
+      ## dig / nslookup — DNS at the record level
+
+      - `dig example.com` → the A record; `dig example.com AAAA` → IPv6; `dig -t MX
+        gmail.com` → mail servers; `dig -t TXT example.com` → SPF/DKIM text records.
+      - `dig +trace example.com` replays the full chain: root → .com TLD → authoritative
+        server (the exact walk from the DNS lesson).
+      - `nslookup` is the older, simpler tool; `dig` is the debugging-grade one.
+
+      ## curl -v — see the actual conversation
+
+      `curl -v https://api.example.com/users` prints, with `*` (events), `>` (request
+      lines) and `<` (response lines):
+
+      - `* Trying 93.184.216.34:443...` → TCP connect (L4).
+      - `* Connected to ...` → the 3-way handshake completed.
+      - `* TLS handshake completed` → TLS negotiated.
+      - `> GET /users HTTP/1.1` and `< HTTP/1.1 200 OK` → the HTTP exchange (L7).
+
+      Stops after `Trying...` → packets dropped (firewall/blackhole). Says `Connection
+      refused` → host is up but the port is closed. Fails on the certificate → TLS-layer
+      problem. The verbose output *is* a layer-by-layer progress report.
+
+      ## tcpdump / Wireshark — read the flags
+
+      `tcpdump -i eth0 host 93.184.216.34 and tcp port 443` shows segments with flags:
+
+      - **SYN → SYN-ACK → ACK** = successful 3-way handshake.
+      - **FIN / ACK, FIN / ACK** = graceful teardown (4-way).
+      - **RST** = abrupt reset — e.g. nothing listening (connection refused).
+      - Repeated **SYN** with no SYN-ACK = packets dropped or a SYN flood.
+
+      Wireshark is tcpdump with a GUI; filter `tcp.flags.syn==1` to isolate handshakes.
+  - type: markdown
+    content: |
+      ## The layered troubleshooting ladder — ping works but HTTPS fails?
+
+      Work the layers bottom-up; each tool answers exactly one layer:
+
+      | Step | Layer | Tool / check |
+      |------|-------|--------------|
+      | L1 | Physical | cable/WiFi link, link lights |
+      | L2 | Data link | switch ports, VLAN, MAC |
+      | L3 | Network | `ping` (ICMP), `ip addr`, routing |
+      | L4 | Transport | `nc -vz host 443`, `curl -v` (SYN-ACK?) |
+      | L5–6 | Session/Presentation (TLS) | certificate valid? handshake completes? |
+      | L7 | Application | DNS (`dig`), HTTP status, app logs |
+
+      **Walkthrough: ping works, HTTPS fails.**
+
+      1. ping OK → L3 and below are fine (ICMP reached the host).
+      2. `dig example.com` → does DNS resolve? (**NXDOMAIN** = no record; **timeout** =
+         resolver problem).
+      3. `curl -v https://example.com` → does TCP connect? (`Connection refused` = port
+         closed; hang after `Trying` = firewall dropping).
+      4. TLS: expired or invalid certificate? Then HTTP: 4xx/5xx status?
+
+      The failure is almost never the physical layer when ping works — it is DNS, a
+      closed port, TLS, or the app.
+
+      ## Common failures — read the error, not the vibes
+
+      - **DNS NXDOMAIN** — the name does not exist (no record). Check spelling, the
+        record, or the zone. Fast failure, definitive answer.
+      - **DNS timeout** — no server answered. Different problem: resolver unreachable,
+        firewall, or the DNS server is down.
+      - **Connection refused** — the TCP handshake *reached* the host but nothing
+        listens on that port (the host sent **RST**). The port is closed or the service
+        is down.
+      - **Timeout** — no response at all. Packets are being **dropped** (firewall,
+        blackhole, host down, partition). The host may be up but unreachable.
+
+      :::tip
+      **Interview question:** How does traceroute use TTL to map a path? — Traceroute
+      sends probes with TTL 1, 2, 3, … . Each router decrements the TTL; the router that
+      reaches 0 discards the packet and replies ICMP time-exceeded with its own address.
+      So TTL=1 names the first router, TTL=2 the second, and so on — each hop
+      identifies itself in order. Windows `tracert` uses ICMP echo probes; Linux
+      `traceroute` uses UDP by default.
+      :::
+
+      :::tip
+      **Interview question:** ping works but the browser fails — walk me through the
+      layers. — Ping proving reachability only clears L3 and below; the browser also
+      needs DNS (L7), a TCP connection (L4), a TLS handshake (L5/6) and an HTTP response
+      (L7). I would check, in order: `dig` for the A record; `nc -vz host 443` for the
+      port; `curl -v` to watch TCP/TLS/HTTP progress; then the app logs. The insight
+      they want: each tool targets one layer, and the failure is where the stack stops
+      progressing.
+      :::
+  - type: flowchart
+    title: "Traceroute — TTL progression maps the path"
+    nodes: ["Host sends probe with TTL=1", "Router 1: TTL 1→0 — drops packet, replies ICMP time-exceeded", "Host learns hop 1 = Router 1's IP", "Host sends probe with TTL=2", "Router 1: TTL 2→1 — forwards", "Router 2: TTL 1→0 — replies ICMP time-exceeded", "Host learns hop 2 = Router 2's IP", "Host sends probe with TTL=3", "Router 3 (destination): replies (echo reply / port unreachable)", "Host learns hop 3 — full path mapped"]
+    edges:
+      - {from: 0, to: 1, label: "TTL expires"}
+      - {from: 1, to: 2, label: "time-exceeded"}
+      - {from: 2, to: 3, label: "TTL = TTL+1"}
+      - {from: 3, to: 4, label: "decrement"}
+      - {from: 4, to: 5, label: "expires"}
+      - {from: 5, to: 6, label: "time-exceeded"}
+      - {from: 6, to: 7, label: "TTL = TTL+1"}
+      - {from: 7, to: 8, label: "decrement"}
+      - {from: 8, to: 9, label: "final reply"}
+  - type: flowchart
+    title: "Layered troubleshooting ladder — L1 up to L7"
+    nodes: ["L1 Physical — link up? cable/WiFi", "L2 Data link — MAC, switch, VLAN", "L3 Network — ping (ICMP), IP config", "L4 Transport — port open? nc / curl -v", "L5–6 TLS — certificate, handshake", "L7 Application — DNS, HTTP status, logs", "Root cause found — fix and re-test"]
+    edges:
+      - {from: 0, to: 1, label: "link ok"}
+      - {from: 1, to: 2, label: "frames ok"}
+      - {from: 2, to: 3, label: "ping ok"}
+      - {from: 3, to: 4, label: "SYN-ACK"}
+      - {from: 4, to: 5, label: "handshake ok"}
+      - {from: 5, to: 6, label: "diagnose"}
+  - type: mcq
+    prompt: "curl fails with 'Connection refused' for https://example.com. What does that mean?"
+    options: ["The host is reachable and answered, but nothing is listening on port 443 — the server sent RST", "The host is unreachable — packets are being dropped", "DNS could not resolve example.com", "The TLS certificate expired"]
+    answer: 0
+    explanation: "Connection refused = the TCP handshake reached the host but the port is closed (RST in reply to the SYN). Unreachable hosts or dropped packets present as a timeout; NXDOMAIN is a DNS failure; a certificate problem happens only after the connection is established."
+  - type: mcq
+    prompt: "ping to a server succeeds, but HTTPS requests time out. Which layer is the most productive place to look next?"
+    options: ["Transport (L4) — is port 443 open? (nc -vz / curl -v)", "Physical (L1) — the cable", "Data link (L2) — the MAC address", "Application (L7) — the HTTP verb used"]
+    answer: 0
+    explanation: "Ping succeeding means L1–L3 are fine — ICMP reached the host. HTTPS needs a TCP connection to port 443, so the next check is transport: does the SYN get a SYN-ACK? nc -vz host 443 or curl -v answers that in one command."
+  - type: mcq
+    prompt: "How does traceroute discover the routers along a path?"
+    options: ["It sends probes with increasing TTL; the router that decrements TTL to 0 discards the packet and replies ICMP time-exceeded, revealing its address", "It queries each router's routing table", "It follows ARP replies hop by hop", "It reads the destination's DNS records"]
+    answer: 0
+    explanation: "Each probe's TTL is incremented by 1, so probe N dies at the N-th router, which replies time-exceeded with its own IP — the path is mapped hop by hop. ARP works within one subnet only, and DNS records map names to IPs, not paths."
+  - type: mscq
+    prompt: "In a tcpdump capture, which readings are correct?"
+    options: ["SYN → SYN-ACK → ACK = a completed 3-way handshake", "FIN then ACK in both directions = graceful teardown", "A single RST is how TCP normally closes a session gracefully", "Repeated SYNs with no SYN-ACK = packets dropped or a SYN flood"]
+    answer: [0, 1, 3]
+    explanation: "A completed handshake is SYN → SYN-ACK → ACK; graceful teardown is the FIN/ACK exchange in each direction; SYNs that never get SYN-ACKs mean the path or the listener is broken. RST is an abrupt reset (used when nothing listens), not the graceful close — so option 2 is false."
+---
