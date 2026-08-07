@@ -199,6 +199,21 @@ blocks:
         - name: "belady-short"
           args: [[1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5], 3]
           expected: 9
+        - name: "belady anomaly with 4 frames"
+          args: [[1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5], 4]
+          expected: 10
+        - name: "frames exceed reference"
+          args: [[1, 2, 3], 10]
+          expected: 3
+        - name: "empty reference"
+          args: [[], 3]
+          expected: 0
+        - name: "consecutive repeats"
+          args: [[1, 1, 1, 2, 2], 1]
+          expected: 2
+        - name: "single page many frames"
+          args: [[5, 5, 5], 2]
+          expected: 1
     hints:
       - "Count a fault every time the referenced page is not currently resident."
       - "FIFO evicts the page that has been resident the longest — a queue works: append on load, pop the front on eviction."
