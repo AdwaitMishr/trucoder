@@ -12,10 +12,13 @@ import { preflightSandbox } from "./sandbox";
 import { authRouter } from "./routes/auth";
 import { coursesRouter } from "./routes/courses";
 import { lessonsRouter } from "./routes/lessons";
+import { deployRouter } from "./routes/deploy";
 
 const app = express();
 app.use(helmet({ contentSecurityPolicy: false })); // Monaco injects styles/workers
-app.use(express.json({ limit: "1mb" }));
+// verify hook captures the raw request bytes — the deploy webhook signs the
+// exact payload (see routes/deploy.ts), so re-serialization is not an option
+app.use(express.json({ limit: "1mb", verify: (req, _res, buf) => { (req as express.Request & { rawBody?: Buffer }).rawBody = buf; } }));
 app.use(cookieParser());
 app.use(morgan("short"));
 
@@ -32,6 +35,10 @@ watchCourses();
 preflightSandbox();
 
 app.use("/api/auth", authRouter);
+
+// GitHub push webhook → auto-deploy. Public but HMAC-gated; must be mounted
+// BEFORE the /api session gate (it authenticates via signature, not cookie).
+app.use(deployRouter);
 
 // Public health/uptime endpoint.
 app.get("/api/health", (_req, res) => {
