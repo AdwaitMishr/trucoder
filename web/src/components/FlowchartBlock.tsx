@@ -1,5 +1,11 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { PiArrowSquareOut, PiX } from "react-icons/pi";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  PiArrowSquareOut,
+  PiFrameCorners,
+  PiMinus,
+  PiPlus,
+  PiX,
+} from "react-icons/pi";
 import type { FlowchartBlock } from "../types";
 
 const NODE_W = 150;
@@ -12,11 +18,13 @@ const GUTTER = 48;
 // mono 12px ≈ 7.2px/char: a 150px node fits ~20 chars. Longer labels get a
 // smaller font instead of spilling over the node box.
 const MAX_NODE_CHARS = 20;
+const MIN_SCALE = 0.2;
+const MAX_SCALE = 4;
 
 /** Renders a simple DAG flowchart as inline SVG (no external dependencies).
  *  Layers come from longest-path layering; nodes flow left to right.
- *  An expand button opens a fullscreen overlay with the diagram at its
- *  natural size (scrollable when larger than the viewport). */
+ *  An expand button opens a fullscreen canvas viewer: pan by drag, zoom by
+ *  wheel / pinch / buttons / double-click, fit on open. */
 export default function Flowchart({ block }: { block: FlowchartBlock }) {
   const markerId = `tcarrow-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const { nodes, edges } = block;
@@ -52,14 +60,14 @@ export default function Flowchart({ block }: { block: FlowchartBlock }) {
     });
   }
 
-  const width = (maxLayer + 1) * (NODE_W + GX) - GX;
-  const height = maxRows * (NODE_H + GY) - GY;
+  const svgW = (maxLayer + 1) * (NODE_W + GX) - GX + 2 * GUTTER;
+  const svgH = maxRows * (NODE_H + GY) - GY + 2 * GUTTER;
 
   const svg = (
     <svg
-      viewBox={`${-GUTTER} ${-GUTTER} ${width + 2 * GUTTER} ${height + 2 * GUTTER}`}
-      width={width + 2 * GUTTER}
-      height={height + 2 * GUTTER}
+      viewBox={`${-GUTTER} ${-GUTTER} ${svgW} ${svgH}`}
+      width={svgW}
+      height={svgH}
       role="img"
       aria-label={block.title ?? "flowchart"}
       className="flowchart-svg"
@@ -132,20 +140,113 @@ export default function Flowchart({ block }: { block: FlowchartBlock }) {
   );
 
   const [open, setOpen] = useState(false);
+  const [view, setView] = useState({ x: 0, y: 0, s: 1 });
+  const canvasRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ dist: number } | null>(null);
+  const drag = useRef<{ x: number; y: number } | null>(null);
 
+  const fit = useCallback(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const vw = el.clientWidth;
+    const vh = el.clientHeight;
+    // 24px breathing room around the diagram; never upscale beyond natural
+    // size — 12px labels stay crisp
+    const s = Math.min((vw - 24) / svgW, (vh - 24) / svgH, 1);
+    setView({ s, x: (vw - svgW * s) / 2, y: (vh - svgH * s) / 2 });
+  }, [svgW, svgH]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    fit();
+    closeRef.current?.focus();
+  }, [open, fit]);
+
+  const zoomAt = useCallback((cx: number, cy: number, factor: number) => {
+    setView((v) => {
+      const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, v.s * factor));
+      const wx = (cx - v.x) / v.s;
+      const wy = (cy - v.y) / v.s;
+      return { s, x: cx - wx * s, y: cy - wy * s };
+    });
+  }, []);
+
+  // wheel zoom — native listener so preventDefault works (React wheel is passive)
+  useEffect(() => {
+    if (!open) return;
+    const el = canvasRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const r = el.getBoundingClientRect();
+      zoomAt(e.clientX - r.left, e.clientY - r.top, e.deltaY < 0 ? 1.1 : 1 / 1.1);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [open, zoomAt]);
+
+  // keyboard: Escape closes, +/-/0 zoom
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
+      else if (e.key === "+" || e.key === "=") zoomAt(window.innerWidth / 2, window.innerHeight / 2, 1.25);
+      else if (e.key === "-") zoomAt(window.innerWidth / 2, window.innerHeight / 2, 0.8);
+      else if (e.key === "0") fit();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, zoomAt, fit]);
 
-  useEffect(() => {
-    if (open) closeRef.current?.focus();
-  }, [open]);
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // ignore drags that start on controls/close — they keep their own clicks
+    if ((e.target as HTMLElement).closest(".flow-controls, .flow-close")) return;
+    canvasRef.current?.setPointerCapture(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y) };
+      drag.current = null;
+    } else {
+      drag.current = { x: e.clientX, y: e.clientY };
+    }
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const p = pointers.current.get(e.pointerId);
+    if (!p) return;
+    const dx = e.clientX - p.x;
+    const dy = e.clientY - p.y;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const el = canvasRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (pointers.current.size === 2 && pinch.current) {
+      const [a, b] = [...pointers.current.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const midX = (a.x + b.x) / 2 - r.left;
+      const midY = (a.y + b.y) / 2 - r.top;
+      zoomAt(midX, midY, dist / pinch.current.dist);
+      pinch.current.dist = dist;
+    } else if (drag.current && pointers.current.size === 1) {
+      setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }));
+    }
+  };
+
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) pinch.current = null;
+    if (pointers.current.size === 0) drag.current = null;
+  };
+
+  const onDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    zoomAt(e.clientX - r.left, e.clientY - r.top, 2);
+  };
 
   return (
     <figure className="flowchart">
@@ -163,28 +264,54 @@ export default function Flowchart({ block }: { block: FlowchartBlock }) {
       <div className="flowchart-scroll">{svg}</div>
       {open && (
         <div
-          className="flowchart-overlay"
+          className="flow-canvas"
+          ref={canvasRef}
           role="dialog"
           aria-modal="true"
           aria-label={block.title ?? "flowchart"}
-          onClick={() => setOpen(false)}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onDoubleClick={onDoubleClick}
         >
-          <div className="flowchart-overlay-box" onClick={(e) => e.stopPropagation()}>
-            <div className="flowchart-overlay-head">
-              <span className="flowchart-overlay-title">
-                {block.title ?? "flowchart"}
-              </span>
-              <button
-                className="flow-expand"
-                onClick={() => setOpen(false)}
-                aria-label="close fullscreen"
-                ref={closeRef}
-              >
-                <PiX size={16} />
-              </button>
-            </div>
-            <div className="flowchart-overlay-body">{svg}</div>
+          <div
+            className="flow-stage"
+            style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.s})` }}
+          >
+            {svg}
           </div>
+          <div className="flow-controls">
+            <button
+              className="flow-zoom-btn"
+              onClick={() => zoomAt(window.innerWidth / 2, window.innerHeight / 2, 0.8)}
+              aria-label="zoom out"
+              title="zoom out"
+            >
+              <PiMinus size={15} />
+            </button>
+            <span className="flow-scale-label">{Math.round(view.s * 100)}%</span>
+            <button
+              className="flow-zoom-btn"
+              onClick={() => zoomAt(window.innerWidth / 2, window.innerHeight / 2, 1.25)}
+              aria-label="zoom in"
+              title="zoom in"
+            >
+              <PiPlus size={15} />
+            </button>
+            <span className="flow-ctrl-divider" />
+            <button className="flow-zoom-btn" onClick={fit} aria-label="fit to screen" title="fit to screen">
+              <PiFrameCorners size={15} />
+            </button>
+          </div>
+          <button
+            className="flow-close"
+            ref={closeRef}
+            onClick={() => setOpen(false)}
+            aria-label="close fullscreen"
+          >
+            <PiX size={18} />
+          </button>
         </div>
       )}
     </figure>
