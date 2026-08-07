@@ -1,0 +1,133 @@
+---
+id: core-concepts
+title: "Core Concepts: DBMS, ACID, Architecture"
+difficulty: beginner
+order: 1
+tags: [acid, architecture, schema]
+blocks:
+  - type: markdown
+    content: |
+      A **database management system (DBMS)** is software that stores, manages,
+      and queries data with concurrency control, crash recovery, and integrity
+      guarantees. A file system just stores bytes — everything else is your
+      problem.
+
+      ## DBMS vs file system
+
+      | Concern | File system | DBMS |
+      |---|---|---|
+      | Concurrency | No locking semantics — two writers corrupt data | Transactions + locking; safe concurrent access |
+      | Crash recovery | No guarantees; half-written files | WAL + redo/undo; recovers to a consistent state |
+      | Queries | Manual scan/parse of files | Declarative query language (SQL) with a query optimizer |
+      | Integrity | None — anything can be written | Constraints (PK, FK, CHECK, NOT NULL) enforced by the server |
+      | Redundancy | Same data copied in many files | Centralized store with normalization; redundancy controlled |
+
+      **Use case:** e-commerce checkout — hundreds of concurrent users read and
+      update the same inventory rows. A file system would corrupt or lose data;
+      a DBMS serializes the updates and never loses a committed order.
+  - type: markdown
+    content: |
+      ## ACID — the four guarantees of a transaction
+
+      A **transaction** is a unit of work made of multiple statements. ACID
+      describes what happens to that unit under concurrency and crashes:
+
+      ```sql
+      BEGIN;
+      UPDATE accounts SET balance = balance - 1000 WHERE id = 1;
+      UPDATE accounts SET balance = balance + 1000 WHERE id = 2;
+      COMMIT;
+      ```
+
+      - **Atomicity** — all-or-nothing. If the second UPDATE fails, the first
+        is rolled back too: money never vanishes from account 1 without
+        appearing in account 2. Rollback is the mechanism.
+      - **Consistency** — a transaction moves the DB from one valid state to
+        another; constraints never break. If `CHECK (balance >= 0)` exists, a
+        transfer of 5000 from an account holding 2000 is rejected outright.
+      - **Isolation** — concurrent transactions behave as if run one after the
+        other. Two simultaneous transfers from the same account cannot both
+        read the old balance and both commit — each sees a consistent snapshot.
+      - **Durability** — once COMMIT returns, the change survives a crash. The
+        DB writes a **write-ahead log (WAL)** record to disk *before* commit
+        returns, so a power loss cannot undo the committed update.
+
+      **Use case:** a bank transfer is the canonical ACID example — the two
+      UPDATEs must be atomic, the balance constraint must hold, concurrent
+      transfers must not interleave badly, and the committed transfer must
+      survive a crash.
+  - type: markdown
+    content: |
+      ## 1/2/3-tier architecture
+
+      - **1-tier:** the application and the DB live on the same machine
+        (SQLite inside a desktop app).
+      - **2-tier:** the client program talks directly to the DB server over
+        the network (classic client–server; business logic lives in the
+        client).
+      - **3-tier:** a middle **application server** sits between client and DB
+        server. The client only renders UI, the app server holds business
+        logic, the DB server only stores data. This is the standard web stack
+        (browser → API server → PostgreSQL) — each tier scales independently.
+
+      ## Schema levels (three-schema architecture)
+
+      - **Physical (internal) schema** — *how* data is stored: files, pages,
+        indexes, compression. Users never see this.
+      - **Logical (conceptual) schema** — *what* data exists: tables, columns,
+        keys, constraints. This is the DBA's view and stays stable regardless
+        of storage changes.
+      - **View (external) schema** — *what a user sees*: a subset or
+        restructuring of the logical schema (e.g. a `sales_report` view that
+        hides salary columns).
+
+      **Use case:** HR gets a view with only employee names and departments,
+      while the logical schema still holds salaries and the physical schema
+      decides whether those rows live in a heap or an index.
+  - type: flowchart
+    title: "3-tier architecture"
+    nodes: ["Client (browser/UI)", "Application server", "Database server"]
+    edges:
+      - {from: 0, to: 1, label: "HTTP requests"}
+      - {from: 1, to: 2, label: "SQL queries"}
+  - type: markdown
+    content: |
+      ## Interview questions
+
+      :::tip
+      **Interview question:** Explain ACID with an example — A bank transfer
+      (debit account 1, credit account 2) is **atomic** (both updates commit
+      or both roll back), **consistent** (the `balance >= 0` constraint is
+      never violated), **isolated** (two concurrent transfers behave as if
+      serial), and **durable** (after COMMIT a power loss cannot undo it — the
+      WAL record is already on disk).
+      :::
+
+      :::tip
+      **Interview question:** What is the difference between a view and a
+      table? — A table stores data physically; a view is a stored query that
+      presents a subset or derivation of tables and is computed on access.
+      Views hold no data of their own — they enforce access control (hide
+      columns), simplify complex joins, and are read-only unless updatable.
+      :::
+  - type: mcq
+    prompt: "A transfer debits account 1 and credits account 2; the second UPDATE fails and the first is undone. Which ACID property is at work?"
+    options: ["Atomicity", "Consistency", "Isolation", "Durability"]
+    answer: 0
+    explanation: "Atomicity = all-or-nothing: a failed statement rolls back the whole transaction, so no partial transfer is ever visible."
+  - type: mcq
+    prompt: "Browser → application server → database server is which architecture?"
+    options: ["1-tier", "2-tier", "3-tier", "Peer-to-peer"]
+    answer: 2
+    explanation: "Three tiers: client (UI) → app server (business logic) → DB server (storage). This is the standard web stack."
+  - type: mcq
+    prompt: "Which schema level describes how rows are physically stored on disk (files, indexes, pages)?"
+    options: ["View schema", "Logical schema", "Physical schema", "Conceptual schema"]
+    answer: 2
+    explanation: "The physical/internal schema covers storage structures. Logical = tables and relations; view = what a user sees."
+  - type: mscq
+    prompt: "Which of these are advantages of a DBMS over a plain file system?"
+    options: ["Concurrency control with locking", "Crash recovery via a write-ahead log", "Declarative query language with an optimizer", "Guaranteed zero data redundancy"]
+    answer: [0, 1, 2]
+    explanation: "A DBMS provides concurrency control, crash recovery, and SQL. Redundancy is reduced by normalization but never guaranteed to be zero."
+---

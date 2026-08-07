@@ -1,0 +1,184 @@
+---
+id: classes-objects
+title: "Classes & Objects"
+difficulty: beginner
+order: 1
+tags: [classes, constructors, this, static]
+blocks:
+  - type: markdown
+    content: |
+      ### Class vs Object
+
+      - **Class** — a *blueprint*: it declares what data (members) and what
+        behavior (methods) an object will have. Defining a class allocates no
+        memory.
+      - **Object** — a concrete *instance* of a class, created at runtime; it
+        occupies memory and holds its own copy of the data members.
+      - One class → many objects: `Circle c1(1.0), c2(2.0);` — same blueprint,
+        independent state.
+
+      **Access specifiers** control who can see what:
+
+      - `public` — accessible from anywhere.
+      - `private` — only the class's own member functions (and friends).
+      - `protected` — private outside, but accessible in derived classes.
+
+      **Use case:** `BankAccount` is the blueprint (balance, account id,
+      `withdraw()`/`deposit()`); every customer's account is an object with
+      its own balance.
+  - type: markdown
+    content: |
+      ### Constructors & destructors
+
+      - **Default ctor** — no arguments; auto-generated *only if you define no
+        constructor at all*.
+      - **Parameterized ctor** — takes arguments to initialize the object:
+        `BankAccount acc("1234", 1000);`
+      - **Copy ctor** — `BankAccount b2 = b1;` builds a *new* object as a copy
+        of an existing one: `BankAccount(const BankAccount& other);`
+      - **Destructor** — `~BankAccount()` runs automatically when the object
+        goes out of scope (or is `delete`d); used to release resources.
+
+      **Constructor initializer list** — members are initialized *before* the
+      body runs; the only way to initialize `const` and reference members:
+
+      ```cpp
+      BankAccount::BankAccount(std::string id, double bal)
+          : id_(std::move(id)), balance_(bal) {}
+      ```
+
+      **Use case:** a `GameEntity` constructor acquires a texture handle; its
+      destructor releases it — no matter how the object dies, the resource is
+      freed (RAII in one line).
+  - type: flowchart
+    title: "Object lifecycle"
+    nodes: ["Constructor call", "Object constructed: memory allocated, members initialized", "Member functions called on the object", "Scope ends / delete", "Destructor runs (cleanup)", "Memory reclaimed"]
+    edges:
+      - {from: 0, to: 1, label: "initializer list"}
+      - {from: 1, to: 2, label: "object usable"}
+      - {from: 2, to: 3, label: "lifetime ends"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+  - type: markdown
+    content: |
+      ### `this`, static members, const methods
+
+      - **`this`** — a hidden pointer to the object the member function was
+        called on.
+        - Resolves **name shadowing**: `this->radius = radius;`
+        - Enables **method chaining**: return `*this` from setters.
+      - **Static members** (`static int count;`) — belong to the *class*, not
+        to any object: **one shared copy** across all objects; defined once
+        outside the class.
+      - **Static member functions** — called as `ClassName::fn()` without an
+        object; they have **no `this`**, so they can only touch static members.
+      - **`const` member functions** (`double area() const`) — promise not to
+        modify the object; required to call methods on `const` objects.
+
+      **Use case:** a `static int liveObjects` counter incremented in the
+      constructor and decremented in the destructor; a `Config` class exposing
+      one shared settings object via a static member.
+
+      :::tip
+      **Interview question:** what is a static member function and can it access
+      instance members? — It belongs to the class, not to an instance: it has no
+      `this` pointer, so it can only access static members; to read an instance
+      member it must be passed an explicit object.
+      :::
+  - type: markdown
+    content: |
+      ### **Interview questions**
+
+      :::tip
+      **Interview question:** when is the copy constructor called? — When a
+      *new* object is initialized from an existing one: `B b2 = b1;`, passing
+      an object by value, or returning by value (copy elision aside). Plain
+      assignment `b2 = b1;` is **copy assignment**, not the copy constructor.
+      :::
+
+      - Copy ctor signature: `BankAccount(const BankAccount& other);`
+      - Pass by `const&` to avoid needless copies.
+      - If you write any constructor yourself, the default constructor is not
+        auto-generated.
+  - type: code
+    task: "Implement Circle::area() (π·r²) and solve(radius), which returns the area as a STRING rounded to 2 decimals (e.g. \"28.27\")."
+    languages: [cpp, python]
+    signature:
+      cpp: "std::string solve(double radius)"
+      python: "def solve(radius: float) -> str"
+    starter:
+      cpp: |
+        #include <string>
+        #include <cmath>
+        #include <sstream>
+        #include <iomanip>
+
+        class Circle {
+        public:
+            Circle(double r) : r_(r) {}
+            double area() const { return 0.0; }
+        private:
+            double r_;
+        };
+
+        std::string solve(double radius) {
+            return "";
+        }
+      python: |
+        import math
+
+        class Circle:
+            def __init__(self, r):
+                self.r = r
+
+            def area(self):
+                return 0.0
+
+        def solve(radius: float) -> str:
+            return ""
+    tests:
+      public:
+        - name: "basic"
+          args: [3]
+          expected: "28.27"
+        - name: "unit"
+          args: [1]
+          expected: "3.14"
+      private:
+        - name: "zero"
+          args: [0]
+          expected: "0.00"
+        - name: "radius-7"
+          args: [7]
+          expected: "153.94"
+    hints:
+      - "area() = π × r × r. For π in C++ use std::acos(-1.0) — M_PI is not guaranteed under -std=c++17."
+      - "Return a 2-decimal string: C++ std::ostringstream with std::fixed << std::setprecision(2); Python f\"{value:.2f}\"."
+    solution: |
+      import math
+
+      class Circle:
+          def __init__(self, r):
+              self.r = r
+
+          def area(self):
+              return math.pi * self.r * self.r
+
+      def solve(radius: float) -> str:
+          return f"{Circle(radius).area():.2f}"
+  - type: mcq
+    prompt: "Which statement about a static member function is true?"
+    options: ["It can access non-static members without an object", "It can be called on the class without creating an instance", "Every object gets its own copy of it", "It must be declared const"]
+    answer: 1
+    explanation: "A static member function belongs to the class: call it as ClassName::fn() with no object. It has no this pointer, so it cannot access non-static members without an explicit object, and there is exactly one copy of it for the whole class."
+  - type: mcq
+    prompt: "When is the copy constructor invoked?"
+    options: ["Passing an object by reference to a function", "Initializing a new object from an existing one (e.g. B b2 = b1;)", "Assigning an existing object (b2 = b1;)", "Returning a reference from a function"]
+    answer: 1
+    explanation: "The copy constructor builds a NEW object from an existing one: B b2 = b1;, pass-by-value, or return-by-value (elision aside). b2 = b1; on an existing object is copy assignment, and references involve no copying at all."
+  - type: mscq
+    prompt: "Which statements about constructors and destructors are true?"
+    options: ["If you define any constructor yourself, the default constructor is NOT auto-generated", "A destructor runs automatically when the object goes out of scope or is deleted", "The initializer list is the only way to initialize const member variables", "The copy constructor is never generated implicitly"]
+    answer: [0, 1, 2]
+    explanation: "Defining any constructor suppresses the implicit default constructor. Destructors run at scope exit / delete. const and reference members can only be set in the initializer list. The implicit copy constructor IS generated unless you declare your own copy ctor (or a move ctor) — so the last option is false."
+---

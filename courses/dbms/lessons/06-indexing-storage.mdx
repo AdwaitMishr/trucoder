@@ -1,0 +1,208 @@
+---
+id: indexing-storage
+title: "Indexing & Storage: B+ Trees, Clustered Indexes"
+difficulty: medium
+order: 6
+tags: [b-tree, index, query-optimization]
+blocks:
+  - type: markdown
+    content: |
+      ## B-tree vs B+ tree
+
+      A **B-tree** stores keys *and* data in every node. A **B+ tree** splits
+      the job: **internal nodes hold only keys** (routing), and **all data
+      rows live in leaf nodes**, which are **linked in key order**.
+
+      Why B+ trees win as DB indexes:
+
+      - **Higher fanout → fewer levels.** Internal nodes are pure keys, so a
+        page fits far more entries → a shallower tree → fewer disk reads.
+      - **Range scans.** Once the first match is found in the leaf chain, the
+        rest is a sequential walk — no backtracking up internal nodes.
+      - **Predictable access.** Every lookup goes root → leaf at the same
+        depth, so latency is uniform.
+
+      **Use case:** an e-commerce catalog of 10M products — an index on
+      `(category, price)` finds and streams a category's rows in price order
+      without visiting internal nodes twice.
+  - type: markdown
+    content: |
+      ## Worked fanout arithmetic
+
+      Say the DB uses **4 KiB pages** (4096 bytes) and each index entry
+      (key + child pointer) takes **16 bytes**.
+
+      Keys per node: `4096 / 16 = 256` → fanout **256**.
+
+      Rows reachable per level of the tree (each level multiplies by the
+      fanout):
+
+      - 1 level: `256¹ = 256` leaf entries
+      - 2 levels: `256² = 65,536` leaf entries
+      - 3 levels: `256³ = 16,777,216 ≈ 16.7 million` leaf entries
+
+      Working: `256² = 65,536`; then `256 × 65,536 = 16,777,216 ≈ 16.7M`.
+      That is why a 3–4 level B+ tree indexes tens of millions of rows in a
+      handful of disk reads.
+  - type: markdown
+    content: |
+      ## Clustered vs non-clustered index
+
+      - **Clustered** — the table's rows are physically stored in key order;
+        the index *is* the data. **One per table** (usually the primary key).
+        Fast range scans on the key; inserts/updates may reorder pages
+        (page splits).
+      - **Non-clustered** — a separate structure mapping each key value to a
+        **row pointer** in the heap. **Many per table**. A query hits the
+        index, then jumps to the row.
+      - **Covering index** — an index that contains *every* column a query
+        needs; the query is answered from the index alone (index-only scan),
+        skipping the table entirely.
+
+      **Use case:** `WHERE dept_id = 10` on a million-row Employee table — a
+      non-clustered index on `dept_id` turns a full scan into a few index
+      lookups; `SELECT dept_id, COUNT(*) ... GROUP BY dept_id` is answered
+      entirely by a covering index.
+  - type: flowchart
+    title: "B+ tree structure"
+    nodes: ["Root: internal node (keys only)", "Level-1 internal nodes (keys only)", "Leaf nodes: ALL data, sorted by key", "Leaves linked left → right"]
+    edges:
+      - {from: 0, to: 1, label: "fanout 256"}
+      - {from: 1, to: 2, label: "fanout 256"}
+      - {from: 2, to: 3, label: "range scans walk the chain"}
+  - type: flowchart
+    title: "Clustered vs non-clustered"
+    nodes: ["Index key chosen", "Clustered index", "Non-clustered index", "Rows physically stored in key order — one per table", "Separate key → row-pointer structure — many per table", "Fast range scans; slower inserts (page splits)", "Enables covering (index-only) scans"]
+    edges:
+      - {from: 0, to: 1, label: "data = index"}
+      - {from: 0, to: 2, label: "data separate"}
+      - {from: 1, to: 3, label: "decides layout"}
+      - {from: 2, to: 4, label: "points at rows"}
+      - {from: 3, to: 5, label: "trade-off"}
+      - {from: 4, to: 6, label: "trade-off"}
+  - type: markdown
+    content: |
+      ## Hashing in a DBMS
+
+      - **Static hashing** — a fixed number of buckets; collisions spill into
+        overflow chains, which grow and slow lookups.
+      - **Dynamic hashing** (extendible/linear) — buckets split as data
+        grows; the structure expands without full rebuilds.
+      - Equality lookups are **O(1) on average** — unbeatable for
+        `WHERE id = 42`.
+      - But hash order is not key order: **no range scans**, no prefix
+        searches. `WHERE salary BETWEEN 30000 AND 50000` needs a B+ tree.
+
+      Rule of thumb: **B+ tree for ranges/ordering, hash index for exact
+      match** — DBs use hashing inside joins (hash join) and partitions, and
+      B+ trees for almost every user-facing index.
+  - type: markdown
+    content: |
+      ## Query optimization basics
+
+      - **Index usage** — indexes speed up `WHERE`, joins, and `ORDER BY`
+        predicates; low-cardinality columns (e.g. a `gender` flag) rarely
+        justify one.
+      - **EXPLAIN** — shows the chosen plan (sequential scan vs index scan vs
+        index-only scan) and estimated row counts — the first tool for a slow
+        query.
+      - **Join order** — the optimizer reorders joins (small/most selective
+        first); you rarely need to force it.
+      - **Avoid `SELECT *`** — fetch only needed columns; this enables
+        covering (index-only) scans and shrinks transferred data.
+      - **Composite indexes + leftmost prefix** — an index on `(a, b, c)`
+        serves queries on `a`, `(a, b)`, and `(a, b, c)`, but NOT `(b)` or
+        `(c)` alone — the leading column must be used.
+
+      **Use case:** a slow dashboard query on 10M rows — `EXPLAIN` shows a
+      seq scan; adding a composite index on `(dept_id, salary)` and dropping
+      `SELECT *` turns it into an index-only scan.
+  - type: markdown
+    content: |
+      ## Sargability and covering indexes in practice
+
+      **Sargable** = the predicate can use the index. Wrapping the
+      indexed column in a function breaks that:
+
+      ```sql
+      -- NOT sargable: the function runs on every row → index unused
+      SELECT name FROM Employee WHERE YEAR(hire_date) = 2024;
+
+      -- Sargable: a range predicate on the raw column → index scan
+      SELECT name FROM Employee
+      WHERE hire_date >= '2024-01-01' AND hire_date < '2025-01-01';
+      ```
+
+      Same rule for any function on the column: `UPPER(name) = 'ALICE'`,
+      `salary + 1000 > 50000`, `LEFT(code, 2) = 'AB'` all force a scan.
+
+      **Covering index:** if an index holds every column a query needs,
+      the answer comes from the index alone — an **index-only scan**,
+      no table lookup. With `CREATE INDEX idx_dept_sal ON
+      Employee(dept_id, salary);`:
+
+      - `SELECT dept_id, salary FROM Employee WHERE dept_id = 10` —
+        covered.
+      - `SELECT dept_id, AVG(salary) ... GROUP BY dept_id` — covered.
+      - `SELECT salary FROM Employee WHERE salary > 50000` — NOT
+        covered: salary is not the leftmost column (leftmost prefix
+        rule).
+
+      **Use case:** the classic dashboard fix — check `EXPLAIN` for a
+      seq scan, add a covering composite index and narrow the `SELECT`
+      columns until the plan shows an index-only scan.
+  - type: markdown
+    content: |
+      ## Interview questions
+
+      :::tip
+      **Interview question:** Why B+ tree and not a B-tree or hash index for
+      range queries? — B-trees keep data in internal nodes too, so a range
+      scan must backtrack between levels; B+ trees put all data in linked
+      leaves, so a range is one sequential walk. A hash index is O(1) for
+      equality but unordered, so `BETWEEN`/`ORDER BY` cannot use it. B+
+      trees also have higher fanout (keys-only internals) → fewer levels →
+      fewer disk reads.
+      :::
+
+      :::tip
+      **Interview question:** Clustered vs non-clustered index? — A clustered
+      index determines the physical order of the table's rows and there is
+      one per table; a non-clustered index is a separate key → row-pointer
+      structure and there can be many. Clustered excels at key range scans;
+      non-clustered covers arbitrary columns, and a covering index (all
+      needed columns) lets a query skip the table entirely.
+      :::
+
+      :::tip
+      **Interview question:** What is the leftmost prefix rule? — A composite
+      index on `(a, b, c)` can only be used when the query predicates start
+      at the leading column: `a`, `a + b`, or `a + b + c`. A query filtering
+      on `b` alone cannot use the index because `b` is not a prefix of it.
+      :::
+  - type: mcq
+    prompt: "A DB uses 4 KiB pages and each index entry (key + child pointer) is 16 bytes. How many keys fit in one node, and how many rows are reachable at 3 levels?"
+    options: ["256 keys; ≈16.7M rows", "256 keys; 65,536 rows", "64 keys; ≈16.7M rows", "512 keys; ≈16.7M rows"]
+    answer: 0
+    explanation: "4096 / 16 = 256 keys per node (fanout 256). Three levels: 256³ = 256 × 65,536 = 16,777,216 ≈ 16.7 million rows."
+  - type: mcq
+    prompt: "Which is the main reason DB indexes use B+ trees rather than B-trees?"
+    options: ["Internal nodes hold only keys → higher fanout, fewer levels, and linked leaves make range scans sequential", "Data in internal nodes makes point lookups O(1)", "B+ trees sort rows in memory at write time", "Only B+ trees support equality lookups"]
+    answer: 0
+    explanation: "Keys-only internal nodes raise the fanout (shallower tree, fewer disk reads) and all data sits in linked leaves, so range scans never backtrack. B-trees store data in internal nodes, reducing fanout and complicating ranges."
+  - type: mcq
+    prompt: "Which statement about clustered indexes is true?"
+    options: ["A table can have several clustered indexes", "The clustered index determines the physical order of the table's rows", "A clustered index is a separate structure mapping keys to row pointers", "Clustered indexes only speed up equality lookups"]
+    answer: 1
+    explanation: "The clustered index IS the data — rows are physically stored in key order, so there is exactly one per table. Non-clustered indexes are the separate key → pointer structures, and there can be many."
+  - type: mscq
+    prompt: "Which statements about hashing and B+ trees in a DBMS are true?"
+    options: ["Hash indexes give O(1) average equality lookups", "Hash indexes support efficient range scans", "Static hashing keeps a fixed number of buckets; overflow chains handle collisions", "B+ tree leaves are linked in key order, which is why range scans are efficient"]
+    answer: [0, 2, 3]
+    explanation: "Hash = O(1) equality but unordered, so ranges are impossible (2 is false). Static hashing uses a fixed bucket count with overflow chains. B+ tree leaves form a sorted linked chain — the basis of range scans."
+  - type: mcq
+    prompt: "With a covering index on (dept_id, salary), which query can be answered entirely from the index (index-only scan)?"
+    options: ["SELECT dept_id, salary FROM Employee WHERE dept_id = 10", "SELECT salary FROM Employee WHERE salary > 50000", "SELECT name FROM Employee WHERE dept_id = 10", "SELECT dept_id FROM Employee WHERE salary > 50000"]
+    answer: 0
+    explanation: "The index holds (dept_id, salary) in key order. Query 1 needs exactly those two columns and filters on the leftmost column — index-only. Queries 2 and 4 filter on salary alone, which is not a leftmost prefix; query 3 needs name, which is not in the index, so it must fetch the rows."
+---

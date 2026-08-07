@@ -2,16 +2,17 @@
 id: final-assessment
 title: "Final Assessment — Operating Systems"
 difficulty: medium
-order: 7
+order: 10
 tags: [exam, revision]
 blocks:
   - type: markdown
     content: |
       # Final Assessment — Operating Systems
 
-      This is the closing exam of the course. It has **20 questions** covering all
-      six lessons: processes & threads, CPU scheduling, synchronization, deadlocks,
-      memory management, and file systems & I/O — including the numerical problems
+      This is the closing exam of the course. It has **25 questions** covering all
+      nine lessons: processes & threads, CPU scheduling, synchronization, deadlocks,
+      memory management, file systems & I/O, Linux & debugging, IPC & thread
+      pools, and page replacement — including the numerical problems
       you must be able to do by hand in an interview.
 
       :::tip How to take this exam
@@ -124,6 +125,31 @@ blocks:
     options: ["The child is removed from the system immediately, PCB included", "The child becomes a zombie: it is dead but keeps a PCB entry holding its exit status until the parent reaps it with wait()", "The kernel restarts the child automatically", "The child becomes an orphan and is killed by the kernel"]
     answer: 1
     explanation: "When a child exits, the kernel keeps a minimal PCB entry with the exit status so the parent can read it — that is a zombie (defunct) process: no CPU consumed, but a process-table slot held. The parent reaps it with wait()/waitpid(), freeing the entry. If the parent exits first, the child becomes an orphan and is adopted by init (PID 1), which reaps it later. A buggy parent that never calls wait() can leak zombies until the process table fills."
+  - type: mcq
+    prompt: "You type `ls` in a terminal and press Enter. Which sequence of steps is correct?"
+    options: ["The shell forks, the child execs /bin/ls after a PATH search, ls runs via open/read/write syscalls, the shell wait()s, then prints the next prompt", "The kernel runs ls directly and only afterwards tells the shell", "ls is loaded by the boot firmware; the shell is not involved", "The shell reads the directory itself and prints it — no new process is created"]
+    answer: 0
+    explanation: "The shell blocks on read() for your input, parses the line, calls fork() (a child copy of the shell), the child calls exec() — the kernel searches PATH and replaces the child's image with /bin/ls — ls issues open/read/write syscalls against the directory, then exits; the parent shell, blocked in wait(), reaps the child and prints the next prompt. Every user-level action crosses the kernel boundary as a syscall."
+  - type: mcq
+    prompt: "A child process exits but its parent never calls wait(). What is the child, and how is its process-table slot eventually reclaimed?"
+    options: ["It is an orphan, immediately reparented to init and reaped at once", "It is a zombie holding a PCB entry with its exit status; the slot is reclaimed only when the parent wait()s — a SIGCHLD handler reaps automatically, and if the parent dies first, init adopts and reaps it", "The kernel deletes its PCB immediately when it exits", "It keeps running in the background, consuming CPU, until killed"]
+    answer: 1
+    explanation: "A zombie is dead (no CPU) but its PCB entry, holding the exit status, must stay until the parent reads it with wait()/waitpid() — that is what reaps it. A SIGCHLD handler that calls waitpid() prevents zombie accumulation. If the parent dies first, the child becomes an orphan and init (PID 1) adopts and reaps it. Signals like SIGKILL do nothing to a zombie — there is nothing left to kill."
+  - type: mcq
+    prompt: "A web service receives 10,000 concurrent requests. Why is a thread pool usually better than creating a fresh thread per request?"
+    options: ["Thread creation costs time, each thread reserves stack memory, and thousands of runnable threads oversubscribe the cores — context switches and cache/TLB misses dominate; a pool of N fixed workers processes tasks from a queue", "Threads cannot share state, so pools are the only way to make them cooperate", "A pool can only ever run one request at a time", "Thread pools automatically prevent deadlocks"]
+    answer: 0
+    explanation: "Thread-per-request is unbounded: per-thread creation/destruction cost, ~8 MB default stack reservation per thread, and once runnable threads far exceed cores the scheduler thrashes — switching, cache and TLB misses dominate. A pool creates N workers once and feeds them from a task queue: bounded parallelism, thread reuse, and backpressure when the queue fills. Pools don't solve sharing (threads already share the address space) or deadlock (workers can still deadlock)."
+  - type: mcq
+    prompt: "Reference string 2,3,2,3,4 with 2 frames under LRU page replacement. How many page faults occur?"
+    options: ["2", "3", "4", "5"]
+    answer: 1
+    explanation: "Walk: 2 F → frames [2]. 3 F → [2,3]. 2 H (moves to most-recent end → [3,2]). 3 H (→ [2,3]). 4 F — both frames full, evict the least-recently-used: 3 was touched at step 4, 2 at step 3, so 2 is evicted → [3,4]. Faults = 2, 3, 4 = 3. LRU counts a fault only when the page is not resident, and every hit promotes the page to most-recently-used."
+  - type: mscq
+    prompt: "Which statements about IPC mechanisms are TRUE?"
+    options: ["Anonymous pipes carry a byte stream and are typically used between a parent and its child (e.g. shell pipelines)", "Shared memory is usually the fastest IPC because no kernel copy is involved, but the processes must synchronize explicitly", "Message queues deliver discrete messages through the kernel and work between unrelated processes", "Sockets are the only IPC that cannot cross a network"]
+    answer: [0, 1, 2]
+    explanation: "[0] Correct — pipe() creates an in-memory byte stream inherited across fork(); `ls | grep` is exactly this. [1] Correct — shared memory is a mapped region both processes touch directly; no per-message kernel copy, so it is fastest, but mutual exclusion is the processes' job. [2] Correct — message queues are kernel-mediated discrete messages with no parent–child requirement. [3] Wrong — sockets are the one mechanism that *does* cross a network (TCP/UDP, also on localhost); pipes, shared memory and message queues are single-host."
   - type: markdown
     content: |
       # You made it! 🎉
@@ -138,6 +164,9 @@ blocks:
       - **Deadlocks:** the four Coffman conditions, Banker's safe sequence.
       - **Memory:** address translation, page replacement, thrashing, Belady's.
       - **Files & I/O:** allocation methods, disk scheduling, fork / zombie / orphan.
+      - **Linux & debugging:** ps/top/free, /proc, signals, zombie vs orphan, the `ls` walkthrough.
+      - **IPC & thread pools:** pipes vs shared memory vs queues vs sockets; pool = fixed workers + task queue.
+      - **Page replacement:** LRU fault counting (classic string = 12 with 3 frames; TLB hit vs miss vs page fault).
       :::
 
       Best of luck in your placement interviews! 🚀

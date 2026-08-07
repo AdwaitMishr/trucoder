@@ -122,3 +122,8 @@ blocks:
     options: ["User threads are faster to create and switch than kernel threads.", "Kernel threads are scheduled independently by the OS and can run in parallel on different cores.", "In the many-to-one model, one blocking system call blocks every thread of the process.", "The OS scheduler manages user threads directly."]
     answer: [0, 1, 2]
     explanation: "User threads switch in user space with no syscall, so they are faster — true. Kernel threads are OS-scheduled, so they can run in parallel — true. Many-to-one maps all user threads onto a single kernel thread, so one blocking call stalls them all — true. The OS only knows about kernel threads, so the last option is false."
+  - type: mcq
+    prompt: "A process executes `fork(); fork();` (two fork calls, nothing else forks). How many processes exist in total afterwards, including the original?"
+    options: ["2", "3", "4", "8"]
+    answer: 2
+    explanation: "Each fork() doubles the process count. After the first fork: 1 → 2. After the second fork, *both* existing processes fork, doubling again: 2 → 4. So 4 processes exist (1 original parent + 3 children, 2^2 = 4). Both the parent and the first child execute the second fork because fork() returns in every caller — that is why fork trees explode exponentially (N forks ⇒ 2^N processes)."

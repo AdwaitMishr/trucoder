@@ -1,0 +1,133 @@
+---
+id: polymorphism
+title: "Polymorphism"
+difficulty: medium
+order: 4
+tags: [virtual, vtable, overloading]
+blocks:
+  - type: markdown
+    content: |
+      ### Compile-time polymorphism
+
+      - **Function overloading** — same name, different parameter lists (type,
+        count, or order); resolved at compile time.
+
+      ```cpp
+      int add(int a, int b);
+      double add(double a, double b);   // overload — different params
+      ```
+
+      - **Operator overloading** — give operators class-specific meaning:
+        `a + b`, `a[i]`, `std::cout << a`.
+      - Zero runtime cost — the compiler picks the exact function.
+
+      **Use case:** `std::string` overloads `+`, `==`, `<<`; your `Matrix`
+      class overloads `operator+` and `operator*`.
+  - type: markdown
+    content: |
+      ### Runtime polymorphism — virtual functions
+
+      - `virtual` enables **dynamic dispatch**: the call is resolved at runtime
+        by the object's *actual* type, not the pointer's static type.
+      - `override` — declares "I override a base virtual"; the compiler checks.
+      - `final` — prevents further overriding (on a class, prevents
+        inheritance).
+
+      ```cpp
+      class Shape {
+      public:
+          virtual double area() const { return 0; }  // virtual — dynamic dispatch
+      };
+      class Circle : public Shape {
+      public:
+          double area() const override { return pi * r * r; }
+      };
+
+      Shape* s = new Circle();
+      s->area();   // Circle::area runs — decided at runtime
+      ```
+
+      **Use case:** a `std::vector<Shape*>` of mixed shapes — one loop calls
+      `area()` and every object runs its own version.
+  - type: markdown
+    content: |
+      ### vtable & vptr — how dynamic dispatch works
+
+      - Each **polymorphic class** gets one **vtable**: an array of function
+        pointers, one entry per virtual function.
+      - Each **object** carries a hidden **vptr** pointing to its class's
+        vtable.
+      - A virtual call is: `ptr->vptr->vtable[index]` — an **indirect call**
+        through two pointer hops.
+
+      **Cost:** one vptr per object (usually 8 bytes), one vtable per class,
+      and an indirect call per virtual call — no inlining, worse cache and
+      branch-prediction behavior.
+
+      :::tip
+      **Interview question:** what is the cost of virtual functions? — Per
+      object: one hidden vptr (~8 bytes). Per class: one vtable. Per call: an
+      indirect jump through vptr → vtable instead of a direct call, which also
+      defeats inlining and hurts branch prediction / cache locality.
+      :::
+  - type: flowchart
+    title: "Dynamic dispatch: Base* → vptr → vtable → derived override"
+    nodes: ["Base* ptr = &derived", "ptr->vptr (hidden member)", "vtable of Derived", "&Derived::override", "override executes"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "index of virtual fn"}
+      - {from: 3, to: 4, label: "indirect call"}
+  - type: markdown
+    content: |
+      ### Pure virtual functions & the virtual destructor (the #1 trap)
+
+      - `virtual void draw() = 0;` — **pure virtual**; the class becomes
+        **abstract** and cannot be instantiated; derived classes must override
+        it to be concrete.
+      - **Virtual destructor:** if you `delete` a `Derived` through a `Base*`
+        and the base destructor is NOT virtual, only the base part is
+        destroyed — **undefined behavior**, and the derived resources leak.
+
+      ```cpp
+      class Base {
+      public:
+          virtual ~Base() = default;   // ALWAYS virtual when polymorphic
+      };
+      ```
+
+      **Use case / trap:** every polymorphic base (`Shape`, `Animal`,
+      `Widget`) needs a virtual destructor — the classic interview question.
+
+      :::tip
+      **Interview question:** when do you need a virtual destructor? — Whenever
+      derived objects are deleted through a base-class pointer or reference.
+      Without it, the destructor call is statically bound to `~Base`, the
+      derived destructor never runs, and the behavior is undefined.
+      :::
+  - type: mcq
+    prompt: "Deleting a Derived object through a Base* where ~Base() is NOT virtual results in:"
+    options: ["A compile error", "Only the base part being destroyed — undefined behavior and a potential resource leak", "The derived destructor running automatically", "The vtable being corrupted"]
+    answer: 1
+    explanation: "Without a virtual destructor the call is statically bound to ~Base, so the derived destructor never runs — the derived resources leak and the behavior is undefined. This is why polymorphic bases need virtual destructors."
+  - type: mcq
+    prompt: "Which is a genuine cost of virtual functions?"
+    options: ["Each object carries a hidden vptr, and each call is an indirect call through the vtable", "Virtual functions cannot be overloaded", "They triple the size of every class's code", "They force all methods to be public"]
+    answer: 0
+    explanation: "Virtual calls cost one vptr per object plus one vtable per class plus an indirect call per invocation (no inlining). The other options are simply false — virtual functions can be overloaded, and access specifiers are unrelated."
+  - type: mscq
+    prompt: "Which statements about polymorphism are true?"
+    options: ["Function overloading is resolved at compile time", "A pure virtual function makes its class abstract and un-instantiable", "The vptr is a hidden member that points to the object's class vtable", "Marking a function final means it can be overridden only once more"]
+    answer: [0, 1, 2]
+    explanation: "Overloading is static/compile-time resolution (true). A pure virtual (= 0) function makes the class abstract (true). Every polymorphic object carries a vptr to its class vtable (true). final prevents ANY further overriding — the last option is false."
+  - type: mcq
+    prompt: "Which C++ keyword says 'this virtual may not be overridden further in derived classes'?"
+    options: ["override", "static", "final", "const"]
+    answer: 2
+    explanation: "final on a virtual function forbids further overriding; on a class it forbids inheritance. override only re-declares an existing virtual to get compiler checking, static has nothing to do with it, and const affects the function's mutability, not overriding."
+  - type: mcq
+    prompt: "What happens when you dynamic_cast<Derived*>(basePtr) on a class hierarchy that has NO virtual functions?"
+    options: ["It compiles and always succeeds", "It fails to compile — dynamic_cast needs RTTI, which requires at least one virtual function (a polymorphic type); on a polymorphic hierarchy a failed POINTER downcast returns nullptr", "It throws std::bad_cast at runtime", "It silently does a static_cast"]
+    answer: 1
+    explanation: "dynamic_cast relies on RTTI, which only exists for polymorphic classes — a hierarchy with no virtual functions is not polymorphic, so the cast is ill-formed. On a valid polymorphic hierarchy, a failed downcast on a POINTER returns nullptr (a failed cast on a REFERENCE throws std::bad_cast)."
+---

@@ -132,6 +132,11 @@ blocks:
     options: ["4.75", "5.25", "6.5", "7.25"]
     answer: 1
     explanation: "Gantt: P1 0–2, P2 2–4, P3 4–5, P4 5–7, P1 7–9, P2 9–10. Completion: P1 = 9, P2 = 10, P3 = 5, P4 = 7. Waiting = completion − burst (arrival 0): P1 = 5, P2 = 7, P3 = 4, P4 = 5. Total = 21, average = 21/4 = 5.25."
+  - type: mcq
+    prompt: "Same four processes, bursts [4, 3, 1, 2], all at time 0. With quantum q = 2 the average waiting time is 5.25. What is it with quantum q = 3 — and which quantum wins here?"
+    options: ["q = 3 gives 5.50 — q = 2 is lower", "q = 3 gives 4.75 — q = 3 is lower", "q = 3 gives 6.50 — q = 2 is lower", "q = 3 gives 5.25 — identical"]
+    answer: 0
+    explanation: "q = 3 Gantt: P1 0–3 (1 left), P2 3–6, P3 6–7, P4 7–9, P1 9–10. Completion: P1 = 10, P2 = 6, P3 = 7, P4 = 9. Waiting = completion − burst: P1 = 6, P2 = 3, P3 = 6, P4 = 7. Total = 22, average = 22/4 = 5.50. So q = 2 (5.25) beats q = 3 (5.5) on this set. Lesson: a smaller quantum is not universally better — it improves response but adds context switches; here the trade-off lands in q = 2's favour, but on other burst mixes q = 3 can win."
   - type: markdown
     content: |
       ### Priority scheduling

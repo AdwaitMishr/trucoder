@@ -1,0 +1,170 @@
+---
+id: final-assessment
+title: "Final Assessment"
+difficulty: medium
+order: 9
+tags: [exam, revision]
+blocks:
+  - type: markdown
+    content: |
+      ### Exam instructions
+
+      - **24 questions** covering all eight lessons: classes & objects,
+        encapsulation & abstraction, inheritance, polymorphism, copy semantics
+        & memory, modern C++ & STL, modern C++ deep dive (auto, lambdas,
+        concurrency), and design patterns.
+      - Single-choice (**MCQ**) and multi-select (**MSQ**) questions — for MSQ,
+        select *every* correct option.
+      - After each answer you see a model-answer explanation — treat it as the
+        revision note.
+      - These are the **frequently asked interview questions** — if you can
+        answer all of them out loud, you are ready.
+
+      :::tip
+      **Interview question:** how do you revise C++/OOP in one sitting? — Go
+      pillar by pillar: classes and access control → the four pillars
+      (encapsulation, abstraction, inheritance, polymorphism) → vtables → copy
+      semantics and the Rule of Three/Five → stack vs heap and leaks → smart
+      pointers, RAII, and std::move. Then answer each question below *out loud*
+      in one or two sentences — that is the interview format.
+      :::
+  - type: mcq
+    prompt: "Which statement about a class vs an object is true?"
+    options: ["A class allocates memory as soon as it is defined", "A class is a blueprint; an object is a concrete instance that occupies memory at runtime", "An object is a blueprint and a class is an instance of it", "One class can never produce more than one object"]
+    answer: 1
+    explanation: "Defining a class allocates nothing — it is a blueprint. Objects are runtime instances that hold their own member data; one class can produce many objects."
+  - type: mcq
+    prompt: "A static member function can directly access:"
+    options: ["Only static members — it has no this pointer", "Any private member of any object", "Only const member functions", "Instance members through the implicit this pointer"]
+    answer: 0
+    explanation: "A static member function belongs to the class, not to an instance — there is no this pointer, so it can only touch static members unless it is handed an explicit object."
+  - type: mscq
+    prompt: "Which statements about constructors are true?"
+    options: ["If you define a parameterized constructor, the default constructor is NOT auto-generated", "const member variables can only be initialized in the constructor initializer list", "The copy constructor is invoked when an existing object is assigned to another existing object (b2 = b1)", "A destructor runs automatically when the object goes out of scope"]
+    answer: [0, 1, 3]
+    explanation: "Defining any constructor suppresses the implicit default (true). const members can only be set in the initializer list (true). Destructors run at scope exit (true). b2 = b1 on an EXISTING object is copy ASSIGNMENT, not the copy constructor — false."
+  - type: mcq
+    prompt: "Which statement best describes encapsulation?"
+    options: ["Exposing only the essential operations while hiding complexity", "Binding data and the functions that operate on it, keeping the data private and reachable only through a public interface", "Inheriting behavior from a base class", "Making all members public for convenience"]
+    answer: 1
+    explanation: "Encapsulation is the mechanism of data hiding: private state + public interface. Hiding complexity is abstraction (option 0) — related but distinct."
+  - type: mcq
+    prompt: "A class with a pure virtual function (virtual void draw() = 0;) is:"
+    options: ["abstract — it cannot be instantiated", "final — it cannot be inherited", "concrete — it can be instantiated directly", "a compile error in C++"]
+    answer: 0
+    explanation: "A pure virtual function makes the class abstract: you cannot create an object of it, only derive and override the pure function to become concrete. final is a different keyword that blocks inheritance/overriding."
+  - type: mcq
+    prompt: "In C++, the only difference between struct and class is:"
+    options: ["struct cannot have member functions", "struct members default to public; class members default to private (same for base-class access)", "structs live on the stack, classes on the heap", "structs cannot participate in inheritance"]
+    answer: 1
+    explanation: "The sole difference is the default access: public for struct, private for class (members and inheritance). Everything else — methods, constructors, templates, polymorphism — works identically."
+  - type: mcq
+    prompt: "How do you fix the diamond problem in C++?"
+    options: ["Make the common base class abstract", "Declare the common base virtual in the intermediate classes (virtual public A)", "Use private inheritance for both branches", "Delete the base class destructor"]
+    answer: 1
+    explanation: "virtual inheritance collapses the two duplicated A sub-objects into one shared sub-object, removing the ambiguity. Making A abstract does not remove the duplication."
+  - type: mcq
+    prompt: "Storing derived objects BY VALUE in a std::vector<Base>:"
+    options: ["Preserves derived behavior perfectly", "Slices them — only the base parts are stored", "Throws std::bad_cast at runtime", "Requires virtual inheritance to compile"]
+    answer: 1
+    explanation: "The vector copies Base-sized objects; each Derived is sliced down to its base sub-object. Store pointers or smart pointers to keep polymorphism."
+  - type: mcq
+    prompt: "In a diamond hierarchy D : B, C where B and C both inherit from A (no virtual inheritance), how many copies of A's sub-object does one D object contain?"
+    options: ["one", "two", "three", "zero"]
+    answer: 1
+    explanation: "D inherits A twice — once through B and once through C — so a D object holds TWO A sub-objects and its A members are ambiguous. Virtual inheritance reduces this to one."
+  - type: mcq
+    prompt: "Function overloading is resolved at ______; virtual function overriding is resolved at ______."
+    options: ["runtime; compile time", "compile time; runtime (via the vtable)", "link time; compile time", "both at runtime"]
+    answer: 1
+    explanation: "Overloading picks the exact overload at compile time from the argument types — zero runtime cost. Virtual calls are resolved at runtime through the vtable using the object's actual type."
+  - type: mcq
+    prompt: "A class declares 5 virtual functions. How many vtables does the class have and how many vptrs does each object carry?"
+    options: ["5 vtables, 5 vptrs per object", "1 vtable, 1 vptr per object", "1 vtable, 5 vptrs per object", "5 vtables, 1 vptr per object"]
+    answer: 1
+    explanation: "One vtable per polymorphic class (an array of function pointers, one entry per virtual) and one hidden vptr per object pointing to it. The number of virtual functions changes the vtable's size, not the vptr count."
+  - type: mcq
+    prompt: "When do you need a virtual destructor?"
+    options: ["In every class that has any member", "Whenever derived objects are deleted through a base-class pointer or reference (polymorphic bases)", "Only when the base class has no virtual functions", "Never — destructors are virtual by default"]
+    answer: 1
+    explanation: "Deleting a Derived through a Base* statically binds to ~Base unless the destructor is virtual — the derived destructor never runs and the behavior is undefined. Every polymorphic base therefore needs a virtual destructor."
+  - type: mcq
+    prompt: "A class with a raw owning pointer member uses the default copy. Copying it:"
+    options: ["Deep-copies the pointee automatically", "Shallow-copies the pointer — both objects share one heap block, causing aliasing and double free", "Fails to compile without explicit casts", "Nulls the second object's pointer"]
+    answer: 1
+    explanation: "The default copy is member-wise: the pointer VALUE is shared. Two destructors then free the same block (double free / UB) and mutations alias. Fix with a deep copy or smart pointers."
+  - type: mcq
+    prompt: "The Rule of Three says: if you need a destructor, a copy constructor, or a copy assignment operator, you almost certainly need:"
+    options: ["all three", "only the destructor", "at least five constructors", "a virtual base class"]
+    answer: 0
+    explanation: "If you wrote the destructor you manage a resource, and the default copies would shallow-copy it — so write all three together. Rule of Five adds the two move functions."
+  - type: mcq
+    prompt: "Which of these causes a memory leak?"
+    options: ["Calling delete on a null pointer", "Allocating with new and losing every pointer to the block without deleting it", "Freeing memory on the stack", "Using a reference instead of a pointer"]
+    answer: 1
+    explanation: "new without delete leaves the block unreachable forever — a leak. delete on nullptr is safe, stack memory must not be freed manually, and references manage no memory."
+  - type: mcq
+    prompt: "Which smart pointer has EXCLUSIVE ownership and cannot be copied (only moved)?"
+    options: ["shared_ptr", "unique_ptr", "weak_ptr", "raw pointer"]
+    answer: 1
+    explanation: "unique_ptr deletes its copy — ownership transfers via std::move. shared_ptr shares via a refcount, weak_ptr observes without owning, and raw pointers have no ownership semantics at all."
+  - type: mscq
+    prompt: "Which statements about RAII are true?"
+    options: ["Resources are acquired in the constructor and released in the destructor", "RAII makes code exception-safe because destructors run during stack unwinding", "RAII requires wrapping every resource use in try/catch", "std::lock_guard is a classic RAII example — it unlocks even when the scope throws"]
+    answer: [0, 1, 3]
+    explanation: "Acquire-in-ctor, release-in-dtor is the definition (true). Unwinding runs destructors automatically (true). lock_guard releases the mutex on every exit path including exceptions (true). RAII exists to AVOID manual try/catch cleanup — false."
+  - type: mcq
+    prompt: "What does std::move(x) actually do?"
+    options: ["It immediately moves x's resources into a temporary", "It casts x to an rvalue reference, making it eligible for a move — the move itself happens in the move constructor/assignment", "It deep-copies x", "It deletes x"]
+    answer: 1
+    explanation: "std::move is only a cast to T&& — it moves nothing by itself. The compiler then selects a move constructor/assignment that steals the resources. It never copies and never deletes."
+  - type: mcq
+    prompt: "When is std::list preferred over std::vector?"
+    options: ["When you need frequent O(1) insertions/erasures in the middle with stable iterators", "Always — lists are faster in every case", "When you need O(1) random access by index", "When the data must be contiguous in memory"]
+    answer: 0
+    explanation: "list gives O(1) splice/insert/erase at any position and stable iterators; vector pays O(n) for middle inserts but wins on locality, indexing, and cache behavior. vector remains the default choice."
+  - type: mcq
+    prompt: "auto [a, b] = std::make_pair(1, 2); — what does this statement do?"
+    options: ["It is a compile error", "It is a C++17 structured binding: the pair is decomposed and a and b are bound to 1 and 2 (works on pairs, tuples, arrays, and structs with public members)", "It creates two references to the pair object itself", "It only works with std::map"]
+    answer: 1
+    explanation: "Structured bindings (C++17) decompose the right-hand side into named variables: a and b are bound to the pair's elements. Pairs, tuples, arrays, and structs with only public members all qualify."
+  - type: mcq
+    prompt: "When is std::optional<int> the right return type for a function?"
+    options: ["When the function may legitimately have no value to return (e.g. a lookup that can miss) — instead of a sentinel value like -1", "Whenever the function can throw an exception", "To make the return type polymorphic", "To force the result onto the heap"]
+    answer: 0
+    explanation: "std::optional models 'maybe a value' — use it for results that can legitimately be absent so callers cannot mistake a sentinel for real data. It has nothing to do with exceptions, polymorphism, or heap placement."
+  - type: mcq
+    prompt: "Which scenario is a C++ data race (undefined behavior)?"
+    options: ["Two threads both read the same int without synchronization", "One thread writes an int while another reads or writes it concurrently, with no mutex or atomic", "Two threads each modify their own local variables", "Two threads increment the same std::atomic<int>"]
+    answer: 1
+    explanation: "Concurrent access to one memory location where at least one access is a write and there is no synchronization is a data race — undefined behavior. Concurrent reads are safe, locals are per-thread, and atomics are synchronized."
+  - type: mcq
+    prompt: "Why is the Meyers singleton (function-local static) thread-safe in C++11 and later?"
+    options: ["It uses std::atomic internally", "Function-local statics are initialized exactly once with guaranteed thread-safe initialization (magic statics)", "Statics are immutable by definition", "Only the main thread may call the accessor"]
+    answer: 1
+    explanation: "Since C++11, function-local static initialization is guaranteed to happen exactly once and is thread-safe, so static Singleton s; inside the accessor needs no mutex. It does not rely on atomics, statics are not immutable, and any thread may call it."
+  - type: mscq
+    prompt: "Which statements about design patterns are true?"
+    options: ["A Meyers singleton (function-local static) is initialized thread-safely since C++11", "In Observer, the subject calls update() on its registered observers when state changes — and observers must unsubscribe before destruction to avoid dangling notifications", "A Factory decouples creation: callers depend on the abstract interface, not concrete classes", "Singleton is always the best way to share state in a multithreaded program"]
+    answer: [0, 1, 2]
+    explanation: "Magic statics make the Meyers singleton thread-safe (true). Observer notifies registered listeners and stale observers must unsubscribe (true). Factory hands back the abstract interface so callers never name concrete classes (true). Singleton is global mutable state — usually an anti-pattern, not 'always the best way' — false."
+  - type: markdown
+    content: |
+      ### Revision tips
+
+      - **You have finished the course.** Re-do the code exercises from lessons
+        1, 5 and 6 from memory — writing real C++ is what the interview expects.
+      - Drill the five model answers: diamond problem, virtual destructor,
+        shallow copy / double free, unique vs shared vs weak, and what
+        std::move really does.
+      - The quiz explanations in every lesson are mini model answers — skim them
+        the night before the interview.
+
+      :::tip
+      **Interview question:** final checklist — can you answer these in one
+      sentence each? What is a vptr? When is the copy constructor called? What
+      does the Rule of Five add to the Rule of Three? Why is RAII
+      exception-safe? When does a shared_ptr leak? If yes, you are interview-ready
+      for the C++/OOP section.
+      :::
+---

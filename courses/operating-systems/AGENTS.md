@@ -22,7 +22,10 @@ the night before an interview. Every lesson follows the same skeleton:
 | 4 | deadlocks | medium | Coffman conditions, prevention/avoidance/detection, Banker's algorithm, resource allocation graph |
 | 5 | memory-management | medium | contiguous allocation, fragmentation, paging, segmentation, virtual memory & demand paging, FIFO/LRU/Optimal, thrashing + code exercise (FIFO) |
 | 6 | file-systems-and-io | easy | allocation methods, directory structures, disk scheduling (FCFS/SSTF/SCAN/C-SCAN), inodes, fork/exec/wait |
-| 7 | final-assessment | medium | comprehensive MCQ/MSQ exam across sections 1–6 |
+| 7 | linux-and-debugging | easy | ps/top/free, /proc filesystem, grep pipelines, kill & signals (SIGKILL/SIGTERM/SIGINT), zombie vs orphan, strace, the 'what happens when you type ls' walkthrough |
+| 8 | ipc-and-threads-in-practice | medium | IPC comparison (anonymous/named pipes, shared memory, message queues, sockets), thread pools, producer-consumer archetype, deadlock in practice (lock ordering, timeouts), std::thread/std::async |
+| 9 | page-replacement-practice | medium | FIFO/LRU/Optimal recap, Belady's anomaly, TLB (hit vs miss vs page fault) + code exercise (LRU page faults) |
+| 10 | final-assessment | medium | comprehensive MCQ/MSQ exam across sections 1–9 |
 
 ## Conventions
 
@@ -34,9 +37,10 @@ the night before an interview. Every lesson follows the same skeleton:
   reference valid indices; keep them acyclic.
 - **mcq/mscq** for practice. Numerical questions are mcq with computed options
   and a worked `explanation` showing every step (formula + substitution + answer).
-- **code blocks** only in lessons 2 (SJF total waiting time) and 5 (FIFO page
-  faults). `solution` is Python; provide equivalent starters/signatures for
-  python, javascript, java. At most one code block per lesson.
+- **code blocks** only in lessons 2 (SJF total waiting time), 5 (FIFO page
+  faults) and 9 (LRU page faults). `solution` is Python; provide equivalent
+  starters/signatures for python, javascript, java. At most one code block per
+  lesson.
 - Numbers that exceed 2^53 are quoted strings in `expected`.
 - YAML block scalars: content under `content: |` is indented **6 spaces**
   (2 for the list item + 4 for the scalar). No tabs. Fenced code blocks inside

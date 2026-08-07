@@ -1,0 +1,120 @@
+---
+id: encapsulation-abstraction
+title: "Encapsulation & Abstraction"
+difficulty: easy
+order: 2
+tags: [encapsulation, abstraction, friend]
+blocks:
+  - type: markdown
+    content: |
+      ### Encapsulation — data hiding
+
+      - Bundle **data + the functions that operate on it** inside one class;
+        keep the data `private`.
+      - The outside world touches the object only through its **public
+        interface** (methods, getters, setters).
+      - Why it matters: **invariants**. A setter can validate, a public field
+        cannot:
+
+      ```cpp
+      class Account {
+      public:
+          void deposit(double amt) { if (amt > 0) balance_ += amt; }
+          double balance() const { return balance_; }
+      private:
+          double balance_ = 0.0;   // nobody can set this to -5
+      };
+      ```
+
+      **Use case:** a library header exposes only the public API — the
+      implementation (even the internal data layout) can change without
+      breaking callers.
+  - type: flowchart
+    title: "The public interface boundary around private state"
+    nodes: ["Client code", "public interface: methods / getters / setters", "private data members", "friend functions (declared backdoor)"]
+    edges:
+      - {from: 0, to: 1, label: "calls"}
+      - {from: 1, to: 2, label: "validated access"}
+      - {from: 0, to: 3, label: "only declared friends"}
+  - type: markdown
+    content: |
+      ### Abstraction — hide complexity, expose the interface
+
+      - **Encapsulation** hides *data and implementation details* behind an
+        interface (the *how*).
+      - **Abstraction** hides *complexity*, exposing only what the caller needs
+        (the *what*).
+      - **Abstract class** — has at least one **pure virtual** function
+        (`virtual void draw() = 0;`); **cannot be instantiated**; derived
+        classes must override the pure function to become concrete.
+      - **Interface (C++)** — a class with *only* pure virtual functions and no
+        data. Java's `interface` is a language keyword; in C++ it is a
+        convention (an abstract class with no data members).
+
+      **Use case:** a `Shape` interface exposing `area()` lets the rest of the
+      app work with any shape without knowing which concrete class it is.
+  - type: markdown
+    content: |
+      ### friend functions & friend classes
+
+      - A `friend` can access the class's `private` members — a deliberate
+        backdoor.
+      - `friend std::ostream& operator<<(std::ostream&, const Account&);`
+      - `friend class TestSuite;`
+      - Justified for: `operator<<` / `operator>>`, unit tests, tightly
+        coupled helper classes.
+      - Friendship is **granted, not taken**: it is neither inherited nor
+        transitive.
+
+      ### struct vs class
+
+      - In C++ the **only** difference is the default access: `struct` members
+        default to `public`, `class` members to `private` (and the default
+        inheritance access differs the same way).
+      - Convention: `struct` for plain data holders, `class` for encapsulated
+        types.
+
+      :::tip
+      **Interview question:** encapsulation vs abstraction — same thing? — No.
+      Encapsulation hides *implementation details and data* behind an
+      interface; abstraction hides *complexity*, exposing only the essential
+      operations. Encapsulation is the mechanism (private state + public API);
+      abstraction is the design goal (interface without implementation).
+      :::
+  - type: markdown
+    content: |
+      ### **Interview questions**
+
+      :::tip
+      **Interview question:** why do friend functions break encapsulation and
+      when are they still used? — They reach into private state without going
+      through the public API, so the class can no longer guarantee its
+      invariants on every access. They are still used where the operation
+      genuinely belongs outside the class: stream operators (`operator<<`) and
+      test code that must inspect internals.
+      :::
+
+      - An abstract class cannot be instantiated; a concrete class can.
+      - A C++ interface is just an abstract class with only pure virtual
+        functions — no special keyword needed.
+  - type: mcq
+    prompt: "What is the key difference between encapsulation and abstraction?"
+    options: ["They are exactly the same concept", "Encapsulation hides data and implementation details behind an interface; abstraction hides complexity and exposes only the essential operations", "Encapsulation is used only in C++ and abstraction only in Java", "Abstraction hides data; encapsulation hides behavior"]
+    answer: 1
+    explanation: "Encapsulation is the mechanism of data hiding — private members reachable only through the public interface. Abstraction is the design goal — exposing only what the caller needs. They are related but distinct ideas."
+  - type: mcq
+    prompt: "Which class can NOT be instantiated?"
+    options: ["A class with all private data members", "A class with a pure virtual function (virtual void draw() = 0;)", "A class with only private constructors", "A class with no constructors at all"]
+    answer: 1
+    explanation: "A class with at least one pure virtual function is abstract and cannot be instantiated — you can only derive from it and override the pure functions. Private data, private constructors, or no constructors do not by themselves prevent instantiation in the same way (private ctors restrict but don't make it abstract)."
+  - type: mscq
+    prompt: "Which statements about friend functions are true?"
+    options: ["A friend function can access the private members of the class that declared it", "Friendship is inherited by derived classes", "A friend class's member functions can access the private members of the befriending class", "friend is justified for operator<< that must print private state"]
+    answer: [0, 2, 3]
+    explanation: "Friends can touch private members of the befriending class — true. A friend class's members get the same access — true. operator<< is the classic justified use — true. But friendship is NOT inherited and NOT transitive — so 'friendship is inherited by derived classes' is false."
+  - type: mcq
+    prompt: "In C++, what is the ONLY difference between struct and class?"
+    options: ["struct cannot have member functions", "struct cannot be used with inheritance", "Default member (and base-class) access: public for struct, private for class", "struct types are stored on the stack, class types on the heap"]
+    answer: 2
+    explanation: "A struct defaults to public access for its members and public inheritance; a class defaults to private. Everything else — methods, constructors, templates, inheritance — works identically for both. The stack/heap claim is false: either type can live anywhere."
+---
