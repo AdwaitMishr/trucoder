@@ -51,7 +51,7 @@ the whole tree. The coordinator runs it once after review. To self-check a
 single file's frontmatter parses, use:
 
 ```bash
-node -e 'const gm=require("/home/monke/monke/my-projects/trucoder/server/node_modules/gray-matter");const fs=require("fs");for(const f of process.argv.slice(1)){const d=gm(fs.readFileSync(f,"utf8"));const b=d.data.blocks||[];console.log(f.split("/").pop(),"frontmatter OK,",b.length,"blocks")}' <files...>
+node -e 'const gm=require(require("path").join(process.cwd(),"server/node_modules/gray-matter"));const fs=require("fs");for(const f of process.argv.slice(1)){const d=gm(fs.readFileSync(f,"utf8"));const b=d.data.blocks||[];console.log(f.split("/").pop(),"frontmatter OK,",b.length,"blocks")}' <files...>   # run from the repo root
 ```
 
 ## Pedagogy
