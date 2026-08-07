@@ -665,11 +665,14 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 .flow-expand:hover { color: var(--ink); background: var(--surface2); }
 /* fullscreen canvas viewer: pan by drag, zoom by wheel/pinch/buttons.
    the diagram lives on a transformed stage — no scrollbars, ever.
-   dotted graph-paper bg tracks pan/zoom via inline background-position/size */
+   dotted graph-paper bg tracks pan/zoom via inline background-position/size.
+   bg follows the ACTIVE THEME (var(--bg)) + muted-tinted dots — a fixed
+   dark backdrop made dark-theme node boxes nearly invisible (measured
+   contrast ~30 vs 250 on light themes) */
 .flow-canvas {
   position: fixed; inset: 0; z-index: 130; overflow: hidden;
-  background-color: rgba(0, 0, 0, 0.72);
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.13) 1px, transparent 1.6px);
+  background-color: var(--bg);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--muted) 32%, transparent) 1px, transparent 1.6px);
   background-size: 24px 24px;
   touch-action: none; cursor: grab; user-select: none;
 }
