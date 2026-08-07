@@ -5,6 +5,44 @@ process.env.DATA_DIR = "/tmp/trucoder-verify-data";
 const { scanCourses, getCourses } = require("../dist/courses/loader");
 const { submit } = require("../dist/judge");
 
+// Validate a lesson's quiz blocks: answer indices must be in range and
+// unique, mscq answers must be non-empty index sets, options must have at
+// least 2 entries. Returns a list of human-readable problems.
+function validateQuizBlocks(blocks) {
+  const problems = [];
+  for (const b of blocks) {
+    if (b.type !== "mcq" && b.type !== "mscq") continue;
+    if (!Array.isArray(b.options) || b.options.length < 2) {
+      problems.push(`${b.type}: options must have at least 2 entries`);
+      continue;
+    }
+    if (b.type === "mcq") {
+      if (!Number.isInteger(b.answer) || b.answer < 0 || b.answer >= b.options.length) {
+        problems.push(
+          `mcq: answer ${JSON.stringify(b.answer)} out of range for ${b.options.length} options`
+        );
+      }
+    } else {
+      if (!Array.isArray(b.answer) || b.answer.length === 0) {
+        problems.push("mscq: answer must be a non-empty array of indices");
+      } else {
+        const bad = b.answer.filter(
+          (i) => !Number.isInteger(i) || i < 0 || i >= b.options.length
+        );
+        if (bad.length) {
+          problems.push(
+            `mscq: answer indices [${bad.join(", ")}] out of range for ${b.options.length} options`
+          );
+        }
+        if (new Set(b.answer).size !== b.answer.length) {
+          problems.push("mscq: duplicate answer indices");
+        }
+      }
+    }
+  }
+  return problems;
+}
+
 (async () => {
   scanCourses();
   let pass = 0;
@@ -12,15 +50,31 @@ const { submit } = require("../dist/judge");
   for (const course of getCourses()) {
     console.log(`\n== ${course.title} ==`);
     for (const lesson of course.lessons) {
-      const codeBlock = lesson.blocks.find((b) => b.type === "code");
+      const codeBlocks = lesson.blocks.filter((b) => b.type === "code");
+      if (codeBlocks.length > 1) {
+        console.log(`  FAIL ${lesson.id} (${codeBlocks.length} code blocks — at most 1 allowed)`);
+        fail += 1;
+        continue;
+      }
+      const codeBlock = codeBlocks[0];
       if (!codeBlock) {
-        // Content/quiz lessons have no tests to run — not a failure.
+        // No code exercise: validate quiz blocks instead.
         const quizzes = lesson.blocks.filter(
           (b) => b.type === "mcq" || b.type === "mscq"
         );
-        console.log(
-          `  SKIP ${lesson.id} (${quizzes.length ? `${quizzes.length} quiz block(s)` : "content"})`
-        );
+        if (quizzes.length) {
+          const problems = validateQuizBlocks(quizzes);
+          if (problems.length) {
+            console.log(`  FAIL ${lesson.id}`);
+            for (const p of problems) console.log(`    ${p}`);
+            fail += 1;
+          } else {
+            pass += 1;
+            console.log(`  PASS ${lesson.id} (${quizzes.length} quiz block(s) validated)`);
+          }
+        } else {
+          console.log(`  SKIP ${lesson.id} (content)`);
+        }
         continue;
       }
       if (!codeBlock.solution) {
