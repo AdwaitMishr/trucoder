@@ -1,0 +1,262 @@
+---
+id: project-checkout-pipeline
+title: "Project 2: Checkout Pipeline"
+difficulty: medium
+order: 11
+tags: [checkout, transactions, idempotency]
+blocks:
+  - type: markdown
+    content: |
+      # Project 2: Checkout Pipeline
+
+      **Context.** The cart is done (lesson 10). Now the moment of truth: the
+      shopper taps **Checkout**. One request must do four things in order —
+      validate the order, check stock, reserve stock, and create the order —
+      and it must survive retries, crashes, and double-clicks. This lesson
+      builds the **checkout pipeline**: a decision function plus a database
+      transaction, guarded by an idempotency key.
+
+      **What you are building this step.** The core decision logic of checkout:
+      given the cart items, the current stock, and the shopper's balance,
+      decide the outcome — confirmed, insufficient stock, or insufficient
+      funds. In the real project this decision runs *before* the transaction
+      starts (fail fast) and again inside it (the stock reservation is the
+      authoritative check). The graded `solve()` is that decision.
+
+      **Acceptance criteria**
+
+      - `POST /api/orders` validates the body, checks the idempotency key,
+        then runs the checkout pipeline.
+      - Out-of-stock or missing product → rejected with **409 Conflict**,
+        nothing reserved.
+      - Insufficient balance → rejected with **402 Payment Required**, nothing
+        reserved.
+      - Success → order created inside one DB transaction (stock reservation +
+        order insert commit together or not at all), **201 Created**.
+      - Replaying the same `Idempotency-Key` returns the stored order (**200**)
+        instead of charging twice.
+  - type: markdown
+    content: |
+      ## Deliverables — the checkout wiring
+
+      ```js
+      // routes/orders.js — mounted at /api/orders (behind requireAuth)
+      const router = require('express').Router();
+      const ordersController = require('../controllers/ordersController');
+
+      router.post('/', ordersController.checkout);   // POST /api/orders
+
+      module.exports = router;
+      ```
+
+      ```js
+      // controllers/ordersController.js — thin
+      async function checkout(req, res, next) {
+        try {
+          const result = await orderService.checkout({
+            userId: req.user.id,
+            items: req.body.items,                    // [{id, qty, price}]
+            idempotencyKey: req.headers['idempotency-key'],
+          });
+          res.status(result.replayed ? 200 : 201).json({ data: result.order });
+        } catch (err) { next(err); }
+      }
+      ```
+
+      ```js
+      // services/orderService.js — the pipeline
+      async function checkout({ userId, items, idempotencyKey }) {
+        // 0. idempotency: has this key been seen? Redis SETNX with a TTL.
+        const claimed = await redis.set(idempotencyKey, 'pending', 'NX', 'EX', 3600);
+        if (!claimed) return { replayed: true, order: await getByKey(idempotencyKey) };
+
+        // 1. decision — this is exactly solve(items, stock, balance):
+        //    [0, total] confirmed | [1, 0] stock | [2, total] funds
+        const [status, total] = decide(items, await stockService.snapshot(), reqBalance);
+
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          // 2. reserve stock atomically: UPDATE products SET available = available - $1
+          //    WHERE id = $2 AND available >= $1  → rowCount 0 means oversold
+          // 3. INSERT the order row (status 'confirmed')
+          // 4. stamp the idempotency key with the order id
+          await client.query('COMMIT');
+          return { replayed: false, order };
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        } finally {
+          client.release();
+        }
+      }
+      ```
+
+      Three things make this safe. **One transaction** — the stock decrement and
+      the order insert are atomic: either both commit or both roll back, so a
+      crash between them cannot leave stock reserved with no order. **The
+      conditional UPDATE** — `available >= $1` turns a race into a rejected
+      request instead of a negative stock count. **The idempotency key** — a
+      network retry of the same checkout replays the stored order instead of
+      charging the card twice.
+  - type: markdown
+    content: |
+      ## The graded exercise
+
+      Implement `solve(items, stock, balance)`:
+
+      - `items` — cart rows `[id, qty, price]`.
+      - `stock` — inventory rows `[id, available]`.
+      - `balance` — the shopper's account balance.
+      - `total = Σ qty × price`.
+      - **Any** item missing from `stock`, or with `qty > available` →
+        return `[1, 0]` (status 1 = insufficient stock).
+      - Otherwise, if `balance < total` → return `[2, total]` (status 2 =
+        insufficient funds).
+      - Otherwise → return `[0, total]` (status 0 = confirmed).
+
+      :::example
+      Items `[[1, 2, 100]]`, stock `[[1, 5]]`, balance `500`. Product 1 has 5
+      available and we want 2 → fine. `total = 2 × 100 = 200`. Balance 500 ≥
+      200 → confirmed → `[0, 200]`.
+      :::
+
+      :::example
+      Items `[[1, 10, 50]]`, stock `[[1, 5]]`, balance `1000`. We want 10 but
+      only 5 exist → insufficient stock, checked *before* money → `[1, 0]`.
+      :::
+
+      **Private cases you should handle:** insufficient balance → `[2, total]`
+      (stock is fine, money is not); empty items → total 0, so `[0, 0]` (an
+      empty order is trivially affordable); a product id missing from stock
+      entirely → `[1, 0]`. Stock is checked item by item, and the first
+      failure wins.
+  - type: code
+    task: "Implement solve(items, stock, balance): compute the checkout decision. Return [0, total] if every item is in stock with enough quantity and balance >= total; [1, 0] if any item is missing or qty > available; [2, total] if balance < total."
+    languages: [javascript, python]
+    signature:
+      javascript: "function solve(items, stock, balance)"
+      python: "def solve(items: list[list[int]], stock: list[list[int]], balance: int) -> list[int]"
+    starter:
+      javascript: |
+        function solve(items, stock, balance) {
+          // items: [id, qty, price], stock: [id, available]
+          // Return [status, total]: 0 = confirmed, 1 = insufficient stock, 2 = insufficient funds.
+          return [0, 0];
+        }
+      python: |
+        def solve(items: list[list[int]], stock: list[list[int]], balance: int) -> list[int]:
+            # items: [id, qty, price], stock: [id, available]
+            # Return [status, total]: 0 = confirmed, 1 = insufficient stock, 2 = insufficient funds.
+            return [0, 0]
+    tests:
+      public:
+        - name: "valid checkout"
+          args: [[[1, 2, 100]], [[1, 5]], 500]
+          expected: [0, 200]
+        - name: "out of stock"
+          args: [[[1, 10, 50]], [[1, 5]], 1000]
+          expected: [1, 0]
+      private:
+        - name: "insufficient balance"
+          args: [[[1, 2, 100]], [[1, 5]], 150]
+          expected: [2, 200]
+        - name: "empty items"
+          args: [[], [[1, 5]], 100]
+          expected: [0, 0]
+        - name: "missing product id"
+          args: [[[1, 1, 50], [2, 1, 10]], [[1, 5]], 1000]
+          expected: [1, 0]
+    hints:
+      - "Build a lookup of id → available from the stock rows first."
+      - "Walk the items and check each one against the lookup; the moment any item is missing or oversold, return [1, 0] — do not compute further."
+      - "Only after every item passes, compare balance to the accumulated total and pick [2, total] or [0, total]."
+    solution: |
+      def solve(items: list[list[int]], stock: list[list[int]], balance: int) -> list[int]:
+          available = {row[0]: row[1] for row in stock}
+          total = 0
+          for item_id, qty, price in items:
+              if item_id not in available or qty > available[item_id]:
+                  return [1, 0]
+              total += qty * price
+          if balance < total:
+              return [2, total]
+          return [0, total]
+  - type: flowchart
+    title: "the checkout pipeline"
+    nodes: ["POST /api/orders", "validate body", "idempotency key (Redis SETNX)", "BEGIN", "reserve stock", "insert order", "COMMIT", "201 / replay 200"]
+    edges:
+      - {from: 0, to: 1, label: "zod schema"}
+      - {from: 1, to: 2, label: "seen? replay"}
+      - {from: 2, to: 3, label: "new key"}
+      - {from: 3, to: 4, label: "conditional UPDATE"}
+      - {from: 4, to: 5, label: "order row"}
+      - {from: 5, to: 6, label: "atomic"}
+      - {from: 6, to: 7, label: "response"}
+  - type: markdown
+    content: |
+      ## Interview questions
+
+      :::tip
+      **Interview question:** What happens if the process crashes between
+      "reserve stock" and "insert order"? Without a transaction you get a
+      permanent inconsistency: stock decremented, no order, money never
+      charged. With `BEGIN … COMMIT/ROLLBACK`, the crash aborts the open
+      transaction and Postgres rolls it back — the reservation vanishes and
+      the inventory returns to its previous state. That atomicity is the `A`
+      in ACID, and checkout is the canonical example.
+      :::
+
+      :::tip
+      **Interview question:** Why use an idempotency key instead of just
+      checking "does this order already exist"? Because two identical orders
+      are indistinguishable from two legitimate purchases of the same items —
+      the user might genuinely want to buy the same thing twice. The key is
+      client-generated and unique per *intent*: retrying the same checkout
+      sends the same key and replays the stored result, while a genuinely new
+      purchase sends a new key. `SETNX` makes the claim atomic so two
+      concurrent retries cannot both slip through.
+      :::
+
+      **Use case.** Payment providers and mobile clients retry aggressively —
+      a dropped response on a 3G network can resend the same checkout seconds
+      later. Without the key, that retry charges the shopper twice. With it,
+      the second attempt returns the first order untouched: one charge, one
+      order, one happy customer.
+  - type: mcq
+    prompt: "Why is stock reservation + order insert wrapped in a single DB transaction?"
+    options:
+      - "To make the checkout faster."
+      - "So both either commit together or roll back together — a crash between them cannot leave stock reserved with no order."
+      - "Because the SQL syntax requires BEGIN and COMMIT."
+      - "To avoid using Redis."
+    answer: 1
+    explanation: "Atomicity: the two writes are one unit. If anything fails, ROLLBACK undoes the reservation and the inventory stays consistent."
+  - type: mcq
+    prompt: "The same Idempotency-Key arrives for a second time. What should the API do?"
+    options:
+      - "Charge the card again and create a second order."
+      - "Return 409 Conflict."
+      - "Replay the stored order with 200 instead of creating a duplicate."
+      - "Ignore the request silently."
+    answer: 2
+    explanation: "A replayed key means 'same intent, retry' — return the original result. The duplicate is prevented by the key, not by comparing order contents."
+  - type: mcq
+    prompt: "Which HTTP status does the API return for an out-of-stock checkout?"
+    options:
+      - "200 OK"
+      - "400 Bad Request"
+      - "409 Conflict"
+      - "500 Internal Server Error"
+    answer: 2
+    explanation: "The request is well-formed but conflicts with the current inventory state — 409 Conflict. Insufficient funds maps to 402 Payment Required."
+  - type: mscq
+    prompt: "Which steps must happen inside the DB transaction?"
+    options:
+      - "Reserving stock (decrementing available)"
+      - "Charging the external payment provider"
+      - "Inserting the order row"
+      - "Stamping the idempotency key"
+    answer: [0, 2]
+    explanation: "DB writes (stock, order) must be atomic together. The external payment call stays outside the transaction — you cannot roll back a card charge with a DB statement."
+---

@@ -1,0 +1,54 @@
+---
+id: backend-fundamentals
+title: "Backend Engineering — From First Principles"
+description: "A backend course distilled from the user's own Obsidian notes: HTTP, routing, controllers, validation, auth, API design, PostgreSQL, and caching — plus a complete e-commerce project arc (cart → checkout → rate limiter → Docker assembly) with LeetCode-style, all-visible graded exercises in a Node.js Docker sandbox."
+difficultyLevels: [beginner, easy, medium]
+---
+
+# How to use this course
+
+This course is distilled from **your own Obsidian notes**
+(`notes/v1/Backend/01.md … 09 Caching.md`) and rebuilt as interactive lessons.
+Every theory lesson keeps the note's core content, adds **use cases**, an
+**e-commerce example**, **interview questions**, and a quiz.
+
+The second half is the special part: a complete **e-commerce backend project**
+built lesson by lesson in **LeetCode style** — each project lesson has a
+problem statement and deliverables, and a graded exercise that runs in the
+**Node.js Docker sandbox**. **All test cases are visible** — nothing hidden.
+
+Lessons **in order**:
+
+1. **Backend Basics** — what a backend is, the end-to-end request lifecycle, why centralized state.
+2. **HTTP** — methods, status codes, headers, request/response anatomy, statelessness.
+3. **Routing** — routes, params, query strings, 404s.
+4. **Request Context & Controllers** — middleware chain, controller pattern, req/res.
+5. **Validation & Transformations** — input validation, sanitization, DTOs, error responses.
+6. **Auth** — sessions vs JWT vs cookies, hashing, stateful vs stateless, OAuth/API keys.
+7. **API Design** — REST, resource naming, versioning, errors, pagination, idempotency.
+8. **Database: PostgreSQL** — modeling an e-commerce schema, SQL, transactions, connection pooling.
+9. **Caching** — cache-aside, Redis, TTL, invalidation, hot product catalog.
+10. **Project 1: Cart Domain** — cart service, utils, line totals (graded exercise).
+11. **Project 2: Checkout Pipeline** — validation → stock → payment → order, idempotency (graded exercise).
+12. **Project 3: Rate Limiter & Middleware** — auth + rate-limit middleware chain (graded exercise).
+13. **Project 4: Assembly & Docker** — the full Express app, Dockerfile, docker-compose, API walkthrough (graded exercise).
+14. **Final Assessment** — comprehensive exam across all thirteen lessons.
+
+## The roadmap
+
+| # | Lesson | The idea it introduces | Type |
+|---|--------|------------------------|------|
+| 1 | Backend Basics | request lifecycle, why backends exist | notes + quiz |
+| 2 | HTTP | methods, status codes, headers | notes + quiz |
+| 3 | Routing | routes, params, 404s | notes + quiz |
+| 4 | Request Context & Controllers | middleware, controller pattern | notes + quiz |
+| 5 | Validation & Transformations | validation, DTOs, errors | notes + quiz |
+| 6 | Auth | sessions, JWT, cookies, hashing | notes + quiz |
+| 7 | API Design | REST, versioning, idempotency | notes + quiz |
+| 8 | Database: PostgreSQL | schema, SQL, transactions | notes + quiz |
+| 9 | Caching | cache-aside, Redis, TTL | notes + quiz |
+| 10 | Project 1: Cart Domain | cart service + utils | notes + code + quiz |
+| 11 | Project 2: Checkout Pipeline | checkout flow, idempotency | notes + code + quiz |
+| 12 | Project 3: Rate Limiter | middleware chain | notes + code + quiz |
+| 13 | Project 4: Assembly & Docker | full app + docker-compose | notes + code + quiz |
+| 14 | Final Assessment | all thirteen lessons | exam (MCQ/MSQ) |

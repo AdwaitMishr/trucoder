@@ -1,0 +1,295 @@
+---
+id: final-assessment
+title: 'Final Assessment — Backend Engineering'
+difficulty: medium
+order: 14
+tags: [exam, revision]
+blocks:
+  - type: markdown
+    content: |
+      # Final Assessment — Backend Engineering
+
+      You have finished all **13 lessons** — backend basics, HTTP, routing,
+      request context & controllers, validation & transformations,
+      authentication, API design, PostgreSQL, caching, and the four-lesson
+      project arc (cart domain, checkout pipeline, rate limiter, Docker
+      assembly). This exam checks that all of it stuck.
+
+      **Instructions**
+
+      - **26 questions**: 24 single-choice (MCQ) + 2 multi-select (MSQ). For
+        MSQ, select **every** correct option.
+      - Three questions are small worked examples (cart merge, checkout
+        decision, sliding-window limiter) — do the arithmetic by hand. The
+        explanation shows the full working.
+      - No time limit. If a question surprises you, that is a signal to
+        revisit the lesson before the interview.
+      - Answers are graded immediately; read the explanation either way — the
+        working is the revision value.
+  - type: mcq
+    prompt: "After the browser sends a request to api.shop.com, in what order does it cross the infrastructure?"
+    options:
+      - "DNS resolution → firewall / security group → reverse proxy → application server"
+      - "Firewall → DNS resolution → application server → reverse proxy"
+      - "Application server → DNS resolution → firewall → reverse proxy"
+      - "Reverse proxy → DNS resolution → firewall → application server"
+    answer: 0
+    explanation: "The browser resolves the domain via a DNS A record to the server's public IP; the firewall checks the destination port (80/443); NGINX terminates TLS and forwards to the app server on a local port; the response travels back down the same chain."
+  - type: mcq
+    prompt: "Why must the shared cart live in the backend rather than in a single browser tab?"
+    options:
+      - "Because the same cart must be identical on the phone and the laptop — it is shared global state that only a server-side store can coordinate"
+      - "Because browsers cannot store any data at all"
+      - "Because cart data is too large for browser storage"
+      - "Because only the backend can display the cart"
+    answer: 0
+    explanation: "Centralized state is state shared by all users and devices at once. The cart is a server-side fact kept in the backend's database, so adding an item on mobile and checking out on a laptop sees the same cart."
+  - type: mcq
+    prompt: "A network timeout makes the client retry an identical POST /orders. What is the danger?"
+    options:
+      - "Nothing — POST is safe to retry"
+      - "Two identical orders are created, because POST is non-idempotent"
+      - "The server responds 404 Not Found"
+      - "The server process crashes"
+    answer: 1
+    explanation: "POST creates a new resource every time — two identical POSTs create two orders. GET, PUT, and DELETE are idempotent; POST is not, which is why checkout retries are defended with an Idempotency-Key."
+  - type: mcq
+    prompt: "A customer with a valid token hits an admin-only endpoint. Which status code fits best?"
+    options:
+      - "401 Unauthorized"
+      - "403 Forbidden"
+      - "404 Not Found"
+      - "200 OK"
+    answer: 1
+    explanation: "401 means the server doesn't know who you are (missing/invalid credentials). 403 means the server knows who you are but you're not allowed to do this — an authenticated customer on an admin endpoint gets 403."
+  - type: mcq
+    prompt: "For GET /api/v1/products/42?page=2&sort=price, where does Express put each part?"
+    options:
+      - "req.params.id = '42'; req.query = { page: '2', sort: 'price' }"
+      - "req.query.id = 42; req.params = { page: 2 }"
+      - "req.body.id = '42'; req.query = { page: '2' }"
+      - "req.params = { page: '2' }; req.query.id = '42'"
+    answer: 0
+    explanation: "Path parameters identify which resource — /products/:id captures '42' in req.params.id, always as a string. Everything after the ? lands in req.query as key-value string pairs: page and sort."
+  - type: mcq
+    prompt: "Which is the correct middleware chain order?"
+    options:
+      - "CORS → logger → auth → rate limiter → router → global error handler"
+      - "Router → auth → logger → error handler → CORS"
+      - "Error handler → router → rate limiter → auth → logger"
+      - "Auth → router → CORS → logger → rate limiter"
+    answer: 0
+    explanation: "Cross-cutting concerns (CORS, logging, auth, rate limiting) run before the router so unwanted traffic is short-circuited early, and the global error handler is registered LAST so it catches anything that escaped from any layer."
+  - type: mcq
+    prompt: "Why keep controllers thin?"
+    options:
+      - "So business logic lives in services that are unit-testable without HTTP and reusable across entry points"
+      - "Controllers are not allowed to call services"
+      - "Thin controllers make responses slower"
+      - "Express requires it for routing to work"
+    answer: 0
+    explanation: "A controller should only extract, validate, delegate, and respond. Business logic in services is testable without spinning up HTTP and reusable from CLI jobs or queue workers, and it keeps status codes and error formats consistent."
+  - type: mcq
+    prompt: "The frontend form validates every field with instant red-text errors. Why must the backend still validate?"
+    options:
+      - "Anyone can bypass the frontend and hit the API directly with curl or Postman"
+      - "Frontend validation is always buggy"
+      - "Because the database requires it"
+      - "It doesn't need to — the frontend is enough"
+    answer: 0
+    explanation: "Frontend validation is for UX — instant feedback without a network round trip. Backend validation is for security and data integrity: clients are not under your control, so the backend must never trust incoming data."
+  - type: mcq
+    prompt: "What does a DTO primarily protect against?"
+    options:
+      - "Mass assignment — extra fields like role: 'admin' smuggled into a payload are dropped because the DTO only declares expected fields"
+      - "Slow database queries"
+      - "DDoS attacks"
+      - "CORS errors"
+    answer: 0
+    explanation: "A DTO is a shaped, validated payload that crosses layer boundaries. If the DTO only declares {name, email, password}, hidden fields like role: 'admin' never reach the service, and unvalidated input can't leak into business logic."
+  - type: mcq
+    prompt: "Which statement about the sessions-vs-JWT tradeoff is true?"
+    options:
+      - "Sessions revoke instantly (delete the Redis entry) but need a shared session store; JWTs scale without shared state but a stolen token stays valid until expiry"
+      - "JWTs revoke instantly; sessions scale infinitely"
+      - "Both mechanisms are stateless"
+      - "Sessions sign claims into the token itself"
+    answer: 0
+    explanation: "Stateful sessions give central control and instant revocation but the store must be shared across servers. Stateless JWTs let any server verify the signature locally, but revocation is hard — a stolen token lives until expiry unless a Redis blacklist is added."
+  - type: mcq
+    prompt: "Why hash passwords with bcrypt instead of SHA-256?"
+    options:
+      - "bcrypt is deliberately slow and salts every hash, so brute force is expensive and identical passwords produce different hashes"
+      - "SHA-256 is deprecated and unsupported"
+      - "bcrypt stores passwords in plaintext for easy recovery"
+      - "bcrypt is faster, so logins feel snappier"
+    answer: 0
+    explanation: "SHA-256 is fast, which is exactly the problem — an attacker can brute-force billions of guesses per second. Password hashing needs deliberate slowness (bcrypt's cost factor), and the per-password salt defeats rainbow tables."
+  - type: mcq
+    prompt: "What does the HttpOnly cookie flag do?"
+    options:
+      - "Stops JavaScript from reading the cookie, defusing XSS token theft"
+      - "Forces the cookie to be sent only over HTTPS"
+      - "Blocks cross-site cookie sending (CSRF mitigation)"
+      - "Encrypts the cookie's contents"
+    answer: 0
+    explanation: "HttpOnly keeps JavaScript out of the cookie — a stolen-script XSS attack can't read the session token. Secure forces HTTPS transport and SameSite mitigates CSRF; encryption of the payload is not what HttpOnly does."
+  - type: mcq
+    prompt: "When should a resource be nested under a parent in a REST API?"
+    options:
+      - "When the child only makes sense under its parent, e.g. /users/:id/orders"
+      - "Always — nesting keeps URLs short"
+      - "Never — every resource must be flat"
+      - "When the child is a first-class resource like products"
+    answer: 0
+    explanation: "Nest when ownership is clear: an order needs a buyer, so /users/:id/orders reads as 'orders belonging to user :id'. Flatten first-class resources — a product isn't owned by one user, so it stays at /products."
+  - type: mcq
+    prompt: "How do you ship a breaking API change without breaking existing clients?"
+    options:
+      - "Ship /api/v2 alongside /api/v1, announce deprecation, let clients migrate, then retire v1"
+      - "Silently change the v1 responses under the same URL"
+      - "Delete v1 immediately and hope clients update"
+      - "Add verbs to the URL instead of versioning"
+    answer: 0
+    explanation: "URL versioning is the pragmatic choice — visible, cache-friendly, trivially routable. Freeze v1 and keep it additive; run both versions during migration and retire v1 only after consumers move. Never silently change v1 semantics."
+  - type: mcq
+    prompt: "Why do payment endpoints need an Idempotency-Key?"
+    options:
+      - "A retried POST /payments would charge twice; the server stores key → response and replays the same result for a repeated key"
+      - "To authenticate the client"
+      - "To bypass rate limiting"
+      - "To make the database faster"
+    answer: 0
+    explanation: "POST is non-idempotent, so a plain retry double-charges. The client sends a generated Idempotency-Key; the server stores the key with its response and replays it for the same key — one charge, one order, even across retries."
+  - type: mcq
+    prompt: "Why must checkout's stock reservation and order insert run in one DB transaction?"
+    options:
+      - "A crash between them would leave stock reserved with no order — atomicity makes both commit or both roll back"
+      - "To make the checkout run faster"
+      - "Because SQL syntax requires BEGIN"
+      - "To avoid using Redis"
+    answer: 0
+    explanation: "That is the A in ACID: BEGIN … COMMIT/ROLLBACK makes the batch one unit. If the process crashes mid-checkout, the open transaction is aborted and Postgres rolls it back — the reservation vanishes and inventory returns to its previous state."
+  - type: mcq
+    prompt: "What is the purpose of a connection pool?"
+    options:
+      - "Opening a DB connection costs a handshake, auth, and memory — a pool reuses a fixed set of connections instead of opening one per request"
+      - "To store query results"
+      - "To replace the database"
+      - "To encrypt traffic between app and DB"
+    answer: 0
+    explanation: "A pool reuses a fixed set of connections (tens per instance, not thousands). If every connection is busy — slow queries or leaks — new requests queue and time out: pool exhaustion makes the app look dead while the database is healthy."
+  - type: mcq
+    prompt: "In cache-aside, after updating a product row in the database, what do you do with the cache?"
+    options:
+      - "Delete (invalidate) the cache key so the next read misses and repopulates from fresh data"
+      - "Update every cached copy eagerly"
+      - "Do nothing — the cache handles itself"
+      - "Restart Redis"
+    answer: 0
+    explanation: "Cache-aside invalidates on write: update the DB, then delete the key — the next read misses and repopulates from the fresh row. Eagerly updating copies is write-through; doing nothing leaves stale data until the TTL fires."
+  - type: mcq
+    prompt: "What role does a TTL play in a cache?"
+    options:
+      - "It bounds staleness — an expired key is deleted automatically, so even a missed invalidation can't serve data older than the TTL"
+      - "It prevents eviction when memory is full"
+      - "It makes keys permanent"
+      - "It duplicates data across servers"
+    answer: 0
+    explanation: "TTL is a per-key timer; expired keys are deleted automatically. It is the first line of defense against stale data and the safety net: even if a delete-on-write invalidation is missed, the TTL bounds how stale a value can get."
+  - type: mcq
+    prompt: "The cart is [[1, 2, 100]] (rows are [id, qty, price]). The user adds product 1, qty 3, at a new price of 150. What is the resulting row?"
+    options:
+      - "[1, 5, 100, 500]"
+      - "[1, 5, 150, 750]"
+      - "[1, 3, 150, 450]"
+      - "[1, 2, 100, 200] plus a new line [1, 3, 150, 450]"
+    answer: 0
+    explanation: "Merge, don't duplicate: the id already exists, so qty becomes 2 + 3 = 5. Merging keeps the original unit price — the price snapshot from when the item was first added — so price stays 100, and the line total is 5 × 100 = 500."
+  - type: mcq
+    prompt: "Checkout: items [[1, 2, 100], [2, 1, 50]], stock [[1, 5], [2, 5]], balance 200. What does the decision function return?"
+    options:
+      - "[0, 250]"
+      - "[1, 0]"
+      - "[2, 250]"
+      - "[2, 0]"
+    answer: 2
+    explanation: "total = 2 × 100 + 1 × 50 = 250. Stock is fine (5 ≥ 2 and 5 ≥ 1), so status is not 1. Balance 200 < 250 → insufficient funds: status 2 with the total → [2, 250]. Status 0 would need balance ≥ total."
+  - type: mcq
+    prompt: "Sliding-window limiter: timestamps [100, 200, 300, 400] (ms), limit 2, windowMs 200, window [t − 200, t] inclusive. Which requests are allowed?"
+    options:
+      - "[true, true, false, false]"
+      - "[true, true, true, false]"
+      - "[true, false, false, false]"
+      - "[true, true, false, true]"
+    answer: 0
+    explanation: "At 100: window [-100, 100] holds {100} → 1 ≤ 2 allowed. At 200: [0, 200] holds {100, 200} → 2 ≤ 2 allowed. At 300: [100, 300] holds {100, 200, 300} → 3 > 2 denied. At 400: [200, 400] holds {200, 300, 400} → 3 > 2 denied. Result: [true, true, false, false]."
+  - type: mcq
+    prompt: "Why does the Dockerfile run the app as a non-root user (USER app)?"
+    options:
+      - "Root in a container is still root on the host kernel for many operations — a compromised app becomes a compromised host; a non-root user shrinks the blast radius"
+      - "Root users cannot run Node.js"
+      - "Non-root containers are faster at runtime"
+      - "Docker refuses to run root containers"
+    answer: 0
+    explanation: "Least privilege: after addgroup/adduser the container runs as an unprivileged user. If the app is compromised, the attacker inherits that limited user instead of root on the host kernel — a much smaller blast radius."
+  - type: mcq
+    prompt: "Why does the api service wait on Postgres with depends_on.condition: service_healthy instead of plain depends_on?"
+    options:
+      - "Plain depends_on only waits for the container to start, but Postgres takes longer to accept connections — service_healthy gates startup on pg_isready succeeding"
+      - "depends_on is not valid in docker-compose.yml"
+      - "The healthcheck makes the API run faster"
+      - "Plain depends_on would start the database on the host machine"
+    answer: 0
+    explanation: "A container that has started is not yet ready: the API would crash-loop on refused connections. The healthcheck (pg_isready for Postgres, redis-cli ping for Redis) gates startup on actual readiness — and the api reaches them by service name (postgres:5432) on the shared Compose network."
+  - type: mscq
+    prompt: "Which of these are 5xx server-error codes? (select all that apply)"
+    options:
+      - "500 Internal Server Error"
+      - "404 Not Found"
+      - "503 Service Unavailable"
+      - "201 Created"
+      - "504 Gateway Timeout"
+    answer: [0, 2, 4]
+    explanation: "500, 503, and 504 are 5xx server errors — the server or its upstream failed (500 internal, 503 overloaded/maintenance, 504 the proxy timed out waiting on the backend). 404 is a 4xx client error and 201 is a 2xx success."
+  - type: mscq
+    prompt: "Which statements about Redis in the storefront are true? (select all that apply)"
+    options:
+      - "Data lives in RAM, so reads are orders of magnitude faster than disk"
+      - "SET product:123 '...' EX 300 sets a 300-second TTL on the key"
+      - "It should be the system of record for the users table"
+      - "INCR makes a good rate-limit counter (rl:{ip}:{minute})"
+    answer: [0, 1, 3]
+    explanation: "Redis is an in-memory key-value store — RAM speed, SET … EX sets a TTL, and INCR counters power rate limiting in microseconds. But it is a cache/session store, not the system of record: authoritative data like the users table belongs in PostgreSQL."
+  - type: markdown
+    content: |
+      ## Revision tips
+
+      - **Backend basics** — memorize the request lifecycle order (DNS →
+        firewall → reverse proxy → app server); it is the number-one
+        "walk me through a request" interview question.
+      - **HTTP** — know the idempotency table (GET/PUT/DELETE yes, POST no)
+        and the 401 vs 403 distinction cold.
+      - **Routing** — path params identify *which* resource; query strings
+        shape *how* it is returned.
+      - **Controllers & middleware** — the chain order (logger → auth → rate
+        limit → router → error handler last) and why controllers stay thin.
+      - **Validation** — server-side validation is non-negotiable; DTOs stop
+        mass assignment.
+      - **Auth** — sessions = instant revocation, JWT = scale; bcrypt is slow
+        on purpose; HttpOnly/Secure/SameSite on every cookie.
+      - **API design** — plural nouns, no verbs, nest only real ownership,
+        version URLs, Idempotency-Key on payments.
+      - **PostgreSQL** — transactions give checkout atomicity; pools reuse
+        connections; money is numeric, never float.
+      - **Caching** — cache-aside: update the DB, then invalidate the key;
+        TTL bounds staleness.
+      - **The project arc** — re-run the three solve() exercises by hand:
+        merging keeps the original price, checkout checks stock before money,
+        and the sliding window is inclusive on both edges.
+      - **Docker** — non-root USER, healthchecks gate startup, and service
+        names are DNS names on the Compose network.
+      - Re-attempt any question you missed, then walk the curl walkthrough
+        from lesson 13 (register → login → add to cart → checkout → 429) as
+        the final end-to-end review.
+---

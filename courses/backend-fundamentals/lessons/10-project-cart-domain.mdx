@@ -1,0 +1,258 @@
+---
+id: project-cart-domain
+title: "Project 1: Cart Domain"
+difficulty: medium
+order: 10
+tags: [cart, service, utils]
+blocks:
+  - type: markdown
+    content: |
+      # Project 1: Cart Domain
+
+      **Context.** You are building the storefront backend of a small e-commerce
+      site ("Shop"). This lesson is the first of a four-lesson project arc:
+      cart domain → checkout pipeline → rate limiter → Docker assembly. By the
+      end of lesson 13 you will have shipped the whole API. Today you build the
+      **cart domain**: the pure logic that the `CartService` runs on every
+      "add to cart" request.
+
+      **What you are building this step.** The heart of the cart is one rule:
+      *an item already in the cart is merged, not duplicated*. Two requests for
+      the same product must produce one cart line with summed quantity — never
+      two lines. Every line carries its unit price, and the service derives the
+      **line total** (`qty × price`) so the controller never does arithmetic.
+
+      **Acceptance criteria**
+
+      - `POST /api/cart/items` with `{itemId, qty}` adds or merges a line.
+      - `GET /api/cart` returns cart rows, each with a line total.
+      - `DELETE /api/cart/items/:id` removes a line.
+      - Merging an existing line keeps its original unit price (the price
+        snapshot from when it was first added).
+      - The merge + line-total logic is a pure function — no HTTP, no SQL —
+        so it is trivially unit-testable. That pure function is your graded
+        exercise.
+  - type: markdown
+    content: |
+      ## Deliverables — where this logic lives in the real project
+
+      The request flows **route → controller → service → repository**. The
+      controller parses the request and formats the response; the service owns
+      the domain rule; the repository owns the SQL. The graded `solve()` is the
+      `mergeLine` step inside `CartService.addItem`.
+
+      ```js
+      // routes/cart.js — mounted at /api/cart
+      const router = require('express').Router();
+      const cartController = require('../controllers/cartController');
+
+      router.post('/items', cartController.addItem);        // POST /api/cart/items
+      router.get('/', cartController.getCart);              // GET  /api/cart
+      router.delete('/items/:id', cartController.removeItem); // DELETE /api/cart/items/:id
+
+      module.exports = router;
+      ```
+
+      ```js
+      // controllers/cartController.js — thin: parse, delegate, respond
+      const cartService = require('../services/cartService');
+
+      async function addItem(req, res, next) {
+        try {
+          const { itemId, qty, price } = req.body; // validated by a zod schema upstream
+          const rows = await cartService.addItem(req.user.id, itemId, qty, price);
+          res.status(201).json({ data: rows });    // rows already carry line totals
+        } catch (err) { next(err); }
+      }
+
+      async function getCart(req, res, next) {
+        try {
+          const rows = await cartService.getCart(req.user.id);
+          res.json({ data: rows });
+        } catch (err) { next(err); }
+      }
+
+      module.exports = { addItem, getCart, removeItem };
+      ```
+
+      ```js
+      // services/cartService.js — the domain rule lives here
+      const cartRepository = require('../repositories/cartRepository');
+
+      async function addItem(userId, itemId, qty, price) {
+        const rows = await cartRepository.getItems(userId); // rows [id, qty, price]
+        const updated = mergeLine(rows, itemId, qty, price); // ← solve()'s logic
+        await cartRepository.upsertItems(userId, updated);
+        return updated;
+      }
+
+      function mergeLine(rows, itemId, qty, price) {
+        // ── the graded exercise implements exactly this as solve() ──
+        // 1. find the row with row[0] === itemId
+        // 2. found  → row[1] += qty   (keep the original unit price)
+        // 3. missing → append [itemId, qty, price]
+        // 4. map every row to [id, qty, price, qty * price]
+      }
+
+      module.exports = { addItem, getCart, removeItem };
+      ```
+
+      Why keep this out of the controller? A controller that does arithmetic is
+      a controller you cannot unit-test without spinning up HTTP. The rule
+      "merge, don't duplicate" is a business rule — it belongs in the service
+      layer, next to the repository, and it must be pure.
+  - type: markdown
+    content: |
+      ## The graded exercise
+
+      Implement `solve(items, itemId, qty, price)`:
+
+      - `items` — the current cart, rows of `[id, qty, price]` (id = product id).
+      - `itemId`, `qty`, `price` — the item being added (`qty >= 1`).
+      - If a row with that id already exists, **add qty to that row** and keep
+        its existing unit price. Otherwise **append** a new row.
+      - Return the updated rows, each with the **line total** appended as a
+        4th element: `[id, qty, price, qty * price]`.
+
+      :::example
+      Cart is `[[1, 2, 100]]` — product 1, qty 2, at 100¢. You add product 1,
+      qty 3, at 100¢. The id exists, so qty merges: `2 + 3 = 5`. The updated
+      row is `[1, 5, 100, 5 × 100 = 500]` → `[[1, 5, 100, 500]]`.
+      :::
+
+      :::example
+      Cart is `[[1, 1, 50], [2, 2, 25]]`. You add a *new* product 3, qty 1, at
+      10¢. No row has id 3, so it is appended: the result is
+      `[[1, 1, 50, 50], [2, 2, 25, 50], [3, 1, 10, 10]]`.
+      :::
+
+      **Private cases you should handle:** empty cart (add into `[]` → a single
+      new row); merging an existing line keeps the **original** unit price even
+      if the incoming price differs; large quantities and prices (the line total
+      can reach billions — keep full integer precision). All quantities are
+      `>= 1`, so there is no zero-qty removal to worry about.
+  - type: code
+    task: "Implement solve(items, itemId, qty, price): merge the item into the cart (rows [id, qty, price], qty >= 1) and return the updated rows with the line total qty*price appended as a 4th element. Merging an existing id adds qty and keeps the original unit price."
+    languages: [javascript, python]
+    signature:
+      javascript: "function solve(items, itemId, qty, price)"
+      python: "def solve(items: list[list[int]], item_id: int, qty: int, price: int) -> list[list[int]]"
+    starter:
+      javascript: |
+        function solve(items, itemId, qty, price) {
+          // Merge the item into the cart (rows are [id, qty, price]) and
+          // return the updated rows with a line total as the 4th element.
+          return items;
+        }
+      python: |
+        def solve(items: list[list[int]], item_id: int, qty: int, price: int) -> list[list[int]]:
+            # Merge the item into the cart (rows are [id, qty, price]) and
+            # return the updated rows with a line total as the 4th element.
+            return items
+    tests:
+      public:
+        - name: "merge into existing line"
+          args: [[[1, 2, 100]], 1, 3, 100]
+          expected: [[1, 5, 100, 500]]
+        - name: "append new line"
+          args: [[[1, 1, 50], [2, 2, 25]], 3, 1, 10]
+          expected: [[1, 1, 50, 50], [2, 2, 25, 50], [3, 1, 10, 10]]
+      private:
+        - name: "empty cart"
+          args: [[], 7, 2, 500]
+          expected: [[7, 2, 500, 1000]]
+        - name: "merge keeps original price"
+          args: [[[1, 2, 100], [2, 1, 50]], 1, 1, 200]
+          expected: [[1, 3, 100, 300], [2, 1, 50, 50]]
+        - name: "large quantities and prices"
+          args: [[[1, 1000000, 9999]], 1, 1000000, 9999]
+          expected: [[1, 2000000, 9999, 19998000000]]
+    hints:
+      - "Scan the rows for one whose first element equals itemId before you do anything else."
+      - "If found, add qty to that row's quantity and do NOT append a new row. If not found, append [itemId, qty, price]."
+      - "Finally map every row to [row[0], row[1], row[2], row[1] * row[2]] — the line total uses the row's own price."
+    solution: |
+      def solve(items: list[list[int]], item_id: int, qty: int, price: int) -> list[list[int]]:
+          for row in items:
+              if row[0] == item_id:
+                  row[1] += qty
+                  break
+          else:
+              items.append([item_id, qty, price])
+          return [[row[0], row[1], row[2], row[1] * row[2]] for row in items]
+  - type: flowchart
+    title: "add-to-cart request lifecycle"
+    nodes: ["Client", "POST /api/cart/items", "auth middleware", "CartController", "CartService.addItem", "CartRepository", "PostgreSQL", "201 Created"]
+    edges:
+      - {from: 0, to: 1, label: "HTTP + JWT"}
+      - {from: 1, to: 2, label: "verify token"}
+      - {from: 2, to: 3, label: "req.user"}
+      - {from: 3, to: 4, label: "mergeLine = solve()"}
+      - {from: 4, to: 5, label: "upsert rows"}
+      - {from: 5, to: 6, label: "SQL"}
+      - {from: 6, to: 7, label: "rows + totals"}
+  - type: markdown
+    content: |
+      ## Interview questions
+
+      :::tip
+      **Interview question:** Why is the cart's add-item rule a pure function
+      of `(items, itemId, qty, price)` rather than living inline in the route
+      handler? Because a pure function has no hidden state — no HTTP request,
+      no database connection — so you can test every branch (merge, append,
+      empty cart, big numbers) in milliseconds without spinning up the app.
+      That is the whole point of the service layer: business rules that are
+      fast to verify and safe to reuse.
+      :::
+
+      :::tip
+      **Interview question:** Why merge quantities instead of always appending
+      a new line per request? Because a cart is a *set of products with
+      quantities*, not a log of clicks. Two lines for the same product make
+      checkout ambiguous (which line wins?), double the storage, and confuse
+      the shopper. Merging also preserves the price snapshot — the price at
+      which the item was first added — which is what you actually charge at
+      checkout.
+      :::
+
+      **Use case.** Every "add to cart" button on the storefront fans out to
+      this one function. A user who taps *Add* twice for the same product gets
+      qty 2 on one line — and the cart total (`Σ qty × price`) stays correct
+      because the line total is derived, never stored separately.
+  - type: mcq
+    prompt: "The cart already has a line for product 7. The user adds product 7 again. What does the merged line look like?"
+    options:
+      - "A new line is appended, so product 7 appears twice."
+      - "The existing line's qty is increased; the line total is recomputed."
+      - "The existing line's qty is replaced by the new qty."
+      - "The existing line is deleted and re-created with the new price."
+    answer: 1
+    explanation: "Merging means qty += incoming qty on the existing line. The line total is derived as qty × price, so it is recomputed on read."
+  - type: mcq
+    prompt: "Why are line totals computed in the service layer instead of the controller?"
+    options:
+      - "Controllers cannot do multiplication."
+      - "The controller should only parse the request and delegate; keeping arithmetic in the service makes it unit-testable and keeps one source of truth."
+      - "Line totals must be computed by the database."
+      - "It is faster to compute totals in the controller."
+    answer: 1
+    explanation: "Controllers are thin by design: parse, delegate, respond. Business math (line totals, merges) lives in the service where it can be tested without HTTP."
+  - type: mcq
+    prompt: "Which HTTP endpoint removes a line from the cart?"
+    options:
+      - "DELETE /api/cart/items/:id"
+      - "POST /api/cart/items"
+      - "GET /api/cart"
+      - "PUT /api/cart/items/:id"
+    answer: 0
+    explanation: "DELETE targets the resource identified by :id — the cart line for that product."
+  - type: mscq
+    prompt: "Which responsibilities belong to CartService (not to the controller or repository)?"
+    options:
+      - "Parsing the JSON request body"
+      - "Merging quantities when the same product is added twice"
+      - "Computing line totals"
+      - "Writing the upsert SQL"
+    answer: [1, 2]
+    explanation: "Merging and line totals are business rules — service territory. Parsing the body is the controller's job; SQL belongs to the repository."
+---

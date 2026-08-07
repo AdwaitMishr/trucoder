@@ -1,0 +1,218 @@
+---
+id: request-context-and-controllers
+title: "Request Context, Middleware & Controllers"
+difficulty: easy
+order: 4
+tags: [middleware, controllers, req-res]
+blocks:
+  - type: markdown
+    content: |
+      When a request reaches your framework, it creates two objects that
+      travel through the whole lifecycle:
+
+      - **`req` (request)** — everything about the incoming request: method,
+        path, params, query, headers, body — plus anything middleware
+        attaches to it.
+      - **`res` (response)** — how you send data back: status code, headers,
+        body.
+
+      Together they form the **request context**: a temporary, isolated
+      state bucket that lives and dies with one HTTP request. Middleware and
+      handlers are separate functions; the context is how they communicate
+      without being tightly coupled.
+
+      Classic uses:
+
+      - **Auth data** — the auth middleware verifies the token and stores
+        `req.user = { id, role }`; the controller reads `req.user.id` when
+        saving an order. *Never* trust a `user_id` from the client's JSON
+        body — it can be spoofed; identity must come from the verified token.
+      - **Request tracing** — a middleware generates a unique id for the
+        request; every log line carries it, so you can trace one request
+        through the whole system.
+      - **Deadlines** — the context can carry a timeout so slow work is
+        cancelled if the client disconnects.
+
+      **Use case:** the checkout flow attaches the authenticated user to
+      `req.user` in the auth middleware; the order controller uses it — the
+      client never sends "who I am", only *what* it wants to buy.
+
+      :::tip
+      **Interview question:** Why should you never trust a user id sent in
+      the request body?
+      — Anyone can POST `{ "userId": 1, "productId": 42 }` with a forged id.
+      The only trustworthy identity is what the auth middleware derived from
+      a verified token and stored on the request context (`req.user.id`).
+      Always read identity from the context, never from client-supplied
+      fields.
+      :::
+  - type: markdown
+    content: |
+      ## Middleware: the request pipeline
+
+      A **middleware** is a function executed *in the middle* of the
+      lifecycle — before the router and handler. Its signature is
+      `(req, res, next)`:
+
+      - `next()` — pass execution to the next middleware in the chain.
+      - **Early termination** — a middleware may skip `next()` and send a
+        response itself: the auth middleware returns `401` for a bad token
+        and the request never reaches the handler.
+
+      Why middleware? To kill duplication: write authentication once, mount
+      it in front of every protected route, instead of pasting auth code
+      into 100 handlers.
+
+      Common middleware, in typical order:
+
+      1. **CORS** — allow the storefront origin, set allowed
+         headers/methods.
+      2. **Logger** — record method, path, duration.
+      3. **Auth** — verify the JWT/session cookie; `401` or attach
+         `req.user`.
+      4. **Rate limiter** — `429` when a client exceeds the limit.
+      5. **Router → handler** — your actual endpoints.
+      6. **Global error handler** — LAST: catches unhandled errors from any
+         layer and formats a clean 500 JSON.
+
+      :::tip
+      **Interview question:** What is middleware?
+      — A function with `(req, res, next)` that runs between receiving the
+      request and executing the handler. It can inspect or transform the
+      request, end the request early (e.g. 401 on a bad token, 429 when
+      rate-limited), or call `next()` to continue down the chain. It exists
+      to keep cross-cutting concerns — auth, logging, rate limiting, CORS —
+      out of every individual handler.
+      :::
+  - type: flowchart
+    title: "middleware chain"
+    nodes: ["Incoming request", "Logger", "Auth", "Rate limiter", "Router", "Controller / handler", "Error handler (last)", "Client"]
+    edges:
+      - {from: 0, to: 1, label: "next()"}
+      - {from: 1, to: 2, label: "next()"}
+      - {from: 2, to: 3, label: "next()"}
+      - {from: 2, to: 7, label: "401: bad token"}
+      - {from: 3, to: 4, label: "next()"}
+      - {from: 3, to: 7, label: "429: too many"}
+      - {from: 4, to: 5, label: "route match"}
+      - {from: 5, to: 7, label: "response"}
+      - {from: 5, to: 6, label: "unhandled error"}
+      - {from: 6, to: 7, label: "500 JSON"}
+  - type: markdown
+    content: |
+      ## Controller → Service → Repository
+
+      Modern backends split the handler's job into three layers:
+
+      **Controller (HTTP layer)** — the entry and exit point of a route:
+
+      1. Extracts data: params, query, body.
+      2. Deserializes JSON into native structures.
+      3. Validates and transforms (see the next lesson).
+      4. Delegates to a service.
+      5. Formats the HTTP response with the right status code.
+
+      **Service (business logic)** — knows *nothing* about HTTP: no `req`,
+      no `res`, no status codes. It runs the actual logic (payments,
+      discounts, orchestration) and triggers side effects (emails,
+      webhooks). It can call several repository methods and merge the
+      results.
+
+      **Repository (data access)** — the only layer that talks to the
+      database. It builds SQL/ORM queries, executes them, and returns raw
+      data. One method does one thing: `findOrderById(id)`, not an if/else
+      grab-bag.
+
+      **Use case:** `POST /cart/items` flows: auth middleware → validation
+      middleware → `CartController.addItem` (parses body) →
+      `CartService.addItem` (price checks, line totals) →
+      `CartRepository.upsert` (SQL) → controller answers `201` with the new
+      cart.
+  - type: flowchart
+    title: "three-layer architecture"
+    nodes: ["Client (HTTP request)", "Controller — parse, validate, delegate", "Service — business logic", "Repository — SQL queries", "Database", "Response (status + JSON)"]
+    edges:
+      - {from: 0, to: 1, label: "request"}
+      - {from: 1, to: 2, label: "clean data"}
+      - {from: 2, to: 3, label: "persist / read"}
+      - {from: 3, to: 4, label: "SQL"}
+      - {from: 3, to: 2, label: "raw rows"}
+      - {from: 2, to: 1, label: "result"}
+      - {from: 1, to: 5, label: "response"}
+  - type: markdown
+    content: |
+      ## Thin controllers and error handling
+
+      Keep controllers **thin**: they translate HTTP into application calls
+      and back — nothing else. That makes services testable without HTTP,
+      reusable from CLI jobs or queue workers, and keeps responses
+      consistent.
+
+      Error handling spans the chain: handlers `try/catch`, and the
+      **global error middleware** at the end catches anything that escaped,
+      converting it into a clean 500 JSON instead of a crash or stack trace.
+
+      :::example
+      **Worked example — POST /cart/items, step by step:**
+
+      1. **Auth middleware**: verifies `Authorization: Bearer …`, attaches
+         `req.user = { id: 7 }`, calls `next()`.
+      2. **Validation middleware**: checks `productId` is an int and `qty`
+         is an int ≥ 1; on failure responds `422` and stops the chain.
+      3. **CartController.addItem**: reads `req.user.id` and `req.body`,
+         calls `cartService.addItem(7, { productId: 42, qty: 2 })`.
+      4. **CartService**: checks the product exists, computes the line
+         total, calls `cartRepository.upsert(...)`.
+      5. **CartRepository**: runs `INSERT … ON CONFLICT (user_id,
+         product_id) DO UPDATE SET qty = qty + excluded.qty`.
+      6. **CartController** responds `201 Created` with the cart summary.
+      7. If anything throws, the **error middleware** responds `500` JSON —
+         the client never sees a raw crash.
+      :::
+
+      :::tip
+      **Interview question:** Why keep controllers thin?
+      — Controllers should only convert HTTP into application calls:
+      extract, validate, delegate, respond. Business logic in services is
+      testable without spinning up HTTP, reusable across entry points (API,
+      CLI, workers), and keeps status codes and error formats consistent. A
+      controller full of business logic is the first sign of a maintenance
+      problem.
+      :::
+  - type: mcq
+    prompt: "What does next() do in a middleware?"
+    options:
+      - "passes execution to the next middleware in the chain"
+      - "restarts the request from the beginning"
+      - "sends the response to the client"
+      - "closes the server"
+    answer: 0
+    explanation: "next() hands control to the following middleware. A middleware that doesn't call next() ends the request early by responding itself."
+  - type: mcq
+    prompt: "Which layer must know nothing about HTTP?"
+    options:
+      - "controller"
+      - "service"
+      - "router"
+      - "middleware"
+    answer: 1
+    explanation: "Services run business logic and never touch req/res or status codes — that is the controller's job."
+  - type: mcq
+    prompt: "The auth middleware finds an invalid token. What should it do?"
+    options:
+      - "call next() and let the handler decide"
+      - "respond 401 and skip next()"
+      - "respond 200 with an empty body"
+      - "store the token in req.user"
+    answer: 1
+    explanation: "Early termination: respond 401 immediately and don't call next(), so the request never reaches the handler."
+  - type: mscq
+    prompt: "Which of these are typical middleware responsibilities?"
+    options:
+      - "CORS headers"
+      - "authentication"
+      - "rate limiting"
+      - "calculating order discounts"
+    answer: [0, 1, 2]
+    explanation: "CORS, auth, and rate limiting are cross-cutting concerns that belong in middleware. Discount math is business logic — it belongs in a service."
+---

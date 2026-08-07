@@ -1,0 +1,247 @@
+---
+id: http
+title: "HTTP: Methods, Status Codes, and Headers"
+difficulty: beginner
+order: 2
+tags: [http, status-codes, headers]
+blocks:
+  - type: markdown
+    content: |
+      HTTP (Hypertext Transfer Protocol) is how browsers and servers exchange
+      data. Two ideas define it:
+
+      **Statelessness** — the server has no memory of past interactions. Every
+      request is treated as a completely new, unrelated event, so each request
+      must carry everything the server needs (tokens, cookies). That buys
+      *simplicity* (no per-server session memory) and *scalability* (any
+      server can handle any request, so load balancing is trivial).
+
+      **Client-server model** — communication is always initiated by the
+      client. The server hosts resources and passively waits for requests,
+      processes them, and responds.
+
+      ## Key points
+
+      - HTTP is an application-layer (OSI layer 7) protocol that runs over
+        TCP.
+      - Stateless requests are self-contained: headers carry identity and
+        context.
+      - Because of statelessness, sessions and tokens exist — more on that
+        below.
+
+      **Use case:** your storefront serves `GET /api/products` from any of
+      ten load-balanced servers — statelessness makes that safe.
+  - type: markdown
+    content: |
+      ## Anatomy of an HTTP message
+
+      A **request** has four parts:
+
+      1. **Request line** — method + path + version: `POST /orders HTTP/1.1`
+      2. **Headers** — key-value metadata: `Host: api.shop.com`
+      3. **Blank line** — marks the end of the headers
+      4. **Body (optional)** — the payload, e.g. a JSON order
+
+      A **response** mirrors it:
+
+      1. **Status line** — version + code + message: `HTTP/1.1 201 Created`
+      2. **Headers** — e.g. `Content-Type: application/json`
+      3. **Blank line**
+      4. **Body** — the requested data or an error object
+
+      :::example
+      **Worked example — placing an order.** The checkout page sends:
+
+      ```http
+      POST /orders HTTP/1.1
+      Host: api.shop.com
+      Authorization: Bearer eyJhbGciOi...
+      Content-Type: application/json
+
+      {"items":[{"productId":42,"qty":2}],"addressId":7}
+      ```
+
+      The backend creates the order and replies:
+
+      ```http
+      HTTP/1.1 201 Created
+      Content-Type: application/json
+      Location: /orders/2049
+
+      {"orderId":2049,"total":5998,"status":"confirmed"}
+      ```
+
+      Note the status line, the headers (`Content-Type`, `Location`), and the
+      JSON body — and that the client's identity travelled in the
+      `Authorization` header, not in server memory.
+      :::
+  - type: flowchart
+    title: "request / response anatomy"
+    nodes: ["Request line (POST /orders HTTP/1.1)", "Request headers", "Blank line", "Request body (JSON)", "Server processes", "Status line (201 Created)", "Response headers", "Response body"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6}
+      - {from: 6, to: 7}
+  - type: markdown
+    content: |
+      ## Methods: intent, safety, idempotency
+
+      Methods declare the **intent** of the request:
+
+      | Method | Meaning | Example | Idempotent? |
+      |---|---|---|---|
+      | GET | fetch data | `GET /products/42` | yes (safe, no side effects) |
+      | POST | create | `POST /orders` | **no** — twice = two orders |
+      | PUT | full replace | `PUT /users/7` | yes |
+      | PATCH | partial update | `PATCH /users/7` (just the name) | no |
+      | DELETE | remove | `DELETE /cart/items/9` | yes |
+      | OPTIONS | ask capabilities (CORS preflight) | `OPTIONS /orders` | yes |
+
+      A method is **idempotent** when calling it N times leaves the same end
+      state as calling it once. GET, PUT, and DELETE are idempotent; POST is
+      not — double-clicking "Place order" must be defended server-side
+      (idempotency keys, see the API design lesson).
+
+      :::tip
+      **Interview question:** What is the difference between GET and POST?
+      — GET fetches a resource: it is *safe* (no side effects) and
+      *idempotent* (any number of identical GETs changes nothing). POST
+      creates a resource and is non-idempotent: two identical POSTs create
+      two resources. That's why retrying a failed checkout needs an
+      idempotency key rather than a plain POST retry.
+      :::
+  - type: markdown
+    content: |
+      ## Status codes: 1xx–5xx
+
+      Status codes standardize the *result* of a request so clients don't
+      have to guess from the body:
+
+      - **1xx Informational** — `100 Continue` (go ahead and send the body),
+        `101 Switching Protocols` (WebSocket upgrade).
+      - **2xx Success** — `200 OK`, `201 Created` (resource made), `204 No
+        Content` (success, no body — common for DELETE).
+      - **3xx Redirection** — `301 Moved Permanently`, `302 Found`, `304 Not
+        Modified` (caching: use your saved copy).
+      - **4xx Client errors** — *you* messed up the request: `400 Bad
+        Request`, `401 Unauthorized` (missing/invalid credentials), `403
+        Forbidden` (authenticated but not allowed), `404 Not Found`, `405
+        Method Not Allowed`, `409 Conflict` (e.g. email already registered),
+        `422 Unprocessable Entity` (valid JSON, invalid values), `429 Too
+        Many Requests` (rate limited).
+      - **5xx Server errors** — *the server* messed up: `500 Internal Server
+        Error`, `502 Bad Gateway` / `504 Gateway Timeout` (a proxy can't
+        reach the backend), `503 Service Unavailable` (overloaded or in
+        maintenance).
+
+      :::tip
+      **Interview question:** What's the difference between 401 and 403?
+      — 401 Unauthorized means the request lacks valid authentication: the
+      server doesn't know *who you are* (missing or invalid token). 403
+      Forbidden means the server knows who you are but you're not *allowed*
+      to do this — a customer hitting an admin-only endpoint gets 403, not
+      401.
+      :::
+  - type: flowchart
+    title: "status code families"
+    nodes: ["Status code", "1xx Informational", "2xx Success", "3xx Redirection", "4xx Client error", "5xx Server error", "200 OK · 201 Created · 204 No Content", "301 · 302 · 304 Not Modified", "400 · 401 · 403 · 404 · 409 · 422 · 429", "500 · 502 · 503 · 504"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 0, to: 2}
+      - {from: 0, to: 3}
+      - {from: 0, to: 4}
+      - {from: 0, to: 5}
+      - {from: 2, to: 6}
+      - {from: 3, to: 7}
+      - {from: 4, to: 8}
+      - {from: 5, to: 9}
+  - type: markdown
+    content: |
+      ## Headers: the shipping labels of HTTP
+
+      Headers are metadata attached to requests and responses — like the
+      label on a parcel: they tell the network and the server how to handle
+      the package without opening it. The ones you'll meet constantly:
+
+      - `Content-Type` — what the body is: `application/json`,
+        `multipart/form-data`.
+      - `Authorization` — credentials: `Bearer <jwt>` or `Basic ...`.
+      - `Cache-Control` — freshness: `max-age=10` (cache for 10 seconds).
+      - `Set-Cookie` — the server plants a cookie (`HttpOnly`, `Secure`
+        flags).
+      - `Access-Control-Allow-Origin` / `-Methods` / `-Headers` — CORS: the
+        server tells the browser which origins may read the response.
+      - `Content-Encoding: gzip` — the body is compressed.
+      - Security: `Strict-Transport-Security` (force HTTPS),
+        `Content-Security-Policy` (block XSS).
+
+      **Use case:** the storefront's image CDN returns
+      `Cache-Control: max-age=3600` and an `ETag` on product photos, so
+      repeat visits reuse the cached images and only changed files are
+      re-downloaded (`304 Not Modified`).
+  - type: markdown
+    content: |
+      ## Statelessness: why sessions and tokens exist
+
+      Because HTTP has no memory, each request must prove who it is. Two
+      standard solutions:
+
+      - **Server-side sessions** — the server stores session state (often in
+        Redis) keyed by a session id the client sends as a cookie.
+      - **Tokens** — the client holds a signed token (e.g. JWT) and sends it
+        in the `Authorization` header; the server verifies the signature
+        without storing anything.
+
+      Either way the principle is the same: **the request carries its own
+      context**. Your cart API reads the user id from the token, not from
+      server memory of a previous request.
+
+      :::tip
+      **Interview question:** Why does HTTP statelessness matter for scaling?
+      — A stateless server holds no per-user memory, so any instance can
+      serve any request. You can add servers behind a load balancer and
+      spread traffic freely. The moment servers keep sessions in local
+      memory, requests get stuck to one instance and scaling breaks.
+      :::
+  - type: mcq
+    prompt: "Which HTTP method is NOT idempotent?"
+    options:
+      - "GET"
+      - "PUT"
+      - "DELETE"
+      - "POST"
+    answer: 3
+    explanation: "POST creates a new resource each time — two identical POSTs create two resources. GET, PUT, and DELETE leave the same end state no matter how many times they run."
+  - type: mcq
+    prompt: "A user is logged in but tries to delete an order that belongs to someone else. What status code fits best?"
+    options:
+      - "401 Unauthorized"
+      - "403 Forbidden"
+      - "404 Not Found"
+      - "429 Too Many Requests"
+    answer: 1
+    explanation: "The user is authenticated (so not 401) but lacks permission for this action — that is 403 Forbidden."
+  - type: mcq
+    prompt: "Your checkout endpoint successfully created an order. Which status code should it return?"
+    options:
+      - "200 OK"
+      - "201 Created"
+      - "204 No Content"
+      - "302 Found"
+    answer: 1
+    explanation: "201 Created signals that a new resource was created and usually comes with a Location header pointing at it."
+  - type: mscq
+    prompt: "Which of these are 4xx client-error codes?"
+    options:
+      - "400 Bad Request"
+      - "502 Bad Gateway"
+      - "429 Too Many Requests"
+      - "503 Service Unavailable"
+      - "404 Not Found"
+    answer: [0, 2, 4]
+    explanation: "400, 429, and 404 are client errors. 502 and 503 are 5xx server errors — the server or its upstream failed."
+---

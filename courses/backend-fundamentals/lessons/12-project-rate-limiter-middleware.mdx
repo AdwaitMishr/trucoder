@@ -1,0 +1,266 @@
+---
+id: project-rate-limiter-middleware
+title: "Project 3: Rate Limiter & Middleware"
+difficulty: medium
+order: 12
+tags: [rate-limiter, middleware, sliding-window]
+blocks:
+  - type: markdown
+    content: |
+      # Project 3: Rate Limiter & Middleware
+
+      **Context.** The shop is live and the first bot attack arrives: one IP
+      hammers `POST /api/auth/login` a thousand times a minute, and a scraper
+      drains the product catalog. You need a **rate limiter** — and because
+      Express is a middleware chain, the limiter is just one link in it. This
+      lesson builds the **sliding-window rate limiter** and shows where it
+      sits in the chain: logger → auth → rate limit → controller.
+
+      **What you are building this step.** The allow/deny decision of a
+      sliding-window limiter. For each request you know its timestamp and the
+      request's key (user id or IP). A request is allowed when the window
+      `[t − window_ms, t]` — **inclusive on both edges** — holds **at most
+      `limit`** requests, counting the current one. Denied requests get
+      **429 Too Many Requests** with a `Retry-After` header. The graded
+      `solve()` is that decision, applied to a stream of timestamps.
+
+      **Acceptance criteria**
+
+      - `app.use('/api', limiter)` protects every API route, not just auth.
+      - A request that pushes the window over `limit` → **429** + `Retry-After`.
+      - The window slides: old requests expire out of it as time moves on.
+      - The middleware chain order is fixed: logger → auth → rate limit →
+        controller, so unauthenticated and rate-limited traffic never reaches
+        your controllers.
+  - type: markdown
+    content: |
+      ## Deliverables — the limiter middleware
+
+      The limiter is Express middleware: it decides `next()` or 429. The store
+      can be in-memory (single instance) or Redis-backed (multi-instance); the
+      decision rule is the same — that rule is your graded `solve()`.
+
+      ```js
+      // middleware/rateLimiter.js — sliding window per key
+      const redis = require('../db/redis');
+
+      function rateLimiter({ limit, windowMs, keyFn }) {
+        return async function rateLimit(req, res, next) {
+          const key = keyFn(req);                 // user id, or IP for anonymous
+          const now = Date.now();
+          const min = now - windowMs;             // left edge of the window
+
+          const pipe = redis.multi();
+          pipe.zremrangebyscore(key, 0, min - 1);  // drop requests strictly older than the left edge (window is inclusive)
+          pipe.zcard(key);                          // count what is left
+          const [ , count] = await pipe.exec();
+
+          // ── the decision: this is exactly solve()'s rule ──
+          if (count >= limit) {                   // window already full
+            const [oldest] = await redis.zrange(key, 0, 0, 'WITHSCORES');
+            const retryAfter = Math.max(1, Math.ceil((Number(oldest[1]) + windowMs - now) / 1000));
+            return res.status(429)
+              .set('Retry-After', String(retryAfter))
+              .json({ error: { code: 'RATE_LIMITED', message: 'Too many requests' } });
+          }
+
+          await redis.zadd(key, now, `${now}:${req.id}`);   // record this request
+          await redis.expire(key, Math.ceil(windowMs / 1000));
+          next();                                 // allowed
+        };
+      }
+
+      module.exports = { rateLimiter };
+      ```
+
+      ```js
+      // app.js — where it plugs into the chain
+      const { rateLimiter } = require('./middleware/rateLimiter');
+      const { requireAuth } = require('./middleware/auth');
+
+      app.use(express.json());
+
+      // chain order matters: logger → auth → rate limit → controller
+      app.use('/api', requestLogger);                                        // 1
+      app.use('/api/auth', require('./routes/auth'));                        // public — no auth/limiter
+      app.use('/api/cart', requireAuth,                                      // 2 auth first (sets req.user)
+        rateLimiter({ limit: 60, windowMs: 60_000,                           // 3 then the limiter
+          keyFn: (req) => `user:${req.user.id}` }),                          //    keyed on the authed user
+        require('./routes/cart'));                                           // 4 then the controller
+      ```
+
+      Why **sliding** rather than fixed windows? A fixed window (reset every
+      minute at :00) lets a burst at :59 and another at :00 sneak through as
+      ~2× the limit. The sliding window counts the *last* `window_ms` of real
+      time, so a burst is a burst no matter where the clock hand is. The price
+      is state: you must remember each request's timestamp (a Redis sorted
+      set), not just a counter.
+  - type: markdown
+    content: |
+      ## The graded exercise
+
+      Implement `solve(timestamps, limit, windowMs)`:
+
+      - `timestamps` — request times in **milliseconds**, already **sorted
+        non-decreasing** (they arrive in real time).
+      - `limit`, `windowMs` — the budget and the window length.
+      - Return one boolean per request: `true` = allowed, `false` = denied.
+      - **Convention:** the window is `[t − windowMs, t]`, inclusive on both
+        edges. A request is allowed when the window holds **at most `limit`**
+        requests including itself (equivalently: fewer than `limit` *earlier*
+        requests are inside the window). The edge is inclusive — a request at
+        exactly `t − windowMs` is still inside.
+
+      :::example
+      `([100, 200, 300], 2, 200)`: at 300 the window `[100, 300]` holds
+      100, 200, 300 — three requests, more than the limit of 2 → deny. At 200
+      the window `[0, 200]` holds exactly 2 → allowed (at most 2). Result:
+      `[true, true, false]`.
+      :::
+
+      :::example
+      `([100, 200, 300, 400], 3, 300)`: at 400 the window `[100, 400]` holds
+      all four → 4 > 3 → deny. Result: `[true, true, true, false]`.
+      :::
+
+      **Private cases you should handle:** empty input → `[]`; a single
+      request → always allowed; the **exact boundary** (an earlier request at
+      exactly `t − windowMs` counts as inside the window — inclusive left
+      edge); a burst of identical timestamps (three requests at the same ms
+      with limit 1 → only the first is allowed); a limit larger than the whole
+      input → everything allowed.
+  - type: code
+    task: "Implement solve(timestamps, limit, windowMs): return one boolean per timestamp — true if allowed, false if denied. Convention: window [t - windowMs, t] inclusive on both edges; allowed when the window holds at most `limit` requests including the current one."
+    languages: [javascript, python]
+    signature:
+      javascript: "function solve(timestamps, limit, windowMs)"
+      python: "def solve(timestamps: list[int], limit: int, window_ms: int) -> list[bool]"
+    starter:
+      javascript: |
+        function solve(timestamps, limit, windowMs) {
+          // timestamps are sorted non-decreasing (ms). Return one boolean
+          // per request: allowed if the window [t - windowMs, t] holds
+          // at most `limit` requests including the current one.
+          return [];
+        }
+      python: |
+        def solve(timestamps: list[int], limit: int, window_ms: int) -> list[bool]:
+            # timestamps are sorted non-decreasing (ms). Return one boolean
+            # per request: allowed if the window [t - window_ms, t] holds
+            # at most `limit` requests including the current one.
+            return []
+    tests:
+      public:
+        - name: "sliding window denies the third"
+          args: [[100, 200, 300], 2, 200]
+          expected: [true, true, false]
+        - name: "longer window, bigger limit"
+          args: [[100, 200, 300, 400], 3, 300]
+          expected: [true, true, true, false]
+      private:
+        - name: "empty input"
+          args: [[], 5, 1000]
+          expected: []
+        - name: "single request"
+          args: [[100], 1, 100]
+          expected: [true]
+        - name: "exact boundary is inclusive"
+          args: [[100, 300], 2, 200]
+          expected: [true, true]
+        - name: "burst at the same timestamp"
+          args: [[100, 100, 100], 1, 1000]
+          expected: [true, false, false]
+        - name: "limit larger than input"
+          args: [[100, 200, 300], 100, 50]
+          expected: [true, true, true]
+    hints:
+      - "For each timestamp, count how many timestamps (itself included) are within windowMs — walk backwards while t - timestamps[j] <= windowMs."
+      - "Because the input is non-decreasing, you can stop at the first out-of-window timestamp; every earlier one is also out."
+      - "Allow when that count <= limit. The left edge is inclusive: a request at exactly t - windowMs counts."
+    solution: |
+      def solve(timestamps: list[int], limit: int, window_ms: int) -> list[bool]:
+          result = []
+          for i, t in enumerate(timestamps):
+              count = 0
+              j = i
+              while j >= 0 and t - timestamps[j] <= window_ms:
+                  count += 1
+                  j -= 1
+              result.append(count <= limit)
+          return result
+  - type: flowchart
+    title: "the middleware chain order"
+    nodes: ["Request", "logger", "auth (JWT)", "rate limiter", "controller", "429 + Retry-After"]
+    edges:
+      - {from: 0, to: 1, label: "incoming"}
+      - {from: 1, to: 2, label: "log line"}
+      - {from: 2, to: 3, label: "req.user"}
+      - {from: 3, to: 4, label: "allowed (count <= limit)"}
+      - {from: 3, to: 5, label: "denied"}
+  - type: markdown
+    content: |
+      ## Interview questions
+
+      :::tip
+      **Interview question:** The window is `[t − window_ms, t]` inclusive —
+      why does that edge case matter? An off-by-one here is the difference
+      between "exactly `limit` requests in the window" being allowed or
+      denied, and it decides whether a client hovering right at the boundary
+      gets 429s in a tight loop. State the convention (inclusive both edges,
+      allowed at exactly `limit`) and implement it once — in production this
+      is the kind of subtle bug that only shows up under load-testing.
+      :::
+
+      :::tip
+      **Interview question:** Rate-limit by user id or by IP? User id is
+      precise but useless for unauthenticated endpoints (login, registration)
+      — that is where attackers live. IP covers everyone but punishes
+      NAT/corporate users who share one address. Production answer: key on
+      user id when authenticated, fall back to IP for anonymous traffic, and
+      apply a *separate, stricter* limiter to auth endpoints so credential
+      stuffing is throttled hard. Defend both layers.
+      :::
+
+      **Use case.** The login endpoint gets a strict limiter (5 tries/min per
+      IP) to blunt credential stuffing; the catalog gets a generous one (60
+      req/min) to keep scrapers polite; the checkout endpoint sits behind both
+      the global limiter and the idempotency key from lesson 11. Same
+      middleware, different parameters — that is why the limiter takes
+      `{ limit, windowMs, keyFn }` as configuration.
+  - type: mcq
+    prompt: "A request is denied by the rate limiter. What does the client receive?"
+    options:
+      - "200 OK with an empty body"
+      - "401 Unauthorized"
+      - "429 Too Many Requests with a Retry-After header"
+      - "503 Service Unavailable"
+    answer: 2
+    explanation: "429 is the semantic status for 'slow down', and Retry-After tells the client how long to wait — so well-behaved clients back off instead of hammering."
+  - type: mcq
+    prompt: "Why use a sliding window instead of a fixed window that resets every minute?"
+    options:
+      - "Sliding windows use less memory."
+      - "A fixed window lets bursts at the boundary (e.g. :59 and :00) double the limit; a sliding window counts the last windowMs of real time."
+      - "Fixed windows are harder to implement."
+      - "Sliding windows never deny requests."
+    answer: 1
+    explanation: "Fixed windows reset on the clock, so two bursts straddling a boundary each get a fresh budget. Sliding windows measure real elapsed time and close that gap."
+  - type: mcq
+    prompt: "In the chain logger → auth → rate limiter → controller, why does the rate limiter sit before the controller?"
+    options:
+      - "Controllers cannot count requests."
+      - "Denied traffic never reaches the controller, so the limiter protects the most expensive part of the pipeline."
+      - "Express requires middleware before routes."
+      - "The logger needs the limiter's data."
+    answer: 1
+    explanation: "Middleware before the controller short-circuits unwanted traffic early. The limiter is also after auth so it can key on the authenticated user id."
+  - type: mscq
+    prompt: "Which are valid choices for the limiter's key?"
+    options:
+      - "The authenticated user's id"
+      - "The client IP address"
+      - "The request body"
+      - "The HTTP method alone"
+    answer: [0, 1]
+    explanation: "User id is precise but only exists after auth; IP covers anonymous traffic. The body and method are wrong — they do not identify a client."
+---
