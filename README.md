@@ -125,6 +125,34 @@ in `ExecStart` — nvm's node may mismatch the `better-sqlite3` ABI.
 The app listens on `localhost:3001` by default. Expose it with a Cloudflare
 tunnel (or any reverse proxy) → HTTP → `localhost:3001`.
 
+## Auto-deploy (webhook)
+
+Merges to `main` deploy themselves: GitHub sends a `push` webhook to
+`POST /_deploy` (HMAC-gated by `DEPLOY_SECRET`, verified against the raw
+payload bytes, main-ref only). The server spawns `server/scripts/deploy.sh`
+detached, which:
+
+1. fast-forwards `git pull --ff-only origin main`,
+2. rebuilds only what changed — `server/` → `tsc`, `web/` → `npm run build`,
+   `sandbox-image/` → `docker build`,
+3. restarts the `trucoder` systemd unit when any of those changed,
+4. runs `verify.js` and pings the operator (Hark) with the result.
+
+Deploys are serialized with `flock` (`.deploy.lock`); a busy skip is fine
+because the next push re-triggers. Progress lives in `deploy.log` and the last
+deployed SHA in `.deployed-sha`. The script is detached so it survives the
+server restart it performs. To register the webhook:
+
+```bash
+gh api repos/<owner>/trucoder/hooks -f name=web -F active=true \
+  -f events[]=push -f config[url]=https://<host>/_deploy \
+  -f config[content_type]=json -f "config[secret]=<DEPLOY_SECRET>"
+```
+
+Note: pushes made FROM the deploy box are a no-op by design (the code is
+already there); the webhook earns its keep for GitHub-side merges (PRs,
+UI edits).
+
 ## Contributing
 
 Contributors are welcome — the platform is designed for people to author
