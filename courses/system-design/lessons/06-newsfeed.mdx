@@ -1,0 +1,98 @@
+---
+id: newsfeed
+title: "Design: News Feed"
+difficulty: medium
+order: 6
+tags: [newsfeed, fanout, timeline]
+blocks:
+  - type: markdown
+    content: |
+      # Design: News Feed (Twitter / Instagram)
+
+      **Concept.** A news feed shows a user the latest posts from everyone they follow. The hard part is not storing posts — it is **fanout**: getting each post onto every follower's timeline quickly and cheaply.
+
+      **Requirements (clarify first).**
+      - Follow graph: users follow others; the home timeline = posts from followed users, newest first.
+      - Scale: ~200M DAU, read-heavy **10:1** reads to writes.
+      - Latency: timeline loads in < 200 ms; a new post reaches followers within seconds.
+      - Media (images/video) is served separately from text.
+
+      **Key points.**
+      - Three fanout strategies: push, pull, hybrid (below).
+      - Timeline cache in Redis: one list per user, capped at ~800 post IDs.
+      - Ranking: time-based (simple) or `score = recency × affinity`.
+      - Shard by `user_id`; media on S3 + CDN.
+      - Idempotency: dedup on post ID so retries never double-insert.
+
+      **Use case:** "Design Twitter's home timeline for 200M DAU."
+
+      **Estimate (back of the envelope).**
+      - 200M DAU × 10 actions/day = 2B actions/day → 2B / 86,400 ≈ **23k actions/sec avg**.
+      - At 10:1 read:write → ~**2.1k writes/sec** and ~**21k reads/sec**; peak 3–5×.
+      - Timeline cache: 200M users × 800 post-IDs × ~8 B ≈ **1.28 TB** — easily held by a sharded Redis cluster (IDs only, never media content).
+
+      :::tip
+      **Interview question:** "Push vs pull fanout — which and why?" — Push (fanout-on-write) copies the post into every follower's timeline at publish time: reads become O(1) list lookups, but a celebrity with 10M followers triggers 10M writes per post. Pull (fanout-on-read) stores the post once and merges timelines at read time: cheap writes, slow reads over big follow graphs. Production systems use **hybrid**: push for normal users, pull for celebrities.
+      :::
+
+      :::tip
+      **Interview question:** "How would you design the timeline for a user with 10M followers?" — Never push a celebrity's post into 10M Redis lists. Keep the celebrity's posts in their own feed; at read time merge that feed (pull) with the pushed timelines of normal follows, rank, and cap at 800. This bounds write amplification while reads stay fast.
+      :::
+
+      :::note
+      The two flowcharts below are the diagram you draw on the whiteboard — memorize the shape, not the words.
+      :::
+  - type: flowchart
+    title: "Fanout: push vs pull"
+    nodes: ["Author posts", "Push: fanout-on-write — copy post ID into each follower's timeline list", "Pull: fanout-on-read — append to author's own feed only", "Follower reads: O(1) precomputed Redis list", "Follower reads: merge + rank feeds of all followed users"]
+    edges:
+      - {from: 0, to: 1, label: "push"}
+      - {from: 0, to: 2, label: "pull"}
+      - {from: 1, to: 3, label: "fast reads, hot-user writes"}
+      - {from: 2, to: 4, label: "slow reads, cheap writes"}
+  - type: markdown
+    content: |
+      **Hybrid fanout (what Twitter actually does).** Classify at post time:
+      - Normal user (followers ≤ threshold, e.g. 100k): **push** — a fanout worker writes the post ID into each follower's timeline list.
+      - Celebrity (millions of followers): **pull** — append to the celebrity's own feed only; followers merge it in at read time.
+      - Fanout is async: publish → queue → fanout workers fill timelines, so the author's POST returns immediately.
+  - type: flowchart
+    title: "Hybrid fanout"
+    nodes: ["POST /feed (new post)", "Author has >100k followers?", "Push: fanout worker copies post ID into followers' Redis lists", "Pull: append to author's feed only", "Follower GET /feed: read own list + merge celebrity feeds", "Rank (recency × affinity) + cap 800 → respond"]
+    edges:
+      - {from: 0, to: 1, label: "check"}
+      - {from: 1, to: 2, label: "no"}
+      - {from: 1, to: 3, label: "yes"}
+      - {from: 2, to: 4, label: "stored"}
+      - {from: 3, to: 4, label: "stored"}
+      - {from: 4, to: 5, label: "merge"}
+  - type: markdown
+    content: |
+      **Ranking, media, sharding, idempotency.**
+      - Ranking: `score = recency × affinity`, where affinity = how often you interact with that author. One line, and it beats pure time order for engagement.
+      - Media: upload to S3, serve via CDN; the timeline stores only post IDs + metadata, keeping the cache small.
+      - Sharding: timelines by `user_id`; posts by `author_id` (a user's own posts live together).
+      - Idempotency: fanout workers can retry — dedup on post ID (Redis `SETNX` or a unique index) so a retried delivery never shows the post twice.
+
+      **Worked numerical — write amplification.** A normal post to 200 followers = 200 timeline writes. A celebrity post to 10M followers would be 10M writes. At ~2.1k posts/sec average, if even 1% were celebrity posts: 2.1k × 0.01 × 10M ≈ **210M writes/sec** — impossible. Hence pull for celebrities: 1 write + a few thousand merges per read instead.
+  - type: mcq
+    prompt: "Which fanout strategy gives the fastest home-timeline reads?"
+    options: ["Fanout-on-read (pull) — timelines are merged at read time", "Fanout-on-write (push) — timelines are precomputed at publish time", "Both are equally fast", "Neither — reads always scan the whole post table"]
+    answer: 1
+    explanation: "Push precomputes each follower's list at publish time, so a read is one Redis list lookup (O(1)). Pull must merge the feeds of every followed user on every read, which is slow for large follow graphs."
+  - type: mcq
+    prompt: "In hybrid fanout, why do celebrities' posts use pull (fanout-on-read) instead of push?"
+    options: ["Celebrity posts are less important", "Push would create ~10M timeline writes per post (hot-user write amplification)", "Pull is faster for the celebrity's own followers", "Push is not supported by Redis"]
+    answer: 1
+    explanation: "A 10M-follower celebrity triggers 10M fanout writes per post under push — a hot-user problem. Pull stores the post once and merges it at read time, bounding writes."
+  - type: mcq
+    prompt: "A timeline cache holds only post IDs (≈8 B each), capped at 800 per user, for 200M users. Roughly how much Redis memory is needed?"
+    options: ["1.28 TB", "128 GB", "12.8 TB", "1.28 GB"]
+    answer: 0
+    explanation: "200M × 800 × 8 B = 1.6e11 × 8 = 1.28e12 B = 1.28 TB. IDs-only caching keeps this feasible on a sharded Redis cluster."
+  - type: mcq
+    prompt: "A fanout worker retried a delivery and a post now appears twice in one user's timeline. What is missing?"
+    options: ["Sharding by user_id", "Idempotency / dedup on post ID", "A bigger Redis cluster", "A CDN for media"]
+    answer: 1
+    explanation: "At-least-once delivery (retries) requires dedup: check-and-set on post ID (e.g. Redis SETNX or a unique DB index) so a retried fanout is a no-op."
+---
