@@ -358,6 +358,23 @@ inputs. Explain *why* before *how*. Teach the intuition first.
    `expected` doesn't match the `solution` will fail for everyone.
 7. **Keep `starter` minimal** — signature + a comment hint, `return 0` /
    `pass` / `{}`. The learner should fill in the logic, not fight boilerplate.
+8. **Author-agnostic content (HARD REQUIREMENT, user directive).** A course
+   is a product for ANY learner — not the author's notebook. Violations get
+   flagged in review and must be fixed before merge:
+   - **No machine-specific paths.** `/home/...`, `/Users/...`, `C:\...` —
+     they exist only on the author's machine. This includes paths inside
+     per-course `AGENTS.md` files and any tooling commands they document.
+   - **No creator-only references.** "your vault", "my notes", "see
+     interview prep/TODO.md" — if the learner cannot open it, never point
+     at it. When a course is distilled from personal notes, write "the
+     author's notes" or drop the reference; never cite a file the learner
+     can't access, and never address the learner as if they are the author
+     ("your own notes").
+   - **No personal context.** The learner is a stranger. Anything that
+     requires knowing the author reads as a bug.
+   - If source material MUST be mentioned (e.g. in a per-course
+     `AGENTS.md` for future agents), say it once, generically, with no
+     absolute path.
 
 ---
 
