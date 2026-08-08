@@ -872,3 +872,8 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* KaTeX math — inherit the theme's text color, keep display math quiet */
+.katex { color: inherit; font-size: 1.05em; }
+.katex-display { margin: 14px 0; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+.katex-display > .katex { white-space: normal; }
