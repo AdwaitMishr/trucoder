@@ -240,8 +240,12 @@ code, pre, .mono { font-family: var(--font-mono); }
   flex: 1; display: flex; align-items: center; justify-content: center;
   min-height: 200px;
 }
-.gd-stack { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.gd-stage { position: relative; width: 128px; height: 50px; overflow: hidden; }
+.gd-stack {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  /* the old loader's "shine": a gentle opacity breathe on the whole block */
+  animation: gd-shine 1.6s ease-in-out infinite;
+}
+.gd-stage { position: relative; width: 128px; height: 56px; overflow: hidden; }
 .gd-level {
   position: absolute; inset: 0; width: 200%;
   will-change: transform; animation: gd-scroll 7.2s linear infinite;
@@ -252,18 +256,28 @@ code, pre, .mono { font-family: var(--font-mono); }
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 .gd-cube {
-  position: absolute; left: 30%; bottom: 6px;
-  width: 16px; height: 16px; color: var(--accent);
+  position: absolute; left: 30%; bottom: 7.5px;
+  width: 16px; height: 16px;
   will-change: transform; animation: gd-run 7.2s linear infinite;
 }
+/* the global .mascot sets color: var(--accent) — override it in the loader
+   (the loader is greyscale by design) */
+.gd-cube .mascot { color: color-mix(in srgb, var(--muted) 82%, var(--bg)); }
 .gd-cube svg { display: block; }
 .gd-brand {
   font-family: var(--font-brand); font-weight: 700; font-size: 13px;
   letter-spacing: -0.02em;
 }
+/* greyscale lockup — the loader is muted, the accent stays out of it */
+.gd-brand .brand-tru { color: color-mix(in srgb, var(--muted) 82%, var(--bg)); }
+.gd-brand .brand-coder { color: color-mix(in srgb, var(--muted) 55%, var(--bg)); }
 
 @keyframes gd-scroll {
   to { transform: translate3d(-50%, 0, 0); }
+}
+@keyframes gd-shine {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
 }
 /* timeline (percent of the 7.2s loop — 4x the original, user-directed):
    four jumps at 12.5 / 37.5 / 62.5 / 87.5%, one per 1.8s block. Spikes
@@ -271,46 +285,49 @@ code, pre, .mono { font-family: var(--font-mono); }
    jump, and PERSISTS after landing — GD-style: land sideways (450°), then
    upside-down (540°), then sideways (630°), then upright (720° = 360° ≡ 0)
    — the loop wraps seamlessly because 720 ≡ 360 ≡ 0. The 11px spike stays
-   under the 16px cube for ~21% of the loop around each passage, so the
-   cube stays above the spike tip (y ≤ -11.3) through each window; apex
-   -24. Per-keyframe easing: ease-out rising, ease-in falling. */
+   under the 16px cube for ~21% of the loop around each passage; apex -30
+   (stage 56, cube top clears by 3px) and landings are ~2% AFTER the spike
+   fully clears, so the cube never touches a spike (user-flagged clips);
+   min clearance at the tightest frames is ~1.8px above the tip. The cube
+   feet (bottom 7px + ~1.7px viewBox offset) sit ON or ABOVE the spike-base
+   line in every rotation pose — never below it (user-flagged). Per-keyframe
+   easing: ease-out rising, ease-in falling. */
 @keyframes gd-run {
   0%        { transform: translate3d(-50%, 0, 0) rotate(360deg) scale(1); animation-timing-function: ease-out; }
-  1.5%      { transform: translate3d(-50%, -14px, 0) rotate(378deg) scale(1); animation-timing-function: ease-out; }
-  4%        { transform: translate3d(-50%, -21px, 0) rotate(400deg) scale(1); animation-timing-function: ease-out; }
-  12.5%     { transform: translate3d(-50%, -24px, 0) rotate(420deg) scale(1); animation-timing-function: ease-in; }
-  19%       { transform: translate3d(-50%, -18px, 0) rotate(435deg) scale(1); animation-timing-function: ease-in; }
-  22%       { transform: translate3d(-50%, -14px, 0) rotate(444deg) scale(1); animation-timing-function: ease-in; }
-  23.5%     { transform: translate3d(-50%, -8px, 0) rotate(448deg) scale(1); animation-timing-function: ease-in; }
-  24%       { transform: translate3d(-50%, 0, 0) rotate(450deg) scale(1); }
-  26%       { transform: translate3d(-50%, 0, 0) rotate(450deg) scale(1); animation-timing-function: ease-out; }
-  27.5%     { transform: translate3d(-50%, -14px, 0) rotate(468deg) scale(1); animation-timing-function: ease-out; }
-  30%       { transform: translate3d(-50%, -21px, 0) rotate(490deg) scale(1); animation-timing-function: ease-out; }
-  37.5%     { transform: translate3d(-50%, -24px, 0) rotate(510deg) scale(1); animation-timing-function: ease-in; }
-  44%       { transform: translate3d(-50%, -18px, 0) rotate(525deg) scale(1); animation-timing-function: ease-in; }
-  47%       { transform: translate3d(-50%, -14px, 0) rotate(534deg) scale(1); animation-timing-function: ease-in; }
-  48.5%     { transform: translate3d(-50%, -8px, 0) rotate(538deg) scale(1); animation-timing-function: ease-in; }
-  49%       { transform: translate3d(-50%, 0, 0) rotate(540deg) scale(1); }
-  51%       { transform: translate3d(-50%, 0, 0) rotate(540deg) scale(1); animation-timing-function: ease-out; }
-  52.5%     { transform: translate3d(-50%, -14px, 0) rotate(558deg) scale(1); animation-timing-function: ease-out; }
-  55%       { transform: translate3d(-50%, -21px, 0) rotate(580deg) scale(1); animation-timing-function: ease-out; }
-  62.5%     { transform: translate3d(-50%, -24px, 0) rotate(600deg) scale(1); animation-timing-function: ease-in; }
-  69%       { transform: translate3d(-50%, -18px, 0) rotate(615deg) scale(1); animation-timing-function: ease-in; }
-  72%       { transform: translate3d(-50%, -14px, 0) rotate(624deg) scale(1); animation-timing-function: ease-in; }
-  73.5%     { transform: translate3d(-50%, -8px, 0) rotate(628deg) scale(1); animation-timing-function: ease-in; }
-  74%       { transform: translate3d(-50%, 0, 0) rotate(630deg) scale(1); }
-  76%       { transform: translate3d(-50%, 0, 0) rotate(630deg) scale(1); animation-timing-function: ease-out; }
-  77.5%     { transform: translate3d(-50%, -14px, 0) rotate(648deg) scale(1); animation-timing-function: ease-out; }
-  80%       { transform: translate3d(-50%, -21px, 0) rotate(670deg) scale(1); animation-timing-function: ease-out; }
-  87.5%     { transform: translate3d(-50%, -24px, 0) rotate(690deg) scale(1); animation-timing-function: ease-in; }
-  94%       { transform: translate3d(-50%, -18px, 0) rotate(705deg) scale(1); animation-timing-function: ease-in; }
-  96%       { transform: translate3d(-50%, -14px, 0) rotate(714deg) scale(1); animation-timing-function: ease-in; }
-  97.5%     { transform: translate3d(-50%, -8px, 0) rotate(718deg) scale(1); animation-timing-function: ease-in; }
-  98%       { transform: translate3d(-50%, 0, 0) rotate(720deg) scale(1); }
+  1.5%      { transform: translate3d(-50%, -16px, 0) rotate(376deg) scale(1); animation-timing-function: ease-out; }
+  4%        { transform: translate3d(-50%, -24px, 0) rotate(396deg) scale(1); animation-timing-function: ease-out; }
+  12.5%     { transform: translate3d(-50%, -30px, 0) rotate(420deg) scale(1); animation-timing-function: ease-in; }
+  19%       { transform: translate3d(-50%, -22px, 0) rotate(435deg) scale(1); animation-timing-function: ease-in; }
+  22%       { transform: translate3d(-50%, -16px, 0) rotate(444deg) scale(1); animation-timing-function: ease-in; }
+  23.5%     { transform: translate3d(-50%, -9px, 0) rotate(448deg) scale(1); animation-timing-function: ease-in; }
+  25%       { transform: translate3d(-50%, 0, 0) rotate(450deg) scale(1); }
+  27%       { transform: translate3d(-50%, 0, 0) rotate(450deg) scale(1); animation-timing-function: ease-out; }
+  28.5%     { transform: translate3d(-50%, -16px, 0) rotate(466deg) scale(1); animation-timing-function: ease-out; }
+  31%       { transform: translate3d(-50%, -24px, 0) rotate(486deg) scale(1); animation-timing-function: ease-out; }
+  37.5%     { transform: translate3d(-50%, -30px, 0) rotate(510deg) scale(1); animation-timing-function: ease-in; }
+  44%       { transform: translate3d(-50%, -22px, 0) rotate(525deg) scale(1); animation-timing-function: ease-in; }
+  47%       { transform: translate3d(-50%, -16px, 0) rotate(534deg) scale(1); animation-timing-function: ease-in; }
+  48.5%     { transform: translate3d(-50%, -9px, 0) rotate(538deg) scale(1); animation-timing-function: ease-in; }
+  50%       { transform: translate3d(-50%, 0, 0) rotate(540deg) scale(1); }
+  52%       { transform: translate3d(-50%, 0, 0) rotate(540deg) scale(1); animation-timing-function: ease-out; }
+  53.5%     { transform: translate3d(-50%, -16px, 0) rotate(556deg) scale(1); animation-timing-function: ease-out; }
+  56%       { transform: translate3d(-50%, -24px, 0) rotate(576deg) scale(1); animation-timing-function: ease-out; }
+  62.5%     { transform: translate3d(-50%, -30px, 0) rotate(600deg) scale(1); animation-timing-function: ease-in; }
+  69%       { transform: translate3d(-50%, -22px, 0) rotate(615deg) scale(1); animation-timing-function: ease-in; }
+  72%       { transform: translate3d(-50%, -16px, 0) rotate(624deg) scale(1); animation-timing-function: ease-in; }
+  73.5%     { transform: translate3d(-50%, -9px, 0) rotate(628deg) scale(1); animation-timing-function: ease-in; }
+  75%       { transform: translate3d(-50%, 0, 0) rotate(630deg) scale(1); }
+  77%       { transform: translate3d(-50%, 0, 0) rotate(630deg) scale(1); animation-timing-function: ease-out; }
+  78.5%     { transform: translate3d(-50%, -16px, 0) rotate(646deg) scale(1); animation-timing-function: ease-out; }
+  81%       { transform: translate3d(-50%, -24px, 0) rotate(666deg) scale(1); animation-timing-function: ease-out; }
+  87.5%     { transform: translate3d(-50%, -30px, 0) rotate(690deg) scale(1); animation-timing-function: ease-in; }
+  94%       { transform: translate3d(-50%, -22px, 0) rotate(705deg) scale(1); animation-timing-function: ease-in; }
+  96%       { transform: translate3d(-50%, -16px, 0) rotate(714deg) scale(1); animation-timing-function: ease-in; }
+  97.5%     { transform: translate3d(-50%, -9px, 0) rotate(718deg) scale(1); animation-timing-function: ease-in; }
   100%      { transform: translate3d(-50%, 0, 0) rotate(720deg) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .gd-level, .gd-cube { animation: none; }
+  .gd-level, .gd-cube, .gd-stack { animation: none; }
 }
 
 /* ---- app shell ---- */
