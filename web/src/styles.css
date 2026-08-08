@@ -242,7 +242,7 @@ code, pre, .mono { font-family: var(--font-mono); }
 .gd-stage { position: relative; width: 176px; height: 56px; overflow: hidden; }
 .gd-level {
   position: absolute; inset: 0; width: 200%;
-  will-change: transform; animation: gd-scroll 1.6s linear infinite;
+  will-change: transform; animation: gd-scroll 2s linear infinite;
 }
 .gd-ground {
   position: absolute; left: 0; right: 0; bottom: 8px; height: 2px;
@@ -256,14 +256,14 @@ code, pre, .mono { font-family: var(--font-mono); }
 .gd-cube {
   position: absolute; left: 30%; bottom: 8px;
   width: 20px; height: 20px; color: var(--accent);
-  will-change: transform; animation: gd-run 1.6s linear infinite;
+  will-change: transform; animation: gd-run 2s linear infinite;
 }
 .gd-cube svg { display: block; }
 
 @keyframes gd-scroll {
   to { transform: translate3d(-50%, 0, 0); }
 }
-/* timeline (percent of the 1.6s loop, aligned with the strip's scroll):
+/* timeline (percent of the 2s loop, aligned with the strip's scroll):
    jump spike 50%, jump spike 80%. A 12px spike stays under the 20px cube
    for ~18% of the loop (40.9–59.1% and 70.9–89.1%), so the cube must stay
    above the spike tip (y ≤ -12) through the whole passage — the jumps
