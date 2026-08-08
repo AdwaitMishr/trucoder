@@ -49,12 +49,11 @@ export default function CourseIndex() {
   }
 
   return (
-    <>
-      <div className="page">
-        <header className="page-head">
-          <h1>courses</h1>
-          <p>pick one and work through it at your own pace.</p>
-        </header>
+    <div className="page">
+      <header className="page-head">
+        <h1>courses</h1>
+        <p>pick one and work through it at your own pace.</p>
+      </header>
 
       {courses.length === 0 ? (
         <div className="empty">
@@ -86,8 +85,12 @@ export default function CourseIndex() {
           })}
         </div>
       )}
-      </div>
+      {/* the easter egg must live INSIDE .page — the route body is a fixed
+          height flex column, so an 86vh sibling crushes .page to a sliver
+          (the "where are my courses" bug, 2026-08-09). .page scrolls, so
+          the egg sits at the bottom of the scroll — exactly the intended
+          "scroll past the last content" behavior. */}
       <GdEasterEgg />
-    </>
+    </div>
   );
 }
