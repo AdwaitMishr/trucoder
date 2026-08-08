@@ -9,10 +9,32 @@ import type { CourseSummary } from "../types";
 
 export default function CourseIndex() {
   const [courses, setCourses] = useState<CourseSummary[] | null>(null);
+  const [err, setErr] = useState(false);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    maybeSlow(api.courses()).then((r) => setCourses(r.courses));
-  }, []);
+    setErr(false);
+    maybeSlow(api.courses())
+      .then((r) => setCourses(r.courses))
+      .catch(() => setErr(true));
+  }, [tick]);
+
+  if (err) {
+    return (
+      <div className="page">
+        <header className="page-head">
+          <h1>courses</h1>
+          <p>pick one and work through it at your own pace.</p>
+        </header>
+        <div className="empty">
+          <div className="empty-title">couldn&apos;t load courses</div>
+          <p className="muted">
+            the request failed — <a href="#" onClick={(e) => { e.preventDefault(); setTick((t) => t + 1); }}>try again</a>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!courses) {
     return (
