@@ -27,3 +27,7 @@ courses/*
 !courses/AGENTS.md
 !courses/kubernetes-fundamentals/
 !courses/kubernetes-fundamentals/**
+
+# deploy artifacts (webhook-driven deploy.sh state)
+.deploy.lock
+.deployed-sha
