@@ -28,16 +28,21 @@ NEW=$(git rev-parse HEAD)
 PREV=$(cat "$SHA_FILE" 2>/dev/null || echo "$LOCAL")
 CHANGED=$(git diff --name-only "$PREV".."$NEW")
 
-SERVER=0; WEB=0; SANDBOX=0
+SERVER=0; WEB=0; SANDBOX=0; SANDBOX_NODE=0
 echo "$CHANGED" | grep -q '^server/' && SERVER=1
 echo "$CHANGED" | grep -q '^web/' && WEB=1
 echo "$CHANGED" | grep -q '^sandbox-image/' && SANDBOX=1
+echo "$CHANGED" | grep -q '^sandbox-image-node/' && SANDBOX_NODE=1
 
-log "changes: server=$SERVER web=$WEB sandbox=$SANDBOX (${NEW:0:7})"
+log "changes: server=$SERVER web=$WEB sandbox=$SANDBOX sandbox-node=$SANDBOX_NODE (${NEW:0:7})"
 
 if [ "$SANDBOX" = 1 ]; then
   docker build -t trucoder-sandbox:latest "$REPO_DIR/sandbox-image/" >> "$LOG" 2>&1 \
     || { log "deploy FAILED: sandbox image build"; exit 1; }
+fi
+if [ "$SANDBOX_NODE" = 1 ]; then
+  docker build -t trucoder-sandbox-node:latest "$REPO_DIR/sandbox-image-node/" >> "$LOG" 2>&1 \
+    || { log "deploy FAILED: node sandbox image build"; exit 1; }
 fi
 if [ "$SERVER" = 1 ]; then
   (cd "$REPO_DIR/server" && npx tsc) >> "$LOG" 2>&1 \
@@ -47,7 +52,7 @@ if [ "$WEB" = 1 ]; then
   (cd "$REPO_DIR/web" && npm run build) >> "$LOG" 2>&1 \
     || { log "deploy FAILED: web build"; exit 1; }
 fi
-if [ "$SERVER" = 1 ] || [ "$WEB" = 1 ] || [ "$SANDBOX" = 1 ]; then
+if [ "$SERVER" = 1 ] || [ "$WEB" = 1 ] || [ "$SANDBOX" = 1 ] || [ "$SANDBOX_NODE" = 1 ]; then
   sudo systemctl restart trucoder >> "$LOG" 2>&1 \
     || { log "deploy FAILED: systemctl restart"; exit 1; }
 fi
@@ -58,7 +63,7 @@ VR=$?
 echo "$NEW" > "$SHA_FILE"
 
 if [ "$VR" = 0 ]; then
-  log "deploy OK ${NEW:0:7} (server=$SERVER web=$WEB sandbox=$SANDBOX) verify=pass"
+  log "deploy OK ${NEW:0:7} (server=$SERVER web=$WEB sandbox=$SANDBOX sandbox-node=$SANDBOX_NODE) verify=pass"
   "$HOME/.hermes/scripts/hark-notify.sh" -t "trucoder" "deployed ${NEW:0:7} — verify pass" >/dev/null 2>&1 || true
 else
   log "deploy DONE ${NEW:0:7} BUT verify FAILED — inspect immediately"
