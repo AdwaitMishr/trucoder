@@ -248,7 +248,7 @@ code, pre, .mono { font-family: var(--font-mono); }
 .gd-stage { position: relative; width: 128px; height: 56px; overflow: hidden; }
 .gd-level {
   position: absolute; inset: 0; width: 200%;
-  will-change: transform; animation: gd-scroll 0.8s linear infinite;
+  will-change: transform; animation: gd-scroll 1.8s linear infinite;
 }
 .gd-spike {
   position: absolute; bottom: 8px; width: 11px; height: 11px;
@@ -258,7 +258,7 @@ code, pre, .mono { font-family: var(--font-mono); }
 .gd-cube {
   position: absolute; left: 30%; bottom: 7.5px;
   width: 16px; height: 16px;
-  will-change: transform; animation: gd-run 0.8s linear infinite;
+  will-change: transform; animation: gd-run 1.8s linear infinite;
 }
 /* the global .mascot sets color: var(--accent) — override it in the loader
    (the loader is greyscale by design) */
@@ -279,8 +279,8 @@ code, pre, .mono { font-family: var(--font-mono); }
   0%, 100% { opacity: 0.55; }
   50%      { opacity: 1; }
 }
-/* timeline (percent of the 0.8s loop — 3x again, user-directed 2026-08):
-   four jumps at 12.5 / 37.5 / 62.5 / 87.5%, one per 0.2s block. Spikes
+/* timeline (percent of the 1.8s loop — 4x the original 7.2s, user-directed 2026-08):
+   four jumps at 12.5 / 37.5 / 62.5 / 87.5%, one per 0.45s block. Spikes
    every 32px (four per 128px period). Rotation is CUMULATIVE, +90° per
    jump, and PERSISTS after landing — GD-style: land sideways (450°), then
    upside-down (540°), then sideways (630°), then upright (720° = 360° ≡ 0)
