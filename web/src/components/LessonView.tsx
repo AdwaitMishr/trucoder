@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
@@ -41,6 +41,34 @@ export default function LessonView() {
   });
   const [solvedBlocks, setSolvedBlocks] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
+
+  // Auto-mark content-only lessons when scrolled to the bottom (once per
+  // visit). Short lessons that already fit the viewport mark immediately.
+  // Graded lessons (exercise/quizzes) never auto-mark — they must be solved.
+  // NOTE: these hooks MUST stay above the early returns (rules of hooks).
+  const autoMarked = useRef(false);
+  const pageRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const l = lesson;
+    if (!l) return;
+    const hasGraded = l.blocks.some(
+      (b) => b.type === "code" || b.type === "mcq" || b.type === "mscq"
+    );
+    if (hasGraded || l.progress.solved) return;
+    const el = pageRef.current;
+    if (!el) return;
+    const check = () => {
+      if (autoMarked.current) return;
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) {
+        autoMarked.current = true;
+        markRead();
+      }
+    };
+    check(); // a lesson shorter than the viewport counts as "reached the bottom"
+    el.addEventListener("scroll", check, { passive: true });
+    return () => el.removeEventListener("scroll", check);
+  }, [lesson, courseId, lessonId]);
 
   useEffect(() => {
     let active = true;
@@ -90,6 +118,7 @@ export default function LessonView() {
       );
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "failed to mark as read");
+      autoMarked.current = false; // allow a later scroll to retry
     } finally {
       setBusy(false);
     }
@@ -207,11 +236,14 @@ export default function LessonView() {
     </div>
   );
 
-  const readActions = !codeBlock && (
+  // Only content-only lessons (no exercise, no quizzes) get the read UI —
+  // graded lessons are solved by their graded blocks; the server rejects
+  // read-marking them.
+  const readActions = !hasGradedBlocks && (
     <div className="read-actions">
       {p.progress.solved ? (
         <span className="read-done">
-          <PiCheck size={14} /> {hasGradedBlocks ? "completed" : "read"}
+          <PiCheck size={14} /> read
         </span>
       ) : (
         <button className="btn submit" onClick={markRead} disabled={busy}>
@@ -222,7 +254,7 @@ export default function LessonView() {
   );
 
   return (
-    <div className={`lesson-page ${zen && codeBlock ? "lesson-page-zen" : ""}`}>
+    <div className={`lesson-page ${zen && codeBlock ? "lesson-page-zen" : ""}`} ref={pageRef}>
       <div className="lesson-head">
         <div className="lesson-head-top">
           <Link to={`/course/${courseId}`} className="back">

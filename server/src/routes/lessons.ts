@@ -76,7 +76,9 @@ lessonsRouter.get("/:lessonId", (req, res) => {
 
   // A lesson is solved when its graded blocks are all solved:
   // code block -> accepted submission (progress.solved); quizzes -> correct answers.
-  const codeSolved = lesson.hasExercise ? Boolean(p?.solved) : true;
+  // Content-only lessons are solved ONLY when marked read (POST .../read) —
+  // defaulting them to solved made progress meaningless (owner report 2026-08).
+  const codeSolved = Boolean(p?.solved);
   const quizSolved = quizBlocks.every((q) => solvedQuizzes.has(q.index));
 
   // Previous/next lesson within the course (ordered by `order`).
