@@ -16,11 +16,15 @@ export default function Loader() {
       <div className="gd-stack">
         <div className="gd-stage">
           <div className="gd-level" aria-hidden="true">
-            {/* one pattern period: spike, spike (repeats at +50% for the wrap) */}
-            <span className="gd-spike" style={{ left: "40%" }} />
-            <span className="gd-spike" style={{ left: "55%" }} />
-            <span className="gd-spike" style={{ left: "90%" }} />
-            <span className="gd-spike" style={{ left: "105%" }} />
+            {/* four spikes per period (every 32px), copies at +50% of the strip */}
+            <span className="gd-spike" style={{ left: "8.75%" }} />
+            <span className="gd-spike" style={{ left: "21.25%" }} />
+            <span className="gd-spike" style={{ left: "33.75%" }} />
+            <span className="gd-spike" style={{ left: "46.25%" }} />
+            <span className="gd-spike" style={{ left: "58.75%" }} />
+            <span className="gd-spike" style={{ left: "71.25%" }} />
+            <span className="gd-spike" style={{ left: "83.75%" }} />
+            <span className="gd-spike" style={{ left: "96.25%" }} />
           </div>
           <div className="gd-cube">
             <Mascot state="running" size={16} />
