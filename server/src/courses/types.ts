@@ -8,6 +8,25 @@ export interface TestCase {
   expected: string;
 }
 
+/** Module-exercise metadata (mode: "module"). The learner edits ONE real
+ *  backend file (`entry`) inside a mini project; the visible node:test file
+ *  (`testsFile`) imports it and runs against a real Node server in the
+ *  sandbox. Extra (read-only) files ship alongside so the imports resolve. */
+export interface ModuleSpec {
+  /** The file the learner writes, e.g. "services/cartService.js". */
+  entry: string;
+  /** "javascript" | "typescript" (Node 24 native type stripping). */
+  language: "javascript" | "typescript";
+  /** Visible test file (node:test) that imports the entry module. */
+  testsFile: string;
+  /** The test file's content (node:test source, run in the sandbox). */
+  testsContent: string;
+  /** Read-only files required by the test/entry (e.g. routes, services). */
+  extraFiles?: Record<string, string>;
+  /** Canned preview text shown only when ALL tests pass. */
+  preview?: string;
+}
+
 /** A coding exercise block (the classic TruCoder lesson). */
 export interface CodeBlock {
   type: "code";
@@ -21,6 +40,11 @@ export interface CodeBlock {
   hints: string[];
   /** Reference solution — never sent to the client. */
   solution?: string;
+  /** "function" (default) | "module" — module exercises run real backend
+   *  files against a visible node:test suite instead of solve() functions. */
+  mode?: "function" | "module";
+  /** Present when mode === "module". */
+  module?: ModuleSpec;
 }
 
 /** Prose block (markdown, callouts, code fences — the reading material). */

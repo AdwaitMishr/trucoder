@@ -5,10 +5,10 @@ file adds this course's specifics.
 
 ## Purpose
 
-A backend-from-first-principles course **distilled from the author's own
-Obsidian notes** (backend notes `01.md` … `09 Caching.md`, kept in the
-author's vault). Read the notes for your lessons and build the lesson content
-from them — the notes ARE the source material. The author said the notes alone
+A backend-from-first-principles course **distilled from the user's own
+Obsidian notes** at `/home/monke/monke/notes/v1/Backend/` (01.md … 09
+Caching.md). Read the notes for your lessons and build the lesson content
+from them — the notes ARE the source material. The user said the notes alone
 are enough for the notes sections, so preserve their core content, structure
 it, and add: **Use case** lines, **e-commerce examples**, ≥2
 `**Interview question:**` :::tip callouts per lesson, flowcharts, worked
@@ -36,39 +36,107 @@ examples, and quizzes.
 ## The project arc (the special feature)
 
 Lessons 10–13 build ONE complete **e-commerce backend** (Node.js + Express +
-PostgreSQL + Redis, run in Docker), lesson by lesson, in **LeetCode style**:
-each lesson = problem statement + deliverables (what to build, how it wires
-into the real project) + ONE graded exercise. The theme is constant:
+PostgreSQL + Redis, run in Docker), lesson by lesson, in **test-driven
+real-code style**: each lesson = problem statement + exact **module contract**
+(exports, signatures, behavior) + the **FULL visible node:test test file**
+that ships in the project's `tests/` dir + wiring (where the module plugs
+into routes/controllers/app) + 4 quizzes. The theme is constant:
 **e-commerce** (catalog, cart, checkout, orders, users).
+
+The shipped project (`shop-api/`) is a complete runnable Express app with the
+real test suite. The **learner-written modules** are exactly five:
+`services/cartService.js` (L10), `services/orderService.js` +
+`controllers/ordersController.js` (L11), `middleware/rateLimiter.js` (L12),
+`utils/env.js` (L13). Everything else (routes, other controllers, app.js,
+server.js, db, repositories, Docker, tests/) ships complete.
 
 ### Rules for project lessons
 
-- Every graded exercise uses **languages: [javascript, python]** (Node.js is
-  the point; Python is the verifier's language). `solution` in Python.
-- **NO hidden tests**: put the full contract in `tests.public`, and for the
-  platform-required `tests.private`, ALSO document every private case in the
-  lesson markdown ("Private cases you should handle: …") so nothing is hidden.
-- The sandbox harness supports only arrays/primitives/strings as args and
-  returns (Java-style typing: int, double, String, boolean, int[]/long[]/
-  String[], int[][]). NO objects/maps — design exercises accordingly.
-- The deliverables section in each lesson shows the real Express wiring
-  (route → controller → service → repository) as fenced code blocks in the
-  markdown content, so the learner sees where the graded logic fits.
-- Lesson 13's content contains the COMPLETE project blueprint: app.js, server
-  bootstrap, routes, controllers, services, db handler, middleware, utils,
-  package.json, Dockerfile, docker-compose.yml (node + postgres + redis),
-  and a curl walkthrough (register → login → add to cart → checkout → 429).
+- **Each project lesson (10–13) carries ONE `type: code` block with
+  `mode: module`** — the platform's module-exercise format. The learner
+  writes ONE real backend file in the app; a visible `node:test` suite
+  (`module.testsContent`) runs it on a Node 24 sandbox and the app shows
+  per-test pass/fail + a pass-gated preview. The block's fields:
+  `task` (problem statement), `languages: [javascript]`,
+  `starter.javascript` (the stub, byte-identical to the project stub),
+  `module.entry` (the file the learner edits), `module.language`,
+  `module.testsFile` (e.g. `lesson.test.js`), `module.testsContent` (the
+  visible test file, byte-identical to `project/tests/*.test.js`),
+  `module.extraFiles` (read-only files the suite imports — e.g. L11 mounts
+  `routes/orders.js` + a reference `services/orderService.js`),
+  `module.preview` (canned display shown when all tests pass), `hints`,
+  `solution` (the reference implementation of the entry file).
+- **In-platform grade = the module exercise's visible test suite** (all
+  tests visible — there are no hidden tests; `verify.js` runs each block's
+  solution against its `testsContent`). The **real-world grade is the same
+  suite in the shipped project**: `npm test` (`node --test`) in
+  `courses/backend-fundamentals/project/` must go green.
+- **NO hidden tests**: every test in `project/tests/*.test.js` is printed IN
+  FULL inside the lesson, and the block's `testsContent` is byte-identical
+  to those files. The suite is the contract's executable spec.
+- The **module contracts below are binding** — lessons, tests, and the
+  shipped project must agree EXACTLY (exports, signatures, status strings,
+  HTTP mapping, conventions).
+- Pure modules are unit-tested directly; controller/middleware modules are
+  integration-tested: the test file boots the app with `app.listen(0)` and
+  drives it with the built-in `fetch` against `http://127.0.0.1:${port}` —
+  zero infrastructure required (orderService ships an in-memory store).
+- Test seams (`__setStock`, `__setBalance`, `__reset`) are documented,
+  test-only exports; production storage (Postgres/Redis) swaps in behind the
+  same contract.
+- **Before embedding a lesson's test file, validate it**: run the exact file
+  against a reference implementation in a scratch dir OUTSIDE the repo with
+  `node --test` — it must pass 100%. Never embed unrun tests.
+- Lesson 13's content contains the COMPLETE project blueprint: tree,
+  package.json, app.js, server.js, routes, controllers, services,
+  repositories, db handler, middleware, utils, tests/, Dockerfile,
+  docker-compose.yml (node + postgres + redis), and a curl walkthrough
+  (register → login → add to cart → checkout → replay → 429). The blueprint
+  matches the contracts exactly: an **IP-keyed limiter on /api/products**
+  (`rateLimiter({limit: 60, windowMs: 60_000, keyFn: (req) => \`ip:${req.ip}\`})`)
+  so the 429 walkthrough works; `unit_price BIGINT NOT NULL` in `cart_items`
+  for L10's price snapshot; add-to-cart curl sends `unitPrice`; chain comment
+  "logger → auth → rate limit → controller"; Dockerfile
+  `CMD ["node", "server.js"]` (root-level); "commit package-lock.json" noted
+  next to `npm ci`; package.json `test` script is `node --test`.
 
-### Exercise specs (exactly one code block per project lesson)
+### Module contracts (the project and lessons must agree EXACTLY)
 
-- **L10** cart domain: `solve(items: list[list[int]], item_id: int, qty: int,
-  price: int) -> list[list[int]]` — items rows are `[id, qty, price]`; add
-  the item (merge qty if id exists) and return the updated rows with a
-  **line total appended as a 4th element** `[id, qty, price, qty*price]`.
-  Public: `([[1,2,100]], 1, 3, 100)` → `[[1,5,100,500]]`; `([[1,1,50],[2,2,25]], 3, 1, 10)` → `[[1,1,50,50],[2,2,25,50],[3,1,10,10]]`. Private (document in markdown): empty items; qty 0 removed? (no — keep simple: qty ≥ 1); large numbers. Verify solution with python3.
-- **L11** checkout pipeline: `solve(items: list[list[int]], stock: list[list[int]], balance: int) -> list[int]` — items rows `[id, qty, price]`, stock rows `[id, available]`; compute total = Σ qty×price; if any item missing from stock or qty > available → return `[1, 0]` (status 1 = insufficient stock); else if balance < total → `[2, total]` (insufficient funds); else → `[0, total]` (confirmed). Public: valid checkout; out-of-stock. Private (documented): insufficient balance; empty items → `[0, 0]`; missing product id. Verify with python3.
-- **L12** rate limiter (sliding window): `solve(timestamps: list[int], limit: int, window_ms: int) -> list[bool]` — timestamps in ms, non-decreasing; request allowed if fewer than `limit` requests in the last `window_ms` (inclusive of current). Public: `([100, 200, 300], 2, 200)` → `[true, true, false]` (at 300: window [100,300] has 100,200,300 = 3 > 2 → deny); `([100, 200, 300, 400], 3, 300)` → `[true, true, true, false]` (at 400: [100,400] has 4 > 3 → deny). Private (documented): empty; single request; exact-boundary (window edge — pick a convention and state it); large limit. Verify with python3.
-- **L13** config validation (utils): `solve(vars: list[str], required: list[str]) -> list[str]` — return the required vars missing from vars, in the order they appear in `required`; empty list if all present. Public: `(["PORT=3000", "JWT_SECRET=abc"], ["PORT", "DB_URL"])` → `["DB_URL"]`; `(["A=1","B=2"], ["A","B"])` → `[]`. Private (documented): empty vars; empty required; var present with empty value counts as missing? (state convention: `KEY=` with empty value counts as present? pick: only exact `KEY=value` with non-empty value counts; document). Verify with python3.
+- **L10 `services/cartService.js`** — cart = array of items
+  `{productId, qty, unitPrice}` (prices in integer cents). Exports:
+  `addItem(cart, productId, qty, unitPrice)` (merge qty when productId
+  exists, **keep the ORIGINAL unitPrice on merge**, else append; returns the
+  updated cart), `lineTotal(item)` = `qty × unitPrice`,
+  `cartTotal(cart)` = sum of line totals (`0` for empty). Test file:
+  `tests/cart.test.js` (pure unit tests).
+- **L11 `services/orderService.js` + `controllers/ordersController.js`** —
+  controller reads `req.body.items` + `req.headers['idempotency-key']` +
+  `req.user.id` and calls `orderService.checkout({userId, items,
+  idempotencyKey})` → `{status, order, replayed}` with status ∈
+  `'confirmed' | 'insufficient_stock' | 'insufficient_funds'` and
+  `replayed: true` when the key was already used (returns the stored order).
+  Items are `{productId, qty, unitPrice}`; order is the created order for
+  confirmed, `null` for rejections. Controller maps: confirmed → **201**,
+  insufficient_stock → **409**, insufficient_funds → **402**, replayed →
+  **200**. Test seams: `__setStock(productId, available)`,
+  `__setBalance(userId, cents)`, `__reset()`. Test file:
+  `tests/orders.test.js` (integration: listen(0) + fetch).
+- **L12 `middleware/rateLimiter.js`** — exports factory
+  `rateLimiter({limit, windowMs, keyFn})` → Express middleware. Sliding
+  window `[t − windowMs, t]` **INCLUSIVE both edges**; allowed when the
+  window holds **at most `limit`** requests including the current one;
+  denied → **429** + `Retry-After` = `max(1, ceil((oldest + windowMs −
+  now)/1000))` (seconds until the oldest request leaves the window). Works
+  keyed on `req.user.id` for protected routes and `req.ip` for public ones
+  (`keyFn(req)` picks the bucket; in-memory Map store, Redis zset for
+  multi-instance). Test file: `tests/rateLimiter.test.js` (integration:
+  listen(0) + fetch, incl. `trust proxy` + X-Forwarded-For for per-IP
+  buckets).
+- **L13 `utils/env.js`** — exports `validateEnv(required)` (returns missing
+  keys **in required order**; only `KEY=value` with a NON-EMPTY value counts
+  as present — `KEY=` and absent both missing) and `getEnv(key, fallback)`
+  (value, or fallback when missing/empty). Test file: `tests/env.test.js`
+  (pure unit tests, save/restore `process.env`).
 
 ## Conventions
 

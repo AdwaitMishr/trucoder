@@ -8,7 +8,7 @@ import {
   recordAnswer,
   recordSubmission,
 } from "../db";
-import { runPublic, submit } from "../judge";
+import { runPublic, runModule, submit } from "../judge";
 
 export const lessonsRouter = Router({ mergeParams: true });
 
@@ -196,6 +196,28 @@ lessonsRouter.post("/:lessonId/run", async (req, res) => {
   if (!block) {
     return res.status(400).json({ error: "this lesson has no coding exercise" });
   }
+  const raw = req.body as { language?: unknown; code?: unknown };
+  if (block.mode === "module") {
+    const spec = block.module;
+    if (!spec) return res.status(400).json({ error: "module spec missing" });
+    if (raw.language !== spec.language || typeof raw.code !== "string") {
+      return res.status(400).json({ error: "invalid body" });
+    }
+    try {
+      const result = await runModule(block, raw.code);
+      if (result.sandboxError) {
+        return res.status(503).json({ error: result.sandboxError });
+      }
+      return res.json({
+        module: true,
+        publicTests: result.results,
+        output: result.output,
+        compileError: result.compileError,
+      });
+    } catch (err) {
+      return res.status(500).json({ error: (err as Error).message });
+    }
+  }
   const body = parseBody(req.body);
   if (!body) return res.status(400).json({ error: "invalid body" });
   if (!block.signature[body.lang] || !block.starterCode[body.lang]) {
@@ -221,6 +243,46 @@ lessonsRouter.post("/:lessonId/submit", async (req, res) => {
   const block = codeBlockOf(lesson);
   if (!block) {
     return res.status(400).json({ error: "this lesson has no coding exercise" });
+  }
+  const raw = req.body as { language?: unknown; code?: unknown };
+  if (block.mode === "module") {
+    const spec = block.module;
+    if (!spec) return res.status(400).json({ error: "module spec missing" });
+    if (raw.language !== spec.language || typeof raw.code !== "string") {
+      return res.status(400).json({ error: "invalid body" });
+    }
+    try {
+      const result = await runModule(block, raw.code);
+      if (result.sandboxError) {
+        return res.status(503).json({ error: result.sandboxError });
+      }
+      const passed = result.results.filter((r) => r.passed).length;
+      const total = result.results.length;
+      const verdict = total > 0 && passed === total ? "accepted" : "wrong";
+      recordSubmission({
+        userId,
+        courseId: lesson.courseId,
+        lessonId: lesson.id,
+        language: String(raw.language),
+        code: raw.code,
+        verdict,
+        publicPassed: passed,
+        publicTotal: total,
+        privatePassed: 0,
+        privateTotal: 0,
+        compileError: result.compileError,
+      });
+      return res.json({
+        module: true,
+        verdict,
+        publicTests: result.results,
+        output: result.output,
+        privatePassed: 0,
+        privateTotal: 0,
+      });
+    } catch (err) {
+      return res.status(500).json({ error: (err as Error).message });
+    }
   }
   const body = parseBody(req.body);
   if (!body) return res.status(400).json({ error: "invalid body" });
@@ -250,4 +312,22 @@ lessonsRouter.post("/:lessonId/submit", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
+});
+
+/** Reveal a code block's reference solution on demand (Show Solution). */
+lessonsRouter.post("/:lessonId/solution", async (req, res) => {
+  const { courseId, lessonId } = paramsOf(req);
+  const lesson = getLesson(courseId, lessonId);
+  if (!lesson) return res.status(404).json({ error: "lesson not found" });
+  const block = codeBlockOf(lesson);
+  if (!block?.solution) {
+    return res.status(404).json({ error: "no solution available" });
+  }
+  const body = parseBody(req.body);
+  const lang = body?.lang ?? "javascript";
+  res.json({
+    solution: block.solution,
+    lang,
+    module: block.mode === "module" ? true : false,
+  });
 });

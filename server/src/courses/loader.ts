@@ -16,6 +16,7 @@ import type {
   MarkdownBlock,
   McqBlock,
   MscqBlock,
+  ModuleSpec,
   TestCase,
 } from "./types";
 
@@ -121,6 +122,28 @@ function parseCodeBlock(d: Record<string, any>): CodeBlock | null {
   );
   if (languages.length === 0) languages.push("java");
 
+  // Module exercises: the learner writes ONE real backend file that a visible
+  // node:test suite imports. `module` carries the file map + preview.
+  const mode = d.mode === "module" ? "module" : "function";
+  const mod = d.module as Record<string, any> | undefined;
+  const moduleSpec: ModuleSpec | undefined =
+    mode === "module" && mod
+      ? {
+          entry: String(mod.entry ?? "main.js"),
+          language: mod.language === "typescript" ? "typescript" : "javascript",
+          testsFile: String(mod.testsFile ?? "lesson.test.js"),
+          testsContent: typeof mod.testsContent === "string" ? mod.testsContent : "",
+          extraFiles: mod.extraFiles
+            ? Object.fromEntries(
+                Object.entries(mod.extraFiles as Record<string, unknown>).map(
+                  ([k, v]) => [k, String(v)]
+                )
+              )
+            : undefined,
+          preview: typeof mod.preview === "string" ? mod.preview : undefined,
+        }
+      : undefined;
+
   return {
     type: "code",
     task: String(d.task ?? "Implement solve(...) per the signature."),
@@ -132,6 +155,8 @@ function parseCodeBlock(d: Record<string, any>): CodeBlock | null {
     timeLimitMs: typeof d.timeLimitMs === "number" ? d.timeLimitMs : 2000,
     hints: Array.isArray(d.hints) ? d.hints.map(String) : [],
     solution: typeof d.solution === "string" ? d.solution : undefined,
+    mode,
+    module: moduleSpec,
   };
 }
 

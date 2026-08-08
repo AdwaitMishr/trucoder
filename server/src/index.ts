@@ -12,23 +12,12 @@ import { preflightSandbox } from "./sandbox";
 import { authRouter } from "./routes/auth";
 import { coursesRouter } from "./routes/courses";
 import { lessonsRouter } from "./routes/lessons";
-import { deployRouter } from "./routes/deploy";
 
 const app = express();
 app.use(helmet({ contentSecurityPolicy: false })); // Monaco injects styles/workers
-// verify hook captures the raw request bytes — the deploy webhook signs the
-// exact payload (see routes/deploy.ts), so re-serialization is not an option
-app.use(express.json({ limit: "1mb", verify: (req, _res, buf) => { (req as express.Request & { rawBody?: Buffer }).rawBody = buf; } }));
+app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 app.use(morgan("short"));
-
-// better-sqlite3's teardown aborts on this box (RemoveEnvironmentCleanupHook
-// assertion) — systemd reads the ABRT as a failure and every restart spawns
-// an extra restart storm. Exit cleanly BEFORE the crashing hooks run.
-// (Verified 2026-08: without this, each systemctl restart cascades 2-4
-// extra restarts with restart counter climbing.)
-process.on("SIGTERM", () => process.exit(0));
-process.on("SIGINT", () => process.exit(0));
 
 // Seed the owner account on first boot (credentials come from env).
 if (countUsers() === 0) {
@@ -43,10 +32,6 @@ watchCourses();
 preflightSandbox();
 
 app.use("/api/auth", authRouter);
-
-// GitHub push webhook → auto-deploy. Public but HMAC-gated; must be mounted
-// BEFORE the /api session gate (it authenticates via signature, not cookie).
-app.use(deployRouter);
 
 // Public health/uptime endpoint.
 app.get("/api/health", (_req, res) => {

@@ -25,7 +25,7 @@ const LANGS: { id: Lang; label: string }[] = [
   { id: "cpp", label: "C++" },
 ];
 
-function storageKey(courseId: string, lessonId: string, lang: Lang) {
+function storageKey(courseId: string, lessonId: string, lang: string) {
   return `tc:${courseId}:${lessonId}:${lang}`;
 }
 
@@ -42,15 +42,36 @@ export default function CodeWorkbench({
   lastLanguage: Lang | null;
   onAccepted: () => void;
 }) {
+  const isModule = block.mode === "module";
+  const moduleLang = block.module?.language ?? "javascript";
   const [lang, setLang] = useState<Lang>("java");
   const [code, setCode] = useState("");
   const [run, setRun] = useState<RunResult | null>(null);
   const [submit, setSubmit] = useState<SubmitResult | null>(null);
   const [busy, setBusy] = useState<"run" | "submit" | null>(null);
   const [error, setError] = useState("");
-  const byLang = useRef<Partial<Record<Lang, string>>>({});
+  const [showHints, setShowHints] = useState(false);
+  const [showSolution, setShowSolution] = useState(false);
+  const [solution, setSolution] = useState("");
+  const [solutionLoading, setSolutionLoading] = useState(false);
+  const byLang = useRef<Partial<Record<string, string>>>({});
+
+  const activeLang = isModule ? moduleLang : lang;
+  const starterFor = (l: string) =>
+    (block.starterCode as Record<string, string>)[l] ?? "";
 
   useEffect(() => {
+    if (isModule) {
+      const k = storageKey(courseId, lessonId, moduleLang);
+      byLang.current = {};
+      byLang.current[moduleLang] =
+        localStorage.getItem(k) ?? starterFor(moduleLang);
+      setCode(byLang.current[moduleLang] ?? "");
+      setRun(null);
+      setSubmit(null);
+      setError("");
+      return;
+    }
     const langs: Lang[] = block.languages.length ? block.languages : ["java"];
     const savedLang: Lang =
       lastLanguage && langs.includes(lastLanguage) ? lastLanguage : langs[0];
@@ -64,10 +85,10 @@ export default function CodeWorkbench({
     setRun(null);
     setSubmit(null);
     setError("");
-  }, [courseId, lessonId, block, lastLanguage]);
+  }, [courseId, lessonId, block, lastLanguage, isModule, moduleLang]);
 
   function switchLang(l: Lang) {
-    if (l === lang) return;
+    if (l === lang || isModule) return;
     byLang.current[lang] = code;
     setCode(byLang.current[l] ?? block.starterCode[l] ?? "");
     setLang(l);
@@ -77,8 +98,8 @@ export default function CodeWorkbench({
 
   function onCodeChange(v: string) {
     setCode(v);
-    byLang.current[lang] = v;
-    localStorage.setItem(storageKey(courseId, lessonId, lang), v);
+    byLang.current[activeLang] = v;
+    localStorage.setItem(storageKey(courseId, lessonId, activeLang), v);
     // The displayed result no longer matches the code — drop it so the user
     // doesn't read a stale "all tests passed" for code they just changed.
     setRun(null);
@@ -86,10 +107,10 @@ export default function CodeWorkbench({
   }
 
   function resetCode() {
-    const starter = block.starterCode[lang] ?? "";
-    byLang.current[lang] = starter;
+    const starter = starterFor(activeLang);
+    byLang.current[activeLang] = starter;
     setCode(starter);
-    localStorage.setItem(storageKey(courseId, lessonId, lang), starter);
+    localStorage.setItem(storageKey(courseId, lessonId, activeLang), starter);
     setRun(null);
     setSubmit(null);
   }
@@ -100,7 +121,7 @@ export default function CodeWorkbench({
     setSubmit(null);
     setError("");
     try {
-      setRun(await api.run(courseId, lessonId, lang, code));
+      setRun(await api.run(courseId, lessonId, activeLang, code));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "run failed");
     } finally {
@@ -114,7 +135,7 @@ export default function CodeWorkbench({
     setSubmit(null);
     setError("");
     try {
-      const res = await api.submit(courseId, lessonId, lang, code);
+      const res = await api.submit(courseId, lessonId, activeLang, code);
       setSubmit(res);
       if (res.verdict === "accepted") {
         onAccepted();
@@ -127,55 +148,141 @@ export default function CodeWorkbench({
     }
   }
 
-  // Ctrl/Cmd+Enter = run, Ctrl/Cmd+Shift+Enter = submit.
+  async function toggleSolution() {
+    if (showSolution) {
+      setShowSolution(false);
+      return;
+    }
+    setShowSolution(true);
+    if (solution) return;
+    setSolutionLoading(true);
+    try {
+      const res = await api.solution(courseId, lessonId, activeLang);
+      setSolution(res.solution);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "solution unavailable");
+    } finally {
+      setSolutionLoading(false);
+    }
+  }
+
+  // Ctrl/Cmd+Enter = run, Ctrl/Cmd+Shift+Enter = submit (module: check).
   // Re-registered every render so the handlers always see the latest code.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.key !== "Enter") return;
       e.preventDefault();
-      if (e.shiftKey) doSubmit();
+      if (isModule) doSubmit();
+      else if (e.shiftKey) doSubmit();
       else doRun();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  const allPassed = (r: RunResult | SubmitResult | null) =>
+    !!r && r.publicTests.length > 0 && r.publicTests.every((t) => t.passed);
+
   return (
     <>
       <div className="editor-window">
         <div className="editor-header">
           <div className="editor-tabs">
-            {LANGS.filter((l) => block.starterCode[l.id]).map((l) => (
-              <button
-                key={l.id}
-                className={`lang ${lang === l.id ? "active" : ""}`}
-                onClick={() => switchLang(l.id)}
-              >
-                {l.label}
-              </button>
-            ))}
+            {isModule ? (
+              <span className="lang active" title={`editing ${block.module?.entry}`}>
+                {block.module?.entry ?? moduleLang}
+                <span className="lang-tag">
+                  {moduleLang === "typescript" ? "TS" : "JS"}
+                </span>
+              </span>
+            ) : (
+              LANGS.filter((l) => block.starterCode[l.id]).map((l) => (
+                <button
+                  key={l.id}
+                  className={`lang ${lang === l.id ? "active" : ""}`}
+                  onClick={() => switchLang(l.id)}
+                >
+                  {l.label}
+                </button>
+              ))
+            )}
           </div>
+          {block.hints.length > 0 && (
+            <button
+              className={`ghost small-ghost ${showHints ? "on" : ""}`}
+              onClick={() => setShowHints((s) => !s)}
+            >
+              hints
+            </button>
+          )}
+          <button className="ghost small-ghost" onClick={toggleSolution}>
+            {showSolution ? "hide solution" : "solution"}
+          </button>
           <button className="ghost small-ghost" onClick={resetCode}>
             reset
           </button>
         </div>
-        <CodeEditor language={lang} value={code} onChange={onCodeChange} />
+        <CodeEditor language={activeLang} value={code} onChange={onCodeChange} />
       </div>
 
+      {showHints && (
+        <div className="hints-box">
+          {block.hints.map((h, i) => (
+            <div key={i} className="hint">
+              <span className="muted">hint {i + 1}:</span> {h}
+            </div>
+          ))}
+        </div>
+      )}
+      {showSolution && (
+        <div className="solution-box">
+          <div className="solution-head">
+            <span className="muted">reference solution</span>
+            <button className="ghost small-ghost" onClick={() => setShowSolution(false)}>
+              hide
+            </button>
+          </div>
+          {solutionLoading ? (
+            <div className="muted small">loading…</div>
+          ) : (
+            <pre className="solution-code">{solution}</pre>
+          )}
+        </div>
+      )}
+
       <div className="actions">
-        <button className="btn run" onClick={doRun} disabled={busy !== null}>
-          <Mascot size={14} state={busy === "run" ? "running" : "idle"} />
-          {busy === "run" ? "running…" : "run"}
-        </button>
-        <button className="btn submit" onClick={doSubmit} disabled={busy !== null}>
-          <Mascot size={14} state={busy === "submit" ? "running" : "idle"} />
-          {busy === "submit" ? "submitting…" : "submit"}
-        </button>
-        <span className="muted small">run = visible tests · submit = hidden too</span>
+        {isModule ? (
+          <button className="btn submit" onClick={doSubmit} disabled={busy !== null}>
+            <Mascot size={14} state={busy === "submit" ? "running" : "idle"} />
+            {busy === "submit" ? "checking…" : "check"}
+          </button>
+        ) : (
+          <>
+            <button className="btn run" onClick={doRun} disabled={busy !== null}>
+              <Mascot size={14} state={busy === "run" ? "running" : "idle"} />
+              {busy === "run" ? "running…" : "run"}
+            </button>
+            <button className="btn submit" onClick={doSubmit} disabled={busy !== null}>
+              <Mascot size={14} state={busy === "submit" ? "running" : "idle"} />
+              {busy === "submit" ? "submitting…" : "submit"}
+            </button>
+          </>
+        )}
+        <span className="muted small">
+          {isModule
+            ? "check = run the visible test suite on a real node server"
+            : "run = visible tests · submit = hidden too"}
+        </span>
       </div>
 
       {error && <div className="form-error">{error}</div>}
-      <ResultPanel run={run} submit={submit} />
+      <ResultPanel
+        run={run}
+        submit={submit}
+        output={(run ?? submit)?.output}
+        preview={block.module?.preview}
+        previewUnlocked={allPassed(submit) || allPassed(run)}
+      />
     </>
   );
 }

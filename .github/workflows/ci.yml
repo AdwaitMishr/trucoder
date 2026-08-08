@@ -18,6 +18,9 @@ jobs:
       - name: Build sandbox image (for grading)
         run: docker build -t trucoder-sandbox:latest sandbox-image/
 
+      - name: Build node module-runner sandbox image (for module exercises)
+        run: docker build -t trucoder-sandbox-node:latest sandbox-image-node/
+
       - name: Server — deps + typecheck
         run: |
           cd server

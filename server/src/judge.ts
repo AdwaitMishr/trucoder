@@ -1,6 +1,11 @@
-import { runInSandbox, type SandboxResult } from "./sandbox";
+import { runInSandbox, runModuleInSandbox, type SandboxResult } from "./sandbox";
 import type { CodeBlock, Lang, TestCase } from "./courses/types";
-import type { RunResult, SubmitResult, TestResult } from "./types";
+import type {
+  ModuleRunResult,
+  RunResult,
+  SubmitResult,
+  TestResult,
+} from "./types";
 
 /**
  * Grading pipeline:
@@ -183,4 +188,142 @@ export async function submit(
     compileError,
     error: compileError || runtimeError || (timedOut ? "time limit exceeded" : undefined),
   };
+}
+
+/** Compact rendering of an assert actual/expected value for the UI. */
+function fmtAssert(v: unknown): string {
+  if (typeof v === "string") return v;
+  try {
+    const s = JSON.stringify(v);
+    return s === undefined ? String(v) : s;
+  } catch {
+    return String(v);
+  }
+}
+
+/**
+ * Parse node:test JSON-reporter NDJSON (one event object per line) into
+ * per-test verdicts. The file-level event (name === testsFile path) and
+ * suite events are skipped; each test() maps to one TestResult with
+ * expected/actual extracted from the assertion error when available.
+ */
+function parseModuleResults(stdout: string, testsFile: string): TestResult[] {
+  const results: TestResult[] = [];
+  for (const line of stdout.split("\n")) {
+    const t = line.trim();
+    if (!t.startsWith("{")) continue;
+    let ev: any;
+    try {
+      ev = JSON.parse(t);
+    } catch {
+      continue;
+    }
+    if (ev.type !== "test:pass" && ev.type !== "test:fail") continue;
+    const data = ev.data ?? {};
+    const name = String(data.name ?? "test");
+    // Skip the file-level event (the suite itself) — only test() entries.
+    if (name === testsFile || name.endsWith(`/${testsFile}`)) continue;
+    const details = data.details ?? {};
+    if (details.type === "suite") continue;
+
+    if (ev.type === "test:pass") {
+      results.push({ name, passed: true });
+      continue;
+    }
+    const err = details.error;
+    let message = "";
+    let actual: string | undefined;
+    let expected: string | undefined;
+    if (err && typeof err === "object") {
+      message = String(err.message ?? "");
+      if (err.actual !== undefined) actual = fmtAssert(err.actual);
+      if (err.expected !== undefined) expected = fmtAssert(err.expected);
+    } else if (err !== undefined) {
+      message = String(err);
+    }
+    if (!message && details.failureType === "testCodeFailure") {
+      message = "assertion failed";
+    }
+    results.push({
+      name,
+      passed: false,
+      expected,
+      actual,
+      error: message ? `assert: ${message}` : "test failed",
+    });
+  }
+  return results;
+}
+
+/** Run a module exercise: real backend file + visible node:test suite. */
+export async function runModule(
+  block: CodeBlock,
+  code: string
+): Promise<ModuleRunResult> {
+  const spec = block.module;
+  if (!spec) return { results: [], sandboxError: "module spec missing" };
+  // The test file is mounted under tests/ so its `../services/...` requires
+  // resolve against the project layout (same as the offline project repo).
+  const testPath = `tests/${spec.testsFile}`;
+  const files: Record<string, string> = {
+    [spec.entry]: code,
+    [testPath]: spec.testsContent,
+  };
+  for (const [p, c] of Object.entries(spec.extraFiles ?? {})) files[p] = c;
+  try {
+    const res = await runModuleInSandbox({
+      files,
+      entry: spec.entry,
+      testsFile: testPath,
+      timeLimitMs: block.timeLimitMs,
+    });
+    if (res.sandboxError) return { results: [], sandboxError: res.sandboxError };
+    if (res.timedOut) {
+      return {
+        results: [
+          {
+            name: "test suite",
+            passed: false,
+            error: "time limit exceeded — the suite did not finish in time.",
+          },
+        ],
+        output: res.stdout,
+      };
+    }
+    const results = parseModuleResults(res.stdout, spec.testsFile);
+    if (results.length === 0 && res.code !== 0) {
+      // Fatal load/runtime failure (e.g. TS type error, missing import).
+      const detail = (res.stderr || res.stdout || "").slice(0, 2000);
+      return {
+        results: [
+          {
+            name: "test suite",
+            passed: false,
+            error: `runtime error (exit ${res.code}):\n${detail}`,
+          },
+        ],
+        output: res.stdout,
+      };
+    }
+    // Output preview = the test file's own stdout; strip the reporter NDJSON
+    // lines that run.sh cats to stdout alongside it.
+    const output = res.stdout
+      .split("\n")
+      .filter((l) => {
+        const t = l.trim();
+        return !(t.startsWith("{") && t.includes('"type":"test:'));
+      })
+      .join("\n");
+    return { results, output };
+  } catch (err) {
+    return {
+      results: [
+        {
+          name: "test suite",
+          passed: false,
+          error: `runner error: ${(err as Error).message}`,
+        },
+      ],
+    };
+  }
 }

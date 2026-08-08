@@ -269,10 +269,6 @@ export default function Flowchart({ block }: { block: FlowchartBlock }) {
           role="dialog"
           aria-modal="true"
           aria-label={block.title ?? "flowchart"}
-          style={{
-            backgroundPosition: `${view.x}px ${view.y}px`,
-            backgroundSize: `${24 * view.s}px ${24 * view.s}px`,
-          }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}

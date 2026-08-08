@@ -3,11 +3,11 @@ import Editor from "@monaco-editor/react";
 import { useTheme } from "../theme";
 import { THEMES, type ThemeDef } from "../themes";
 import { FONT_STACKS, useSettings } from "../settings";
-import type { Lang } from "../types";
 
-const MONACO_LANG: Record<Lang, string> = {
+const MONACO_LANG: Record<string, string> = {
   java: "java",
   javascript: "javascript",
+  typescript: "typescript",
   python: "python",
   cpp: "cpp",
 };
@@ -87,7 +87,7 @@ export default function CodeEditor({
   value,
   onChange,
 }: {
-  language: Lang;
+  language: string;
   value: string;
   onChange: (v: string) => void;
 }) {
@@ -162,7 +162,7 @@ export default function CodeEditor({
     <div className="editor-surface">
       <Editor
         height="100%"
-        language={MONACO_LANG[language]}
+        language={MONACO_LANG[language] ?? "javascript"}
         value={value}
         onChange={(v) => onChange(v ?? "")}
         theme={`trucoder-${theme.id}`}

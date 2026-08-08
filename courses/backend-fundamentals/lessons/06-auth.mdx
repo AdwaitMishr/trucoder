@@ -31,6 +31,15 @@ blocks:
       - **Cookies (transport, not auth)** — a browser mechanism: the server sets a cookie holding a session id *or* a JWT, and the browser automatically attaches it to every request for that domain. Flags: `HttpOnly` (JavaScript can't read it — defuses XSS), `Secure` (HTTPS only), `SameSite` (mitigates CSRF).
 
       **Use case:** the storefront sets an `HttpOnly` session cookie for the browser checkout, while the mobile app authenticates with a JWT in the `Authorization` header.
+
+      ```js
+      // login: hash + sign
+      const hash = await bcrypt.hash(password, 12);          // store `hash`, never the password
+      const ok = await bcrypt.compare(password, user.hash);  // verify at login
+      const token = jwt.sign({ sub: user.id, role: user.role }, SECRET, { expiresIn: "1h" });
+      // later, on any request:
+      const payload = jwt.verify(token, SECRET);             // throws if tampered or expired
+      ```
   - type: flowchart
     title: "Session flow (stateful)"
     nodes: ["Client submits credentials", "Server validates credentials", "Server stores session_id + user data in Redis", "Server sets HttpOnly cookie (session_id)", "Client sends cookie on every request", "Server looks up session in Redis", "Authorized — serve request"]

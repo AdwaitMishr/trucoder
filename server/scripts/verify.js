@@ -3,7 +3,7 @@
 // only if its tests match its solution.
 process.env.DATA_DIR = "/tmp/trucoder-verify-data";
 const { scanCourses, getCourses } = require("../dist/courses/loader");
-const { submit } = require("../dist/judge");
+const { submit, runModule } = require("../dist/judge");
 
 // Validate a lesson's quiz blocks: answer indices must be in range and
 // unique, mscq answers must be non-empty index sets, options must have at
@@ -80,6 +80,44 @@ function validateQuizBlocks(blocks) {
       if (!codeBlock.solution) {
         console.log(`  SKIP ${lesson.id} (code block has no reference solution)`);
         fail += 1;
+        continue;
+      }
+      if (codeBlock.mode === "module") {
+        const spec = codeBlock.module;
+        if (
+          !spec ||
+          !spec.entry ||
+          !spec.testsFile ||
+          !spec.testsContent ||
+          !codeBlock.starterCode[spec.language]
+        ) {
+          console.log(
+            `  FAIL ${lesson.id} (module spec incomplete: entry/testsFile/testsContent/starter required)`
+          );
+          fail += 1;
+          continue;
+        }
+        const res = await runModule(codeBlock, codeBlock.solution);
+        if (res.sandboxError) {
+          fail += 1;
+          console.log(`  FAIL ${lesson.id} sandbox: ${res.sandboxError}`);
+          continue;
+        }
+        const passed = res.results.filter((r) => r.passed).length;
+        const total = res.results.length;
+        if (total > 0 && passed === total) {
+          pass += 1;
+          console.log(`  PASS ${lesson.id} (module, ${passed}/${total} tests)`);
+        } else {
+          fail += 1;
+          console.log(`  FAIL ${lesson.id} (module, ${passed}/${total} tests)`);
+          const bad = res.results.find((t) => !t.passed);
+          if (bad) {
+            console.log(
+              "    " + (bad.error || `expected ${bad.expected} got ${bad.actual}`)
+            );
+          }
+        }
         continue;
       }
       const res = await submit(codeBlock, "python", codeBlock.solution);
