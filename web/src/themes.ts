@@ -103,6 +103,17 @@ export const THEMES: ThemeDef[] = [
       ok: "#5e8c4c", err: "#b0483a",
     },
   },
+  {
+    id: "modern-dolch-light",
+    name: "modern dolch light",
+    kind: "light",
+    colors: {
+      bg: "#e4e5e7", ink: "#26282c", muted: "#8a8d93",
+      surface: "#ececef", surface2: "#dadbde", hairline: "#c9cacd",
+      accent: "#2ea697", accentInk: "#f4fbfa", caret: "#2ea697",
+      ok: "#3f8f63", err: "#c14e63",
+    },
+  },
 ];
 
 export const DEFAULT_THEME = "warm";
