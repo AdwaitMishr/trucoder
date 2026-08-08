@@ -272,7 +272,7 @@ code, pre, .mono { font-family: var(--font-mono); }
 .brand-coder { color: color-mix(in oklab, var(--accent) 45%, var(--ink)); }
 /* accent dot, top-right of the wordmark — the blinking cursor */
 .nav .brand::after,
-.login-brand::after {
+.login-word::after {
   content: ""; position: absolute; top: 0.04em; right: -0.55em;
   width: 0.3em; height: 0.3em; border-radius: 50%;
   background: var(--accent);
@@ -334,8 +334,17 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
   display: flex; align-items: center; font-family: var(--font-brand);
   font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
 }
-.login-brand > .mascot { margin-right: 10px; }
-.login-sub { color: var(--muted); font-size: 13px; margin: -8px 0 8px; }
+/* monkeytype-style lockup: chip + stacked tagline/wordmark, muted */
+.login-brand > .mascot {
+  margin-right: 12px;
+  color: color-mix(in srgb, var(--accent) 55%, var(--muted));
+}
+.login-lockup { display: flex; flex-direction: column; line-height: 1; }
+.login-word { position: relative; }
+.login-tag {
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 400;
+  color: var(--muted); letter-spacing: 0.14em; margin-bottom: 8px;
+}
 .login-card label { display: flex; flex-direction: column; gap: 6px; }
 .login-card label span {
   font-size: 11px; color: var(--muted); text-transform: uppercase;

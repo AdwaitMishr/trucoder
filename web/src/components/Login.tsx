@@ -29,11 +29,15 @@ export default function Login({ onLogin }: { onLogin: (user: User) => void }) {
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
         <div className="login-brand">
-          <Mascot size={28} />
-          <span className="brand-tru">tru</span>
-          <span className="brand-coder">coder</span>
+          <Mascot size={32} className="login-chip" />
+          <div className="login-lockup">
+            <span className="login-tag">code true</span>
+            <span className="login-word">
+              <span className="brand-tru">tru</span>
+              <span className="brand-coder">coder</span>
+            </span>
+          </div>
         </div>
-        <p className="login-sub">a calm place to learn, properly</p>
         <label>
           <span>username</span>
           <input
