@@ -4,7 +4,6 @@ import { PiArrowRight } from "react-icons/pi";
 import { api } from "../api";
 import Loader from "./Loader";
 import GdEasterEgg from "./GdEasterEgg";
-import { maybeSlow } from "../delay";
 import type { CourseSummary } from "../types";
 
 export default function CourseIndex() {
@@ -14,7 +13,8 @@ export default function CourseIndex() {
 
   useEffect(() => {
     setErr(false);
-    maybeSlow(api.courses())
+    api
+      .courses()
       .then((r) => setCourses(r.courses))
       .catch(() => setErr(true));
   }, [tick]);
