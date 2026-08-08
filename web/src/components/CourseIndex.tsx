@@ -3,13 +3,15 @@ import { Link } from "react-router-dom";
 import { PiArrowRight } from "react-icons/pi";
 import { api } from "../api";
 import Loader from "./Loader";
+import GdEasterEgg from "./GdEasterEgg";
+import { maybeSlow } from "../delay";
 import type { CourseSummary } from "../types";
 
 export default function CourseIndex() {
   const [courses, setCourses] = useState<CourseSummary[] | null>(null);
 
   useEffect(() => {
-    api.courses().then((r) => setCourses(r.courses));
+    maybeSlow(api.courses()).then((r) => setCourses(r.courses));
   }, []);
 
   if (!courses) {
@@ -25,11 +27,12 @@ export default function CourseIndex() {
   }
 
   return (
-    <div className="page">
-      <header className="page-head">
-        <h1>courses</h1>
-        <p>pick one and work through it at your own pace.</p>
-      </header>
+    <>
+      <div className="page">
+        <header className="page-head">
+          <h1>courses</h1>
+          <p>pick one and work through it at your own pace.</p>
+        </header>
 
       {courses.length === 0 ? (
         <div className="empty">
@@ -61,6 +64,8 @@ export default function CourseIndex() {
           })}
         </div>
       )}
-    </div>
+      </div>
+      <GdEasterEgg />
+    </>
   );
 }

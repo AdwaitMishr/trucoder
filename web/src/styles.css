@@ -236,14 +236,31 @@ code, pre, .mono { font-family: var(--font-mono); }
    screen). The level strip scrolls; the mascot cube spins 360° over each
    spike and lands flat. Transforms only. No floor — the level floats,
    with the trucoder wordmark below the stage. */
-.gd-center {
+/* ---- loader (wordmark + left-to-right shine sweep) ---- */
+.ld-center {
   flex: 1; display: flex; align-items: center; justify-content: center;
   min-height: 200px;
 }
-.gd-stack {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  /* the old loader's "shine": a gentle opacity breathe on the whole block */
-  animation: gd-shine 1.6s ease-in-out infinite;
+.ld-word {
+  font-family: var(--font-brand); font-weight: 700; font-size: 19px;
+  letter-spacing: -0.02em;
+  color: transparent;
+  background-image: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--muted) 62%, var(--bg)) 42%,
+    color-mix(in srgb, var(--muted) 96%, var(--bg)) 50%,
+    color-mix(in srgb, var(--muted) 62%, var(--bg)) 58%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: ld-shine 2.8s linear infinite;
+}
+/* the highlight band sweeps left -> right; it is off-screen at both ends
+   of the cycle, so the wrap is invisible */
+@keyframes ld-shine {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
 }
 .gd-stage { position: relative; width: 128px; height: 56px; overflow: hidden; }
 .gd-level {
@@ -275,9 +292,11 @@ code, pre, .mono { font-family: var(--font-mono); }
 @keyframes gd-scroll {
   to { transform: translate3d(-66.67%, 0, 0); }
 }
-@keyframes gd-shine {
-  0%, 100% { opacity: 0.55; }
-  50%      { opacity: 1; }
+/* bottom-of-page easter egg: extra scroll space with the GD loop */
+.gd-ee {
+  min-height: 86vh;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px;
 }
 /* timeline (percent of the 1.8s loop — 4x the original 7.2s):
    FOUR jumps at 10 / 35 / 60 / 85%, one per 0.45s block. Spikes every
@@ -326,7 +345,7 @@ code, pre, .mono { font-family: var(--font-mono); }
   100%      { transform: translate3d(-50%, 0, 0) rotate(360deg) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .gd-level, .gd-cube, .gd-stack { animation: none; }
+  .gd-level, .gd-cube, .ld-word { animation: none; }
 }
 
 /* ---- app shell ---- */
