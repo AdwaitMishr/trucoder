@@ -247,7 +247,7 @@ code, pre, .mono { font-family: var(--font-mono); }
 }
 .gd-stage { position: relative; width: 128px; height: 56px; overflow: hidden; }
 .gd-level {
-  position: absolute; inset: 0; width: 200%;
+  position: absolute; inset: 0; width: 300%;
   will-change: transform; animation: gd-scroll 1.8s linear infinite;
 }
 .gd-spike {
@@ -256,7 +256,7 @@ code, pre, .mono { font-family: var(--font-mono); }
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 .gd-cube {
-  position: absolute; left: 30%; bottom: 7.5px;
+  position: absolute; left: 30%; bottom: 6.7px;
   width: 16px; height: 16px;
   will-change: transform; animation: gd-run 1.8s linear infinite;
 }
@@ -273,58 +273,57 @@ code, pre, .mono { font-family: var(--font-mono); }
 .gd-brand .brand-coder { color: color-mix(in srgb, var(--muted) 55%, var(--bg)); }
 
 @keyframes gd-scroll {
-  to { transform: translate3d(-50%, 0, 0); }
+  to { transform: translate3d(-66.67%, 0, 0); }
 }
 @keyframes gd-shine {
   0%, 100% { opacity: 0.55; }
   50%      { opacity: 1; }
 }
-/* timeline (percent of the 1.8s loop — 4x the original 7.2s, user-directed 2026-08):
-   four jumps at 12.5 / 37.5 / 62.5 / 87.5%, one per 0.45s block. Spikes
-   every 32px (four per 128px period). Rotation is CUMULATIVE, +90° per
-   jump, and PERSISTS after landing — GD-style: land sideways (450°), then
-   upside-down (540°), then sideways (630°), then upright (720° = 360° ≡ 0)
-   — the loop wraps seamlessly because 720 ≡ 360 ≡ 0. The 11px spike stays
-   under the 16px cube for ~21% of the loop around each passage; apex -30
-   (stage 56, cube top clears by 3px) and landings are ~2% AFTER the spike
-   fully clears, so the cube never touches a spike (user-flagged clips);
-   min clearance at the tightest frames is ~1.8px above the tip. The cube
-   feet (bottom 7px + ~1.7px viewBox offset) sit ON or ABOVE the spike-base
-   line in every rotation pose — never below it (user-flagged). Per-keyframe
-   easing: ease-out rising, ease-in falling. */
+/* timeline (percent of the 1.8s loop — 4x the original 7.2s):
+   FOUR jumps at 10 / 35 / 60 / 85%, one per 0.45s block. Spikes every
+   64px (strip 300% wide, scroll -66.67% = 256px per loop) — the 128px
+   stage window shows EXACTLY 3 spikes at any scroll position (max-3
+   requirement). Rotation is CUMULATIVE, +90° per jump, and PERSISTS
+   after landing: 90° (sideways), 180° (upside-down), 270° (sideways),
+   360° (≡ 0°, upright) — seamless wrap. The 11px spike stays under the
+   16px cube for ~21% of the loop around each passage (10±5.3% etc.);
+   apex -30 (stage 56, cube top clears by 3px); landings land ~1.7% AFTER
+   the spike fully clears, min clearance at the tightest frames is ~3px
+   above the tip (verified by probes) — spikes are never touched. The
+   cube bottom 6.7px puts the chip's VISUAL feet (viewBox offset ~1.67px,
+   1.33px when rotated) EXACTLY on the spike-base line in the sideways
+   poses (0.34px above in the upright poses) — measured, never below.
+   Per-keyframe easing: ease-out rising, ease-in falling. */
 @keyframes gd-run {
-  0%        { transform: translate3d(-50%, 0, 0) rotate(360deg) scale(1); animation-timing-function: ease-out; }
-  1.5%      { transform: translate3d(-50%, -16px, 0) rotate(376deg) scale(1); animation-timing-function: ease-out; }
-  4%        { transform: translate3d(-50%, -24px, 0) rotate(396deg) scale(1); animation-timing-function: ease-out; }
-  12.5%     { transform: translate3d(-50%, -30px, 0) rotate(420deg) scale(1); animation-timing-function: ease-in; }
-  19%       { transform: translate3d(-50%, -22px, 0) rotate(435deg) scale(1); animation-timing-function: ease-in; }
-  22%       { transform: translate3d(-50%, -16px, 0) rotate(444deg) scale(1); animation-timing-function: ease-in; }
-  23.5%     { transform: translate3d(-50%, -9px, 0) rotate(448deg) scale(1); animation-timing-function: ease-in; }
-  25%       { transform: translate3d(-50%, 0, 0) rotate(450deg) scale(1); }
-  27%       { transform: translate3d(-50%, 0, 0) rotate(450deg) scale(1); animation-timing-function: ease-out; }
-  28.5%     { transform: translate3d(-50%, -16px, 0) rotate(466deg) scale(1); animation-timing-function: ease-out; }
-  31%       { transform: translate3d(-50%, -24px, 0) rotate(486deg) scale(1); animation-timing-function: ease-out; }
-  37.5%     { transform: translate3d(-50%, -30px, 0) rotate(510deg) scale(1); animation-timing-function: ease-in; }
-  44%       { transform: translate3d(-50%, -22px, 0) rotate(525deg) scale(1); animation-timing-function: ease-in; }
-  47%       { transform: translate3d(-50%, -16px, 0) rotate(534deg) scale(1); animation-timing-function: ease-in; }
-  48.5%     { transform: translate3d(-50%, -9px, 0) rotate(538deg) scale(1); animation-timing-function: ease-in; }
-  50%       { transform: translate3d(-50%, 0, 0) rotate(540deg) scale(1); }
-  52%       { transform: translate3d(-50%, 0, 0) rotate(540deg) scale(1); animation-timing-function: ease-out; }
-  53.5%     { transform: translate3d(-50%, -16px, 0) rotate(556deg) scale(1); animation-timing-function: ease-out; }
-  56%       { transform: translate3d(-50%, -24px, 0) rotate(576deg) scale(1); animation-timing-function: ease-out; }
-  62.5%     { transform: translate3d(-50%, -30px, 0) rotate(600deg) scale(1); animation-timing-function: ease-in; }
-  69%       { transform: translate3d(-50%, -22px, 0) rotate(615deg) scale(1); animation-timing-function: ease-in; }
-  72%       { transform: translate3d(-50%, -16px, 0) rotate(624deg) scale(1); animation-timing-function: ease-in; }
-  73.5%     { transform: translate3d(-50%, -9px, 0) rotate(628deg) scale(1); animation-timing-function: ease-in; }
-  75%       { transform: translate3d(-50%, 0, 0) rotate(630deg) scale(1); }
-  77%       { transform: translate3d(-50%, 0, 0) rotate(630deg) scale(1); animation-timing-function: ease-out; }
-  78.5%     { transform: translate3d(-50%, -16px, 0) rotate(646deg) scale(1); animation-timing-function: ease-out; }
-  81%       { transform: translate3d(-50%, -24px, 0) rotate(666deg) scale(1); animation-timing-function: ease-out; }
-  87.5%     { transform: translate3d(-50%, -30px, 0) rotate(690deg) scale(1); animation-timing-function: ease-in; }
-  94%       { transform: translate3d(-50%, -22px, 0) rotate(705deg) scale(1); animation-timing-function: ease-in; }
-  96%       { transform: translate3d(-50%, -16px, 0) rotate(714deg) scale(1); animation-timing-function: ease-in; }
-  97.5%     { transform: translate3d(-50%, -9px, 0) rotate(718deg) scale(1); animation-timing-function: ease-in; }
-  100%      { transform: translate3d(-50%, 0, 0) rotate(720deg) scale(1); }
+  0%        { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); animation-timing-function: ease-out; }
+  1%        { transform: translate3d(-50%, -12px, 0) rotate(12deg) scale(1); animation-timing-function: ease-out; }
+  2%        { transform: translate3d(-50%, -20px, 0) rotate(30deg) scale(1); animation-timing-function: ease-out; }
+  10%       { transform: translate3d(-50%, -30px, 0) rotate(60deg) scale(1); animation-timing-function: ease-in; }
+  15%       { transform: translate3d(-50%, -14px, 0) rotate(82deg) scale(1); animation-timing-function: ease-in; }
+  16.5%     { transform: translate3d(-50%, -6px, 0) rotate(88deg) scale(1); animation-timing-function: ease-in; }
+  17%       { transform: translate3d(-50%, 0, 0) rotate(90deg) scale(1); }
+  28%       { transform: translate3d(-50%, 0, 0) rotate(90deg) scale(1); animation-timing-function: ease-out; }
+  29%       { transform: translate3d(-50%, -12px, 0) rotate(102deg) scale(1); animation-timing-function: ease-out; }
+  30%       { transform: translate3d(-50%, -20px, 0) rotate(120deg) scale(1); animation-timing-function: ease-out; }
+  35%       { transform: translate3d(-50%, -30px, 0) rotate(150deg) scale(1); animation-timing-function: ease-in; }
+  40%       { transform: translate3d(-50%, -14px, 0) rotate(172deg) scale(1); animation-timing-function: ease-in; }
+  41.5%     { transform: translate3d(-50%, -6px, 0) rotate(178deg) scale(1); animation-timing-function: ease-in; }
+  42%       { transform: translate3d(-50%, 0, 0) rotate(180deg) scale(1); }
+  53%       { transform: translate3d(-50%, 0, 0) rotate(180deg) scale(1); animation-timing-function: ease-out; }
+  54%       { transform: translate3d(-50%, -12px, 0) rotate(192deg) scale(1); animation-timing-function: ease-out; }
+  55%       { transform: translate3d(-50%, -20px, 0) rotate(210deg) scale(1); animation-timing-function: ease-out; }
+  60%       { transform: translate3d(-50%, -30px, 0) rotate(240deg) scale(1); animation-timing-function: ease-in; }
+  65%       { transform: translate3d(-50%, -14px, 0) rotate(262deg) scale(1); animation-timing-function: ease-in; }
+  66.5%     { transform: translate3d(-50%, -6px, 0) rotate(268deg) scale(1); animation-timing-function: ease-in; }
+  67%       { transform: translate3d(-50%, 0, 0) rotate(270deg) scale(1); }
+  78%       { transform: translate3d(-50%, 0, 0) rotate(270deg) scale(1); animation-timing-function: ease-out; }
+  79%       { transform: translate3d(-50%, -12px, 0) rotate(282deg) scale(1); animation-timing-function: ease-out; }
+  80%       { transform: translate3d(-50%, -20px, 0) rotate(300deg) scale(1); animation-timing-function: ease-out; }
+  85%       { transform: translate3d(-50%, -30px, 0) rotate(330deg) scale(1); animation-timing-function: ease-in; }
+  90%       { transform: translate3d(-50%, -14px, 0) rotate(352deg) scale(1); animation-timing-function: ease-in; }
+  91.5%     { transform: translate3d(-50%, -6px, 0) rotate(358deg) scale(1); animation-timing-function: ease-in; }
+  92%       { transform: translate3d(-50%, 0, 0) rotate(360deg) scale(1); }
+  100%      { transform: translate3d(-50%, 0, 0) rotate(360deg) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) {
   .gd-level, .gd-cube, .gd-stack { animation: none; }
