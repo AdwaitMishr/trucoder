@@ -23,6 +23,9 @@ import type { Lang } from "./courses/types";
  */
 
 const SANDBOX_IMAGE = process.env.SANDBOX_IMAGE || "trucoder-sandbox:latest";
+/** Node module-runner image (JS + TS via Node 24 type stripping). */
+const SANDBOX_NODE_IMAGE =
+  process.env.SANDBOX_NODE_IMAGE || "trucoder-sandbox-node:latest";
 const HEAP_MB = 512;
 const MEMORY_MB = 768;
 // Startup overhead (JVM/node/python cold start + container creation) is not
@@ -37,6 +40,19 @@ export interface SandboxRunOptions {
   code: string;
   /** Batch of test cases. Each has positional args, serialized to JSON. */
   tests: { args: unknown[] }[];
+  /** Wall-clock limit in ms (per whole batch). */
+  timeLimitMs: number;
+}
+
+/** Module-exercise run: a set of real files (entry = learner's module, plus
+ *  extra read-only files and the node:test file) executed by Node 24. */
+export interface ModuleSandboxOptions {
+  /** path -> content map (entry module, extra files, test file). */
+  files: Record<string, string>;
+  /** The file the learner wrote (used for diagnostics). */
+  entry: string;
+  /** The test file to run (node:test). */
+  testsFile: string;
   /** Wall-clock limit in ms (per whole batch). */
   timeLimitMs: number;
 }
@@ -198,5 +214,84 @@ export function runInSandbox(options: SandboxRunOptions): Promise<SandboxResult>
       }
     );
     child.stdin?.end(JSON.stringify({ tests: options.tests }));
+  });
+}
+
+/** Run a module exercise: real files (learner entry + extras + test file)
+ *  executed by the Node 24 sandbox. Stdout = the test file's own output
+ *  (the JSON reporter is redirected to a file inside the container). */
+export function runModuleInSandbox(
+  options: ModuleSandboxOptions
+): Promise<SandboxResult> {
+  const effectiveMs = options.timeLimitMs + STARTUP_BUFFER_MS;
+  const timeoutSecs = Math.max(5, Math.ceil(effectiveMs / 1000));
+
+  const args = [
+    "run",
+    "--rm",
+    "-i",
+    "--network",
+    "none",
+    "--read-only",
+    "--memory",
+    `${MEMORY_MB}m`,
+    "--cpus",
+    "1",
+    "--pids-limit",
+    "128",
+    "--cap-drop",
+    "ALL",
+    "--security-opt",
+    "no-new-privileges",
+    "--tmpfs",
+    "/tmp:rw,size=256m,mode=1777,exec",
+    "-e",
+    `FILES_B64=${Buffer.from(JSON.stringify(options.files), "utf8").toString("base64")}`,
+    "-e",
+    `MODULE_ENTRY=${options.entry}`,
+    "-e",
+    `MODULE_TESTFILE=${options.testsFile}`,
+    "-e",
+    `TIMEOUT_SECS=${timeoutSecs}`,
+    SANDBOX_NODE_IMAGE,
+  ];
+
+  return new Promise((resolve) => {
+    const child = execFile(
+      "docker",
+      args,
+      {
+        timeout: effectiveMs + 30_000,
+        maxBuffer: 16 * 1024 * 1024,
+      },
+      (err, stdout, stderr) => {
+        const e = err as {
+          code?: string | number;
+          killed?: boolean;
+          signal?: string;
+        } | null;
+        const sandboxError = classifySandboxError(e, stderr || "");
+        if (sandboxError) {
+          resolve({
+            stdout: stdout || "",
+            stderr: stderr || "",
+            code: typeof e?.code === "number" ? e.code : 1,
+            timedOut: false,
+            sandboxError,
+          });
+          return;
+        }
+        const code =
+          e && typeof e.code === "number" ? e.code : e ? (e.killed ? 137 : 1) : 0;
+        const timedOut = code === 124 || code === 137;
+        resolve({
+          stdout: stdout || "",
+          stderr: stderr || "",
+          code,
+          timedOut,
+        });
+      }
+    );
+    child.stdin?.end();
   });
 }

@@ -22,14 +22,6 @@ app.use(express.json({ limit: "1mb", verify: (req, _res, buf) => { (req as expre
 app.use(cookieParser());
 app.use(morgan("short"));
 
-// better-sqlite3's teardown aborts on this box (RemoveEnvironmentCleanupHook
-// assertion) — systemd reads the ABRT as a failure and every restart spawns
-// an extra restart storm. Exit cleanly BEFORE the crashing hooks run.
-// (Verified 2026-08: without this, each systemctl restart cascades 2-4
-// extra restarts with restart counter climbing.)
-process.on("SIGTERM", () => process.exit(0));
-process.on("SIGINT", () => process.exit(0));
-
 // Seed the owner account on first boot (credentials come from env).
 if (countUsers() === 0) {
   createUser(config.ownerUsername, hashPassword(config.ownerPassword));

@@ -46,6 +46,17 @@ export interface CodeBlock {
   publicTests: PublicTestCase[];
   timeLimitMs: number;
   hints: string[];
+  /** "function" (default) | "module" — module exercises run a real backend
+   *  file against a visible node:test suite. */
+  mode?: "function" | "module";
+  /** Present when mode === "module". */
+  module?: {
+    entry: string;
+    language: "javascript" | "typescript";
+    testsFile: string;
+    /** Canned preview text shown when all tests pass (fallback to output). */
+    preview?: string;
+  };
 }
 
 export interface MarkdownBlock {
@@ -126,6 +137,8 @@ export interface TestResult {
 export interface RunResult {
   publicTests: TestResult[];
   compileError?: string;
+  /** Module exercises: the test suite's stdout (output preview). */
+  output?: string;
 }
 
 export interface SubmitResult {
@@ -134,6 +147,8 @@ export interface SubmitResult {
   privatePassed: number;
   privateTotal: number;
   compileError?: string;
+  /** Module exercises: the test suite's stdout (output preview). */
+  output?: string;
   error?: string;
 }
 

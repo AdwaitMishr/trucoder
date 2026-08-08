@@ -15,6 +15,15 @@ export interface RunResult {
   sandboxError?: string;
 }
 
+/** Result of a module exercise run (real backend file + visible node:test). */
+export interface ModuleRunResult {
+  results: TestResult[];
+  /** The test file's stdout — shown as the output preview. */
+  output?: string;
+  compileError?: string;
+  sandboxError?: string;
+}
+
 export interface SubmitResult {
   verdict: "accepted" | "wrong" | "error" | "timeout";
   publicTests: TestResult[];

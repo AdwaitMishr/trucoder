@@ -2,7 +2,6 @@ import type {
   AnswerResult,
   CourseDetail,
   CourseSummary,
-  Lang,
   Lesson,
   RunResult,
   SubmitResult,
@@ -50,17 +49,23 @@ export const api = {
   lesson: (courseId: string, lessonId: string) =>
     get<Lesson>(`/api/courses/${courseId}/lessons/${lessonId}`),
 
-  run: (courseId: string, lessonId: string, language: Lang, code: string) =>
+  run: (courseId: string, lessonId: string, language: string, code: string) =>
     post<RunResult>(`/api/courses/${courseId}/lessons/${lessonId}/run`, {
       language,
       code,
     }),
 
-  submit: (courseId: string, lessonId: string, language: Lang, code: string) =>
+  submit: (courseId: string, lessonId: string, language: string, code: string) =>
     post<SubmitResult>(`/api/courses/${courseId}/lessons/${lessonId}/submit`, {
       language,
       code,
     }),
+
+  solution: (courseId: string, lessonId: string, language: string) =>
+    post<{ solution: string; module: boolean }>(
+      `/api/courses/${courseId}/lessons/${lessonId}/solution`,
+      { language }
+    ),
 
   markRead: (courseId: string, lessonId: string) =>
     post<{ solved: boolean }>(

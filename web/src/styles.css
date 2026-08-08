@@ -698,16 +698,10 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 }
 .flow-expand:hover { color: var(--ink); background: var(--surface2); }
 /* fullscreen canvas viewer: pan by drag, zoom by wheel/pinch/buttons.
-   the diagram lives on a transformed stage — no scrollbars, ever.
-   dotted graph-paper bg tracks pan/zoom via inline background-position/size.
-   bg follows the ACTIVE THEME (var(--bg)) + muted-tinted dots — a fixed
-   dark backdrop made dark-theme node boxes nearly invisible (measured
-   contrast ~30 vs 250 on light themes) */
+   the diagram lives on a transformed stage — no scrollbars, ever */
 .flow-canvas {
   position: fixed; inset: 0; z-index: 130; overflow: hidden;
-  background-color: var(--bg);
-  background-image: radial-gradient(circle, color-mix(in srgb, var(--muted) 32%, transparent) 1px, transparent 1.6px);
-  background-size: 24px 24px;
+  background: rgba(0, 0, 0, 0.72);
   touch-action: none; cursor: grab; user-select: none;
 }
 .flow-stage {
@@ -894,6 +888,21 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 .test-io .muted { color: var(--muted); }
 .test-error, .block-error { white-space: pre-wrap; font-family: var(--font-mono); font-size: 12px; margin: 0; }
 .block-error { padding: 10px 16px; color: var(--err); border-bottom: 1px solid var(--hairline); }
+
+/* Module-exercise panels: output preview + pass-gated PREVIEW + hints/solution */
+.run-output { border-top: 1px solid var(--hairline); padding: 10px 16px; }
+.run-output pre { margin: 4px 0 0; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; color: var(--ink); }
+.preview { border-top: 1px solid var(--hairline); padding: 10px 16px; font-size: 12.5px; }
+.preview-head { display: flex; gap: 6px; align-items: baseline; font-weight: 600; letter-spacing: 0.04em; }
+.preview.ok .preview-head { color: var(--ok); }
+.preview.ok pre { margin: 6px 0 0; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; color: var(--ink); background: color-mix(in srgb, var(--ok) 7%, transparent); border: 1px solid color-mix(in srgb, var(--ok) 25%, transparent); border-radius: 8px; padding: 10px 12px; }
+.preview.locked { color: var(--muted); font-style: italic; }
+.hints-box { margin: 8px 0; padding: 10px 14px; border: 1px dashed var(--hairline); border-radius: 8px; font-size: 13px; display: grid; gap: 6px; }
+.solution-box { margin: 8px 0; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; }
+.solution-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--hairline); }
+.solution-code { margin: 0; padding: 12px 14px; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; max-height: 320px; overflow: auto; }
+.lang-tag { margin-left: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; }
+button.ghost.small-ghost.on { color: var(--accent); }
 
 .empty { max-width: 520px; margin: 80px auto; text-align: center; }
 .empty-title { font-size: 18px; font-weight: 600; margin-bottom: 6px; }

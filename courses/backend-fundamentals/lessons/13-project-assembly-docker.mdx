@@ -10,18 +10,22 @@ blocks:
       # Project 4: Assembly & Docker
 
       **Context.** Three lessons, three pieces: the cart domain, the checkout
-      pipeline, and the rate limiter. Today you **assemble the whole e-commerce
-      backend** — every file, wired end to end — and **ship it in Docker**:
-      an API container (Node 20 + Express) talking to a Postgres container
-      and a Redis container, orchestrated by `docker-compose.yml`. One
-      command, `docker compose up`, and the shop is open.
+      pipeline, and the rate limiter. Today you **assemble the whole
+      e-commerce backend** — every file, wired end to end — and **ship it in
+      Docker**: an API container (Node 20 + Express) talking to a Postgres
+      container and a Redis container, orchestrated by `docker-compose.yml`.
+      One command, `docker compose up`, and the shop is open.
 
-      **What you are building this step.** The complete blueprint below is the
-      finished project. Read it top to bottom; every earlier lesson plugs in
-      somewhere. Your graded exercise is the last util the project needs:
-      **config validation** — the function that fails fast at boot when a
-      required environment variable is missing, instead of crashing on the
-      first request.
+      **What you are building this step.** The complete blueprint below is
+      the finished project — read it top to bottom; every earlier lesson
+      plugs in somewhere. The one module you write today is the last util the
+      project needs: **config validation** (`utils/env.js`) — the functions
+      that fail fast at boot when a required environment variable is missing,
+      instead of crashing on the first request.
+
+      This is **real backend practice, done test-first**: `utils/env.js`
+      ships with a full, visible `node:test` suite (`tests/env.test.js`).
+      Nothing is hidden — every test case is printed in this lesson.
 
       **Acceptance criteria**
 
@@ -31,39 +35,169 @@ blocks:
         → add to cart → checkout → duplicate checkout is replayed, not
         duplicated → hammering the API eventually returns **429**.
       - The API container runs as a **non-root user** and has a **HEALTHCHECK**.
-      - Missing env vars fail at boot with a clear message — that is `solve()`.
+      - Missing env vars fail at boot with a clear message — that is your
+        module.
+
+      **How this lesson is graded.** The platform grades the module exercise
+      below — a visible node:test suite runs your `utils/env.js` in a
+      sandbox. The same suite is the real deliverable in the shipped
+      project: run `npm test` and make `tests/env.test.js` green.
+  - type: markdown
+    content: |
+      ## Module contract — `utils/env.js`
+
+      The project and this lesson agree **exactly** on this surface.
+
+      **Exports**
+
+      | Export | Signature | Behavior |
+      |--------|-----------|----------|
+      | `validateEnv` | `validateEnv(required)` | Returns the names in `required` that are **missing** from `process.env`, in the order they appear in `required`. `[]` when all are present. |
+      | `getEnv` | `getEnv(key, fallback)` | The value of `process.env[key]`, or `fallback` when the var is missing or empty. |
+
+      **Convention.** Only `KEY=value` with a **non-empty** value counts as
+      present. `KEY=` (empty value) and an absent key are both missing — for
+      `validateEnv` they land in the missing list, and for `getEnv` they
+      yield the fallback.
+
+      :::example
+      `process.env` holds `PORT=3000` and `JWT_SECRET=abc`.
+      `validateEnv(['PORT', 'DB_URL'])`: PORT is present, DB_URL is nowhere →
+      `['DB_URL']`.
+      :::
+
+      :::example
+      `validateEnv(['A', 'B'])` with `A=1` and `B=2` set → both present →
+      `[]`.
+      :::
+
+      :::example
+      `getEnv('PORT', 3000)` with `PORT=4000` → `'4000'` (a string, exactly
+      as the environment holds it). `getEnv('REDIS_URL', 'redis://redis:6379')`
+      with REDIS_URL unset → `'redis://redis:6379'`.
+      :::
+
+      **Edge cases you must handle** (all covered by the visible suite): empty
+      `required` → `[]`; an entry like `PORT=` with an empty value counts as
+      **missing**; missing names come back in `required` order, not
+      environment order.
+  - type: markdown
+    content: |
+      ## The test suite — `tests/env.test.js`
+
+      This is the **entire** test file, exactly as it ships in the project
+      under `tests/`. Every case is visible — there are no hidden tests. Run
+      it from the project root:
+
+      ```bash
+      node --test tests/env.test.js
+      ```
+
+      or the whole project suite with `npm test`.
+
+      ```js
+      // tests/env.test.js — lesson 13
+      // Run: node --test tests/env.test.js   (or: npm test)
+      // The module under test is utils/env.js — pure config validation.
+      const { test, beforeEach, after } = require('node:test');
+      const assert = require('node:assert/strict');
+      const { validateEnv, getEnv } = require('../utils/env');
+
+      // Save the real environment; each test starts from a clean slate.
+      const SAVED = { ...process.env };
+
+      function unset(...names) {
+        for (const name of names) delete process.env[name];
+      }
+
+      after(() => {
+        for (const key of Object.keys(process.env)) delete process.env[key];
+        Object.assign(process.env, SAVED);
+      });
+
+      beforeEach(() => {
+        unset('PORT', 'DB_URL', 'JWT_SECRET', 'REDIS_URL', 'DATABASE_URL', 'A', 'B', 'C', 'EMPTY');
+      });
+
+      test('validateEnv returns [] when every required var is present', () => {
+        process.env.PORT = '3000';
+        process.env.JWT_SECRET = 'abc';
+        assert.deepEqual(validateEnv(['PORT', 'JWT_SECRET']), []);
+      });
+
+      test('validateEnv returns the missing vars in REQUIRED order', () => {
+        process.env.PORT = '3000';
+        assert.deepEqual(validateEnv(['PORT', 'DB_URL', 'JWT_SECRET']), ['DB_URL', 'JWT_SECRET']);
+      });
+
+      test('validateEnv treats an empty value as missing', () => {
+        process.env.PORT = '';
+        assert.deepEqual(validateEnv(['PORT']), ['PORT']);
+      });
+
+      test('validateEnv with an empty required list returns []', () => {
+        assert.deepEqual(validateEnv([]), []);
+      });
+
+      test('getEnv returns the value when the var is set', () => {
+        process.env.PORT = '4000';
+        assert.equal(getEnv('PORT', 3000), '4000');
+      });
+
+      test('getEnv falls back when the var is missing or empty', () => {
+        assert.equal(getEnv('PORT', 3000), 3000); // missing
+        process.env.PORT = '';
+        assert.equal(getEnv('PORT', 3000), 3000); // empty counts as missing
+      });
+      ```
+
+      When every `test(...)` above passes, the util is done — and the whole
+      project arc is complete: every module from lessons 10–13 now has a
+      green, visible test suite.
   - type: markdown
     content: |
       ## The blueprint — project tree
 
-      ```
+      ```text
       shop-api/
       ├── package.json
+      ├── package-lock.json            # committed — npm ci needs it
       ├── Dockerfile
       ├── docker-compose.yml
       ├── db/
-      │   ├── pool.js                 # pg connection pool
-      │   └── migrations/001_init.sql # schema sketch
+      │   ├── pool.js                  # pg connection pool
+      │   ├── redis.js                 # shared node-redis client
+      │   └── migrations/001_init.sql  # schema + seed catalog
       ├── middleware/
-      │   ├── auth.js                 # JWT verify (lesson 6)
-      │   ├── rateLimiter.js          # sliding window (lesson 12)
-      │   └── errors.js               # notFound + errorHandler
+      │   ├── logger.js                # requestLogger (method/url/status/duration)
+      │   ├── auth.js                  # JWT verify (lesson 6)
+      │   ├── rateLimiter.js           # sliding window (lesson 12)
+      │   └── errors.js                # notFound + errorHandler (PG 23505→409, 23503→400)
       ├── routes/
       │   ├── auth.js  products.js  cart.js  orders.js
       ├── controllers/
       │   ├── authController.js  productsController.js
       │   ├── cartController.js  ordersController.js
       ├── services/
-      │   ├── authService.js          # bcrypt + JWT
-      │   ├── cartService.js          # merge + line totals (lesson 10)
-      │   └── orderService.js         # checkout transaction (lesson 11)
+      │   ├── authService.js           # bcrypt + JWT
+      │   ├── cartService.js           # pure cart domain (lesson 10)
+      │   └── orderService.js          # checkout pipeline (lesson 11)
+      ├── repositories/
+      │   └── cartRepository.js        # SQL for cart rows
       ├── utils/
-      │   ├── env.js                  # config validation → your solve()
-      │   ├── response.js             # one response envelope
-      │   └── orderId.js              # order id generator
-      ├── app.js                      # middleware wiring
-      └── server.js                   # bootstrap
+      │   ├── env.js                   # config validation (lesson 13)
+      │   ├── response.js              # one response envelope
+      │   └── orderId.js               # order id generator
+      ├── tests/
+      │   ├── cart.test.js  orders.test.js
+      │   ├── rateLimiter.test.js  env.test.js
+      ├── reference/                   # complete solutions (peek after you try)
+      ├── app.js                       # middleware wiring
+      └── server.js                    # bootstrap
       ```
+
+      The modules marked with a lesson number are the ones you wrote in
+      lessons 10–13 — everything else ships complete.
 
       ## package.json
 
@@ -75,7 +209,8 @@ blocks:
         "main": "server.js",
         "scripts": {
           "start": "node server.js",
-          "dev": "node --watch server.js"
+          "dev": "node --watch server.js",
+          "test": "node --test"
         },
         "dependencies": {
           "bcryptjs": "^2.4.3",
@@ -88,6 +223,9 @@ blocks:
       }
       ```
 
+      Run `npm install` once and **commit `package-lock.json`** — the
+      Dockerfile's `npm ci` refuses to run without it.
+
       ## app.js — the middleware wiring
 
       ```js
@@ -95,6 +233,7 @@ blocks:
       const { rateLimiter } = require('./middleware/rateLimiter');
       const { requireAuth } = require('./middleware/auth');
       const { notFound, errorHandler } = require('./middleware/errors');
+      const { requestLogger } = require('./middleware/logger');
 
       const app = express();
 
@@ -106,7 +245,8 @@ blocks:
       // chain: logger → rate limiter → routes (auth runs per-route where needed)
       app.use('/api', requestLogger);
       app.use('/api/auth', require('./routes/auth'));           // public
-      app.use('/api/products', require('./routes/products'));   // public catalog
+      app.use('/api/products', rateLimiter({ limit: 60, windowMs: 60_000,
+        keyFn: (req) => `ip:${req.ip}` }), require('./routes/products')); // public catalog, IP-keyed
       app.use('/api/cart', requireAuth, rateLimiter({ limit: 120, windowMs: 60_000,
         keyFn: (req) => `user:${req.user.id}` }), require('./routes/cart'));
       app.use('/api/orders', requireAuth, rateLimiter({ limit: 30, windowMs: 60_000,
@@ -118,14 +258,23 @@ blocks:
       module.exports = app;
       ```
 
-      ## server.js — bootstrap
+      ## server.js — bootstrap (fail fast on bad config)
 
       ```js
+      // server.js — bootstrap (fail fast on bad config)
+      // Uses YOUR lesson-13 module: utils/env.js (validateEnv + getEnv).
       const app = require('./app');
-      const { env } = require('./utils/env'); // fails fast if config is bad
+      const { validateEnv, getEnv } = require('./utils/env');
 
-      app.listen(env.PORT, () => {
-        console.log(`shop-api listening on :${env.PORT}`);
+      const missing = validateEnv(['PORT', 'DATABASE_URL', 'REDIS_URL', 'JWT_SECRET']);
+      if (missing.length > 0) {
+        console.error(`Missing required env vars: ${missing.join(', ')}`);
+        process.exit(1);
+      }
+
+      const PORT = getEnv('PORT', 3000);
+      app.listen(PORT, () => {
+        console.log(`shop-api listening on :${PORT}`);
       });
       ```
   - type: markdown
@@ -133,31 +282,10 @@ blocks:
       ## utils/ — env validation, response envelope, order ids
 
       ```js
-      // utils/env.js — fail fast at boot, not on the first request.
-      // The missing-vars check is exactly your graded solve(vars, required).
-      const raw = { ...process.env };
-
-      const REQUIRED = ['PORT', 'DATABASE_URL', 'REDIS_URL', 'JWT_SECRET'];
-
-      // ── this is solve(vars, required): missing vars, in required order ──
-      const missing = REQUIRED.filter((name) => {
-        const value = raw[name];
-        return value === undefined || value === '';   // only KEY=value counts
-      });
-
-      if (missing.length > 0) {
-        console.error(`Missing required env vars: ${missing.join(', ')}`);
-        process.exit(1);
-      }
-
-      module.exports = {
-        env: {
-          PORT: Number(raw.PORT),
-          DATABASE_URL: raw.DATABASE_URL,
-          REDIS_URL: raw.REDIS_URL,
-          JWT_SECRET: raw.JWT_SECRET,
-        },
-      };
+      // utils/env.js — lesson 13 (you build this per the contract above)
+      // validateEnv(required) -> missing names in required order
+      // getEnv(key, fallback) -> value, or fallback when missing/empty
+      // Only KEY=value with a NON-EMPTY value counts as present.
       ```
 
       ```js
@@ -180,7 +308,68 @@ blocks:
       module.exports = { orderId };
       ```
 
-      ## middleware/ — auth and errors (rateLimiter is in lesson 12)
+      ## middleware/ — logger, auth, rate limiter, errors
+
+      ```js
+      // middleware/logger.js — request logger that also stamps a unique req.id.
+      // The lesson-13 app.js wires `requestLogger` into the chain but never
+      // imports or defines it; it also must set req.id because the lesson-12
+      // rate limiter uses `${now}:${req.id}` as the sorted-set member.
+      const { randomUUID } = require('crypto');
+
+      function requestLogger(req, res, next) {
+        req.id = randomUUID();
+        const start = Date.now();
+        res.on('finish', () => {
+          console.log(
+            `${req.method} ${req.originalUrl} ${res.statusCode} ${Date.now() - start}ms`
+          );
+        });
+        next();
+      }
+
+      module.exports = { requestLogger };
+      ```
+      ```js
+      // middleware/rateLimiter.js — sliding window per key (lesson 12)
+      // Factory: rateLimiter({ limit, windowMs, keyFn, store? })
+      //   limit     — max requests per window
+      //   windowMs  — window length in ms; window [t - windowMs, t] INCLUSIVE on both edges
+      //   keyFn     — (req) => string key (user id for authed routes, IP for public ones)
+      //   store     — optional Redis client (defaults to the shared db/redis client).
+      //               Tests inject an in-memory store so the suite runs with zero infra.
+      function rateLimiter({ limit, windowMs, keyFn, store }) {
+        const redis = store || require('../db/redis');
+
+        return async function rateLimit(req, res, next) {
+          const key = keyFn(req);                 // user id, or IP for anonymous
+          const now = Date.now();
+          const min = now - windowMs;             // left edge of the window
+
+          const pipe = redis.multi();
+          pipe.zRemRangeByScore(key, 0, min - 1);  // drop requests strictly older than the left edge (window is inclusive)
+          pipe.zCard(key);                          // count what is left
+          const results = await pipe.exec();        // node-redis v4: FLAT array of results, one per command
+          const count = results[1];                 // zCard result
+
+          // ── the decision: this is exactly the lesson's rule ──
+          if (count >= limit) {                   // window already full
+            const oldest = await redis.zRange(key, 0, 0, { WITHSCORES: true });
+            const oldestScore = oldest.length >= 2 ? Number(oldest[1]) : now;
+            const retryAfter = Math.max(1, Math.ceil((oldestScore + windowMs - now) / 1000));
+            return res.status(429)
+              .set('Retry-After', String(retryAfter))
+              .json({ error: { code: 'RATE_LIMITED', message: 'Too many requests' } });
+          }
+
+          await redis.zAdd(key, { score: now, value: `${now}:${req.id}` });   // record this request
+          await redis.expire(key, Math.ceil(windowMs / 1000));
+          next();                                 // allowed
+        };
+      }
+
+      module.exports = { rateLimiter };
+      ```
 
       ```js
       // middleware/auth.js — JWT verify (stateless auth, lesson 6)
@@ -208,6 +397,13 @@ blocks:
       }
 
       function errorHandler(err, req, res, next) { // eslint-disable-line no-unused-vars
+        // Map known DB errors to proper status codes instead of leaking 500s.
+        if (err.code === '23505') {           // unique_violation (e.g. duplicate email)
+          return res.status(409).json({ error: { code: 'CONFLICT', message: 'Resource already exists' } });
+        }
+        if (err.code === '23503') {           // foreign_key_violation
+          return res.status(400).json({ error: { code: 'INVALID_REFERENCE', message: 'Referenced resource does not exist' } });
+        }
         const status = err.status || 500;
         if (status >= 500) console.error(err);
         res.status(status).json({ error: { code: err.code || 'INTERNAL' } });
@@ -215,9 +411,8 @@ blocks:
 
       module.exports = { notFound, errorHandler };
       ```
-  - type: markdown
-    content: |
-      ## db/ — pool and schema sketch
+
+      ## db/ — pool, redis client, schema + seed
 
       ```js
       // db/pool.js
@@ -228,12 +423,33 @@ blocks:
       module.exports = { pool, query: (text, params) => pool.query(text, params) };
       ```
 
+      ```js
+      // db/redis.js — shared node-redis client (used by the rate limiter)
+      // db/redis.js — shared Redis client (node-redis v4).
+      // Required by middleware/rateLimiter.js (lesson 12) and
+      // services/orderService.js (lesson 11), but missing from the lesson-13
+      // project tree — this file is the minimal fix.
+      const { createClient } = require('redis');
+
+      const client = createClient({ url: process.env.REDIS_URL });
+
+      client.on('error', (err) => console.error('redis client error:', err.message));
+
+      client.connect();
+
+      module.exports = client;
+      ```
+
       ```sql
-      -- db/migrations/001_init.sql (sketch)
+      -- db/migrations/001_init.sql
+      -- Applied automatically by the postgres container via /docker-entrypoint-initdb.d
+      -- on first boot of a fresh volume.
+
       CREATE TABLE users (
         id            BIGSERIAL PRIMARY KEY,
         email         TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
+        balance_cents BIGINT NOT NULL DEFAULT 1000000,
         created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
       );
 
@@ -245,22 +461,29 @@ blocks:
       );
 
       CREATE TABLE cart_items (
-        user_id    BIGINT NOT NULL REFERENCES users(id),
-        product_id BIGINT NOT NULL REFERENCES products(id),
-        qty        INT NOT NULL CHECK (qty >= 1),
+        user_id     BIGINT NOT NULL REFERENCES users(id),
+        product_id  BIGINT NOT NULL REFERENCES products(id),
+        qty         INT NOT NULL CHECK (qty >= 1),
+        unit_price  BIGINT NOT NULL,              -- price snapshot (lesson 10)
         PRIMARY KEY (user_id, product_id)
       );
 
       CREATE TABLE orders (
-        id             BIGSERIAL PRIMARY KEY,
-        user_id        BIGINT NOT NULL REFERENCES users(id),
-        status         TEXT NOT NULL,
-        total_cents    BIGINT NOT NULL,
+        id              BIGSERIAL PRIMARY KEY,
+        user_id         BIGINT NOT NULL REFERENCES users(id),
+        status          TEXT NOT NULL,
+        total_cents     BIGINT NOT NULL,
         idempotency_key TEXT UNIQUE NOT NULL,     -- lesson 11
-        created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
       );
-      ```
 
+      -- Seed catalog (the blueprint ships none; the walkthrough needs product id 1)
+      INSERT INTO products (name, price, available) VALUES
+        ('Wireless Mouse', 2500, 100),
+        ('Mechanical Keyboard', 8900, 50);
+      ```
+  - type: markdown
+    content: |
       ## routes/ — thin, one file per resource
 
       ```js
@@ -285,7 +508,25 @@ blocks:
       ```
 
       ```js
-      // routes/cart.js and routes/orders.js — as built in lessons 10 and 11
+      // routes/cart.js — mounted at /api/cart (behind requireAuth + rate limiter)
+      const router = require('express').Router();
+      const cartController = require('../controllers/cartController');
+
+      router.post('/items', cartController.addItem);          // POST /api/cart/items
+      router.get('/', cartController.getCart);                // GET  /api/cart
+      router.delete('/items/:id', cartController.removeItem); // DELETE /api/cart/items/:id
+
+      module.exports = router;
+      ```
+
+      ```js
+      // routes/orders.js — mounted at /api/orders (behind requireAuth + rate limiter)
+      const router = require('express').Router();
+      const ordersController = require('../controllers/ordersController');
+
+      router.post('/', ordersController.checkout);   // POST /api/orders
+
+      module.exports = router;
       ```
 
       ## controllers/ — thin: parse, delegate, respond
@@ -328,7 +569,84 @@ blocks:
       ```
 
       ```js
-      // controllers/cartController.js and ordersController.js — as built in lessons 10 and 11
+      // controllers/cartController.js — thin: parse, delegate, respond (lesson 10)
+      // GIVEN — ships complete with the project. The pure cart business rules
+      // (merge, line totals) live in services/cartService.js, YOUR module.
+      const cartRepository = require('../repositories/cartRepository');
+      const cartService = require('../services/cartService');
+
+      function rowsToCart(rows) {
+        return rows.map((r) => ({
+          productId: r.product_id,
+          qty: r.qty,
+          unitPrice: r.unit_price,
+        }));
+      }
+
+      async function addItem(req, res, next) {
+        try {
+          const { productId, qty, unitPrice } = req.body; // validated upstream
+          const rows = await cartRepository.getItems(req.user.id);
+          const cart = rowsToCart(rows);
+          const updated = cartService.addItem(cart, productId, qty, unitPrice);
+          await cartRepository.upsertItems(req.user.id, updated);
+          res.status(201).json({
+            data: { items: updated, total: cartService.cartTotal(updated) },
+          });
+        } catch (err) { next(err); }
+      }
+
+      async function getCart(req, res, next) {
+        try {
+          const rows = await cartRepository.getItems(req.user.id);
+          const cart = rowsToCart(rows);
+          res.json({ data: { items: cart, total: cartService.cartTotal(cart) } });
+        } catch (err) { next(err); }
+      }
+
+      async function removeItem(req, res, next) {
+        try {
+          await cartRepository.removeItem(req.user.id, Number(req.params.id));
+          res.status(204).end();
+        } catch (err) { next(err); }
+      }
+
+      module.exports = { addItem, getCart, removeItem };
+      ```
+
+      ```js
+      // controllers/ordersController.js — lesson 11: thin status mapper
+      // Reads req.body.items + req.headers['idempotency-key'] + req.user.id,
+      // delegates to orderService.checkout, and maps the result to HTTP:
+      //   confirmed           -> 201 Created
+      //   insufficient_stock  -> 409 Conflict
+      //   insufficient_funds  -> 402 Payment Required
+      //   replayed            -> 200 OK (the stored order, no duplicate)
+      const orderService = require('../services/orderService');
+
+      const STATUS_TO_HTTP = {
+        confirmed: 201,
+        insufficient_stock: 409,
+        insufficient_funds: 402,
+      };
+
+      async function checkout(req, res, next) {
+        try {
+          const result = await orderService.checkout({
+            userId: req.user.id,
+            items: req.body.items,
+            idempotencyKey: req.headers['idempotency-key'],
+          });
+          if (result.replayed) {
+            return res.status(200).json({ data: result.order });
+          }
+          res.status(STATUS_TO_HTTP[result.status]).json({ data: result.order });
+        } catch (err) {
+          next(err);
+        }
+      }
+
+      module.exports = { checkout };
       ```
 
       ## services/ — the business rules from lessons 10 and 11
@@ -365,25 +683,144 @@ blocks:
       ```
 
       ```js
-      // services/cartService.js — lesson 10: merge + line totals
-      async function addItem(userId, itemId, qty, price) {
-        const rows = await getItems(userId);
-        const updated = mergeLine(rows, itemId, qty, price); // ← solve() from lesson 10
-        await upsertItems(userId, updated);
-        return updated;
+      // services/cartService.js — lesson 10: the pure cart domain
+      // A cart is an array of items { productId, qty, unitPrice }.
+      // Pure functions only: no HTTP, no SQL — trivially unit-testable.
+
+      function lineTotal(item) {
+        return item.qty * item.unitPrice;
       }
+
+      function cartTotal(cart) {
+        return cart.reduce((sum, item) => sum + lineTotal(item), 0);
+      }
+
+      function addItem(cart, productId, qty, unitPrice) {
+        const existing = cart.find((item) => item.productId === productId);
+        if (existing) {
+          // Merge: sum the quantities, KEEP the original unitPrice snapshot.
+          return cart.map((item) =>
+            item.productId === productId ? { ...item, qty: item.qty + qty } : item
+          );
+        }
+        // Append a new line.
+        return [...cart, { productId, qty, unitPrice }];
+      }
+
+      module.exports = { addItem, lineTotal, cartTotal };
       ```
 
       ```js
-      // services/orderService.js — lesson 11: transaction + idempotency
-      async function checkout({ userId, items, idempotencyKey }) {
-        const claimed = await redis.set(idempotencyKey, 'pending', 'NX', 'EX', 3600);
-        if (!claimed) return { replayed: true, order: await getByKey(idempotencyKey) };
+      // services/orderService.js — lesson 11: the checkout pipeline
+      // checkout({ userId, items, idempotencyKey }) -> { status, order, replayed }
+      //   status ∈ 'confirmed' | 'insufficient_stock' | 'insufficient_funds'
+      //   replayed = true when the idempotency key was already used (returns the
+      //   stored order untouched — no double charge, no double reservation).
+      //
+      // The store below is IN-MEMORY so the test suite runs with zero
+      // infrastructure. In production the same contract is implemented over
+      // Postgres (stock, balances, orders) + Redis (the idempotency claim via
+      // SETNX), wrapped in a BEGIN … COMMIT transaction.
+      const store = {
+        stock: new Map(),    // productId -> available
+        balances: new Map(), // userId -> cents
+        orders: new Map(),   // idempotencyKey -> order
+        seq: 0,
+      };
 
-        const [status, total] = decide(items, await stockSnapshot(), balanceFor(userId));
-        // status 0 → BEGIN / conditional stock UPDATE / INSERT order / COMMIT
-        // status 1 or 2 → 409 / 402, nothing reserved
+      // Test seams (documented, test-only): seed the store between tests.
+      function __setStock(productId, available) {
+        store.stock.set(productId, available);
       }
+      function __setBalance(userId, cents) {
+        store.balances.set(userId, cents);
+      }
+      function __reset() {
+        store.stock.clear();
+        store.balances.clear();
+        store.orders.clear();
+        store.seq = 0;
+      }
+
+      async function checkout({ userId, items, idempotencyKey }) {
+        // 0. Idempotency — was this exact intent already processed?
+        if (store.orders.has(idempotencyKey)) {
+          const order = store.orders.get(idempotencyKey);
+          return { replayed: true, status: order.status, order };
+        }
+
+        // 1. Stock check (fail fast, before any write).
+        for (const item of items) {
+          const available = store.stock.get(item.productId) ?? -1;
+          if (available < item.qty) {
+            return { replayed: false, status: 'insufficient_stock', order: null };
+          }
+        }
+
+        // 2. Funds check.
+        const total = items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+        const balance = store.balances.get(userId) ?? 0;
+        if (balance < total) {
+          return { replayed: false, status: 'insufficient_funds', order: null };
+        }
+
+        // 3. Confirmed — reserve stock and create the order atomically.
+        for (const item of items) {
+          store.stock.set(item.productId, store.stock.get(item.productId) - item.qty);
+        }
+        store.seq += 1;
+        const order = {
+          id: `ord_${store.seq}`,
+          userId,
+          items,
+          total,
+          status: 'confirmed',
+          idempotencyKey,
+          createdAt: new Date().toISOString(),
+        };
+        store.orders.set(idempotencyKey, order);
+
+        return { replayed: false, status: 'confirmed', order };
+      }
+
+      module.exports = { checkout, __setStock, __setBalance, __reset };
+      ```
+
+      ## repositories/ — the only file that touches cart SQL
+
+      ```js
+      // repositories/cartRepository.js — the only file that touches cart SQL
+      // (lesson-13 blueprint, verbatim). GIVEN — ships complete with the project.
+      const { query } = require('../db/pool');
+
+      async function getItems(userId) {
+        const { rows } = await query(
+          'SELECT product_id, qty, unit_price FROM cart_items WHERE user_id = $1',
+          [userId]
+        );
+        return rows;
+      }
+
+      async function upsertItems(userId, items) {
+        for (const item of items) {
+          await query(
+            `INSERT INTO cart_items (user_id, product_id, qty, unit_price)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (user_id, product_id)
+             DO UPDATE SET qty = EXCLUDED.qty`,   // unit_price keeps its snapshot
+            [userId, item.productId, item.qty, item.unitPrice]
+          );
+        }
+      }
+
+      async function removeItem(userId, productId) {
+        await query(
+          'DELETE FROM cart_items WHERE user_id = $1 AND product_id = $2',
+          [userId, productId]
+        );
+      }
+
+      module.exports = { getItems, upsertItems, removeItem };
       ```
   - type: markdown
     content: |
@@ -395,6 +832,7 @@ blocks:
       WORKDIR /app
 
       # install dependencies first so the layer cache survives code changes
+      # (commit package-lock.json so `npm ci` works here and in CI)
       COPY package*.json ./
       RUN npm ci --omit=dev
 
@@ -440,6 +878,7 @@ blocks:
             POSTGRES_DB: shop
           volumes:
             - pgdata:/var/lib/postgresql/data
+            - ./db/migrations:/docker-entrypoint-initdb.d:ro
           healthcheck:
             test: ["CMD-SHELL", "pg_isready -U shop -d shop"]
             interval: 5s
@@ -461,13 +900,12 @@ blocks:
         redisdata:
       ```
 
-      Note the service names are DNS names: the API connects to `postgres:5432`
-      and `redis:6379` — not `localhost`, because each container has its own
-      network namespace. Compose gives them one shared network, and the
-      `depends_on.condition: service_healthy` gates the API's start on its
-      databases actually accepting connections.
-  - type: markdown
-    content: |
+      Note the service names are DNS names: the API connects to
+      `postgres:5432` and `redis:6379` — not `localhost`, because each
+      container has its own network namespace. Compose gives them one shared
+      network, and the `depends_on.condition: service_healthy` gates the
+      API's start on its databases actually accepting connections.
+
       ## The curl walkthrough
 
       ```bash
@@ -484,30 +922,43 @@ blocks:
         -d '{"email":"ada@example.com","password":"hunter2hunter2"}' \
         | jq -r .data.token)
 
-      # 3. browse the public catalog
+      # 3. browse the public catalog (60 req/min per IP — the lesson-12 limiter)
       curl -s http://localhost:3000/api/products
 
-      # 4. add to cart: 2 of product 1
+      # 4. add to cart: 2 of product 1 at 2500¢ (the seeded catalog price).
+      #    unitPrice is the price snapshot (lesson 10) — a real client takes
+      #    it from the catalog response.
       curl -s -X POST http://localhost:3000/api/cart/items \
         -H "Authorization: Bearer $TOKEN" \
         -H 'Content-Type: application/json' \
-        -d '{"itemId":1,"qty":2}'
+        -d '{"productId":1,"qty":2,"unitPrice":2500}'
 
-      # 5. checkout with an idempotency key (controller reads req.body.items — lesson 11)
+      # 4b. add 3 more of the same product — the cart MERGES into one line of
+      #     qty 5, keeping the ORIGINAL unitPrice (lesson 10's merge rule)
+      curl -s -X POST http://localhost:3000/api/cart/items \
+        -H "Authorization: Bearer $TOKEN" \
+        -H 'Content-Type: application/json' \
+        -d '{"productId":1,"qty":3,"unitPrice":2500}'
+
+      # 5. checkout with an idempotency key (controller reads req.body.items
+      #    + the header — lesson 11)
       curl -s -X POST http://localhost:3000/api/orders \
         -H "Authorization: Bearer $TOKEN" \
         -H 'Content-Type: application/json' \
         -H 'Idempotency-Key: order-ada-001' \
-        -d '{"items":[{"itemId":1,"qty":2}],"shippingAddress":"1 Main St"}'
+        -d '{"items":[{"productId":1,"qty":5,"unitPrice":2500}]}'
 
       # 6. same key again → replayed (200), no second order, no second charge
       curl -s -X POST http://localhost:3000/api/orders \
         -H "Authorization: Bearer $TOKEN" \
         -H 'Content-Type: application/json' \
         -H 'Idempotency-Key: order-ada-001' \
-        -d '{"items":[{"itemId":1,"qty":2}],"shippingAddress":"1 Main St"}'
+        -d '{"items":[{"productId":1,"qty":5,"unitPrice":2500}]}'
 
-      # 7. hammer the API → eventually 429 Too Many Requests
+      # 7. hammer the PUBLIC catalog → the IP-keyed limiter (60 req/min) kicks
+      #    in: the burst below yields ~60×200 then ~10×429 (the window is
+      #    sliding, so the exact split shifts if other requests from this IP
+      #    land inside the same 60 s — the verified run measured 59×200/11×429)
       for i in $(seq 1 70); do
         curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000/api/products
       done | sort | uniq -c
@@ -518,86 +969,6 @@ blocks:
       Every piece you built in lessons 10–12 shows up in that trace: the
       cart's merge (step 4), the transaction and idempotency key (steps 5–6),
       and the sliding-window limiter (step 7).
-  - type: markdown
-    content: |
-      ## The graded exercise
-
-      Implement `solve(vars, required)` — the config validator from
-      `utils/env.js`:
-
-      - `vars` — environment entries as strings, e.g. `"PORT=3000"`.
-      - `required` — the variable names the app needs.
-      - Return the names in `required` that are **missing**, in the order they
-        appear in `required`. Return `[]` when all are present.
-      - **Convention:** only `KEY=value` with a **non-empty** value counts as
-        present. `KEY=` (empty value) and an absent key are both missing.
-
-      :::example
-      `(["PORT=3000", "JWT_SECRET=abc"], ["PORT", "DB_URL"])`: PORT is present,
-      DB_URL is nowhere → `["DB_URL"]`.
-      :::
-
-      :::example
-      `(["A=1", "B=2"], ["A", "B"])`: both present → `[]`.
-      :::
-
-      **Private cases you should handle:** empty `vars` → every required name
-      is missing, in order; empty `required` → `[]`; an entry like `"PORT="`
-      with an empty value counts as **missing**; missing names must come back
-      in `required` order, not input order.
-  - type: code
-    task: "Implement solve(vars, required): return the required env var names that are missing from vars, in the order they appear in required. Convention: only KEY=value with a non-empty value counts as present; KEY= with an empty value counts as missing."
-    languages: [javascript, python]
-    signature:
-      javascript: "function solve(vars, required)"
-      python: "def solve(vars: list[str], required: list[str]) -> list[str]"
-    starter:
-      javascript: |
-        function solve(vars, required) {
-          // vars entries look like "PORT=3000". Return the required names
-          // that are missing, in required order. Only KEY=value with a
-          // non-empty value counts as present.
-          return [];
-        }
-      python: |
-        def solve(vars: list[str], required: list[str]) -> list[str]:
-            # vars entries look like "PORT=3000". Return the required names
-            # that are missing, in required order. Only KEY=value with a
-            # non-empty value counts as present.
-            return []
-    tests:
-      public:
-        - name: "one missing var"
-          args: [["PORT=3000", "JWT_SECRET=abc"], ["PORT", "DB_URL"]]
-          expected: ["DB_URL"]
-        - name: "all present"
-          args: [["A=1", "B=2"], ["A", "B"]]
-          expected: []
-      private:
-        - name: "empty vars"
-          args: [[], ["PORT", "DB_URL"]]
-          expected: ["PORT", "DB_URL"]
-        - name: "empty required"
-          args: [["A=1"], []]
-          expected: []
-        - name: "empty value counts as missing"
-          args: [["PORT=", "A=1"], ["PORT", "A"]]
-          expected: ["PORT"]
-        - name: "missing names keep required order"
-          args: [["B=1"], ["A", "B", "C"]]
-          expected: ["A", "C"]
-    hints:
-      - "Split each entry on the first '=' and keep the key only when a '=' exists and the value is non-empty."
-      - "Collect the present keys in a set, then walk `required` in order and collect the names not in the set."
-      - "Return [] when every required name is present — the order of the result is the order of `required`, not of `vars`."
-    solution: |
-      def solve(vars: list[str], required: list[str]) -> list[str]:
-          present = set()
-          for entry in vars:
-              key, sep, value = entry.partition("=")
-              if sep and value != "":
-                  present.add(key)
-          return [name for name in required if name not in present]
   - type: flowchart
     title: "deployment topology"
     nodes: ["Client", "api container (node:20-alpine)", "postgres container", "redis container"]
@@ -635,6 +1006,113 @@ blocks:
       minutes, because every dependency (Postgres, Redis, env vars) is
       declared in one file. That reproducibility is the entire point of
       shipping with Docker: the production environment is a text file in git.
+  - type: code
+    mode: module
+    timeLimitMs: 15000
+    task: |
+      Implement the config validation utility `utils/env.js` so the server fails fast at boot instead of on the first request: `validateEnv(required)` returns the missing keys in `required` order (only keys with a NON-EMPTY value count as present), and `getEnv(key, fallback)` returns the value or the fallback.
+    languages: [javascript]
+    starter:
+      javascript: |
+        // utils/env.js — lesson 13: fail fast at boot, not on the first request
+        // validateEnv(required) — returns the missing keys, in `required` order.
+        //   Only `KEY=value` with a NON-EMPTY value counts as present.
+        // getEnv(key, fallback) — the value for `key`, or the fallback.
+        // TODO: implement (lesson 13).
+
+        function validateEnv(required) {
+          return required; // TODO: filter to the missing ones, keep required order
+        }
+
+        function getEnv(key, fallback) {
+          return fallback; // TODO
+        }
+
+        module.exports = { validateEnv, getEnv };
+    module:
+      entry: utils/env.js
+      language: javascript
+      testsFile: lesson.test.js
+      testsContent: |
+        // tests/env.test.js — lesson 13
+        // Run: node --test tests/env.test.js   (or: npm test)
+        // The module under test is utils/env.js — pure config validation.
+        const { test, beforeEach, after } = require('node:test');
+        const assert = require('node:assert/strict');
+        const { validateEnv, getEnv } = require('../utils/env');
+
+        // Save the real environment; each test starts from a clean slate.
+        const SAVED = { ...process.env };
+
+        function unset(...names) {
+          for (const name of names) delete process.env[name];
+        }
+
+        after(() => {
+          for (const key of Object.keys(process.env)) delete process.env[key];
+          Object.assign(process.env, SAVED);
+        });
+
+        beforeEach(() => {
+          unset('PORT', 'DB_URL', 'JWT_SECRET', 'REDIS_URL', 'DATABASE_URL', 'A', 'B', 'C', 'EMPTY');
+        });
+
+        test('validateEnv returns [] when every required var is present', () => {
+          process.env.PORT = '3000';
+          process.env.JWT_SECRET = 'abc';
+          assert.deepEqual(validateEnv(['PORT', 'JWT_SECRET']), []);
+        });
+
+        test('validateEnv returns the missing vars in REQUIRED order', () => {
+          process.env.PORT = '3000';
+          assert.deepEqual(validateEnv(['PORT', 'DB_URL', 'JWT_SECRET']), ['DB_URL', 'JWT_SECRET']);
+        });
+
+        test('validateEnv treats an empty value as missing', () => {
+          process.env.PORT = '';
+          assert.deepEqual(validateEnv(['PORT']), ['PORT']);
+        });
+
+        test('validateEnv with an empty required list returns []', () => {
+          assert.deepEqual(validateEnv([]), []);
+        });
+
+        test('getEnv returns the value when the var is set', () => {
+          process.env.PORT = '4000';
+          assert.equal(getEnv('PORT', 3000), '4000');
+        });
+
+        test('getEnv falls back when the var is missing or empty', () => {
+          assert.equal(getEnv('PORT', 3000), 3000); // missing
+          process.env.PORT = '';
+          assert.equal(getEnv('PORT', 3000), 3000); // empty counts as missing
+        });
+      preview: 'validateEnv([PORT, JWT_SECRET, DB_URL]) → [] — every required var present; server boots'
+    hints:
+      - "A key counts as present only when its value is a non-empty string — `KEY=` and absent keys are both missing."
+      - 'validateEnv must preserve the order of `required` in its result.'
+      - 'getEnv returns the value; returns the fallback when the key is absent or empty.'
+    solution: |
+      // utils/env.js — lesson 13: fail fast at boot, never on the first request.
+      // Only KEY=value with a NON-EMPTY value counts as present.
+
+      function validateEnv(required) {
+        const missing = [];
+        for (const name of required) {
+          const value = process.env[name];
+          if (value === undefined || value === '') {
+            missing.push(name);
+          }
+        }
+        return missing;
+      }
+
+      function getEnv(key, fallback) {
+        const value = process.env[key];
+        return value === undefined || value === '' ? fallback : value;
+      }
+
+      module.exports = { validateEnv, getEnv };
   - type: mcq
     prompt: "Why use docker-compose instead of three separate docker run commands?"
     options:
@@ -648,7 +1126,7 @@ blocks:
     prompt: "Inside the api container, how does it reach Postgres?"
     options:
       - "http://localhost:5432"
-      - "postgres://shop:shop@postgres:5432/shop — the service name is the DNS name on the shared Compose network"
+      - "postgres://shop:***@postgres:5432/shop — the service name is the DNS name on the shared Compose network"
       - "It cannot reach other containers."
       - "Through the host machine's IP only"
     answer: 1
@@ -661,14 +1139,14 @@ blocks:
       - "Exit at boot with a clear list of missing vars — fail fast."
       - "Generate a random secret at startup."
     answer: 2
-    explanation: "Failing fast at boot (your solve() + process.exit) surfaces misconfiguration immediately, before any traffic. A random secret would invalidate every session on restart — worse than failing."
+    explanation: "Failing fast at boot (your validateEnv + process.exit) surfaces misconfiguration immediately, before any traffic. A random secret would invalidate every session on restart — worse than failing."
   - type: mscq
     prompt: "Which statements about the Dockerfile are true?"
     options:
       - "It runs the app as a non-root user."
-      - "It declares a HEALTHCHECK that curls /health."
+      - "It declares a HEALTHCHECK that hits /health."
       - "It installs dependencies before copying the source, so code changes reuse the dependency layer."
       - "It runs the app with npm run dev."
     answer: [0, 1, 2]
-    explanation: "USER app, HEALTHCHECK against /health, and COPY package*.json before COPY . are all there. The CMD is node src/server.js — production start, not dev watch mode."
+    explanation: "USER app, HEALTHCHECK against /health, and COPY package*.json before COPY . are all there. The CMD is node server.js — production start at the repo root, not dev watch mode."
 ---

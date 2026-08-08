@@ -44,10 +44,43 @@ function VerdictFace({ ok }: { ok: boolean }) {
 export default function ResultPanel({
   run,
   submit,
+  output,
+  preview,
+  previewUnlocked,
 }: {
   run: RunResult | null;
   submit: SubmitResult | null;
+  /** Module exercises: the test suite's stdout (output preview). */
+  output?: string;
+  /** Canned preview text (fallback when the run produced no stdout). */
+  preview?: string;
+  /** Module exercises: true when every test passed — unlocks the preview. */
+  previewUnlocked?: boolean;
 }) {
+  const previewBlock = () => (
+    <>
+      {output && (
+        <div className="run-output">
+          <div className="muted small">output</div>
+          <pre>{output}</pre>
+        </div>
+      )}
+      {previewUnlocked !== undefined &&
+        (previewUnlocked ? (
+          <div className="preview ok">
+            <div className="preview-head">
+              <span>PREVIEW</span>
+              <span className="muted small">· all tests passed</span>
+            </div>
+            <pre>{output?.trim() ? output : (preview ?? "(no output)")}</pre>
+          </div>
+        ) : (
+          <div className="preview locked">
+            preview locked — fix the failing tests to unlock it
+          </div>
+        ))}
+    </>
+  );
   if (submit) {
     if (submit.verdict === "timeout") {
       return (
@@ -63,6 +96,7 @@ export default function ResultPanel({
           {submit.publicTests.map((t) => (
             <TestRow key={t.name} t={t} />
           ))}
+          {previewBlock()}
         </div>
       );
     }
@@ -84,6 +118,7 @@ export default function ResultPanel({
         {submit.publicTests.map((t) => (
           <TestRow key={t.name} t={t} />
         ))}
+        {previewBlock()}
       </div>
     );
   }
@@ -100,6 +135,7 @@ export default function ResultPanel({
       {run.publicTests.map((t) => (
         <TestRow key={t.name} t={t} />
       ))}
+      {previewBlock()}
     </div>
   );
 }

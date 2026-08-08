@@ -13,181 +13,369 @@ blocks:
       hammers `POST /api/auth/login` a thousand times a minute, and a scraper
       drains the product catalog. You need a **rate limiter** — and because
       Express is a middleware chain, the limiter is just one link in it. This
-      lesson builds the **sliding-window rate limiter** and shows where it
-      sits in the chain: logger → auth → rate limit → controller.
+      lesson builds the real **sliding-window rate limiter middleware**
+      (`middleware/rateLimiter.js`) and shows where it sits in the chain:
+      logger → auth → rate limit → controller.
 
-      **What you are building this step.** The allow/deny decision of a
-      sliding-window limiter. For each request you know its timestamp and the
-      request's key (user id or IP). A request is allowed when the window
-      `[t − window_ms, t]` — **inclusive on both edges** — holds **at most
-      `limit`** requests, counting the current one. Denied requests get
-      **429 Too Many Requests** with a `Retry-After` header. The graded
-      `solve()` is that decision, applied to a stream of timestamps.
+      **What you are building this step.** A real Express middleware factory:
+
+      - `rateLimiter({ limit, windowMs, keyFn, store? })` returns middleware
+        that decides `next()` or **429** for every request. `store` is an
+        optional Redis client (defaults to the shared `db/redis.js` client;
+        tests inject an in-memory store so the suite runs with zero infra).
+      - Sliding window `[t − windowMs, t]`, **inclusive on both edges**: a
+        request is allowed when the window holds **at most `limit`** requests
+        counting the current one.
+      - Denied requests get **429 Too Many Requests** with a `Retry-After`
+        header (seconds until the oldest request leaves the window).
+      - The bucket key comes from `keyFn(req)` — `req.user.id` for protected
+        routes, `req.ip` for public ones.
+
+      This is **real backend practice, done test-first**: the middleware
+      ships with a full, visible `node:test` suite (`tests/rateLimiter.test.js`)
+      that boots a real Express app and drives it with `fetch`. Nothing is
+      hidden — every test case is printed in this lesson.
 
       **Acceptance criteria**
 
       - `app.use('/api', limiter)` protects every API route, not just auth.
-      - A request that pushes the window over `limit` → **429** + `Retry-After`.
+      - A request that pushes the window over `limit` → **429** +
+        `Retry-After`.
       - The window slides: old requests expire out of it as time moves on.
       - The middleware chain order is fixed: logger → auth → rate limit →
         controller, so unauthenticated and rate-limited traffic never reaches
         your controllers.
+
+      **How this lesson is graded.** The platform grades the module exercise
+      below — a visible node:test suite runs your `middleware/rateLimiter.js`
+      in a sandbox. The same suite is the real deliverable in the shipped
+      project: run `npm test` and make `tests/rateLimiter.test.js` green.
   - type: markdown
     content: |
-      ## Deliverables — the limiter middleware
+      ## Module contract — `middleware/rateLimiter.js`
 
-      The limiter is Express middleware: it decides `next()` or 429. The store
-      can be in-memory (single instance) or Redis-backed (multi-instance); the
-      decision rule is the same — that rule is your graded `solve()`.
+      The project and this lesson agree **exactly** on this surface.
+
+      **Export**
+
+      - `rateLimiter({ limit, windowMs, keyFn, store? })` — a factory
+        returning Express middleware `(req, res, next)`.
+
+      | Param | Meaning |
+      |-------|---------|
+      | `limit` | Max requests per window |
+      | `windowMs` | Window length in ms — window `[t − windowMs, t]` **inclusive** on both edges |
+      | `keyFn` | `(req) => string` — picks the bucket (`req.user.id` for protected routes, `req.ip` for public ones) |
+      | `store?` | Optional Redis client. Defaults to the shared `db/redis.js` client; tests inject an in-memory store so the suite runs with zero infra |
+
+      **Decision rule.** For the request's key at time `t`, keep every
+      recorded request with timestamp `>= t − windowMs` (the left edge is
+      **inclusive**). If that count is `>= limit`, the window is full — this
+      request would be the `(limit + 1)`-th — so deny with **429** and
+      `Retry-After`. Otherwise record `t` and call `next()`.
+
+      **`Retry-After`.** Seconds until the oldest request in the window
+      leaves it — `max(1, ceil((oldestScore + windowMs − now) / 1000))` — at
+      least 1. The oldest score is read with
+      `redis.zRange(key, 0, 0, { WITHSCORES: true })` (the first member of
+      the zset).
+
+      **`keyFn(req)`.** Picks the bucket: `(req) => \`user:${req.user.id}\``
+      for protected routes (after auth), `(req) => \`ip:${req.ip}\`` for
+      public ones. Different keys get independent budgets.
+
+      **Store.** The default store is the shared `db/redis.js` client
+      (node-redis v4): each key is a Redis sorted set whose members are
+      request ids and whose scores are timestamps. The tests inject an
+      in-memory store (`memRedis`) implementing the same zset commands, so
+      the suite runs with zero infrastructure.
+
+      The window check is a `multi()` pipeline — and node-redis v4 returns
+      a **FLAT array** from `multi().exec()`, one result per command. With
+      `zRemRangeByScore` then `zCard`, the count is `results[1]` — NOT
+      `results[1][1]` (which is `undefined` under v4, so the limiter would
+      silently never deny). Recording is `zAdd(key, { score: now, value:
+      \`${now}:${req.id}\` })`.
+
+      :::example
+      `limit: 2, windowMs: 200`. Requests arrive at 100, 200, 300 (ms). At
+      300 the window `[100, 300]` holds 100, 200, 300 — three requests, more
+      than the limit of 2 → deny. At 200 the window `[0, 200]` holds exactly
+      2 → allowed (at most 2). Result: `[allowed, allowed, denied]`.
+      :::
+
+      :::example
+      The edge is inclusive: an earlier request at exactly `t − windowMs`
+      is still inside the window, so with `limit: 2` and requests at 100 and
+      300 (`windowMs: 200`), the request at 300 sees both 100 and 300 inside
+      `[100, 300]` — exactly 2 → allowed.
+      :::
+
+      **Edge cases you must handle** (all covered by the visible suite): a
+      burst of requests (the `limit`-th is allowed, the next is 429); the
+      window sliding (after `windowMs` the budget resets); `Retry-After`
+      being present and roughly `windowMs / 1000`; independent buckets per
+      user and per IP; a generous limit never denying normal traffic.
+  - type: markdown
+    content: |
+      ## The test suite — `tests/rateLimiter.test.js`
+
+      This is the **entire** test file, exactly as it ships in the project
+      under `tests/`. Every case is visible — there are no hidden tests. The
+      limiter IS middleware, so the tests boot a REAL Express app on an
+      ephemeral port (`app.listen(0)`) and drive it with the built-in
+      `fetch` against `http://127.0.0.1:${port}`. Run it from the project
+      root:
+
+      ```bash
+      node --test tests/rateLimiter.test.js
+      ```
+
+      or the whole project suite with `npm test`.
 
       ```js
-      // middleware/rateLimiter.js — sliding window per key
-      const redis = require('../db/redis');
+      // tests/rateLimiter.test.js — lesson 12
+      // Run: node --test tests/rateLimiter.test.js   (or: npm test)
+      // Integration: the limiter IS Express middleware, so the tests boot a real
+      // app on an ephemeral port and drive it with the built-in fetch.
+      const { test } = require('node:test');
+      const assert = require('node:assert/strict');
+      const express = require('express');
+      const { rateLimiter } = require('../middleware/rateLimiter');
 
-      function rateLimiter({ limit, windowMs, keyFn }) {
-        return async function rateLimit(req, res, next) {
-          const key = keyFn(req);                 // user id, or IP for anonymous
-          const now = Date.now();
-          const min = now - windowMs;             // left edge of the window
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-          const pipe = redis.multi();
-          pipe.zremrangebyscore(key, 0, min - 1);  // drop requests strictly older than the left edge (window is inclusive)
-          pipe.zcard(key);                          // count what is left
-          const [ , count] = await pipe.exec();
-
-          // ── the decision: this is exactly solve()'s rule ──
-          if (count >= limit) {                   // window already full
-            const [oldest] = await redis.zrange(key, 0, 0, 'WITHSCORES');
-            const retryAfter = Math.max(1, Math.ceil((Number(oldest[1]) + windowMs - now) / 1000));
-            return res.status(429)
-              .set('Retry-After', String(retryAfter))
-              .json({ error: { code: 'RATE_LIMITED', message: 'Too many requests' } });
-          }
-
-          await redis.zadd(key, now, `${now}:${req.id}`);   // record this request
-          await redis.expire(key, Math.ceil(windowMs / 1000));
-          next();                                 // allowed
+      // In-memory redis double: sliding-window zset semantics (member -> score),
+      // so the middleware's real logic (multi/zRemRangeByScore/zCard/zAdd/zRange)
+      // runs against a store that behaves like redis — no server required.
+      function memRedis() {
+        const sets = new Map();
+        const zset = (key) => {
+          if (!sets.has(key)) sets.set(key, new Map());
+          return sets.get(key);
+        };
+        return {
+          multi() {
+            const cmds = [];
+            return {
+              zRemRangeByScore: (k, min, max) => cmds.push(['zrem', k, min, max]),
+              zCard: (k) => cmds.push(['zcard', k]),
+              async exec() {
+                const out = [];
+                for (const [op, k, a, b] of cmds) {
+                  if (op === 'zrem') {
+                    const s = zset(k);
+                    let n = 0;
+                    for (const [m, sc] of [...s]) {
+                      if (sc >= a && sc <= b) {
+                        s.delete(m);
+                        n++;
+                      }
+                    }
+                    out.push(n);
+                  } else if (op === 'zcard') {
+                    out.push(zset(k).size);
+                  }
+                }
+                return out; // flat array, like node-redis v4 multi().exec()
+              },
+            };
+          },
+          async zAdd(k, { score, value }) {
+            zset(k).set(value, score);
+            return 1;
+          },
+          async zRange(k, start, stop) {
+            const entries = [...zset(k).entries()].sort((x, y) => x[1] - y[1]);
+            const out = [];
+            for (const [m, sc] of entries.slice(start, stop + 1)) out.push(m, String(sc));
+            return out; // flat [member, score, ...], like node-redis v4
+          },
+          async expire() {
+            return 1;
+          },
         };
       }
 
-      module.exports = { rateLimiter };
+      // A tiny app with two routes: /public (keyed on the IP) and /protected
+      // (keyed on req.user.id — a stub auth middleware sets req.user first).
+      function buildApp({ limit, windowMs, keyFn }) {
+        const app = express();
+        app.set('trust proxy', true); // so X-Forwarded-For drives req.ip in tests
+        const limiter = rateLimiter({ limit, windowMs, keyFn, store: memRedis() });
+        app.get('/public', limiter, (req, res) => res.json({ ok: true }));
+        app.get(
+          '/protected',
+          (req, res, next) => {
+            req.user = { id: req.headers['x-user-id'] || 'anon' };
+            next();
+          },
+          limiter,
+          (req, res) => res.json({ ok: true })
+        );
+        return app;
+      }
+
+      // Boot a fresh app per test; the server is closed even if the test throws.
+      async function withServer(options, fn) {
+        const server = buildApp(options).listen(0);
+        await new Promise((resolve) => server.once('listening', resolve));
+        try {
+          await fn(`http://127.0.0.1:${server.address().port}`);
+        } finally {
+          await new Promise((resolve) => server.close(resolve));
+        }
+      }
+
+      test('the third request inside the window is denied with 429', async () => {
+        await withServer(
+          { limit: 2, windowMs: 300, keyFn: (req) => `ip:${req.ip}` },
+          async (base) => {
+            assert.equal((await fetch(`${base}/public`)).status, 200);
+            assert.equal((await fetch(`${base}/public`)).status, 200);
+            const denied = await fetch(`${base}/public`);
+            assert.equal(denied.status, 429);
+            const body = await denied.json();
+            assert.equal(body.error.code, 'RATE_LIMITED');
+          }
+        );
+      });
+
+      test('the window slides: after windowMs the budget resets', async () => {
+        await withServer(
+          { limit: 1, windowMs: 200, keyFn: (req) => `ip:${req.ip}` },
+          async (base) => {
+            assert.equal((await fetch(`${base}/public`)).status, 200);
+            assert.equal((await fetch(`${base}/public`)).status, 429);
+            await sleep(250); // oldest request has now left the window
+            assert.equal((await fetch(`${base}/public`)).status, 200);
+          }
+        );
+      });
+
+      test('denied responses carry Retry-After (seconds until the window frees)', async () => {
+        await withServer(
+          { limit: 1, windowMs: 5000, keyFn: (req) => `ip:${req.ip}` },
+          async (base) => {
+            assert.equal((await fetch(`${base}/public`)).status, 200);
+            const denied = await fetch(`${base}/public`);
+            assert.equal(denied.status, 429);
+            const retryAfter = Number(denied.headers.get('retry-after'));
+            // Oldest request leaves at oldest + 5000ms; we are a few ms in, so
+            // ceil() lands on 5. Allow a little drift.
+            assert.ok(retryAfter >= 4 && retryAfter <= 5, `retry-after was ${retryAfter}`);
+          }
+        );
+      });
+
+      test('protected routes are keyed on the authenticated user id', async () => {
+        await withServer(
+          { limit: 1, windowMs: 60_000, keyFn: (req) => `user:${req.user.id}` },
+          async (base) => {
+            const asUser1 = { 'x-user-id': 'u1' };
+            assert.equal((await fetch(`${base}/protected`, { headers: asUser1 })).status, 200);
+            assert.equal((await fetch(`${base}/protected`, { headers: asUser1 })).status, 429);
+            // A different user has its own budget — the limiter is keyed on the
+            // identity, not on a shared counter.
+            const asUser2 = { 'x-user-id': 'u2' };
+            assert.equal((await fetch(`${base}/protected`, { headers: asUser2 })).status, 200);
+          }
+        );
+      });
+
+      test('public routes are keyed on the client IP', async () => {
+        await withServer(
+          { limit: 2, windowMs: 60_000, keyFn: (req) => `ip:${req.ip}` },
+          async (base) => {
+            const fromIpA = { 'x-forwarded-for': '10.0.0.1' };
+            const fromIpB = { 'x-forwarded-for': '10.0.0.2' };
+            assert.equal((await fetch(`${base}/public`, { headers: fromIpA })).status, 200);
+            assert.equal((await fetch(`${base}/public`, { headers: fromIpA })).status, 200);
+            assert.equal((await fetch(`${base}/public`, { headers: fromIpA })).status, 429);
+            // A second IP is untouched.
+            assert.equal((await fetch(`${base}/public`, { headers: fromIpB })).status, 200);
+          }
+        );
+      });
+
+      test('a generous limit never denies normal traffic', async () => {
+        await withServer(
+          { limit: 100, windowMs: 1000, keyFn: (req) => `ip:${req.ip}` },
+          async (base) => {
+            for (let i = 0; i < 5; i++) {
+              assert.equal((await fetch(`${base}/public`)).status, 200);
+            }
+          }
+        );
+      });
       ```
 
+      When every `test(...)` above passes, the middleware is done — including
+      the subtle parts (inclusive window edge, per-key buckets, `Retry-After`)
+      that only show up under load in production.
+  - type: markdown
+    content: |
+      ## Wiring — where the limiter plugs into the chain
+
+      The limiter is mounted per-route with different parameters. Public
+      routes key on the IP; protected routes key on the authenticated user.
+      The chain order is fixed: **logger → auth → rate limit → controller**.
+
       ```js
-      // app.js — where it plugs into the chain
+      // app.js (excerpt)
       const { rateLimiter } = require('./middleware/rateLimiter');
       const { requireAuth } = require('./middleware/auth');
+      const { requestLogger } = require('./middleware/logger');
 
       app.use(express.json());
 
-      // chain order matters: logger → auth → rate limit → controller
-      app.use('/api', requestLogger);                                        // 1
-      app.use('/api/auth', require('./routes/auth'));                        // public — no auth/limiter
-      app.use('/api/cart', requireAuth,                                      // 2 auth first (sets req.user)
-        rateLimiter({ limit: 60, windowMs: 60_000,                           // 3 then the limiter
-          keyFn: (req) => `user:${req.user.id}` }),                          //    keyed on the authed user
-        require('./routes/cart'));                                           // 4 then the controller
+      app.use('/api', requestLogger);                                    // 1 logger
+
+      app.use('/api/auth', require('./routes/auth'));                    // public — no auth/limiter
+      app.use('/api/products',                                            // public catalog
+        rateLimiter({ limit: 60, windowMs: 60_000,                       // IP-keyed
+          keyFn: (req) => `ip:${req.ip}` }),
+        require('./routes/products'));
+
+      app.use('/api/cart', requireAuth,                                  // 2 auth first (sets req.user)
+        rateLimiter({ limit: 120, windowMs: 60_000,                      // 3 then the limiter
+          keyFn: (req) => `user:${req.user.id}` }),                      //    keyed on the user
+        require('./routes/cart'));                                       // 4 then the controller
       ```
+
+      One production caveat: behind a reverse proxy, `req.ip` is the proxy's
+      address unless you tell Express to trust the `X-Forwarded-For` header
+      (`app.set('trust proxy', 1)`) — otherwise every client shares one
+      bucket and the limiter rate-limits the whole shop as a single IP. The
+      test suite simulates exactly this with `trust proxy` + spoofed headers.
 
       Why **sliding** rather than fixed windows? A fixed window (reset every
       minute at :00) lets a burst at :59 and another at :00 sneak through as
       ~2× the limit. The sliding window counts the *last* `window_ms` of real
-      time, so a burst is a burst no matter where the clock hand is. The price
-      is state: you must remember each request's timestamp (a Redis sorted
-      set), not just a counter.
-  - type: markdown
-    content: |
-      ## The graded exercise
+      time, so a burst is a burst no matter where the clock hand is. The
+      price is state: you must remember each request's timestamp, not just a
+      counter. The default store is the shared Redis client; the tests
+      inject an in-memory store with the same zset commands. Either way the
+      pipeline is the same `multi()` shape:
 
-      Implement `solve(timestamps, limit, windowMs)`:
-
-      - `timestamps` — request times in **milliseconds**, already **sorted
-        non-decreasing** (they arrive in real time).
-      - `limit`, `windowMs` — the budget and the window length.
-      - Return one boolean per request: `true` = allowed, `false` = denied.
-      - **Convention:** the window is `[t − windowMs, t]`, inclusive on both
-        edges. A request is allowed when the window holds **at most `limit`**
-        requests including itself (equivalently: fewer than `limit` *earlier*
-        requests are inside the window). The edge is inclusive — a request at
-        exactly `t − windowMs` is still inside.
-
-      :::example
-      `([100, 200, 300], 2, 200)`: at 300 the window `[100, 300]` holds
-      100, 200, 300 — three requests, more than the limit of 2 → deny. At 200
-      the window `[0, 200]` holds exactly 2 → allowed (at most 2). Result:
-      `[true, true, false]`.
-      :::
-
-      :::example
-      `([100, 200, 300, 400], 3, 300)`: at 400 the window `[100, 400]` holds
-      all four → 4 > 3 → deny. Result: `[true, true, true, false]`.
-      :::
-
-      **Private cases you should handle:** empty input → `[]`; a single
-      request → always allowed; the **exact boundary** (an earlier request at
-      exactly `t − windowMs` counts as inside the window — inclusive left
-      edge); a burst of identical timestamps (three requests at the same ms
-      with limit 1 → only the first is allowed); a limit larger than the whole
-      input → everything allowed.
-  - type: code
-    task: "Implement solve(timestamps, limit, windowMs): return one boolean per timestamp — true if allowed, false if denied. Convention: window [t - windowMs, t] inclusive on both edges; allowed when the window holds at most `limit` requests including the current one."
-    languages: [javascript, python]
-    signature:
-      javascript: "function solve(timestamps, limit, windowMs)"
-      python: "def solve(timestamps: list[int], limit: int, window_ms: int) -> list[bool]"
-    starter:
-      javascript: |
-        function solve(timestamps, limit, windowMs) {
-          // timestamps are sorted non-decreasing (ms). Return one boolean
-          // per request: allowed if the window [t - windowMs, t] holds
-          // at most `limit` requests including the current one.
-          return [];
-        }
-      python: |
-        def solve(timestamps: list[int], limit: int, window_ms: int) -> list[bool]:
-            # timestamps are sorted non-decreasing (ms). Return one boolean
-            # per request: allowed if the window [t - window_ms, t] holds
-            # at most `limit` requests including the current one.
-            return []
-    tests:
-      public:
-        - name: "sliding window denies the third"
-          args: [[100, 200, 300], 2, 200]
-          expected: [true, true, false]
-        - name: "longer window, bigger limit"
-          args: [[100, 200, 300, 400], 3, 300]
-          expected: [true, true, true, false]
-      private:
-        - name: "empty input"
-          args: [[], 5, 1000]
-          expected: []
-        - name: "single request"
-          args: [[100], 1, 100]
-          expected: [true]
-        - name: "exact boundary is inclusive"
-          args: [[100, 300], 2, 200]
-          expected: [true, true]
-        - name: "burst at the same timestamp"
-          args: [[100, 100, 100], 1, 1000]
-          expected: [true, false, false]
-        - name: "limit larger than input"
-          args: [[100, 200, 300], 100, 50]
-          expected: [true, true, true]
-    hints:
-      - "For each timestamp, count how many timestamps (itself included) are within windowMs — walk backwards while t - timestamps[j] <= windowMs."
-      - "Because the input is non-decreasing, you can stop at the first out-of-window timestamp; every earlier one is also out."
-      - "Allow when that count <= limit. The left edge is inclusive: a request at exactly t - windowMs counts."
-    solution: |
-      def solve(timestamps: list[int], limit: int, window_ms: int) -> list[bool]:
-          result = []
-          for i, t in enumerate(timestamps):
-              count = 0
-              j = i
-              while j >= 0 and t - timestamps[j] <= window_ms:
-                  count += 1
-                  j -= 1
-              result.append(count <= limit)
-          return result
+      ```js
+      // production note — the exact final shape (node-redis v4)
+      const pipe = redis.multi();
+      pipe.zRemRangeByScore(key, 0, min - 1);   // drop requests older than the left edge
+      pipe.zCard(key);                          // count what is left
+      const results = await pipe.exec();        // v4: FLAT array, one result per command
+      const count = results[1];                 // the zCard count — NOT results[1][1]
+      if (count >= limit) {
+        const oldest = await redis.zRange(key, 0, 0, { WITHSCORES: true });
+        const oldestScore = oldest.length >= 2 ? Number(oldest[1]) : now;
+        const retryAfter = Math.max(1, Math.ceil((oldestScore + windowMs - now) / 1000));
+        return res.status(429).set('Retry-After', String(retryAfter))
+          .json({ error: { code: 'RATE_LIMITED', message: 'Too many requests' } });
+      }
+      await redis.zAdd(key, { score: now, value: `${now}:${req.id}` });
+      await redis.expire(key, Math.ceil(windowMs / 1000));
+      next();                                   // allowed
+      ```
   - type: flowchart
     title: "the middleware chain order"
     nodes: ["Request", "logger", "auth (JWT)", "rate limiter", "controller", "429 + Retry-After"]
@@ -226,7 +414,257 @@ blocks:
       req/min) to keep scrapers polite; the checkout endpoint sits behind both
       the global limiter and the idempotency key from lesson 11. Same
       middleware, different parameters — that is why the limiter takes
-      `{ limit, windowMs, keyFn }` as configuration.
+      `{ limit, windowMs, keyFn, store? }` as configuration.
+  - type: code
+    mode: module
+    timeLimitMs: 15000
+    task: |
+      Implement the sliding-window rate limiter `middleware/rateLimiter.js` — a factory `rateLimiter({ limit, windowMs, keyFn, store })` that returns Express middleware. The window is [t − windowMs, t] INCLUSIVE on both edges; a request that pushes the window over `limit` gets 429 with a Retry-After header (seconds until the oldest request leaves the window). `store` defaults to the shared Redis client (tests inject an in-memory store).
+    languages: [javascript]
+    starter:
+      javascript: |
+        // middleware/rateLimiter.js — lesson 12: sliding-window rate limiter
+        // rateLimiter({ limit, windowMs, keyFn, store? }) → Express middleware.
+        //   limit    — max requests per window
+        //   windowMs — window length in ms; window [t - windowMs, t] INCLUSIVE
+        //   keyFn    — (req) => string key (user id for authed routes, IP for public)
+        //   store    — optional Redis client (defaults to the shared db/redis client;
+        //              tests inject an in-memory store so the suite runs with zero infra)
+        // Denied requests get 429 + Retry-After (seconds until the window frees).
+        // TODO: implement (lesson 12).
+
+        function rateLimiter({ limit, windowMs, keyFn, store }) {
+          const redis = store || require('../db/redis');
+
+          return async function rateLimit(req, res, next) {
+            next(); // TODO: sliding-window allow/deny
+          };
+        }
+
+        module.exports = { rateLimiter };
+    module:
+      entry: middleware/rateLimiter.js
+      language: javascript
+      testsFile: lesson.test.js
+      testsContent: |
+        // tests/rateLimiter.test.js — lesson 12
+        // Run: node --test tests/rateLimiter.test.js   (or: npm test)
+        // Integration: the limiter IS Express middleware, so the tests boot a real
+        // app on an ephemeral port and drive it with the built-in fetch.
+        const { test } = require('node:test');
+        const assert = require('node:assert/strict');
+        const express = require('express');
+        const { rateLimiter } = require('../middleware/rateLimiter');
+
+        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+        // In-memory redis double: sliding-window zset semantics (member -> score),
+        // so the middleware's real logic (multi/zRemRangeByScore/zCard/zAdd/zRange)
+        // runs against a store that behaves like redis — no server required.
+        function memRedis() {
+          const sets = new Map();
+          const zset = (key) => {
+            if (!sets.has(key)) sets.set(key, new Map());
+            return sets.get(key);
+          };
+          return {
+            multi() {
+              const cmds = [];
+              return {
+                zRemRangeByScore: (k, min, max) => cmds.push(['zrem', k, min, max]),
+                zCard: (k) => cmds.push(['zcard', k]),
+                async exec() {
+                  const out = [];
+                  for (const [op, k, a, b] of cmds) {
+                    if (op === 'zrem') {
+                      const s = zset(k);
+                      let n = 0;
+                      for (const [m, sc] of [...s]) {
+                        if (sc >= a && sc <= b) {
+                          s.delete(m);
+                          n++;
+                        }
+                      }
+                      out.push(n);
+                    } else if (op === 'zcard') {
+                      out.push(zset(k).size);
+                    }
+                  }
+                  return out; // flat array, like node-redis v4 multi().exec()
+                },
+              };
+            },
+            async zAdd(k, { score, value }) {
+              zset(k).set(value, score);
+              return 1;
+            },
+            async zRange(k, start, stop) {
+              const entries = [...zset(k).entries()].sort((x, y) => x[1] - y[1]);
+              const out = [];
+              for (const [m, sc] of entries.slice(start, stop + 1)) out.push(m, String(sc));
+              return out; // flat [member, score, ...], like node-redis v4
+            },
+            async expire() {
+              return 1;
+            },
+          };
+        }
+
+        // A tiny app with two routes: /public (keyed on the IP) and /protected
+        // (keyed on req.user.id — a stub auth middleware sets req.user first).
+        function buildApp({ limit, windowMs, keyFn }) {
+          const app = express();
+          app.set('trust proxy', true); // so X-Forwarded-For drives req.ip in tests
+          const limiter = rateLimiter({ limit, windowMs, keyFn, store: memRedis() });
+          app.get('/public', limiter, (req, res) => res.json({ ok: true }));
+          app.get(
+            '/protected',
+            (req, res, next) => {
+              req.user = { id: req.headers['x-user-id'] || 'anon' };
+              next();
+            },
+            limiter,
+            (req, res) => res.json({ ok: true })
+          );
+          return app;
+        }
+
+        // Boot a fresh app per test; the server is closed even if the test throws.
+        async function withServer(options, fn) {
+          const server = buildApp(options).listen(0);
+          await new Promise((resolve) => server.once('listening', resolve));
+          try {
+            await fn(`http://127.0.0.1:${server.address().port}`);
+          } finally {
+            await new Promise((resolve) => server.close(resolve));
+          }
+        }
+
+        test('the third request inside the window is denied with 429', async () => {
+          await withServer(
+            { limit: 2, windowMs: 300, keyFn: (req) => `ip:${req.ip}` },
+            async (base) => {
+              assert.equal((await fetch(`${base}/public`)).status, 200);
+              assert.equal((await fetch(`${base}/public`)).status, 200);
+              const denied = await fetch(`${base}/public`);
+              assert.equal(denied.status, 429);
+              const body = await denied.json();
+              assert.equal(body.error.code, 'RATE_LIMITED');
+            }
+          );
+        });
+
+        test('the window slides: after windowMs the budget resets', async () => {
+          await withServer(
+            { limit: 1, windowMs: 200, keyFn: (req) => `ip:${req.ip}` },
+            async (base) => {
+              assert.equal((await fetch(`${base}/public`)).status, 200);
+              assert.equal((await fetch(`${base}/public`)).status, 429);
+              await sleep(250); // oldest request has now left the window
+              assert.equal((await fetch(`${base}/public`)).status, 200);
+            }
+          );
+        });
+
+        test('denied responses carry Retry-After (seconds until the window frees)', async () => {
+          await withServer(
+            { limit: 1, windowMs: 5000, keyFn: (req) => `ip:${req.ip}` },
+            async (base) => {
+              assert.equal((await fetch(`${base}/public`)).status, 200);
+              const denied = await fetch(`${base}/public`);
+              assert.equal(denied.status, 429);
+              const retryAfter = Number(denied.headers.get('retry-after'));
+              // Oldest request leaves at oldest + 5000ms; we are a few ms in, so
+              // ceil() lands on 5. Allow a little drift.
+              assert.ok(retryAfter >= 4 && retryAfter <= 5, `retry-after was ${retryAfter}`);
+            }
+          );
+        });
+
+        test('protected routes are keyed on the authenticated user id', async () => {
+          await withServer(
+            { limit: 1, windowMs: 60_000, keyFn: (req) => `user:${req.user.id}` },
+            async (base) => {
+              const asUser1 = { 'x-user-id': 'u1' };
+              assert.equal((await fetch(`${base}/protected`, { headers: asUser1 })).status, 200);
+              assert.equal((await fetch(`${base}/protected`, { headers: asUser1 })).status, 429);
+              // A different user has its own budget — the limiter is keyed on the
+              // identity, not on a shared counter.
+              const asUser2 = { 'x-user-id': 'u2' };
+              assert.equal((await fetch(`${base}/protected`, { headers: asUser2 })).status, 200);
+            }
+          );
+        });
+
+        test('public routes are keyed on the client IP', async () => {
+          await withServer(
+            { limit: 2, windowMs: 60_000, keyFn: (req) => `ip:${req.ip}` },
+            async (base) => {
+              const fromIpA = { 'x-forwarded-for': '10.0.0.1' };
+              const fromIpB = { 'x-forwarded-for': '10.0.0.2' };
+              assert.equal((await fetch(`${base}/public`, { headers: fromIpA })).status, 200);
+              assert.equal((await fetch(`${base}/public`, { headers: fromIpA })).status, 200);
+              assert.equal((await fetch(`${base}/public`, { headers: fromIpA })).status, 429);
+              // A second IP is untouched.
+              assert.equal((await fetch(`${base}/public`, { headers: fromIpB })).status, 200);
+            }
+          );
+        });
+
+        test('a generous limit never denies normal traffic', async () => {
+          await withServer(
+            { limit: 100, windowMs: 1000, keyFn: (req) => `ip:${req.ip}` },
+            async (base) => {
+              for (let i = 0; i < 5; i++) {
+                assert.equal((await fetch(`${base}/public`)).status, 200);
+              }
+            }
+          );
+        });
+      preview: '60 requests/min per user; the 61st request → 429 Too Many Requests + Retry-After: 60'
+    hints:
+      - 'Sliding window via a sorted set: zRemRangeByScore(key, 0, min - 1) drops expired entries (inclusive left edge → min - 1), zCard counts what remains.'
+      - 'node-redis v4: multi().exec() returns a FLAT array — the zCard count is results[1], not results[1][1].'
+      - 'Retry-After = max(1, ceil((oldestScore + windowMs - now) / 1000)) where oldestScore comes from zRange(key, 0, 0, { WITHSCORES: true }).'
+    solution: |
+      // middleware/rateLimiter.js — sliding window per key (lesson 12)
+      // Factory: rateLimiter({ limit, windowMs, keyFn, store? })
+      //   limit     — max requests per window
+      //   windowMs  — window length in ms; window [t - windowMs, t] INCLUSIVE on both edges
+      //   keyFn     — (req) => string key (user id for authed routes, IP for public ones)
+      //   store     — optional Redis client (defaults to the shared db/redis client).
+      //               Tests inject an in-memory store so the suite runs with zero infra.
+      function rateLimiter({ limit, windowMs, keyFn, store }) {
+        const redis = store || require('../db/redis');
+
+        return async function rateLimit(req, res, next) {
+          const key = keyFn(req);                 // user id, or IP for anonymous
+          const now = Date.now();
+          const min = now - windowMs;             // left edge of the window
+
+          const pipe = redis.multi();
+          pipe.zRemRangeByScore(key, 0, min - 1);  // drop requests strictly older than the left edge (window is inclusive)
+          pipe.zCard(key);                          // count what is left
+          const results = await pipe.exec();        // node-redis v4: FLAT array of results, one per command
+          const count = results[1];                 // zCard result
+
+          // ── the decision: this is exactly the lesson's rule ──
+          if (count >= limit) {                   // window already full
+            const oldest = await redis.zRange(key, 0, 0, { WITHSCORES: true });
+            const oldestScore = oldest.length >= 2 ? Number(oldest[1]) : now;
+            const retryAfter = Math.max(1, Math.ceil((oldestScore + windowMs - now) / 1000));
+            return res.status(429)
+              .set('Retry-After', String(retryAfter))
+              .json({ error: { code: 'RATE_LIMITED', message: 'Too many requests' } });
+          }
+
+          await redis.zAdd(key, { score: now, value: `${now}:${req.id}` });   // record this request
+          await redis.expire(key, Math.ceil(windowMs / 1000));
+          next();                                 // allowed
+        };
+      }
+
+      module.exports = { rateLimiter };
   - type: mcq
     prompt: "A request is denied by the rate limiter. What does the client receive?"
     options:

@@ -46,6 +46,20 @@ blocks:
       Always read identity from the context, never from client-supplied
       fields.
       :::
+
+      ```js
+      // auth middleware — the ONLY place identity is established
+      app.use((req, res, next) => {
+        const token = req.headers.authorization?.split(" ")[1];
+        try {
+          req.user = { id: jwt.verify(token, SECRET).sub }; // verified → trusted
+          next();
+        } catch {
+          return res.status(401).json({ error: "unauthorized" });
+        }
+      });
+      ```
+      Every downstream controller reads `req.user.id` — never the body.
   - type: markdown
     content: |
       ## Middleware: the request pipeline
