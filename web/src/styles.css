@@ -239,59 +239,51 @@ code, pre, .mono { font-family: var(--font-mono); }
   flex: 1; display: flex; align-items: center; justify-content: center;
   min-height: 200px;
 }
-.gd-stage { position: relative; width: 240px; height: 72px; overflow: hidden; }
+.gd-stage { position: relative; width: 176px; height: 56px; overflow: hidden; }
 .gd-level {
   position: absolute; inset: 0; width: 200%;
-  will-change: transform; animation: gd-scroll 2.4s linear infinite;
+  will-change: transform; animation: gd-scroll 1.6s linear infinite;
 }
 .gd-ground {
-  position: absolute; left: 0; right: 0; bottom: 10px; height: 2px;
+  position: absolute; left: 0; right: 0; bottom: 8px; height: 2px;
   background: var(--hairline);
 }
 .gd-spike {
-  position: absolute; bottom: 10px; width: 16px; height: 16px;
-  background: color-mix(in srgb, var(--muted) 60%, transparent);
+  position: absolute; bottom: 8px; width: 12px; height: 12px;
+  background: color-mix(in srgb, var(--muted) 50%, transparent);
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
-.gd-portal {
-  position: absolute; top: 0; bottom: 10px; width: 4px; border-radius: 2px;
-}
-.gd-portal-g { background: var(--accent); opacity: 0.85; }
-.gd-portal-s { background: var(--ok); opacity: 0.7; }
 .gd-cube {
-  position: absolute; left: 30%; bottom: 10px;
-  width: 26px; height: 26px; color: var(--accent);
-  will-change: transform; animation: gd-run 2.4s linear infinite;
+  position: absolute; left: 30%; bottom: 8px;
+  width: 20px; height: 20px; color: var(--accent);
+  will-change: transform; animation: gd-run 1.6s linear infinite;
 }
 .gd-cube svg { display: block; }
 
 @keyframes gd-scroll {
   to { transform: translate3d(-50%, 0, 0); }
 }
-/* timeline (percent of the 2.4s loop, aligned with the strip's scroll):
-   mini portal 20%, jump spike 50%, jump spike 80%, gravity flip 92% */
+/* timeline (percent of the 1.6s loop, aligned with the strip's scroll):
+   jump spike 50%, jump spike 80%. A 12px spike stays under the 20px cube
+   for ~18% of the loop (40.9–59.1% and 70.9–89.1%), so the cube must stay
+   above the spike tip (y ≤ -12) through the whole passage — the jumps
+   below cover both windows with margin; the apex tops out at -26 (cube
+   top just clears the stage edge). */
 @keyframes gd-run {
-  0%, 16%  { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
-  18%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
-  20%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(0.62); }
-  34%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(0.62); }
+  0%, 34%  { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
   36%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
-  42%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
-  44%      { transform: translate3d(-50%, -12px, 0) rotate(45deg) scale(1); }
-  48%      { transform: translate3d(-50%, -30px, 0) rotate(90deg) scale(1); }
-  52%      { transform: translate3d(-50%, -10px, 0) rotate(135deg) scale(1); }
-  56%      { transform: translate3d(-50%, 0, 0) rotate(180deg) scale(1); }
-  58%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
-  72%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
-  74%      { transform: translate3d(-50%, -12px, 0) rotate(45deg) scale(1); }
-  78%      { transform: translate3d(-50%, -30px, 0) rotate(90deg) scale(1); }
-  82%      { transform: translate3d(-50%, -10px, 0) rotate(135deg) scale(1); }
-  86%      { transform: translate3d(-50%, 0, 0) rotate(180deg) scale(1); }
-  88%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
-  90%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
-  92%      { transform: translate3d(-50%, -30px, 0) rotate(180deg) scale(1); }
-  96%      { transform: translate3d(-50%, -30px, 0) rotate(180deg) scale(1); }
-  98%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+  40%      { transform: translate3d(-50%, -12px, 0) rotate(45deg) scale(1); }
+  46%      { transform: translate3d(-50%, -24px, 0) rotate(90deg) scale(1); }
+  52%      { transform: translate3d(-50%, -26px, 0) rotate(90deg) scale(1); }
+  58%      { transform: translate3d(-50%, -22px, 0) rotate(135deg) scale(1); }
+  62%      { transform: translate3d(-50%, -10px, 0) rotate(180deg) scale(1); }
+  66%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+  68%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+  70%      { transform: translate3d(-50%, -12px, 0) rotate(45deg) scale(1); }
+  76%      { transform: translate3d(-50%, -24px, 0) rotate(90deg) scale(1); }
+  82%      { transform: translate3d(-50%, -26px, 0) rotate(90deg) scale(1); }
+  88%      { transform: translate3d(-50%, -22px, 0) rotate(135deg) scale(1); }
+  94%      { transform: translate3d(-50%, -10px, 0) rotate(180deg) scale(1); }
   100%     { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) {

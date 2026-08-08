@@ -15,16 +15,11 @@ export default function Loader() {
     <div className="gd-center" role="status" aria-label="loading">
       <div className="gd-stage">
         <div className="gd-level" aria-hidden="true">
-          {/* one pattern period: mini portal, spike, spike, gravity portal */}
-          <span className="gd-portal gd-portal-s" style={{ left: "25%" }} />
+          {/* one pattern period: spike, spike (repeats at +50% for the wrap) */}
           <span className="gd-spike" style={{ left: "40%" }} />
           <span className="gd-spike" style={{ left: "55%" }} />
-          <span className="gd-portal gd-portal-g" style={{ left: "60%" }} />
-          {/* second copy of the same period — wraps seamlessly */}
-          <span className="gd-portal gd-portal-s" style={{ left: "75%" }} />
           <span className="gd-spike" style={{ left: "90%" }} />
           <span className="gd-spike" style={{ left: "105%" }} />
-          <span className="gd-portal gd-portal-g" style={{ left: "110%" }} />
         </div>
         <div className="gd-ground" aria-hidden="true" />
         <div className="gd-cube">
