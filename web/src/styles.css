@@ -233,60 +233,67 @@ code, pre, .mono { font-family: var(--font-mono); }
 .center { display: flex; align-items: center; justify-content: center; min-height: 100dvh; }
 
 /* ---- boot / loading: the Geometry Dash loader (one component, every
-   screen). The level strip scrolls; the mascot cube jumps, flips through
-   the gravity portal and shrinks through the mini portal. Transforms only. */
+   screen). The level strip scrolls; the mascot cube spins 360° over each
+   spike and lands flat. Transforms only. No floor — the level floats,
+   with the trucoder wordmark below the stage. */
 .gd-center {
   flex: 1; display: flex; align-items: center; justify-content: center;
   min-height: 200px;
 }
-.gd-stage { position: relative; width: 176px; height: 60px; overflow: hidden; }
+.gd-stack { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.gd-stage { position: relative; width: 128px; height: 50px; overflow: hidden; }
 .gd-level {
   position: absolute; inset: 0; width: 200%;
   will-change: transform; animation: gd-scroll 1.8s linear infinite;
 }
-/* soft gradient floor — no line, just a quiet grounding band */
-.gd-ground {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 8px;
-  background: linear-gradient(to top,
-    color-mix(in srgb, var(--muted) 22%, transparent), transparent);
-}
 .gd-spike {
-  position: absolute; bottom: 8px; width: 14px; height: 14px;
+  position: absolute; bottom: 6px; width: 11px; height: 11px;
   background: color-mix(in srgb, var(--muted) 50%, transparent);
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 .gd-cube {
-  position: absolute; left: 30%; bottom: 8px;
-  width: 20px; height: 20px; color: var(--accent);
+  position: absolute; left: 30%; bottom: 6px;
+  width: 16px; height: 16px; color: var(--accent);
   will-change: transform; animation: gd-run 1.8s linear infinite;
 }
 .gd-cube svg { display: block; }
+.gd-brand {
+  font-family: var(--font-brand); font-weight: 700; font-size: 13px;
+  letter-spacing: -0.02em;
+}
 
 @keyframes gd-scroll {
   to { transform: translate3d(-50%, 0, 0); }
 }
 /* timeline (percent of the 1.8s loop, aligned with the strip's scroll):
-   jump spike 50%, jump spike 80%. A 14px spike stays under the 20px cube
-   for ~19% of the loop (40.3–59.7% and 70.3–89.7%), so the cube must stay
-   above the spike tip (y ≤ -14) through the whole passage — the jumps
-   below cover both windows with margin; apex -28 (cube top clears the
-   60px stage by 4px). */
+   jump spike 50%, jump spike 80%. An 11px spike stays under the 16px cube
+   for ~21% of the loop (39.5–60.5% and 69.5–90.5%), so the cube must stay
+   above the spike tip (y ≤ -11) through the whole passage; apex -24 (cube
+   top clears the 50px stage by 4px). Rotation is a CONTINUOUS 360° spin
+   per jump — the cube lands flat on its face at rotate(360deg), never
+   sideways, never reversing (jump2 keeps counting past 360: 420…720, so
+   every segment rotates forward). Per-keyframe easing makes the arc
+   parabolic: ease-out rising, ease-in falling. */
 @keyframes gd-run {
   0%, 34%  { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
-  36%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
-  40%      { transform: translate3d(-50%, -14px, 0) rotate(45deg) scale(1); }
-  46%      { transform: translate3d(-50%, -26px, 0) rotate(90deg) scale(1); }
-  52%      { transform: translate3d(-50%, -28px, 0) rotate(90deg) scale(1); }
-  58%      { transform: translate3d(-50%, -24px, 0) rotate(135deg) scale(1); }
-  62%      { transform: translate3d(-50%, -12px, 0) rotate(180deg) scale(1); }
-  66%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
-  68%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
-  70%      { transform: translate3d(-50%, -14px, 0) rotate(45deg) scale(1); }
-  76%      { transform: translate3d(-50%, -26px, 0) rotate(90deg) scale(1); }
-  82%      { transform: translate3d(-50%, -28px, 0) rotate(90deg) scale(1); }
-  88%      { transform: translate3d(-50%, -24px, 0) rotate(135deg) scale(1); }
-  94%      { transform: translate3d(-50%, -12px, 0) rotate(180deg) scale(1); }
-  100%     { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+  36%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); animation-timing-function: ease-out; }
+  38%      { transform: translate3d(-50%, -8px, 0) rotate(30deg) scale(1); animation-timing-function: ease-out; }
+  40%      { transform: translate3d(-50%, -12px, 0) rotate(60deg) scale(1); animation-timing-function: ease-out; }
+  46%      { transform: translate3d(-50%, -20px, 0) rotate(120deg) scale(1); animation-timing-function: ease-out; }
+  52%      { transform: translate3d(-50%, -24px, 0) rotate(180deg) scale(1); animation-timing-function: ease-in; }
+  58%      { transform: translate3d(-50%, -18px, 0) rotate(240deg) scale(1); animation-timing-function: ease-in; }
+  62%      { transform: translate3d(-50%, -10px, 0) rotate(300deg) scale(1); animation-timing-function: ease-in; }
+  64%      { transform: translate3d(-50%, -5px, 0) rotate(330deg) scale(1); animation-timing-function: ease-in; }
+  66%      { transform: translate3d(-50%, 0, 0) rotate(360deg) scale(1); animation-timing-function: ease-out; }
+  68%      { transform: translate3d(-50%, 0, 0) rotate(360deg) scale(1); }
+  70%      { transform: translate3d(-50%, -12px, 0) rotate(420deg) scale(1); animation-timing-function: ease-out; }
+  76%      { transform: translate3d(-50%, -20px, 0) rotate(480deg) scale(1); animation-timing-function: ease-out; }
+  82%      { transform: translate3d(-50%, -24px, 0) rotate(540deg) scale(1); animation-timing-function: ease-in; }
+  88%      { transform: translate3d(-50%, -18px, 0) rotate(600deg) scale(1); animation-timing-function: ease-in; }
+  92%      { transform: translate3d(-50%, -10px, 0) rotate(660deg) scale(1); animation-timing-function: ease-in; }
+  94%      { transform: translate3d(-50%, -5px, 0) rotate(690deg) scale(1); animation-timing-function: ease-in; }
+  96%      { transform: translate3d(-50%, 0, 0) rotate(720deg) scale(1); animation-timing-function: ease-out; }
+  100%     { transform: translate3d(-50%, 0, 0) rotate(720deg) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) {
   .gd-level, .gd-cube { animation: none; }
