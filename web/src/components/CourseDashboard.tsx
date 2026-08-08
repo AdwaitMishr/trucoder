@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { PiArrowLeft, PiBookOpen, PiCheck, PiCaretRight } from "react-icons/pi";
 import { api } from "../api";
+import Loader from "./Loader";
 import type { CourseDetail, Difficulty } from "../types";
 import Markdown from "./Markdown";
 
@@ -20,7 +21,7 @@ export default function CourseDashboard() {
     api.course(courseId).then(setCourse);
   }, [courseId]);
 
-  if (!course) return <div className="boot">trucoder</div>;
+  if (!course) return <Loader />;
 
   const done = course.lessons.filter((l) => l.solved).length;
   const pct = course.lessons.length ? Math.round((done / course.lessons.length) * 100) : 0;

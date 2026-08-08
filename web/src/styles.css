@@ -232,15 +232,71 @@ code, pre, .mono { font-family: var(--font-mono); }
 .spacer { flex: 1; }
 .center { display: flex; align-items: center; justify-content: center; min-height: 100dvh; }
 
-/* ---- boot / loading ---- */
-.boot {
-  display: flex; flex-direction: column; gap: 14px;
-  align-items: center; justify-content: center;
-  min-height: 100dvh; color: var(--muted); font-family: var(--font-brand);
-  letter-spacing: 0.3em; text-transform: lowercase; font-size: 13px;
-  animation: breathe 1.6s ease-in-out infinite;
+/* ---- boot / loading: the Geometry Dash loader (one component, every
+   screen). The level strip scrolls; the mascot cube jumps, flips through
+   the gravity portal and shrinks through the mini portal. Transforms only. */
+.gd-center {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  min-height: 200px;
 }
-@keyframes breathe { 0%,100% { opacity: 0.35; } 50% { opacity: 0.9; } }
+.gd-stage { position: relative; width: 240px; height: 72px; overflow: hidden; }
+.gd-level {
+  position: absolute; inset: 0; width: 200%;
+  will-change: transform; animation: gd-scroll 2.4s linear infinite;
+}
+.gd-ground {
+  position: absolute; left: 0; right: 0; bottom: 10px; height: 2px;
+  background: var(--hairline);
+}
+.gd-spike {
+  position: absolute; bottom: 10px; width: 16px; height: 16px;
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.gd-portal {
+  position: absolute; top: 0; bottom: 10px; width: 4px; border-radius: 2px;
+}
+.gd-portal-g { background: var(--accent); opacity: 0.85; }
+.gd-portal-s { background: var(--ok); opacity: 0.7; }
+.gd-cube {
+  position: absolute; left: 30%; bottom: 10px;
+  width: 26px; height: 26px; color: var(--accent);
+  will-change: transform; animation: gd-run 2.4s linear infinite;
+}
+.gd-cube svg { display: block; }
+
+@keyframes gd-scroll {
+  to { transform: translate3d(-50%, 0, 0); }
+}
+/* timeline (percent of the 2.4s loop, aligned with the strip's scroll):
+   mini portal 20%, jump spike 50%, jump spike 80%, gravity flip 92% */
+@keyframes gd-run {
+  0%, 16%  { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+  18%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+  20%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(0.62); }
+  34%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(0.62); }
+  36%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+  42%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+  44%      { transform: translate3d(-50%, -12px, 0) rotate(45deg) scale(1); }
+  48%      { transform: translate3d(-50%, -30px, 0) rotate(90deg) scale(1); }
+  52%      { transform: translate3d(-50%, -10px, 0) rotate(135deg) scale(1); }
+  56%      { transform: translate3d(-50%, 0, 0) rotate(180deg) scale(1); }
+  58%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+  72%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+  74%      { transform: translate3d(-50%, -12px, 0) rotate(45deg) scale(1); }
+  78%      { transform: translate3d(-50%, -30px, 0) rotate(90deg) scale(1); }
+  82%      { transform: translate3d(-50%, -10px, 0) rotate(135deg) scale(1); }
+  86%      { transform: translate3d(-50%, 0, 0) rotate(180deg) scale(1); }
+  88%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+  90%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+  92%      { transform: translate3d(-50%, -30px, 0) rotate(180deg) scale(1); }
+  96%      { transform: translate3d(-50%, -30px, 0) rotate(180deg) scale(1); }
+  98%      { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+  100%     { transform: translate3d(-50%, 0, 0) rotate(0deg) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gd-level, .gd-cube { animation: none; }
+}
 
 /* ---- app shell ---- */
 .app-shell {
@@ -394,19 +450,8 @@ button.ghost:hover { color: var(--ink); background: var(--surface2); }
 
 .course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 20px; }
 
-/* loading skeletons (home) */
-.skel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-top: 20px; }
-.skel-card {
-  border-radius: var(--radius); background: var(--surface); box-shadow: var(--card);
-  padding: 18px; display: flex; flex-direction: column; gap: 12px;
-}
-.skel-line {
-  height: 12px; border-radius: 4px;
-  background: linear-gradient(90deg, var(--surface2) 25%, color-mix(in srgb, var(--surface2) 45%, var(--surface)) 50%, var(--surface2) 75%);
-  background-size: 200% 100%; animation: shimmer 1.4s infinite;
-}
-.skel-line.w60 { width: 60%; } .skel-line.w80 { width: 80%; } .skel-line.w40 { width: 40%; }
-@keyframes shimmer { to { background-position: -200% 0; } }
+/* loading skeletons (home) — replaced by the shared GD loader 2026-08;
+   kept the shimmer keyframe out — see .gd-* above */
 .course-card {
   display: flex; flex-direction: column; gap: 8px;
   background: var(--surface); border-radius: var(--radius); box-shadow: var(--card);

@@ -20,6 +20,7 @@ import FlowchartBlock from "./FlowchartBlock";
 import Markdown from "./Markdown";
 import Mascot from "./Mascot";
 import QuizBlock from "./QuizBlock";
+import Loader from "./Loader";
 
 const LANGS: { id: Lang; label: string }[] = [
   { id: "java", label: "Java" },
@@ -57,7 +58,7 @@ export default function LessonView() {
   }, [courseId, lessonId]);
 
   if (error) return <div className="center error">{error}</div>;
-  if (!lesson) return <div className="boot">trucoder</div>;
+  if (!lesson) return <Loader />;
   const p = lesson;
 
   const codeBlock = p.blocks.find((b) => b.type === "code") as

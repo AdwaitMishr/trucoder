@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { PiArrowRight } from "react-icons/pi";
 import { api } from "../api";
+import Loader from "./Loader";
 import type { CourseSummary } from "../types";
 
 export default function CourseIndex() {
@@ -18,16 +19,7 @@ export default function CourseIndex() {
           <h1>courses</h1>
           <p>pick one and work through it at your own pace.</p>
         </header>
-        <div className="skel-grid" aria-hidden="true">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="skel-card">
-              <div className="skel-line w60" />
-              <div className="skel-line w80" />
-              <div className="skel-line w80" />
-              <div className="skel-line w40" />
-            </div>
-          ))}
-        </div>
+        <Loader />
       </div>
     );
   }
