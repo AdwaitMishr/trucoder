@@ -292,11 +292,12 @@ code, pre, .mono { font-family: var(--font-mono); }
 @keyframes gd-scroll {
   to { transform: translate3d(-66.67%, 0, 0); }
 }
-/* bottom-of-page easter egg: extra scroll space with the GD loop */
+/* bottom-of-page easter egg: a small scroll-past space with the GD loop.
+   compact by design — the 86vh version crushed .page and annoyed the
+   owner; the stage + wordmark need only ~90px */
 .gd-ee {
-  min-height: 86vh;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 12px;
+  gap: 12px; padding: 48px 0 64px;
 }
 /* timeline (percent of the 1.8s loop — 4x the original 7.2s):
    FOUR jumps at 10 / 35 / 60 / 85%, one per 0.45s block. Spikes every
