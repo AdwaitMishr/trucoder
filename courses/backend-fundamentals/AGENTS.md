@@ -5,12 +5,11 @@ file adds this course's specifics.
 
 ## Purpose
 
-A backend-from-first-principles course **distilled from the user's own
-Obsidian notes** at `/home/monke/monke/notes/v1/Backend/` (01.md … 09
-Caching.md). Read the notes for your lessons and build the lesson content
-from them — the notes ARE the source material. The user said the notes alone
-are enough for the notes sections, so preserve their core content, structure
-it, and add: **Use case** lines, **e-commerce examples**, ≥2
+A backend-from-first-principles course **distilled from the author's notes**
+(01.md … 09 Caching.md). Read the notes for your lessons and build the
+lesson content from them — the notes ARE the source material. The notes
+alone are enough for the notes sections, so preserve their core content,
+structure it, and add: **Use case** lines, **e-commerce examples**, ≥2
 `**Interview question:**` :::tip callouts per lesson, flowcharts, worked
 examples, and quizzes.
 
