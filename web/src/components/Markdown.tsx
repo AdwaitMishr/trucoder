@@ -3,6 +3,7 @@ import remarkGfm from "remark-gfm";
 import remarkDirective from "remark-directive";
 import katex from "katex";
 import { visit } from "unist-util-visit";
+import VideoEmbed from "./VideoEmbed";
 
 /** Turn `:::tip` / `:::warning` / `:::note` / `:::example` container
  *  directives into a `callout` element we can render as a styled component. */
@@ -13,6 +14,27 @@ function remarkCallout() {
         const data = node.data || (node.data = {});
         data.hName = "callout";
         data.hProperties = { type: node.name };
+      }
+    });
+  };
+}
+
+/** Turn `:::video url="..." title="..." credit="..."` container directives
+ *  into a `videoEmbed` element we render as a styled YouTube player. */
+function remarkVideo() {
+  return (tree: unknown) => {
+    visit(tree as any, (node: any) => {
+      if (
+        (node.type === "containerDirective" || node.type === "leafDirective") &&
+        node.name === "video"
+      ) {
+        const data = node.data || (node.data = {});
+        data.hName = "videoEmbed";
+        data.hProperties = {
+          url: node.attributes?.url ?? "",
+          title: node.attributes?.title ?? "",
+          credit: node.attributes?.credit ?? "",
+        };
       }
     });
   };
@@ -110,9 +132,10 @@ function InlineMath({ value }: { value: string }) {
 export default function Markdown({ children }: { children: string }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkDirective, remarkCallout, remarkMathCustom]}
+      remarkPlugins={[remarkGfm, remarkDirective, remarkCallout, remarkVideo, remarkMathCustom]}
       components={{
         callout: Callout,
+        videoEmbed: VideoEmbed,
         mathblock: MathBlock,
         inlinemath: InlineMath,
       } as unknown as React.ComponentProps<typeof ReactMarkdown>["components"]}

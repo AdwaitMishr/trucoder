@@ -215,6 +215,8 @@ Rules:
   **mark as read** escape hatch is still available in the UI).
 - A lesson may contain **at most one `code` block** (run/submit grade the
   lesson). Multiple quizzes, images, and flowcharts are fine.
+- A `markdown` block may embed a YouTube video with the `:::video` directive
+  (see §6). At most one video per lesson, always verified and referenced.
 - Flowchart `edges` reference node indices; `from`/`to` must be valid indices.
   Avoid cycles (or keep them short — the renderer caps layout passes).
 - Legacy lessons (body + `starter`/`tests`, or `type: content`) are normalized
@@ -333,6 +335,53 @@ Walk through a concrete input.
 :::
 ```
 
+### Video embeds (YouTube) — STRICT RULES
+
+TruCoder can embed YouTube videos with the `video` directive:
+
+```md
+:::video{url="https://www.youtube.com/watch?v=VIDEO_ID" title="Exact video title" credit="Channel name"}
+:::
+```
+
+The embed renders as a styled 16:9 player with a caption (title, channel,
+and a "watch on YouTube" link). `url` must be a real YouTube watch or
+youtu.be link. `title` is the video's actual title. `credit` is the channel
+name.
+
+A video is a privilege, not a decoration. These rules are MANDATORY:
+
+1. **Verify the video before embedding (HARD REQUIREMENT — every authoring
+   agent, human or AI, must do all three steps).**
+   - Step A: fetch the video's watch page and confirm the exact title and
+     channel match what you will write in the directive.
+   - Step B: fetch the full transcript (youtube-transcript-api or an
+     equivalent tool) and READ it. The transcript must contain the actual
+     solving content for this lesson's problem type: the formulas, the
+     worked numbers, and the step-by-step computation (for example entropy
+     values such as 0.918 and information-gain tables for a decision-tree
+     lesson). Topic-name matches are not enough.
+   - Step C: confirm the video teaches the same method the lesson teaches.
+     A video that only mentions the topic, or teaches a different variant,
+     does not qualify.
+   Never embed from the title or the description alone. If any step fails,
+   or a transcript is unavailable, do not embed.
+2. **Only where required.** Embed a video only for a worked numerical
+   problem or a concept that is genuinely clearer on video (for example
+   solving a decision tree by hand). Do not add videos as filler or
+   decoration. A lesson with no video must stay that way.
+3. **One video per lesson, maximum.** If two candidates exist, keep the one
+   that supports the topic learners fail most. Never stack videos.
+4. **Place it between the content.** The embed goes directly after the
+   prose it supports (for example right after a worked example). Never at
+   the end of the lesson as filler, never before the concept is introduced.
+5. **Reference it in prose.** The paragraph before the embed names the
+   channel and says what the learner gets. Example:
+   "Refer to this video by Gate Smashers to actually solve this problem."
+   The learner must know why the video is there and what to look for.
+6. **No raw HTML.** Never write `<iframe>` markup. The directive is the
+   only supported way to embed a video.
+
 Supported Markdown: headings (`##`), paragraphs, `**bold**`, `*italic*`,
 `\`inline code\``, fenced code blocks, lists, tables, links, and blockquotes.
 
@@ -417,4 +466,6 @@ pedagogy, and test quality. When in doubt, mirror it.
 - [ ] Image `src` files exist under `courses/<id>/assets/`.
 - [ ] Big integers are quoted strings.
 - [ ] Body uses Markdown + directives (not raw HTML/JSX).
+- [ ] At most one `:::video` per lesson; the video is verified relevant,
+      placed mid-lesson, and referenced in prose (§6).
 - [ ] `node scripts/verify.js` reports `0 failed`.
