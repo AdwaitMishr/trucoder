@@ -2517,6 +2517,53 @@ button.ghost.small-ghost.on { color: var(--accent); }
   }
 }
 
+/* ── mobile/tablet: DOCUMENT scrolling (user-diagnosed, 2026-08) ─────
+ * iOS Safari drives its bottom-bar collapse off the DOCUMENT scroll.
+ * With scrolling on an internal child the bar stays expanded, the
+ * pill consistently overlaps, and touch on the page margin is dead.
+ * Below the desktop breakpoint the shell releases and the document
+ * scrolls: native toolbar behavior, margin scrolling everywhere. */
+@media (max-width: 860px) {
+  .app-shell {
+    height: auto;
+    min-height: 100dvh;
+  }
+  .route-body {
+    overflow: visible;
+    height: auto;
+  }
+  .page,
+  .lesson-page,
+  .lesson-scroll {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  /* react-resizable-panels forces inline overflow:hidden on panels —
+     release it so the stacked mobile column flows in the document */
+  [data-panel] {
+    overflow: visible !important;
+  }
+  .split-group {
+    flex: none;
+  }
+  .nav {
+    position: sticky;
+    top: 0;
+    z-index: 60;
+    background: var(--bg);
+  }
+  /* Monaco needs a definite height once the flex chain releases */
+  .workbench {
+    height: auto;
+    overflow: visible;
+  }
+  .editor-window {
+    flex: none;
+    height: 46vh;
+    min-height: 300px;
+  }
+}
+
 /* ── settings modal on phones: sidebar becomes a top tab strip ─────── */
 
 @media (max-width: 640px) {
