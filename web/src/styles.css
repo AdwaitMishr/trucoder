@@ -76,6 +76,12 @@
   --accent: #bd93f9; --accent-ink: #1e1f2b; --caret: #f5f5f2;
   --ok: #50fa7b; --err: #ff5555;
 }
+[data-theme="catppuccin"] {
+  --bg: #1e1e2e; --ink: #cdd6f4; --muted: #7f849c;
+  --surface: #252537; --surface2: #2c2c3e; --hairline: #323246;
+  --accent: #cba6f7; --accent-ink: #1e1e2e; --caret: #f2cdcd;
+  --ok: #a6e3a1; --err: #f38ba8;
+}
 [data-theme="forest"] {
   --bg: #10160f; --ink: #d8e0d6; --muted: #5f705f;
   --surface: #161d15; --surface2: #1c241b; --hairline: #263226;
@@ -93,6 +99,12 @@
   --surface: #f8f7f1; --surface2: #efede3; --hairline: #e0ded1;
   --accent: #6b7a3c; --accent-ink: #f8f7f1; --caret: #6b7a3c;
   --ok: #5e8c4c; --err: #b0483a;
+}
+[data-theme="dollar"] {
+  --bg: #e4e4d4; --ink: #555a56; --muted: #8a9b69;
+  --surface: #ebebdc; --surface2: #dcdccb; --hairline: #d2d2c2;
+  --accent: #6b886b; --accent-ink: #f6f5ec; --caret: #424643;
+  --ok: #4c7d4c; --err: #d60000;
 }
 [data-theme="modern-dolch-light"] {
   --bg: #e4e5e7; --ink: #26282c; --muted: #8a8d93;
