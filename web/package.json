@@ -6,13 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "relay": "node ../relay/server.js"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
+    "ai": "^3.4.33",
     "canvas-confetti": "^1.9.4",
     "katex": "^0.18.1",
+    "mammoth": "^1.12.0",
     "monaco-editor": "^0.56.0",
+    "pdfjs-dist": "^6.2.108",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-icons": "^5.7.0",

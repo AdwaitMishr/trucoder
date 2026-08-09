@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import { api } from "./api";
 import type { User } from "./types";
 import Login from "./components/Login";
@@ -14,6 +14,7 @@ import ThemeSelector from "./components/ThemeSelector";
 import AdminDashboard from "./components/AdminDashboard";
 import {
   PiBookOpen,
+  PiChatCircle,
   PiFileText,
   PiGearSix,
   PiHouse,
@@ -26,6 +27,9 @@ import { registerCommandSection, type Command } from "./commands";
 import { registerShortcut, useShortcuts } from "./shortcuts";
 import { THEMES, useTheme } from "./theme";
 import type { CourseDetail, CourseSummary, SearchEntry } from "./types";
+import InterviewsIndex from "./interview/InterviewsIndex";
+import InterviewWizard from "./interview/InterviewWizard";
+import InterviewChat from "./interview/InterviewChat";
 
 /** Lazy navigation index (courses + their lessons), cached 2 minutes. */
 let navCache: { courses: CourseSummary[]; details: Record<string, CourseDetail> } | null =
@@ -78,6 +82,22 @@ function ThemeHint({ t }: { t: (typeof THEMES)[number] }) {
       <i style={{ background: t.colors.muted }} />
       <i style={{ background: t.colors.ink }} />
     </span>
+  );
+}
+
+/** Sidebar — switch between Courses and Interviews. */
+function Sidebar() {
+  return (
+    <nav className="sidebar" aria-label="sections">
+      <NavLink to="/" end className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}>
+        <PiBookOpen size={17} />
+        <span>courses</span>
+      </NavLink>
+      <NavLink to="/interviews" className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}>
+        <PiChatCircle size={17} />
+        <span>interviews</span>
+      </NavLink>
+    </nav>
   );
 }
 
@@ -279,43 +299,44 @@ export default function App() {
           }}
         />
       )}
-      <div className="route-body">
-        <Routes>
-          <Route
-            path="/login"
-            element={user ? <Navigate to="/" replace /> : <Login onLogin={setUser} />}
-          />
-          <Route
-            path="/"
-            element={user ? <CourseIndex /> : <Navigate to="/login" replace />}
-          />
-          <Route
-            path="/course/:courseId"
-            element={user ? <CourseDashboard /> : <Navigate to="/login" replace />}
-          />
-          <Route
-            path="/course/:courseId/lessons/:lessonId"
-            element={user ? <LessonView /> : <Navigate to="/login" replace />}
-          />
-          <Route
-            path="/admin"
-            element={
-              user ? (
-                user.isOwner ? (
-                  <AdminDashboard />
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
-          />
-          <Route
-            path="*"
-            element={<Navigate to={user ? "/" : "/login"} replace />}
-          />
-        </Routes>
+      <div className="app-main">
+        {user && <Sidebar />}
+        <div className="route-body">
+          <Routes>
+            <Route
+              path="/login"
+              element={user ? <Navigate to="/" replace /> : <Login onLogin={setUser} />}
+            />
+            <Route
+              path="/"
+              element={user ? <CourseIndex /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/course/:courseId"
+              element={user ? <CourseDashboard /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/course/:courseId/lessons/:lessonId"
+              element={user ? <LessonView /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/interviews"
+              element={user ? <InterviewsIndex /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/interviews/new"
+              element={user ? <InterviewWizard /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/interviews/:id"
+              element={user ? <InterviewChat /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="*"
+              element={<Navigate to={user ? "/" : "/login"} replace />}
+            />
+          </Routes>
+        </div>
       </div>
 
       {user && themePopOpen && (
