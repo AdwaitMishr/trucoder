@@ -11,7 +11,6 @@ import Loader from "./components/Loader";
 import SettingsModal from "./components/SettingsModal";
 import CommandPalette from "./components/CommandPalette";
 import ThemeSelector from "./components/ThemeSelector";
-import Keytips from "./components/Keytips";
 import {
   PiBookOpen,
   PiFileText,
@@ -270,8 +269,6 @@ export default function App() {
           />
         </Routes>
       </div>
-
-      {user && <Keytips />}
 
       {user && themePopOpen && (
         <div

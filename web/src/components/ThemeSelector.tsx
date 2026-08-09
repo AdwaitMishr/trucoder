@@ -73,18 +73,16 @@ export default function ThemeSelector({
 
   return (
     <div className={`theme-selector ${inline ? "theme-selector-inline" : ""}`}>
-      {!inline && (
-        <div className="theme-search">
-          <PiMagnifyingGlass size={14} />
-          <input
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="search themes…"
-            spellCheck={false}
-          />
-        </div>
-      )}
+      <div className="theme-search">
+        <PiMagnifyingGlass size={14} />
+        <input
+          autoFocus={!inline}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="search themes…"
+          spellCheck={false}
+        />
+      </div>
       <div className="theme-grid-scroll">
         <div className="theme-grid-cards">
           {themes.map((t) => (
