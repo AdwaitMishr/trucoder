@@ -71,6 +71,17 @@ export const THEMES: ThemeDef[] = [
     },
   },
   {
+    id: "catppuccin",
+    name: "catppuccin",
+    kind: "dark",
+    colors: {
+      bg: "#1e1e2e", ink: "#cdd6f4", muted: "#7f849c",
+      surface: "#252537", surface2: "#2c2c3e", hairline: "#323246",
+      accent: "#cba6f7", accentInk: "#1e1e2e", caret: "#f2cdcd",
+      ok: "#a6e3a1", err: "#f38ba8",
+    },
+  },
+  {
     id: "forest",
     name: "forest",
     kind: "dark",
@@ -101,6 +112,17 @@ export const THEMES: ThemeDef[] = [
       surface: "#f8f7f1", surface2: "#efede3", hairline: "#e0ded1",
       accent: "#6b7a3c", accentInk: "#f8f7f1", caret: "#6b7a3c",
       ok: "#5e8c4c", err: "#b0483a",
+    },
+  },
+  {
+    id: "dollar",
+    name: "dollar",
+    kind: "light",
+    colors: {
+      bg: "#e4e4d4", ink: "#555a56", muted: "#8a9b69",
+      surface: "#ebebdc", surface2: "#dcdccb", hairline: "#d2d2c2",
+      accent: "#6b886b", accentInk: "#f6f5ec", caret: "#424643",
+      ok: "#4c7d4c", err: "#d60000",
     },
   },
   {
