@@ -20,13 +20,30 @@ function hexToRgba(hex: string, a: number): string {
   return `rgba(${r},${g},${b},${a})`;
 }
 
+/** Monaco only accepts theme names matching [a-zA-Z0-9-]. Ported monkeytype
+ *  ids contain underscores (rose_pine, miami_nights, ...) which make
+ *  defineTheme throw "Illegal theme name!" and kill the editor. Sanitized
+ *  names must stay unique: modern-dolch-light and modern_dolch_light both
+ *  collapse to the same name, so later duplicates get a -2 suffix. */
+const monacoNameById = new Map<string, string>();
+{
+  const seen = new Map<string, number>();
+  for (const t of THEMES) {
+    const base = `trucoder-${t.id.replace(/[^a-zA-Z0-9-]/g, "-")}`;
+    const n = seen.get(base) ?? 0;
+    seen.set(base, n + 1);
+    monacoNameById.set(t.id, n === 0 ? base : `${base}-${n + 1}`);
+  }
+}
+const monacoThemeName = (id: string) => monacoNameById.get(id) ?? `trucoder-${id}`;
+
 /** Build a Monaco editor theme that mirrors a TruCoder theme: the chrome
  *  (background, foreground, caret, selection, line numbers, gutter, widgets)
  *  is tinted from the theme palette while token colors are inherited from the
  *  matching light/dark base so syntax highlighting stays crisp. */
 function defineEditorTheme(monaco: any, t: ThemeDef) {
   const c = t.colors;
-  monaco.editor.defineTheme(`trucoder-${t.id}`, {
+  monaco.editor.defineTheme(monacoThemeName(t.id), {
     base: t.kind === "dark" ? "vs-dark" : "vs",
     inherit: true,
     rules: [],
@@ -165,7 +182,7 @@ export default function CodeEditor({
         language={MONACO_LANG[language] ?? "javascript"}
         value={value}
         onChange={(v) => onChange(v ?? "")}
-        theme={`trucoder-${theme.id}`}
+        theme={monacoThemeName(theme.id)}
         beforeMount={beforeMount}
         onMount={handleMount}
         options={{
