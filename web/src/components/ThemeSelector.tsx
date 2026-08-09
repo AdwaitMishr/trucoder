@@ -101,7 +101,7 @@ export default function ThemeSelector({
       </div>
       {!inline && (
         <div className="theme-pop-foot">
-          <PiCheck size={12} /> {themes.length} themes · ⌘⇧T to toggle
+          <PiCheck size={12} /> {themes.length} themes · stays open while you switch · esc to close
         </div>
       )}
     </div>

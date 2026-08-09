@@ -2123,26 +2123,10 @@ button.ghost.small-ghost.on { color: var(--accent); }
 }
 /* ── Theme selector (monkeytype-style) ─────────────────────────────── */
 
-.theme-pop-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-}
-
-.theme-pop-panel {
-  position: fixed;
-  top: 52px;
-  right: 12px;
-  z-index: 91;
-  width: min(480px, calc(100vw - 24px));
-  max-height: min(560px, calc(100dvh - 72px));
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
-  box-shadow: 0 12px 40px -8px color-mix(in srgb, var(--ink) 22%, transparent);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+/* the theme selector floats in the SAME overlay structure as the command
+   palette (cmd-overlay/cmd-panel); it stays open while you compare themes */
+.cmd-panel.theme-overlay-panel {
+  width: min(640px, 100%);
 }
 
 .theme-selector {

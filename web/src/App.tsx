@@ -209,7 +209,10 @@ export default function App() {
     keys: "⌘+K",
     description: "Open the command palette",
     when: () => loggedIn,
-    run: () => setPaletteOpen((o) => !o),
+    run: () => {
+      setThemePopOpen(false);
+      setPaletteOpen((o) => !o);
+    },
   });
   registerShortcut({
     id: "theme-selector",
@@ -271,17 +274,14 @@ export default function App() {
       </div>
 
       {user && themePopOpen && (
-        <div
-          className="theme-pop-backdrop"
-          onMouseDown={() => setThemePopOpen(false)}
-        >
+        <div className="cmd-overlay" onMouseDown={() => setThemePopOpen(false)}>
           <div
-            className="theme-pop-panel"
+            className="cmd-panel theme-overlay-panel"
             role="dialog"
             aria-label="theme selector"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <ThemeSelector onPick={() => setThemePopOpen(false)} />
+            <ThemeSelector />
           </div>
         </div>
       )}
