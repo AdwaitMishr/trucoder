@@ -5,7 +5,6 @@ import {
   PiKeyboard,
   PiFlask,
   PiPalette,
-  PiCheck,
   PiWarning,
 } from "react-icons/pi";
 import {
@@ -13,7 +12,7 @@ import {
   useSettings,
   type EditorSettings,
 } from "../settings";
-import { THEMES, useTheme } from "../theme";
+import ThemeSelector from "./ThemeSelector";
 
 type Section = "editor" | "shortcuts" | "advanced" | "theme";
 
@@ -86,16 +85,26 @@ const SHORTCUTS: { keys: string; action: string }[] = [
   { keys: "Esc", action: "close dialogs" },
 ];
 
+const SITE_SHORTCUTS: { keys: string; action: string }[] = [
+  { keys: "Ctrl/⌘ + K", action: "command palette — search anything" },
+  { keys: "Ctrl/⌘ + Shift + T", action: "theme selector" },
+];
+
 export default function SettingsModal({
   open,
   onClose,
+  initialTab = "editor",
 }: {
   open: boolean;
   onClose: () => void;
+  initialTab?: Section;
 }) {
-  const { settings, update, reset } = useSettings();
-  const { themeId, setThemeId } = useTheme();
   const [section, setSection] = useState<Section>("editor");
+
+  useEffect(() => {
+    if (open) setSection(initialTab);
+  }, [open, initialTab]);
+  const { settings, update, reset } = useSettings();
 
   useEffect(() => {
     if (!open) return;
@@ -222,29 +231,21 @@ export default function SettingsModal({
           )}
 
           {section === "theme" && (
-            <div className="settings-body theme-grid">
-              {THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  className={`theme-swatch ${t.id === themeId ? "active" : ""}`}
-                  onClick={() => setThemeId(t.id)}
-                >
-                  <span className="swatch-dots">
-                    <span style={{ background: t.colors.bg }} />
-                    <span style={{ background: t.colors.accent }} />
-                  </span>
-                  <span className="name">{t.name}</span>
-                  {t.id === themeId && <PiCheck size={14} />}
-                </button>
-              ))}
+            <div className="settings-body">
+              <ThemeSelector inline />
             </div>
           )}
 
           {section === "shortcuts" && (
             <div className="settings-body">
-              <div className="settings-note">
-                These shortcuts work while the editor is focused.
-              </div>
+              <div className="settings-note">Site-wide (work anywhere):</div>
+              {SITE_SHORTCUTS.map((s) => (
+                <div key={s.keys} className="shortcut-row">
+                  <kbd>{s.keys}</kbd>
+                  <span>{s.action}</span>
+                </div>
+              ))}
+              <div className="settings-note">While the editor is focused:</div>
               {SHORTCUTS.map((s) => (
                 <div key={s.keys} className="shortcut-row">
                   <kbd>{s.keys}</kbd>

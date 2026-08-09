@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { api } from "./api";
 import type { User } from "./types";
 import Login from "./components/Login";
@@ -8,9 +8,73 @@ import CourseIndex from "./components/CourseIndex";
 import CourseDashboard from "./components/CourseDashboard";
 import LessonView from "./components/LessonView";
 import Loader from "./components/Loader";
+import SettingsModal from "./components/SettingsModal";
+import CommandPalette from "./components/CommandPalette";
+import ThemeSelector from "./components/ThemeSelector";
+import Keytips from "./components/Keytips";
+import {
+  PiBookOpen,
+  PiFileText,
+  PiGearSix,
+  PiHouse,
+  PiKeyboard,
+  PiPalette,
+  PiSignOut,
+} from "react-icons/pi";
+import { registerCommandSection, type Command } from "./commands";
+import { registerShortcut, useShortcuts } from "./shortcuts";
+import { THEMES, useTheme } from "./theme";
+import type { CourseDetail, CourseSummary } from "./types";
+
+/** Lazy navigation index (courses + their lessons), cached 2 minutes. */
+let navCache: { courses: CourseSummary[]; details: Record<string, CourseDetail> } | null =
+  null;
+let navCacheAt = 0;
+async function loadNavIndex(): Promise<{
+  courses: CourseSummary[];
+  details: Record<string, CourseDetail>;
+}> {
+  if (navCache && Date.now() - navCacheAt < 120_000) return navCache;
+  try {
+    const { courses } = await api.courses();
+    const details: Record<string, CourseDetail> = {};
+    await Promise.all(
+      courses.map((c) =>
+        api.course(c.id).then((d) => (details[c.id] = d)).catch(() => {}),
+      ),
+    );
+    navCache = { courses, details };
+    navCacheAt = Date.now();
+    return navCache;
+  } catch {
+    return { courses: [], details: {} };
+  }
+}
+
+function ThemeDot({ color }: { color: string }) {
+  return <i className="cmd-theme-dot" style={{ background: color }} />;
+}
+
+function ThemeHint({ t }: { t: (typeof THEMES)[number] }) {
+  return (
+    <span className="cmd-theme-hint">
+      <i style={{ background: t.colors.accent }} />
+      <i style={{ background: t.colors.muted }} />
+      <i style={{ background: t.colors.ink }} />
+    </span>
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [themePopOpen, setThemePopOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<
+    "editor" | "theme" | "shortcuts" | "advanced"
+  >("editor");
+  const navigate = useNavigate();
+  const { themeId, setThemeId } = useTheme();
 
   useEffect(() => {
     api
@@ -18,6 +82,147 @@ export default function App() {
       .then((r) => setUser(r.user))
       .catch(() => setUser(null));
   }, []);
+
+  // close the theme popover on Escape
+  useEffect(() => {
+    if (!themePopOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setThemePopOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [themePopOpen]);
+
+  // ---- command palette sections (registered every render — replace-by-title)
+  const themeCommands = useMemo<Command[]>(
+    () =>
+      THEMES.map((t) => ({
+        id: `theme-${t.id}`,
+        display: `Change theme — ${t.name}`,
+        alias: `theme ${t.id} palette colors`,
+        icon: <ThemeDot color={t.colors.accent} />,
+        hint: <ThemeHint t={t} />,
+        active: () => t.id === themeId,
+        run: () => setThemeId(t.id),
+      })),
+    [themeId, setThemeId],
+  );
+
+  const loggedIn = user != null;
+  registerCommandSection({
+    title: "Navigate",
+    commands: () =>
+      loadNavIndex().then(({ courses, details }) => {
+        const cmds: Command[] = [
+          {
+            id: "nav-home",
+            display: "Go to dashboard",
+            alias: "home index courses",
+            icon: <PiHouse />,
+            active: () => window.location.pathname === "/",
+            run: () => navigate("/"),
+          },
+        ];
+        for (const c of courses) {
+          cmds.push({
+            id: `nav-course-${c.id}`,
+            display: `Open course — ${c.title}`,
+            alias: c.id,
+            icon: <PiBookOpen />,
+            run: () => navigate(`/course/${c.id}`),
+          });
+          for (const l of details[c.id]?.lessons ?? []) {
+            cmds.push({
+              id: `nav-lesson-${c.id}-${l.id}`,
+              display: `Go to lesson — ${l.title}`,
+              alias: `${c.id} ${l.id} lesson`,
+              icon: <PiFileText />,
+              run: () => navigate(`/course/${c.id}/lessons/${l.id}`),
+            });
+          }
+        }
+        return cmds;
+      }),
+  });
+
+  registerCommandSection({
+    title: "Themes",
+    commands: themeCommands,
+  });
+
+  registerCommandSection({
+    title: "Settings",
+    commands: [
+      {
+        id: "settings-open",
+        display: "Open settings",
+        alias: "preferences gear options",
+        icon: <PiGearSix />,
+        run: () => {
+          setSettingsTab("editor");
+          setSettingsOpen(true);
+        },
+      },
+      {
+        id: "settings-theme",
+        display: "Open settings — theme",
+        alias: "colors palette appearance",
+        icon: <PiPalette />,
+        run: () => {
+          setSettingsTab("theme");
+          setSettingsOpen(true);
+        },
+      },
+      {
+        id: "settings-shortcuts",
+        display: "Open settings — shortcuts",
+        alias: "keybinds keys hotkeys",
+        icon: <PiKeyboard />,
+        run: () => {
+          setSettingsTab("shortcuts");
+          setSettingsOpen(true);
+        },
+      },
+    ],
+  });
+
+  if (loggedIn) {
+    registerCommandSection({
+      title: "Account",
+      commands: [
+        {
+          id: "account-logout",
+          display: "Log out",
+          alias: "sign out exit",
+          icon: <PiSignOut />,
+          run: () => {
+            api.logout().catch(() => {});
+            setUser(null);
+          },
+        },
+      ],
+    });
+  }
+
+  // ---- site-wide shortcuts (⌘K palette, ⌘⇧T theme selector)
+  registerShortcut({
+    id: "palette",
+    keys: "⌘+K",
+    description: "Open the command palette",
+    when: () => loggedIn,
+    run: () => setPaletteOpen((o) => !o),
+  });
+  registerShortcut({
+    id: "theme-selector",
+    keys: "⌘+⇧+T",
+    description: "Toggle the theme selector",
+    when: () => loggedIn,
+    run: () => {
+      setThemePopOpen((o) => !o);
+      setPaletteOpen(false);
+    },
+  });
+  useShortcuts();
 
   if (user === undefined) {
     return (
@@ -29,7 +234,18 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      {user && <Nav user={user} onLogout={() => setUser(null)} />}
+      {user && (
+        <Nav
+          user={user}
+          onLogout={() => setUser(null)}
+          themePopOpen={themePopOpen}
+          onToggleThemePop={() => setThemePopOpen((o) => !o)}
+          onOpenSettings={() => {
+            setSettingsTab("editor");
+            setSettingsOpen(true);
+          }}
+        />
+      )}
       <div className="route-body">
         <Routes>
           <Route
@@ -54,6 +270,34 @@ export default function App() {
           />
         </Routes>
       </div>
+
+      {user && <Keytips />}
+
+      {user && themePopOpen && (
+        <div
+          className="theme-pop-backdrop"
+          onMouseDown={() => setThemePopOpen(false)}
+        >
+          <div
+            className="theme-pop-panel"
+            role="dialog"
+            aria-label="theme selector"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <ThemeSelector onPick={() => setThemePopOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      <CommandPalette open={paletteOpen && loggedIn} onClose={() => setPaletteOpen(false)} />
+
+      {user && (
+        <SettingsModal
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          initialTab={settingsTab}
+        />
+      )}
     </div>
   );
 }
