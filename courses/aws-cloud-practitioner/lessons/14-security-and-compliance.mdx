@@ -24,7 +24,8 @@ blocks:
       | RDS | Manage the underlying EC2 instance, SSH access disabled, automated DB **and** OS patching, audit the underlying instance & disks | Ports / IP / security group inbound rules, in-database user creation & permissions, public access setting, parameter groups, enabling encryption |
       | Lambda | Managed runtime and execution environment (AWS patches the runtime) | Your function code, dependencies, IAM role & permissions, environment variables, how the function is triggered |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       **Customer = IN the cloud, AWS = OF the cloud.** Managed services
       (RDS, S3, DynamoDB) are patched and run by AWS; anything you configure
       or operate yourself (EC2 OS, security groups, bucket policies, IAM,
@@ -73,7 +74,8 @@ blocks:
       (filter malicious requests) → a load balancer that scales → EC2
       instances in an Auto Scaling group ready to scale under attack.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Shield = **L3/L4** volumetric DDoS protection (Standard is free for
       everyone; Advanced = $3,000/month + 24/7 response team). WAF = **L7
       (HTTP)** web application firewall for SQL injection / XSS / rate
@@ -127,7 +129,8 @@ blocks:
       (it destroys itself if tampered) and is **FIPS 140-2 Level 3**
       compliant; clients connect over an encrypted SSL connection.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       KMS = AWS manages the keys (software). CloudHSM = AWS manages only the
       **hardware**, you manage the keys — pick CloudHSM when the scenario
       demands dedicated hardware, "we manage our own keys," or FIPS 140-2
@@ -162,7 +165,8 @@ blocks:
       | Encryption | Encrypted with KMS automatically | Optional KMS encryption |
       | Cost | Paid (~$0.40/secret/month) | Free (standard tier) |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Secret stored for an **RDS database** that must be **rotated** every
       30 days" → **Secrets Manager** (rotation + RDS integration are its
       signature features). "Simple configuration value or parameter that
@@ -188,7 +192,8 @@ blocks:
       | **Inspector** | **Scan** for software vulnerabilities | Automated security assessments on **EC2 instances** (via the SSM agent — network accessibility + OS known vulnerabilities), **ECR container images** (on push), and **Lambda functions** (on deploy); scans against the **CVE** database, assigns a **risk score**, reports to **Security Hub** and EventBridge |
       | **Macie** | Find **sensitive data / PII** | Fully managed data security & privacy; **ML + pattern matching**; discovers personally identifiable information (PII) in **S3 buckets**; one click to enable; alerts via EventBridge → SNS/Lambda |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       **GuardDuty = detect** (threats, from logs — think "always watching").
       **Inspector = scan** (vulnerabilities in EC2/ECR/Lambda — think
       "vulnerability scanner"). **Macie = PII** (sensitive data in S3).
@@ -238,7 +243,8 @@ blocks:
       | Config | Record resource configuration changes & compliance over time | "configuration changes, compliance timeline" |
       | IAM Access Analyzer | Find resources shared outside your zone of trust | "external access / public resources" |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Security Hub = **aggregate** all findings in one place. Detective =
       **investigate** to the root cause. Firewall Manager = manage security
       groups/WAF **across an Organization**. And remember pen testing is

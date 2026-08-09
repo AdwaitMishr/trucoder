@@ -30,7 +30,8 @@ blocks:
       processing tier can scale on the number of messages sitting in the
       queue).
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Keyword → service: **"decouple"** → SQS; **"notification / publish-
       subscribe / subscribers"** → SNS; **"real-time streaming / big data
       streaming"** → Kinesis. These keywords resolve most integration
@@ -71,7 +72,8 @@ blocks:
       Auto Scaling Group, scaled on queue depth) — both tiers scale
       independently.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Decouple two applications" → SQS. Remember the numbers: **4 days
       default / 14 days max retention**, and consumers must delete a message
       after processing or it can be delivered again.
@@ -92,7 +94,8 @@ blocks:
       If a producer sends messages 1, 2, 3, 4, a FIFO consumer reads them in
       exactly that order.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       **SQS standard = at-least-once** (may deliver a message more than once,
       no ordering guarantee); **FIFO = exactly-once + strict ordering**. A
       scenario with "must process in order / no duplicates" points to
@@ -143,7 +146,8 @@ blocks:
       service (email, fraud, shipping) receives every message and processes it
       independently — no direct integrations to write.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       **SNS fans out to SQS queues** — one message published to a topic is
       delivered to *every* subscribed queue, and each queue's consumers share
       that queue's copy. Don't confuse it with SQS, where consumers of one
@@ -189,7 +193,8 @@ blocks:
       Unlike SNS, Kinesis has **data persistence** and you can run **real-time
       analytics** on the data.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Real-time data streaming / analyze clickstreams as they arrive / ingest
       from IoT devices" → **Kinesis**. "Load the stream into S3 or Redshift"
       → **Kinesis Data Firehose**. SQS and SNS are for messages, not streaming
@@ -218,7 +223,8 @@ blocks:
       new cloud-native apps, prefer SQS/SNS — they scale far better and
       integrate natively with AWS.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       SQS = one-to-one; SNS = one-to-many (fan-out); Kinesis = real-time
       streaming; Amazon MQ = only when migrating apps that depend on
       MQTT/AMQP-style open protocols. "MQTT or AMQP" in a scenario ⇒ Amazon

@@ -37,3 +37,8 @@ jobs:
         run: |
           cd server
           node scripts/verify.js
+
+      - name: Lint course content (callout syntax + asset references)
+        run: |
+          cd server
+          node scripts/lint-courses.js

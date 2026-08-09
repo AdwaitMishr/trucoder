@@ -50,7 +50,8 @@ blocks:
       into a CloudFormation template — letting you deploy infrastructure and
       application code together (great for Lambda and ECS/EKS).
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       **CloudFormation is declarative infrastructure-as-code (IaC).** If the
       question says "define infrastructure in YAML/JSON templates, reviewed as
       code, repeatable across regions," the answer is CloudFormation. It
@@ -96,7 +97,8 @@ blocks:
       Docker, Multi-Container Docker, Preconfigured Docker — or a custom
       platform if needed.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       **Beanstalk abstracts the deployment.** Scenario: "developer wants to
       upload code and have AWS handle capacity, load balancing, and health
       checks" → **Elastic Beanstalk**. It's the quick-deploy PaaS — you don't
@@ -119,7 +121,8 @@ blocks:
       | **CodePipeline** | Orchestrate the CI/CD pipeline | Code → Build → Test → Provision → Deploy; fully managed; compatible with CodeCommit, CodeBuild, CodeDeploy, Beanstalk, CloudFormation, GitHub & custom plugins |
       | **CodeStar** | Unified UI for software development activities | "Quick way" to set up CodeCommit, CodePipeline, CodeBuild, CodeDeploy, Beanstalk, EC2 together; edit code in the cloud with Cloud9 |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Orchestrate a pipeline end to end" → **CodePipeline**. "Build and test
       code, serverless, pay per build" → **CodeBuild**. "Deploy to EC2 AND
       on-premises servers" → **CodeDeploy** (hybrid). "Git repository" →
@@ -150,7 +153,8 @@ blocks:
       | **Systems Manager (SSM)** | Yes (EC2 + on-premises) | Patch fleets, run commands at scale, store config in Parameter Store; needs the SSM agent (installed by default on Amazon Linux AMI) |
       | **AWS OpsWorks** | Yes (EC2 + on-premises VMs) | Managed **Chef & Puppet** for server configuration automation |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Deploy an app to both EC2 instances and on-premises servers" →
       **CodeDeploy**. "Patch my fleet of EC2 instances and on-premises
       servers" → **SSM**. "Chef or Puppet" → **OpsWorks**. "Run commands
@@ -202,7 +206,8 @@ blocks:
       every resource. CodeDeploy = deploying to *existing* servers (EC2 or
       on-premises). CodePipeline = *orchestration* of the whole CI/CD flow.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       The same scenario can point to different services depending on the
       keyword: "deploy my code with minimal effort" → Beanstalk; "manage all
       infrastructure as versioned templates" → CloudFormation; "pipeline that

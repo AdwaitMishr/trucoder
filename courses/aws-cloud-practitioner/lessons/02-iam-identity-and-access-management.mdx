@@ -23,7 +23,8 @@ blocks:
 
       **Use case:** Alice, Bob and Charles (Developers group) get EC2 access from the group policy; David and Edward (Operations group) get different permissions — and nobody ever shares the root account.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       **IAM is global, not regional.** A question offering "switch to another region to find your IAM user" is a trap — IAM users exist in every region automatically.
       :::
   - type: image
@@ -71,7 +72,8 @@ blocks:
 
       **Use case:** Attach `AmazonS3ReadOnlyAccess` to the Developers group so every developer can read S3 buckets — and nothing more (least privilege).
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       **Effect, Principal, Action, Resource** are the four fields the exam focuses on. Distractors swap their meanings — e.g., claiming Action lists *resources* (it lists API calls) or that Principal lists *resources* (it lists who the policy applies to).
       :::
   - type: markdown
@@ -87,7 +89,8 @@ blocks:
 
       **Use case:** An EC2 instance needs to read files from S3 — attach an `AmazonS3ReadOnlyAccess` role to the instance; no keys are stored on the server.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       **Never put access keys on an EC2 instance — use an IAM role instead.** Exam scenarios that "embed the secret access key in the application code" on EC2 are always wrong; roles are the AWS best practice.
       :::
   - type: flowchart
@@ -128,7 +131,8 @@ blocks:
 
       **Use case:** Before an audit, generate the credential report to find users with old passwords or no MFA, then open each user's Access Advisor tab to remove permissions they never use.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Credential report = **account-level** (all users, credential status). Access Advisor = **user-level** (which services a user actually used). Mixing these two up is a classic CLF-C02 distractor.
       :::
   - type: image
@@ -154,7 +158,8 @@ blocks:
 
       **Use case:** A developer leaves the company — an admin deletes their IAM user, checks the credential report for other stale credentials, and confirms no shared access keys exist.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       MFA enforcement, key rotation, and policy management are **always the customer's job** — AWS will never do them for you. If an option says "AWS enables MFA for your users", it is wrong.
       :::
   - type: markdown
@@ -176,7 +181,8 @@ blocks:
 
       **Use case:** Alice logs in with her password and enters the 6-digit code from her virtual MFA app — even if her password leaks, the account remains protected.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       MFA devices come from **third parties** (Yubico, Gemalto, SurePassID) — AWS does not manufacture them. The exam may ask which option is a valid MFA device: all four types above are valid answers.
       :::
   - type: mcq

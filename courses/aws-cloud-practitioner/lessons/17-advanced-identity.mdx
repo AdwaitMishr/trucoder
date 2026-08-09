@@ -40,7 +40,8 @@ blocks:
       | Typical subject | People in your company | Services (EC2), federated users, cross-account access |
       | When to use | A person needs direct, lasting access | Anything that needs temporary privileges |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Whenever a question says "temporary credentials," "assume a role," or
       "give an EC2 instance access to S3," the answer involves **STS** (via
       an IAM role). IAM *users* are for long-term human access; roles are for
@@ -65,7 +66,8 @@ blocks:
         roles in member accounts (including the root user) but **never to
         the management account** and never to service-linked roles
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       SCPs restrict *what member accounts can do* — they are not the same as
       IAM policies and do not replace them. And no matter what the question
       says, the management account is never bound by an SCP.
@@ -89,7 +91,8 @@ blocks:
       identity provider** such as Microsoft Active Directory, OneLogin, or
       Okta.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       The trigger phrase is **"one login / single sign-on across multiple
       AWS accounts (and business applications)."** That is always **IAM
       Identity Center**. Do not confuse it with Cognito — Identity Center is
@@ -116,7 +119,8 @@ blocks:
       Think of it as: **user pools = who can log in to your app**;
       **identity pools = which AWS resources those users can touch**.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Scenario with "users of my mobile/web app," "millions of users," or
       "let users sign in with Facebook or Google" → **Amazon Cognito**.
       Scenario with "my company's employees need one login for multiple
@@ -143,7 +147,8 @@ blocks:
       For the Cloud Practitioner exam you mainly need to know: **"Active
       Directory" in a question → AWS Directory Services.**
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Connect my on-premises Microsoft AD to AWS" → **AD Connector** (proxy,
       users stay on-premises) or **AWS Managed Microsoft AD** (with a
       trust). "Cheap standalone directory in AWS, no on-premises connection"

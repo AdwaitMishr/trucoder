@@ -315,25 +315,70 @@ extend or fix the course.
 ## 6. Rich content (Markdown + directives)
 
 The body is Markdown. It supports **CommonMark + GitHub-flavored Markdown** and
-**container directives** for callouts:
+**container directives** for callouts.
+
+### 6.1 Callouts — the ONLY supported syntax (STRICT, machine-checked)
+
+A callout is a container directive. The syntax is **exactly** this — no
+variations, no exceptions:
 
 ```md
-:::note
-A neutral clarification.
-:::
-
 :::tip
-A nudge toward the solution. Good for hints woven into prose.
-:::
-
-:::warning
-A common mistake to avoid.
-:::
-
-:::example
-Walk through a concrete input.
+The callout content starts on the NEXT line, never on the opener line.
 :::
 ```
+
+Rules that are ABSOLUTE:
+
+1. **The opener is exactly three colons followed by a lowercase name:**
+   `:::tip`, `:::warning`, `:::note`, `:::example`, `:::video`. These five
+   names are the ONLY allowed ones. `:::question`, `:::info`, `:::faq` etc.
+   do not exist — use `:::note` or `:::warning`.
+2. **NOTHING may follow the name on the opener line.** The line is exactly
+   `:::tip` and then a newline. Content — including bold labels like
+   `**Exam tip:**` — goes on the following line. The only legal additions
+   after the name are an explicit label `:::tip[Label]` or attributes
+   `:::video{url="..."}` in curly braces.
+3. **The closer is a line containing exactly three colons: `:::`.** One
+   closer per opener. Missing closers are errors.
+4. **Never use two colons (`::tip`), four colons (`::::tip`), or split a
+   name across lines** (`:::ti` + newline + `p`). All three render as
+   literal text and fail the linter.
+
+The three most common authoring mistakes — all FATAL, all caught by the
+linter:
+
+```md
+<!-- WRONG — content on the opener line (renders as literal text) -->
+:::tip **Exam tip:**
+The exam loves pay-as-you-go.
+:::
+
+<!-- WRONG — two colons, and/or a truncated name -->
+::tip
+:::warn
+Some warning.
+:::
+
+<!-- RIGHT -->
+:::tip
+**Exam tip:** The exam loves pay-as-you-go.
+:::
+```
+
+### 6.2 Assets (images) — STRICT RULES
+
+- Image blocks reference files in `courses/<id>/assets/` via `src:`.
+- **Every file in `assets/` MUST be referenced** by at least one `src:`
+  block. Dead files fail the linter — delete them.
+- **Never commit slide screenshots or full-page captures.** They duplicate
+  the text, bloat the repo, and are unreadable on phones. Instead write the
+  key point as prose or a table, or use the `flowchart` block (inline SVG,
+  no asset file at all).
+- If a diagram genuinely adds information (a rendered table, an architecture
+  sketch), keep it small: crop it, PNG ≤ 300 KB, and reference it exactly
+  once where it is discussed.
+- `alt` is mandatory on every image block.
 
 ### Video embeds (YouTube) — STRICT RULES
 
@@ -429,17 +474,25 @@ inputs. Explain *why* before *how*. Teach the intuition first.
 
 ## 8. Validating a course
 
-TruCoder ships a verification script that runs every lesson's `solution` against
-every test and reports pass/fail. Run it after authoring or editing any course:
+TruCoder ships two validation scripts. Run BOTH after authoring or editing
+any course — the course is not done until both are green:
 
 ```bash
 cd server
 npm run build
 node scripts/verify.js        # exercises every course × every language
+node scripts/lint-courses.js  # callout syntax + asset references
 ```
 
-Expected output: `N passed, 0 failed`. If a test fails, fix the `expected` value
-or the `solution` — the lesson is not ready until it is green.
+`verify.js` expected output: `N passed, 0 failed`. If a test fails, fix the
+`expected` value or the `solution` — the lesson is not ready until it is
+green.
+
+`lint-courses.js` enforces §6.1 and §6.2 with **zero tolerance**: content on
+a directive opener line, two/three/four-colon typos, truncated or unknown
+directive names, missing closers, and unreferenced assets all fail the lint.
+CI runs the linter on every push and PR — a course that violates it cannot
+merge. Run it locally before pushing; do not push a course that fails it.
 
 ---
 
@@ -468,4 +521,10 @@ pedagogy, and test quality. When in doubt, mirror it.
 - [ ] Body uses Markdown + directives (not raw HTML/JSX).
 - [ ] At most one `:::video` per lesson; the video is verified relevant,
       placed mid-lesson, and referenced in prose (§6).
+- [ ] No content on directive opener lines; every opener has a closer;
+      directive names are exactly `tip`/`warning`/`note`/`example`/`video`
+      (§6.1 — verified by `node scripts/lint-courses.js`).
+- [ ] Every file in `assets/` is referenced; no slide screenshots; images
+      ≤ 300 KB with `alt` (§6.2).
 - [ ] `node scripts/verify.js` reports `0 failed`.
+- [ ] `node scripts/lint-courses.js` reports no violations.

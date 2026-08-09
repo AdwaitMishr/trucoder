@@ -26,7 +26,8 @@ blocks:
       - **Other attached EBS volumes**: **disabled by default** → they survive termination
       - You can change the flag (e.g., preserve the root volume to keep its data after termination)
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       EBS is **AZ-bound** — an EBS volume in us-east-1a cannot attach to an instance in us-east-1b. To "move" it across AZs (or regions) you must **snapshot it and restore** a new volume in the target AZ.
       :::
   - type: image
@@ -61,7 +62,8 @@ blocks:
       - **EBS Snapshot Archive**: move a snapshot to an archive tier that is **75% cheaper** — but restoring takes **24 to 72 hours** (only for snapshots you don't need in a hurry)
       - **Recycle Bin**: protects snapshots (and AMIs) from **accidental deletion** — deleted snapshots go to the bin with a retention rule of **1 day to 1 year**, from which they can be recovered
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Snapshot Archive is a cost-saving trade-off: **75% cheaper storage, but 24-72 hours to restore**. If the question mentions "cheapest way to store old snapshots" → archive; "protect against accidental deletion" → Recycle Bin.
       :::
   - type: markdown
@@ -88,7 +90,8 @@ blocks:
       - Can run on a **schedule** (weekly, when packages update, …)
       - The service itself is **free** — you only pay for the underlying resources (the EC2 instances and AMI storage)
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Automate building, testing, and distributing AMIs" → **EC2 Image Builder**. It is a free service; you pay only for the underlying EC2 and storage resources it uses.
       :::
   - type: markdown
@@ -102,7 +105,8 @@ blocks:
       - Good use cases: **buffer, cache, scratch data, temporary content** — never long-term storage
       - **Backups and replication are your responsibility** — if the hardware fails, the data is gone
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Highest possible disk performance, data can be lost on stop/terminate" → **EC2 Instance Store** (ephemeral). "Durable, persists across stops" → **EBS**. The exam tests this contrast constantly.
       :::
   - type: image

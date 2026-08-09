@@ -28,7 +28,8 @@ blocks:
         IPC that works **across machines** (and on localhost too). Use case:
         client-server apps, microservices.
 
-      :::tip **Interview question: pipes vs shared memory — when do you use each?**
+      :::tip
+      **Interview question: pipes vs shared memory — when do you use each?**
       "A pipe is a kernel-mediated byte stream — safe (no synchronization
       needed), but every byte is copied user → kernel → user, so it suits
       small, streaming data like shell pipelines and parent–child
@@ -76,7 +77,8 @@ blocks:
       work. Threads are for parallelism (CPU-bound work, blocking libraries).
       Pools sit in the middle: bounded parallelism with a queue.
 
-      :::tip **Interview question: why a thread pool instead of a thread per request under load?**
+      :::tip
+      **Interview question: why a thread pool instead of a thread per request under load?**
       "Creating a thread per request is unbounded: each thread costs stack
       memory and, once runnable threads far exceed cores, the scheduler spends
       more time context-switching than working — latency and throughput both

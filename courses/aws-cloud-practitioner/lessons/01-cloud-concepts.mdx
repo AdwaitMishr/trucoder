@@ -20,7 +20,8 @@ blocks:
 
       **Use case:** Netflix is built entirely on AWS and delivers video on-demand; Dropbox (originally built on AWS) is a cloud storage service; Gmail is an email cloud service — you use all of these without provisioning a single server.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       The exam loves the phrase "pay-as-you-go". A correct answer describes paying **only for what you use, when you use it** — never buying or owning hardware in advance.
       :::
   - type: image
@@ -52,7 +53,8 @@ blocks:
 
       These advantages solve real problems: flexibility, cost-effectiveness, scalability, elasticity, high availability and fault tolerance, and agility.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       **Elasticity** = scale **out and in automatically** with demand. **Scalability** = handle **larger loads** by making hardware stronger or adding nodes. A scenario where capacity auto-adjusts to traffic is testing elasticity; one where the app must serve more users over time is testing scalability.
       :::
   - type: markdown
@@ -67,7 +69,8 @@ blocks:
 
       **Use case:** A bank keeps customer records in its own data center (private) but bursts analytics workloads into AWS during peak times (public) — that is a hybrid deployment.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Keep sensitive data on-premises but use the cloud for extra capacity" is the classic hybrid-cloud scenario. Pure private = everything stays with one organization; pure public = everything runs on the provider's infrastructure.
       :::
   - type: flowchart
@@ -107,7 +110,8 @@ blocks:
 
       **Use case:** You rent EC2 virtual servers (IaaS), deploy your app on Elastic Beanstalk (PaaS), and use Gmail for email (SaaS) — three service models in one company.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Who manages what?" questions are common. If the provider manages the **operating system**, the service is at least PaaS — with IaaS, the OS is still your responsibility.
       :::
   - type: markdown
@@ -140,7 +144,8 @@ blocks:
       **Global services** (not region-scoped): IAM, Route 53, CloudFront, WAF.
       **Region-scoped services**: EC2, Elastic Beanstalk, Lambda, Rekognition.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Know the **global** services: IAM, Route 53, CloudFront, WAF. Almost everything else on the exam (EC2, S3, Lambda…) is **region-scoped**. A question asking which service is NOT regional is almost always answered by IAM or Route 53.
       :::
   - type: image
@@ -167,7 +172,8 @@ blocks:
 
       **Use case:** You patch the guest OS on your EC2 instance and configure its security groups (your responsibility), while AWS replaces failed hardware and secures the data center (their responsibility).
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       For shared responsibility questions, ask: "does this involve physical infrastructure AWS owns, or something I configure?" Hypervisor patches, physical security, and hardware = AWS. Patching your EC2 instance's OS, managing IAM users, and encrypting your data = you.
       :::
   - type: image

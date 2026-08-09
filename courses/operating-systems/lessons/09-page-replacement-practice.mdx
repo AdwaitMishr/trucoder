@@ -42,7 +42,8 @@ blocks:
       is why thread-per-request servers with huge thread counts pay TLB-miss
       costs — and why pools (lesson 8) win.
 
-      :::tip **Interview question: TLB hit vs miss vs page fault — three different things**
+      :::tip
+      **Interview question: TLB hit vs miss vs page fault — three different things**
       "A TLB hit serves the page→frame mapping from the cache without touching
       memory. A TLB miss means the mapping isn't cached, so the hardware walks
       the page table — normal, and the entry is then cached. A page fault is

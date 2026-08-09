@@ -44,8 +44,8 @@ A one-stop exam-prep course for the **AWS Certified Cloud Practitioner
 - All lessons use `blocks:`. Lesson files: `lessons/NN-<id>.mdx`.
 - **Every theory lesson**: 5-7 markdown blocks (context, key concepts with
   bullet lists + tables of services with one-line descriptions, exam traps
-  callout `:::tip **Exam tip:**`), ≥1 flowchart (service decision/flow
-  diagrams, ≤10 nodes), 2-4 `type: image` blocks embedding the rendered
+  callout `:::tip` with `**Exam tip:**` on the line after it), ≥1 flowchart
+  (service decision/flow diagrams, ≤10 nodes), 2-4 `type: image` blocks embedding the rendered
   diagrams (only when genuinely relevant), and **4 quizzes at the end**
   (mcq/mscq — scenario-based, exam style, with `explanation` on every quiz).
 - **Quiz rules**: mcq = exactly one correct option; mscq = 2 correct options

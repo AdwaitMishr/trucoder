@@ -29,7 +29,8 @@ blocks:
       resiliency, backup, patching, high availability, fault tolerance, and
       scaling.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "SQL / OLTP relational database" → RDS/Aurora. "Flexible schema, JSON,
       scale out" → NoSQL (DynamoDB, DocumentDB). With managed databases, AWS
       patches the OS — you never SSH into the instance.
@@ -57,7 +58,8 @@ blocks:
       | Multi-AZ | High availability / failover | Passive failover DB in another AZ; failover if the main DB or AZ fails; only 1 failover AZ |
       | Multi-Region | Disaster recovery + local reads | Read replicas across regions; lower latency for global reads; replication cost between regions |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Read replicas = scale *reads* (writes stay on the main DB). Multi-AZ =
       *failover/high availability* (passive standby, one other AZ). If the
       question says "survive an AZ outage," the answer is Multi-AZ, not read
@@ -82,7 +84,8 @@ blocks:
       the same managed benefits with better performance. Think of DocumentDB
       later as "Aurora for MongoDB."
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Cloud-native MySQL/Postgres with 5× performance" → Aurora. "Unpredictable
       workload, no capacity planning, pay per second" → Aurora Serverless.
       Aurora is NOT in the free tier; RDS is.
@@ -110,7 +113,8 @@ blocks:
       databases. High performance, low latency; reduces load off databases for
       **read-intensive workloads** by caching frequent queries.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Serverless key-value, single-digit ms" → DynamoDB. "Cache for
       DynamoDB" → DAX (it only works with DynamoDB). "Managed Redis or
       Memcached" → ElastiCache.
@@ -126,7 +130,8 @@ blocks:
       | **Amazon Athena** | Serverless SQL on S3 | Query data directly in S3 with standard SQL — no loading; supports CSV, JSON, ORC, Avro, Parquet; **~$5 per TB scanned**; use compressed/columnar data to pay less; great for VPC Flow Logs, ELB Logs, CloudTrail |
       | **Amazon QuickSight** | BI dashboards | Serverless, ML-powered business intelligence; interactive dashboards, per-session pricing; integrates with RDS, Aurora, Athena, Redshift, S3 |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Analytics on data in S3 without loading it, using SQL" → Athena.
       "Data warehouse / OLAP / columnar" → Redshift. "Hadoop cluster" → EMR.
       "Dashboards / business intelligence" → QuickSight.
@@ -158,7 +163,8 @@ blocks:
         **Timestream**; ledger → **QLDB**; blockchain → **Managed Blockchain**
       - Move/transform data → **DMS** / **Glue**
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Financial transactions, immutable journal" → QLDB. "Decentralized,
       multiple parties, no central authority" → Managed Blockchain. "MongoDB"
       → DocumentDB. "Graph of relationships" → Neptune. "Time series" →

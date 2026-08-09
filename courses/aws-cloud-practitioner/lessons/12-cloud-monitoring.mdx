@@ -62,7 +62,8 @@ blocks:
       to get notified when your estimated charges cross a threshold (say $10
       or $20).
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       CloudWatch = *how systems perform* (metrics, alarms, logs, dashboards).
       CloudTrail = *who did what, when* (audit of API calls). When a question
       asks "which service monitors CPU utilization or triggers an alarm," the
@@ -96,7 +97,8 @@ blocks:
       metrics (such as memory/RAM usage, which is otherwise unavailable for
       EC2) from EC2 and on-premises servers.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "An EC2 instance's logs are not appearing in CloudWatch Logs." The fix
       is usually: install the CloudWatch agent and give the instance an IAM
       role with permissions to push logs. Without the agent, EC2 sends
@@ -123,7 +125,8 @@ blocks:
       automated analysis of your CloudTrail events to detect anomalies and
       unusual activity.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Someone deleted an S3 bucket — who did it, and when?" → **CloudTrail**
       (it logs all API calls). It is the answer for any *audit* question:
       SDK, CLI, and console usage are all captured. Remember the 90-day event
@@ -237,7 +240,8 @@ blocks:
       | AWS Config | Record resource configurations & changes over time | "has my SG / bucket config changed" |
       | Trusted Advisor | Account assessment: 5 categories, 7 core checks on Basic/Developer | "recommendations / best practices" |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Final trap check: CloudTrail answers "who did what, when" (audit);
       CloudWatch answers "how are my systems performing" (metrics, alarms,
       logs); X-Ray answers "where does a request slow down across services";

@@ -40,7 +40,8 @@ blocks:
       | Size / boot | Heavy — a full OS per VM | Lightweight — just the app + dependencies |
       | Density | Few VMs per server | Many containers per server |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Whenever the exam says "run Docker containers on AWS," think **ECS** (or
       Fargate). The *image* is the blueprint and the *container* is the running
       instance — a classic distractor pairing. The public registry is Docker
@@ -73,7 +74,8 @@ blocks:
       Images live in **ECR** so ECS or Fargate can pull and run them. For the
       exam: the word **Kubernetes** → **Amazon EKS**.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       **Fargate = serverless containers.** "Run Docker containers without
       managing EC2 instances" → Fargate. "You must provision the EC2 instances
       yourself" → ECS. ECR only *stores* images — it never runs them.
@@ -148,7 +150,8 @@ blocks:
       | Scaling | You intervene (ASG adds/removes servers) | **Automated** as part of the service |
       | Use for | Long-running, predictable workloads | Short, event-driven executions |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       **Lambda has a 15-minute max timeout** — it is for short, event-driven
       work. If a workload "runs for hours" or "needs a long-running process,"
       Lambda is the wrong answer. And Lambda does NOT support arbitrary Docker
@@ -188,7 +191,8 @@ blocks:
       - **High availability is available but there is NO auto-scaling**, and
         AWS integrations are limited
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Scenario: someone with *no cloud experience* wants to get started
       quickly with *low, predictable pricing* and *minimal configuration* →
       **Lightsail**. Otherwise, Lightsail is almost always the wrong answer
@@ -209,7 +213,8 @@ blocks:
       | **AWS Batch** | Managed batch jobs on EC2/Spot | Jobs have a start & end; defined as Docker images on ECS |
       | **Lightsail** | Simple VPS for beginners | Low, predictable pricing; **no auto-scaling** |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Long-running batch-style job" → **Batch** (no time limit). "Short,
       event-driven function" → **Lambda** (15-minute cap). "Containers without
       servers" → **Fargate**. "Beginners, fixed price" → **Lightsail**. Learn

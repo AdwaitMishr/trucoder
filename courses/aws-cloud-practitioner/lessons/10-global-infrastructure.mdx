@@ -32,7 +32,8 @@ blocks:
       undersea cables) — this is what services like Global Accelerator use to
       route traffic faster than the public internet.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       You can deploy applications in Regions and AZs, but **not** on Edge
       Locations — edge locations exist for content delivery. And remember:
       **Route 53 is DNS, not load balancing** — it answers DNS queries with IP
@@ -73,7 +74,8 @@ blocks:
         returning records for unhealthy targets. Only the **simple** routing
         policy does not use health checks.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Route 53 is a managed DNS service" is the core definition. Route 53
       does **not** cache content (that's CloudFront) and does **not** balance
       live TCP/UDP traffic (that's an ELB or Global Accelerator). If a
@@ -100,7 +102,8 @@ blocks:
       - **Failover** = disaster recovery.
       - **Geolocation** = route by where the user is.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Scenario → policy: "split traffic 70/30" → **weighted**; "direct users
       to the fastest region" → **latency**; "keep working if the primary
       region fails" → **failover**; "send users from a country to a specific
@@ -156,7 +159,8 @@ blocks:
         content (e.g., premium videos) while keeping the origin locked down
         with OAC.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       CloudFront **caches at the edge** — it is not storage replication.
       "Serve the same static content fast to users everywhere" → CloudFront.
       "Allow only CloudFront to read my bucket" → **OAC**, not making the
@@ -201,7 +205,8 @@ blocks:
       **edge location**, which then forwards it over the **private AWS
       network** to the bucket in its target region.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Static content, available worldwide" → **CloudFront** (cached at the
       edge). "Dynamic content, low latency in a few specific regions" →
       **S3 CRR** (near real-time, no caching). CloudFront caches at the edge;
@@ -230,7 +235,8 @@ blocks:
       | Best when | Static/cacheable content worldwide | You need **static IP addresses**, **fast deterministic regional failover**, or non-HTTP traffic |
       | DDoS | Integrates with AWS Shield + WAF | Integrates with AWS Shield |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Both use the global network, edge locations, and Shield — but
       **CloudFront caches content; Global Accelerator does not**. A scenario
       saying "two static Anycast IPs", "TCP/UDP performance", or
@@ -265,7 +271,8 @@ blocks:
       | **AWS WaveLength** | AWS services embedded in telecom providers' data centers at the **edge of 5G networks** — ultra-low latency; traffic can stay inside the carrier's network |
       | **AWS Local Zones** | Extend a Region (e.g., us-east-1) with locations like Boston, Chicago, Dallas — compute, storage, and database closer to users for latency-sensitive apps (EC2, RDS, ECS, EBS, ElastiCache, Direct Connect) |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "5G + ultra-low latency" → **WaveLength**; "AWS services in my own data
       center" → **Outposts**; "extend a region to a city like Boston" →
       **Local Zones**. Active-passive means reads can be global but writes
@@ -290,7 +297,8 @@ blocks:
       the location has **no reliable internet**. Snowball Edge can also run
       compute (EC2, Lambda) at the edge before shipping back.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Transfer 200 TB of data where the network would take weeks" →
       **Snowball Edge**. "Exabyte-scale, one-time migration" → **Snowmobile**.
       "Small portable device for edge data" → **Snowcone**. Snowball imports

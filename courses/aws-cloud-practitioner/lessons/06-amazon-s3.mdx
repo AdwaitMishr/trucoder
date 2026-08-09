@@ -25,7 +25,8 @@ blocks:
       - Naming rules: no uppercase, no underscore; 3–63 characters; not an IP;
         must start with a lowercase letter or number.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Globally unique bucket name" and "bucket created in a region" are both
       heavily tested. If a scenario says two accounts tried to create the same
       bucket name, the second one fails — even in a different region.
@@ -51,7 +52,8 @@ blocks:
       | Tags | Up to 10 Unicode key/value pairs — useful for security and lifecycle rules |
       | Version ID | Assigned if bucket versioning is enabled |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Max object size = 5 TB; files bigger than 5 GB **must** use multipart
       upload. "S3 has no directories — only keys" is a favorite trap.
       :::
@@ -83,7 +85,8 @@ blocks:
       bucket stays private while these settings are enabled. They can be set at
       the bucket or account level.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "EC2 instance needs S3 access" → IAM role, not access keys in the
       instance. "Public website on S3" → bucket policy. Bucket policy wins over
       IAM for cross-account and public scenarios.
@@ -108,7 +111,8 @@ blocks:
       replication setup, logging/monitoring, choosing cost-optimal storage
       classes, and encrypting your data at rest and in transit.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Who is responsible for encrypting objects in the bucket?" — you are
       (customer side of the shared responsibility model). AWS is responsible
       for the physical infrastructure and durability of S3 itself.
@@ -136,7 +140,8 @@ blocks:
       (30 days), Archive Instant (90 days), Archive (optional, 90–700+ days),
       Deep Archive (optional, 180–700+ days).
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Durability (11 nines) is the same everywhere; availability changes per
       class. Glacier Deep Archive = 12-hour retrieval and 180-day minimum —
       the cheapest but slowest. Standard-IA has a 30-day minimum duration.
@@ -191,7 +196,8 @@ blocks:
       have **public reads** enabled via a bucket policy — if you get **403
       Forbidden**, the bucket policy is missing or Block Public Access is on.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "403 Forbidden on an S3 static website" → the bucket isn't public; fix
       the bucket policy (and Block Public Access). "Protect against accidental
       deletes" → versioning. "Move objects to cheaper storage over time" →
@@ -218,7 +224,8 @@ blocks:
       **Access logs / monitoring**: logging and monitoring for S3 are *your*
       responsibility to enable (part of the shared responsibility model).
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Replicate data to another region for compliance" → CRR (and versioning
       must be on first). "Give someone temporary access to a private object" →
       presigned URL, not making the bucket public.

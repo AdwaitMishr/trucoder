@@ -57,7 +57,8 @@ blocks:
       | Accelerated Computing | **p**, **g**, **x** | Hardware accelerators (GPUs/FPGAs) | Machine learning, graphics rendering, video encoding |
       | Storage Optimized | **i** (e.g., I3), h1 | High sequential read/write to large datasets on local storage | High-frequency OLTP, relational & NoSQL databases, caches (e.g., Redis), data warehousing, distributed file systems |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Match the **family letter** to the workload: **c = CPU-heavy**, **r = RAM-heavy** (think "r for RAM"), **i = storage-heavy**. You do not need to memorize instance names — the exam tests which family fits which workload, and that t2.micro is the free-tier instance (750 hours/month).
       :::
   - type: markdown
@@ -91,7 +92,8 @@ blocks:
       | 443 | HTTPS | Access secured websites |
       | 3389 | RDP | Remote Desktop Protocol — log into a **Windows** instance |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Security groups are **allow-only** and **stateful** — return traffic is automatically allowed. You can never write a "deny" rule. And remember: **22 = Linux (SSH)**, **3389 = Windows (RDP)**.
       :::
   - type: markdown
@@ -113,7 +115,8 @@ blocks:
       - Works out of the box with **Amazon Linux 2** AMIs
       - Port 22 must still be open in the security group
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       EC2 Instance Connect still relies on SSH on port 22 — if the security group doesn't allow port 22, Instance Connect fails too. It just saves you from managing key files.
       :::
   - type: image
@@ -141,7 +144,8 @@ blocks:
 
       Since **February 1, 2024**, AWS charges **$0.005 per hour (~$3.60/month)** for every public IPv4 address in your account, used or not. EC2 instances get **750 free hours/month** of public IPv4 during the first 12 months (free tier); other services (e.g., load balancers) have no free tier.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Spot instances are cheap **because they can be interrupted** — the exam loves the "batch job / resilient to failure" → Spot pairing, and "critical database" → never Spot. Steady-state databases → Reserved Instances or Savings Plans.
       :::
   - type: image

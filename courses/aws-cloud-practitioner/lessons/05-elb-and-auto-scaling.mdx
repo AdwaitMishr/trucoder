@@ -27,7 +27,8 @@ blocks:
       but it hits a hardware limit. Horizontal scaling is common for web
       applications and is the cloud-friendly path.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Elasticity = the system scales *automatically* based on load, so you only
       pay for what you need. Agility = new IT resources are a click away,
       reducing provisioning time from weeks to minutes. These two are tested
@@ -56,7 +57,8 @@ blocks:
       groups**: instances register into a target group (e.g., HTTP on port 80),
       and the ELB's listener routes traffic to that group.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       ELB is AWS-managed — you never provision or patch the load balancer
       servers yourself. If a question says "spread traffic across EC2
       instances while hiding instance failures," the answer is a load balancer.
@@ -83,7 +85,8 @@ blocks:
         firewalls, intrusion detection, deep packet inspection. It balances
         traffic to the appliances (in the middle), not to your application.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       Keyword matching is how the exam tests this: "HTTP routing" → ALB
       (Layer 7); "TCP + millions of requests per second + static IP" → NLB
       (Layer 4); "firewall appliances / GENEVE" → GWLB (Layer 3).
@@ -117,7 +120,8 @@ blocks:
       AMI, instance type (e.g., `t2.micro`), security group, and user data —
       the same settings you'd use to launch an EC2 instance manually.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       The ASG always tries to keep the running capacity at the **desired
       capacity**, bounded by min and max. If you terminate an instance
       manually, the ASG detects it and launches a replacement — you can't
@@ -140,7 +144,8 @@ blocks:
       the rest. Scheduled scaling fits predictable patterns (sports events,
       shopping hours). Predictive scaling uses ML on past traffic patterns.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Known pattern ahead of time" → Scheduled scaling. "Machine learning
       predicts traffic" → Predictive scaling. "Keep CPU at 40%" → Target
       tracking. "Alarm fires → add 2 units" → Simple/Step scaling.
@@ -187,7 +192,8 @@ blocks:
       remember the classic 3-tier picture: ELB in front → EC2 instances (in an
       ASG) doing application logic → a shared database behind them.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       ELB + ASG go hand in hand: the ASG creates the servers, the ELB routes
       traffic to them, and ELB health checks can be enabled inside the ASG so
       unhealthy instances are automatically terminated and replaced. Scaling

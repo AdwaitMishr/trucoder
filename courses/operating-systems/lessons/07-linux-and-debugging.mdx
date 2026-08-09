@@ -27,7 +27,8 @@ blocks:
       swap) → `ps aux --sort=-%cpu` (exact culprits) → `/proc/<pid>/` for
       detail.
 
-      :::tip **Interview question: how do you check CPU and memory usage on Linux?**
+      :::tip
+      **Interview question: how do you check CPU and memory usage on Linux?**
       One-liner: "`top`/`htop` for live CPU+memory per process, `free -h` for
       system memory totals, `ps aux` for a snapshot, and everything underneath
       is just reading `/proc` — virtual files the kernel generates on the fly."
@@ -71,7 +72,8 @@ blocks:
         accumulation.
       - Blunt fix: kill the parent — init adopts the zombie and reaps it.
 
-      :::tip **Interview question: zombie vs orphan — and how do you debug a zombie?**
+      :::tip
+      **Interview question: zombie vs orphan — and how do you debug a zombie?**
       "A zombie is an exited child whose parent never called wait(): it keeps a
       PCB slot with its exit status (`ps` shows Z/defunct), it uses no CPU, and
       `kill -9` won't remove it because there is nothing to kill. Debug by
@@ -127,7 +129,8 @@ blocks:
       the whole point of the exercise: fork/exec/wait (lesson 6) + syscalls +
       the shell as an ordinary program.
 
-      :::tip **Interview answer, 30 seconds**
+      :::tip
+      **Interview answer, 30 seconds**
       "The shell forks a child, the child execs /bin/ls after a PATH search,
       ls runs via open/read/write syscalls and exits; the shell is blocked in
       wait() the whole time, reaps the child, and prints the next prompt."

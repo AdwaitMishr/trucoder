@@ -56,7 +56,8 @@ blocks:
       route table points at it, and it forwards traffic to the Internet
       Gateway. The NAT device allows **outbound** traffic only.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       A NAT Gateway is for **outbound-only** internet access from private
       subnets — it never allows the internet to reach your instances. If a
       question says "private instances need to download updates but must not
@@ -87,7 +88,8 @@ blocks:
       inbound is allowed, the response automatically flows back out. NACL
       rules are also **numbered** and evaluated in order.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       NACLs are **stateless** and support **allow + deny** at the **subnet**
       level. Security groups are **stateful**, **allow-only**, and attach at
       the **instance/ENI** level. Any question pairing these two is answered
@@ -120,7 +122,8 @@ blocks:
       can be delivered to **Amazon S3, CloudWatch Logs, or Kinesis Data
       Firehose**.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       "Peering between A–B and B–C" does **not** let A reach C — VPC peering
       is **not transitive**. And for "why can't my instances reach the
       internet / each other?" think **VPC Flow Logs** (network traffic
@@ -173,7 +176,8 @@ blocks:
       connects *your computer* (using OpenVPN) into your VPC so you can reach
       private instances by private IP as if you were inside the network.
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       **Direct Connect = dedicated private line** (slow to set up, expensive,
       fast and reliable). **Site-to-Site VPN = encrypted over the internet**
       (up in minutes, limited bandwidth). If the scenario mentions "private
@@ -250,7 +254,8 @@ blocks:
       | Direct Connect | Dedicated physical private connection | "dedicated, private, low latency" |
       | Transit Gateway | Hub-and-spoke for thousands of VPCs + on-premises | "connect many VPCs together" |
 
-      :::tip **Exam tip:**
+      :::tip
+      **Exam tip:**
       The exam's VPC questions are keyword-matching: "stateful" → Security
       Group; "stateless" → NACL; "outbound-only internet for private
       subnets" → NAT Gateway; "connect two VPCs, not transitive" → VPC
