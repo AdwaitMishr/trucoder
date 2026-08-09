@@ -13,6 +13,7 @@ export default function GdEasterEgg() {
         <span className="brand-tru">tru</span>
         <span className="brand-coder">coder</span>
       </div>
+      <div className="gd-build">build {__BUILD_COMMIT__}</div>
     </section>
   );
 }

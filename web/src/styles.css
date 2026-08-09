@@ -2491,9 +2491,29 @@ button.ghost.small-ghost.on { color: var(--accent); }
   color: var(--accent);
 }
 
+.gd-build {
+  margin-top: 6px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+  text-transform: none;
+}
+
 @media (max-width: 640px) {
   .cmd-panel {
     max-height: 80dvh;
+  }
+  /* The iOS Safari bottom bar (collapsed pill ~50px) and Android Chrome's
+   * toolbar float over the viewport by design (WebKit: "not a bug").
+   * Guarantee the final content can scroll clear of it: env() covers the
+   * home indicator, the +56px covers the pill/toolbar zone. Desktop keeps
+   * the original paddings (env() = 0 and this block does not apply). */
+  .page,
+  .lesson-page,
+  .lesson-scroll,
+  .zen-body {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 56px);
   }
 }
 

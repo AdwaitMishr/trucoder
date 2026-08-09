@@ -1,8 +1,24 @@
+import { execSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import { fileURLToPath } from "node:url";
+
+// Inject the git commit the bundle was built from — shown in the GD
+// easter egg ("build <sha>") so the deployed version is always verifiable.
+function buildCommit(): string {
+  try {
+    return execSync("git rev-parse --short HEAD", { cwd: fileURLToPath(new URL("..", import.meta.url)) })
+      .toString()
+      .trim();
+  } catch {
+    return "dev";
+  }
+}
 
 export default defineConfig({
+  define: {
+    __BUILD_COMMIT__: JSON.stringify(buildCommit()),
+  },
   plugins: [react()],
   resolve: {
     alias: {
