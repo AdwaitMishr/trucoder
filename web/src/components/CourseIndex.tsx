@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { PiArrowRight } from "react-icons/pi";
 import { api } from "../api";
-import Loader from "./Loader";
-import GdEasterEgg from "./GdEasterEgg";
+import { useDocumentTitle } from "../title";
 import type { CourseSummary } from "../types";
+import GdEasterEgg from "./GdEasterEgg";
+import Loader from "./Loader";
 
 export default function CourseIndex() {
+  useDocumentTitle("courses");
   const [courses, setCourses] = useState<CourseSummary[] | null>(null);
   const [err, setErr] = useState(false);
   const [tick, setTick] = useState(0);

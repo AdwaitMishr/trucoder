@@ -1,13 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import {
-  PiArrowLeft,
-  PiArrowRight,
-  PiCheck,
-  PiRows,
-} from "react-icons/pi";
 import { api, ApiError, assetUrl } from "../api";
+import { useDocumentTitle } from "../title";
+import { PiArrowLeft, PiArrowRight, PiCheck, PiRows } from "react-icons/pi";
 import type {
   Block,
   CodeBlock,
@@ -31,6 +27,7 @@ const LANGS: { id: Lang; label: string }[] = [
 export default function LessonView() {
   const { courseId = "", lessonId = "" } = useParams();
   const [lesson, setLesson] = useState<Lesson | null>(null);
+  useDocumentTitle(lesson?.title);
   const [error, setError] = useState("");
   const [zen, setZen] = useState<boolean>(() => {
     try {

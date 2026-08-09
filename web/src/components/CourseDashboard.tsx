@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { PiArrowLeft, PiBookOpen, PiCheck, PiCaretRight } from "react-icons/pi";
 import { api } from "../api";
-import Loader from "./Loader";
+import { useDocumentTitle } from "../title";
 import type { CourseDetail, Difficulty } from "../types";
+import Loader from "./Loader";
 import Markdown from "./Markdown";
 
 const DIFF_LABEL: Record<Difficulty, string> = {
@@ -16,6 +17,7 @@ const DIFF_LABEL: Record<Difficulty, string> = {
 export default function CourseDashboard() {
   const { courseId = "" } = useParams();
   const [course, setCourse] = useState<CourseDetail | null>(null);
+  useDocumentTitle(course?.title);
 
   useEffect(() => {
     api.course(courseId).then(setCourse);
