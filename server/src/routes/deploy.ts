@@ -56,11 +56,28 @@ deployRouter.post("/_deploy", (req, res) => {
     const head = (payload.after ?? "unknown").slice(0, 7);
     log(`webhook accepted push ${head} — spawning deploy`);
     const script = path.join(__dirname, "../../scripts/deploy.sh");
-    const child = spawn("bash", [script], {
-      detached: true,
-      stdio: "ignore",
-      env: { ...process.env, DEPLOY_DIR: REPO_DIR },
-    });
+    // Spawn the deploy in its OWN transient systemd unit. detached:true is
+    // NOT enough: systemd KillMode=control-group kills by cgroup, so the
+    // `sudo systemctl restart trucoder` step reaped the deploy child mid-run
+    // (builds+restart completed, verify/SHA/OK never ran — found 2026-08-09
+    // after the b02dec3 push). systemd-run gives the script its own cgroup,
+    // so it survives the service restart and finishes the bookkeeping.
+    const unit = `trucoder-deploy-${Date.now()}-${head}`;
+    const child = spawn(
+      "sudo",
+      [
+        "-n",
+        "systemd-run",
+        "--collect",
+        `--unit=${unit}`,
+        "--uid=adith",
+        "--setenv=HOME=/home/adith",
+        "--setenv=DEPLOY_DIR=/home/adith/trucoder",
+        "bash",
+        script,
+      ],
+      { stdio: "ignore", env: process.env }
+    );
     // a missing script (e.g. the repo was checked out to a branch that
     // predates the webhook) exits instantly with zero output — surface it
     child.on("error", (err) => log(`deploy SPAWN ERROR: ${err.message}`));
