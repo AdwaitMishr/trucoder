@@ -2475,6 +2475,16 @@ button.ghost.small-ghost.on { color: var(--accent); }
   font-family: var(--font-mono, ui-monospace, monospace);
 }
 
+/* ── safe-area: content must clear the iOS home indicator / Android
+ * gesture bar. viewport-fit=cover in index.html makes the layout extend
+ * under the browser chrome; these paddings keep scrollable content from
+ * being permanently hidden behind it. env() is 0 on desktop, so the
+ * original bottom paddings are preserved. */
+.page { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+.lesson-page { padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+.lesson-scroll { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
+.zen-body { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+
 /* ── small extras ──────────────────────────────────────────────────── */
 
 .theme-btn.active {
