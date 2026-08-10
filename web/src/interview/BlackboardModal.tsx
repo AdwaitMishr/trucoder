@@ -1,11 +1,16 @@
 import { lazy, Suspense, useRef } from "react";
 import { PiX, PiTrash, PiPaperPlaneRight, PiPencilLine } from "react-icons/pi";
-import { elementsToMermaid, mermaidMessage } from "./lib/mermaid";
+import { elementsToMermaid, mermaidMessage, type ArrowBinding } from "./lib/mermaid";
 
-// Excalidraw is heavy (~1MB) — load it only when the blackboard opens.
-const Excalidraw = lazy(() =>
-  import("@excalidraw/excalidraw").then((m) => ({ default: m.Excalidraw }))
-);
+// tldraw is heavy (~1MB+) — loaded only when the blackboard opens.
+const TldrawCanvas = lazy(() => import("./TldrawCanvas"));
+
+interface BoardEditor {
+  getCurrentPageShapes: () => unknown[];
+  getCurrentPageShapeIds: () => Set<string>;
+  deleteShapes: (ids: string[]) => void;
+  getBindingsInvolvingShape: (id: string) => ArrowBinding[];
+}
 
 export default function BlackboardModal({
   open,
@@ -16,19 +21,27 @@ export default function BlackboardModal({
   onClose: () => void;
   onSend: (content: string) => void;
 }) {
-  const apiRef = useRef<{ getSceneElements: () => unknown[]; resetScene: () => void } | null>(null);
+  const editorRef = useRef<BoardEditor | null>(null);
 
   if (!open) return null;
 
   const send = () => {
-    const els = apiRef.current?.getSceneElements() ?? [];
-    const src = elementsToMermaid(els);
-    if (!src) {
-      onSend("[blackboard] (empty)");
-    } else {
-      onSend(mermaidMessage(src));
-    }
+    const editor = editorRef.current;
+    const shapes = (editor?.getCurrentPageShapes() ?? []) as unknown[];
+    const src = elementsToMermaid(shapes, (arrowId) => {
+      const binds = editor?.getBindingsInvolvingShape(arrowId) ?? [];
+      return binds
+        .filter((b) => b.fromId === arrowId && b.toId)
+        .map((b) => ({ fromId: b.fromId, toId: b.toId, terminal: b.terminal }));
+    });
+    onSend(src ? mermaidMessage(src) : "[blackboard] (empty)");
     onClose();
+  };
+
+  const clear = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.deleteShapes([...editor.getCurrentPageShapeIds()]);
   };
 
   return (
@@ -45,7 +58,7 @@ export default function BlackboardModal({
           </span>
           <span className="muted small">draw it — it's sent to the interviewer as mermaid text</span>
           <div className="blackboard-actions">
-            <button className="ghost small-ghost" title="clear" onClick={() => apiRef.current?.resetScene()}>
+            <button className="ghost small-ghost" title="clear" onClick={clear}>
               <PiTrash size={14} />
             </button>
             <button className="btn submit" onClick={send}>
@@ -58,19 +71,11 @@ export default function BlackboardModal({
         </div>
         <div className="blackboard-canvas">
           <Suspense fallback={<div className="muted small blackboard-loading">loading canvas…</div>}>
-            <Excalidraw
-              excalidrawAPI={(api: unknown) => {
-                apiRef.current = api as { getSceneElements: () => unknown[]; resetScene: () => void };
-              }}
-              initialData={{ elements: [], appState: { viewBackgroundColor: "transparent" } }}
-              UIOptions={{
-                canvasActions: {
-                  loadScene: false,
-                  saveToActiveFile: false,
-                  export: false,
-                  saveAsImage: false,
-                  toggleTheme: false,
-                },
+            <TldrawCanvas
+              onMount={(editor) => {
+                editorRef.current = editor as BoardEditor;
+                // test/debug hook: reach the tldraw editor from the console
+                (window as unknown as Record<string, unknown>).__bb = editor;
               }}
             />
           </Suspense>

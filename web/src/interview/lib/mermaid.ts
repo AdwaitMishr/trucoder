@@ -1,88 +1,143 @@
-// Blackboard → mermaid: converts Excalidraw scene elements into a mermaid
-// flowchart the interviewer can READ AS TEXT (no vision needed).
+// Blackboard → mermaid: converts tldraw page shapes into a mermaid flowchart
+// the interviewer can READ AS TEXT (no vision needed).
 //
-// Element model (Excalidraw): shapes (rectangle/ellipse/diamond) at x,y with
-// width/height; text elements with text.rawText (often bound to a shape via
-// containerId); linear elements (arrow) with startBinding/endBinding.
+// tldraw v3 shape model:
+//   geo  { id, type:"geo", parentId?, props:{ geo:"rectangle"|"diamond"|…, richText } }
+//   text { id, type:"text", parentId? /* = a geo shape → it's that shape's label */,
+//          props:{ richText } }
+//   arrow{ id, type:"arrow", props:{ start:{boundShapeId?}, end:{boundShapeId?} } }
+// Labels live in separate child text shapes; text content is TipTap richText.
 
-interface ExcalidrawElementLike {
+interface TldrawShapeLike {
   id: string;
   type: string;
+  parentId?: string | null;
   x: number;
   y: number;
-  width: number;
-  height: number;
-  text?: { rawText?: string };
-  containerId?: string | null;
-  boundElements?: { id: string; type: string }[] | null;
-  startBinding?: { elementId: string } | null;
-  endBinding?: { elementId: string } | null;
-  points?: [number, number][];
+  props?: {
+    geo?: string;
+    w?: number;
+    h?: number;
+    richText?: unknown;
+    text?: string;
+    start?: { x?: number; y?: number; boundShapeId?: string | null };
+    end?: { x?: number; y?: number; boundShapeId?: string | null };
+  };
 }
 
-const SHAPE_TYPES = new Set(["rectangle", "ellipse", "diamond"]);
-const NODE_RE = /^[A-Za-z0-9_]+$/;
+/** Extract plain text from tldraw's TipTap richText JSON (or legacy string). */
+function textOf(shape: TldrawShapeLike): string {
+  const p = shape.props;
+  if (!p) return "";
+  if (typeof p.text === "string") return p.text;
+  const rt = p.richText as
+    | { content?: { content?: { text?: string }[] }[] }
+    | undefined;
+  if (!rt || !Array.isArray(rt.content)) return "";
+  const parts: string[] = [];
+  for (const block of rt.content) {
+    for (const leaf of block.content ?? []) {
+      if (typeof leaf.text === "string" && leaf.text) parts.push(leaf.text);
+    }
+  }
+  return parts.join(" ").trim();
+}
 
 function esc(s: string): string {
   return s.replace(/"/g, '\\"').replace(/[\n\r]+/g, " ").trim().slice(0, 120);
 }
 
-export function elementsToMermaid(raw: unknown[]): string {
-  const els = raw as ExcalidrawElementLike[];
+function nodeId(shapeId: string): string {
+  const clean = shapeId.replace(/[^A-Za-z0-9_]/g, "");
+  return (clean || "n").slice(0, 24);
+}
 
-  // 1) labels: bound text elements attach to their container shape
-  const labelByContainer = new Map<string, string>();
-  for (const e of els) {
-    if (e.type === "text" && e.containerId && e.text?.rawText) {
-      labelByContainer.set(e.containerId, esc(e.text.rawText));
+export interface ArrowBinding {
+  fromId: string;
+  toId: string;
+  terminal?: string;
+}
+
+export function elementsToMermaid(
+  raw: unknown[],
+  bindingsFor?: (arrowId: string) => ArrowBinding[]
+): string {
+  const shapes = raw as TldrawShapeLike[];
+
+  // 1) labels: child text shapes label their parent geo shape
+  const labelByParent = new Map<string, string>();
+  for (const s of shapes) {
+    if (s.type === "text" && s.parentId) {
+      const t = textOf(s);
+      if (t) labelByParent.set(s.parentId, esc(t));
     }
   }
 
-  // 2) nodes: shapes (with their label) + standalone texts
-  const nodeIdByEl = new Map<string, string>();
   const lines: string[] = [];
-  let n = 0;
-  for (const e of els) {
-    if (SHAPE_TYPES.has(e.type)) {
-      const label = labelByContainer.get(e.id) ?? esc(e.text?.rawText ?? "");
-      n++;
-      const id = `n${n}`;
-      nodeIdByEl.set(e.id, id);
-      const shape = e.type === "diamond" ? `{${label}}` : `["${label}"]`;
+  const nodeIdByShape = new Map<string, string>();
+  const used = new Set<string>();
+  const unique = (base: string) => {
+    let id = base;
+    let i = 2;
+    while (used.has(id)) id = `${base}_${i++}`;
+    used.add(id);
+    return id;
+  };
+
+  // 2) nodes
+  for (const s of shapes) {
+    if (s.type === "geo") {
+      const id = unique(nodeId(s.id));
+      nodeIdByShape.set(s.id, id);
+      const label = labelByParent.get(s.id) ?? esc(textOf(s));
+      const shape = s.props?.geo === "diamond" ? `{${label}}` : `["${label}"]`;
       lines.push(`    ${id}${shape}`);
-    } else if (e.type === "text" && !e.containerId && e.text?.rawText?.trim()) {
-      n++;
-      const id = `n${n}`;
-      nodeIdByEl.set(e.id, id);
-      lines.push(`    ${id}["${esc(e.text.rawText)}"]`);
+    } else if (s.type === "text" && !s.parentId) {
+      const label = esc(textOf(s));
+      if (!label) continue;
+      const id = unique(nodeId(s.id));
+      nodeIdByShape.set(s.id, id);
+      lines.push(`    ${id}["${label}"]`);
     }
   }
 
-  // 3) edges: arrows by binding, else nearest node by geometry
+  // 3) edges
   const edges = new Set<string>();
-  const findNode = (elId: string | null | undefined): string | undefined =>
-    elId ? nodeIdByEl.get(elId) : undefined;
-  for (const e of els) {
-    if (e.type !== "arrow") continue;
-    let a = findNode(e.startBinding?.elementId);
-    let b = findNode(e.endBinding?.elementId);
-    if (!a || !b) {
-      const nearest = (x: number, y: number) => {
-        let best: { d: number; id: string } | null = null;
-        for (const [elId, nid] of nodeIdByEl) {
-          const el = els.find((x2) => x2.id === elId);
-          if (!el) continue;
-          const cx = el.x + el.width / 2;
-          const cy = el.y + el.height / 2;
-          const d = (cx - x) ** 2 + (cy - y) ** 2;
-          if (!best || d < best.d) best = { d, id: nid };
-        }
-        return best?.id;
-      };
-      const pts = e.points ?? [];
-      if (!a && pts.length > 1) a = nearest(e.x + pts[0][0], e.y + pts[0][1]);
-      if (!b && pts.length > 1) b = nearest(e.x + pts[pts.length - 1][0], e.y + pts[pts.length - 1][1]);
+  const find = (id: string | null | undefined): string | undefined =>
+    id ? nodeIdByShape.get(id) : undefined;
+  const center = (s: TldrawShapeLike) => ({
+    cx: s.x + (s.props?.w ?? 0) / 2,
+    cy: s.y + (s.props?.h ?? 0) / 2,
+  });
+  const nearest = (x: number, y: number): string | undefined => {
+    let best: { d: number; id: string } | null = null;
+    for (const [shapeId, nid] of nodeIdByShape) {
+      const s = shapes.find((z) => z.id === shapeId);
+      if (!s) continue;
+      const { cx, cy } = center(s);
+      const d = (cx - x) ** 2 + (cy - y) ** 2;
+      if (!best || d < best.d) best = { d, id: nid };
     }
+    return best?.id;
+  };
+
+  for (const s of shapes) {
+    if (s.type !== "arrow") continue;
+    const start = s.props?.start;
+    const end = s.props?.end;
+    let a = find(start?.boundShapeId);
+    let b = find(end?.boundShapeId);
+    // tldraw v3: arrow bindings are separate records (terminal: start|end)
+    if (bindingsFor) {
+      for (const bl of bindingsFor(s.id)) {
+        const bound = find(bl.toId);
+        if (bl.terminal === "start" && bound) a = bound;
+        else if (bl.terminal === "end" && bound) b = bound;
+        else if (!bl.terminal && bound) b = bound;
+      }
+    }
+    if (!a) a = nearest(s.x + (start?.x ?? 0), s.y + (start?.y ?? 0));
+    if (!b) b = nearest(s.x + (end?.x ?? 0), s.y + (end?.y ?? 0));
     if (a && b && a !== b) edges.add(`    ${a} --> ${b}`);
   }
 
