@@ -8,6 +8,7 @@ import CourseIndex from "./components/CourseIndex";
 import CourseDashboard from "./components/CourseDashboard";
 import LessonView from "./components/LessonView";
 import Loader from "./components/Loader";
+import Mascot from "./components/Mascot";
 import SettingsModal from "./components/SettingsModal";
 import CommandPalette from "./components/CommandPalette";
 import ThemeSelector from "./components/ThemeSelector";
@@ -85,17 +86,34 @@ function ThemeHint({ t }: { t: (typeof THEMES)[number] }) {
   );
 }
 
-/** Sidebar — switch between Courses and Interviews. */
-function Sidebar() {
+/** Sidebar — switch between Courses and Interviews. Collapsible via the TruCoder mascot. */
+function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   return (
-    <nav className="sidebar" aria-label="sections">
-      <NavLink to="/" end className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}>
+    <nav className={`sidebar ${collapsed ? "collapsed" : ""}`} aria-label="sections">
+      <button
+        className="sidebar-toggle"
+        onClick={onToggle}
+        title={collapsed ? "expand sidebar" : "collapse sidebar"}
+        aria-expanded={!collapsed}
+      >
+        <Mascot size={20} />
+      </button>
+      <NavLink
+        to="/"
+        end
+        className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}
+        title="courses"
+      >
         <PiBookOpen size={17} />
-        <span>courses</span>
+        {!collapsed && <span>courses</span>}
       </NavLink>
-      <NavLink to="/interviews" className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}>
+      <NavLink
+        to="/interviews"
+        className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}
+        title="interviews"
+      >
         <PiChatCircle size={17} />
-        <span>interviews</span>
+        {!collapsed && <span>interviews</span>}
       </NavLink>
     </nav>
   );
@@ -106,6 +124,14 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [themePopOpen, setThemePopOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("trucoder-sidebar") === "1"
+  );
+  const toggleSidebar = () =>
+    setSidebarCollapsed((v) => {
+      localStorage.setItem("trucoder-sidebar", v ? "0" : "1");
+      return !v;
+    });
   const [settingsTab, setSettingsTab] = useState<
     "editor" | "theme" | "shortcuts" | "advanced"
   >("editor");
@@ -300,7 +326,7 @@ export default function App() {
         />
       )}
       <div className="app-main">
-        {user && <Sidebar />}
+        {user && <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />}
         <div className="route-body">
           <Routes>
             <Route

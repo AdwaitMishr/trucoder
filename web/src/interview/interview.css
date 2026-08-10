@@ -8,11 +8,30 @@
   width: 168px;
   flex-shrink: 0;
   border-right: 1px solid var(--hairline);
-  padding: 16px 8px;
+  padding: 10px 8px;
   display: flex;
   flex-direction: column;
   gap: 3px;
+  transition: width 0.18s ease;
+  overflow: hidden;
 }
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 6px;
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.sidebar-toggle:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.sidebar.collapsed { width: 54px; }
+.sidebar.collapsed .sidebar-item { justify-content: center; padding: 8px 0; }
 .sidebar-item {
   display: flex;
   align-items: center;
