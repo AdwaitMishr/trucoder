@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "relay": "node ../relay/server.js"
+    "relay": "node ../relay/server.js",
+    "stt": "python3 ../relay/stt-server.py"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@monaco-editor/react": "^4.6.0",
     "ai": "^3.4.33",
     "canvas-confetti": "^1.9.4",

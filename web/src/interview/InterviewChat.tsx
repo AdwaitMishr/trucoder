@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useChat, type Message } from "@ai-sdk/react";
-import { PiMicrophone, PiMicrophoneSlash, PiStopCircle } from "react-icons/pi";
+import { PiMicrophone, PiMicrophoneSlash, PiStopCircle, PiPencilLine } from "react-icons/pi";
 import { sessionStore, type InterviewSession } from "./lib/db";
 import { fetchModuleText, buildSystemPrompt, gradeInterview } from "./lib/engine";
 import { parseQuizzes, letter, type ChatQuiz } from "./lib/quiz";
+import { startRecording } from "./lib/stt";
 import InterviewReport from "./InterviewReport";
 import Markdown from "../components/Markdown";
+import BlackboardModal from "./BlackboardModal";
 
 const RELAY = "http://127.0.0.1:3177";
 
@@ -127,8 +129,10 @@ export default function InterviewChat() {
   const [ctx, setCtx] = useState<{ resume: string; focus: string; moduleText: string; model: string } | null>(null);
   const [error, setError] = useState("");
   const [listening, setListening] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
   const [seeded, setSeeded] = useState(false);
-  const recRef = useRef<{ stop: () => void } | null>(null);
+  const recRef = useRef<{ stop: () => Promise<string>; cancel: () => void } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const systemRef = useRef("");
   const modelRef = useRef("deepseek-v4-flash");
@@ -194,6 +198,7 @@ export default function InterviewChat() {
     const text = chat.input.trim();
     if (!text || chat.isLoading) return;
     chat.append({ role: "user", content: text });
+    chat.setInput(""); // always clear the composer after sending
     setError("");
   }
 
@@ -226,47 +231,30 @@ export default function InterviewChat() {
 
   function toggleMic() {
     if (listening) {
-      recRef.current?.stop();
-      setListening(false);
+      // stop recording → transcribe → fill the input
+      const rec = recRef.current;
+      if (rec) {
+        setListening(false);
+        setTranscribing(true);
+        setError("");
+        rec
+          .stop()
+          .then((text) => {
+            if (text) chat.setInput(text);
+            else setError("no speech heard — try again");
+          })
+          .catch((e: unknown) => setError(errMsg(e)))
+          .finally(() => setTranscribing(false));
+      }
       return;
     }
-    const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-    if (!SR) {
-      setError("speech recognition isn't available in this browser — try Chrome/Edge");
-      return;
-    }
-    const rec = new SR();
-    rec.lang = "en-IN";
-    rec.interimResults = true;
-    rec.continuous = true;
-    let sawSpeech = false;
-    rec.onresult = (e: SpeechRecognitionEvent) => {
-      sawSpeech = true;
-      let t = "";
-      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
-      if (t) chat.setInput(t);
-    };
-    rec.onend = () => {
-      setListening(false);
-      if (!sawSpeech) setError("no speech heard — check the mic permission (lock icon) and try again");
-    };
-    rec.onerror = (e) => {
-      const err = (e as { error?: string }).error ?? "unknown";
-      setListening(false);
-      if (err === "not-allowed" || err === "service-not-allowed")
-        setError("mic permission denied — allow the microphone for localhost:3001 (lock icon in the address bar)");
-      else if (err === "no-speech") setError("no speech detected — try again");
-      else if (err === "network") setError("speech service unreachable (network error)");
-      else setError(`speech error: ${err}`);
-    };
-    recRef.current = rec;
     setError("");
-    setListening(true);
     try {
-      rec.start();
-    } catch {
-      setListening(false);
-      setError("couldn't start the microphone — check the browser permission");
+      const rec = startRecording();
+      recRef.current = rec;
+      setListening(true);
+    } catch (e) {
+      setError(errMsg(e));
     }
   }
 
@@ -347,6 +335,15 @@ export default function InterviewChat() {
 
       {error && <div className="form-error chat-error">{error}</div>}
 
+      <BlackboardModal
+        open={boardOpen}
+        onClose={() => setBoardOpen(false)}
+        onSend={(content) => {
+          void chat.append({ role: "user", content });
+          chat.setInput("");
+        }}
+      />
+
       <div className="composer">
         <AutosizeInput
           value={chat.input}
@@ -361,12 +358,21 @@ export default function InterviewChat() {
           placeholder="your answer… (or speak it with the mic)"
         />
         <button
-          className={`icon-btn ${listening ? "on" : ""}`}
+          className="icon-btn"
+          onClick={() => setBoardOpen(true)}
+          title="open the blackboard (draw → mermaid)"
+        >
+          <PiPencilLine size={17} />
+        </button>
+        <button
+          className={`icon-btn ${listening || transcribing ? "on" : ""}`}
           onClick={toggleMic}
-          title={listening ? "stop listening" : "speak your answer"}
+          title={listening ? "stop & transcribe" : "speak your answer (local whisper)"}
         >
           {listening ? <PiMicrophoneSlash size={17} /> : <PiMicrophone size={17} />}
-          {listening && <span className="mic-live">listening…</span>}
+          {(listening || transcribing) && (
+            <span className="mic-live">{transcribing ? "transcribing…" : "recording…"}</span>
+          )}
         </button>
         {streaming ? (
           <button className="stop-btn" onClick={() => chat.stop()} title="stop generating">

@@ -25,6 +25,10 @@ node --env-file=../.env dist/index.js   # in server/
 
 # terminal 2 — the local relay (required for interviews)
 npm run relay                            # in web/  (node ../relay/server.js)
+
+# terminal 3 — local speech-to-text (required for the mic; first run
+# downloads the ~140 MB faster-whisper 'base' model)
+npm run stt                              # in web/  (relay/stt-server.py)
 ```
 
 Vite dev mode works too — the relay reflects any localhost origin.
@@ -34,7 +38,10 @@ Vite dev mode works too — the relay reflects any localhost origin.
 - `prompts/interviewer.md` — the interviewer persona/behavior (tune here)
 - `prompts/report-grader.md` — the end-of-interview rubric grader (JSON out)
 - `lib/relay.ts` — relay client (key never stored in the browser)
+- `lib/stt.ts` — mic recording → local whisper transcription (relay/stt-server.py)
+- `lib/mermaid.ts` — blackboard → mermaid conversion (interviewer reads the source)
 - `lib/db.ts` — IndexedDB session store
 - `lib/resume.ts` — client-side PDF/DOCX parsing (pdf.js + mammoth)
 - `lib/engine.ts` — context assembly + turn logic
+- `BlackboardModal.tsx` — Excalidraw infinite canvas (send as mermaid)
 - `GRADER-REVIEW.md` — qwen3.7-max grading report (goal + standards)

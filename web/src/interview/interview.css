@@ -390,3 +390,31 @@
 .report-recs a { color: var(--accent); }
 .report-raw pre { font-size: 11.5px; white-space: pre-wrap; background: color-mix(in srgb, var(--ink) 5%, transparent); padding: 12px; border-radius: 9px; }
 .report-actions { display: flex; gap: 8px; align-items: center; }
+
+/* blackboard (Excalidraw modal) */
+.blackboard-panel {
+  width: min(960px, 94vw);
+  height: min(640px, 88vh);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.blackboard-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--hairline);
+}
+.blackboard-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.blackboard-actions { margin-left: auto; display: flex; align-items: center; gap: 7px; }
+.blackboard-canvas { flex: 1; min-height: 0; }
+.blackboard-loading { padding: 40px; text-align: center; }
+.blackboard-canvas .excalidraw { --theme-filter: none; }
