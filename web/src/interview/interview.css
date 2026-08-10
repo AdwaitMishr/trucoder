@@ -48,7 +48,7 @@
 .sidebar-item.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 
 /* wizard */
-.wizard { max-width: 660px; margin: 0 auto; }
+.wizard { max-width: 680px; margin: 0 auto; height: 100%; overflow-y: auto; padding: 6px 10px 24px; scroll-behavior: smooth; }
 .wizard-steps {
   display: flex;
   gap: 3px;
@@ -116,8 +116,8 @@
 .wizard .text-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
 .wizard textarea.text-input { resize: vertical; min-height: 84px; line-height: 1.5; }
 
-/* module tree — fixed height so expanding a course never shoves the UI below */
-.module-tree { display: flex; flex-direction: column; gap: 10px; height: 320px; overflow-y: auto; padding: 2px; }
+/* module tree — grows downward with the page; no cramped fixed box */
+.module-tree { display: flex; flex-direction: column; gap: 10px; padding: 2px; }
 .module-course { border: 1px solid var(--hairline); border-radius: 12px; background: color-mix(in srgb, var(--ink) 2%, transparent); overflow: hidden; transition: border-color 0.12s; }
 .module-course:hover { border-color: color-mix(in srgb, var(--hairline) 70%, transparent); }
 .module-course-head {
@@ -160,7 +160,7 @@
 .custom-check.partial { border-color: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--accent); }
 .module-course-head .custom-check { margin-left: 4px; }
 
-.module-lessons { display: flex; flex-direction: column; border-top: 1px solid var(--hairline); max-height: 240px; overflow-y: auto; }
+.module-lessons { display: flex; flex-direction: column; border-top: 1px solid var(--hairline); }
 .module-lesson {
   display: flex;
   align-items: center;
