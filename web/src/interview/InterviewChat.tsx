@@ -105,12 +105,12 @@ function AutosizeInput({
     const el = ref.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+    el.style.height = Math.min(el.scrollHeight, Math.round(window.innerHeight * 0.35)) + "px";
   }, [value]);
   return (
     <textarea
       ref={ref}
-      className="text-input chat-input"
+      className="chat-input"
       placeholder={placeholder}
       value={value}
       rows={1}
@@ -301,16 +301,16 @@ export default function InterviewChat() {
           </p>
         </div>
         <div className="interview-head-actions">
-          <button className="ghost" onClick={() => control("hint")} disabled={streaming}>
+          <button className="ctrl-btn" onClick={() => control("hint")} disabled={streaming}>
             hint
           </button>
-          <button className="ghost" onClick={() => control("go-deeper")} disabled={streaming}>
+          <button className="ctrl-btn" onClick={() => control("go-deeper")} disabled={streaming}>
             go deeper
           </button>
-          <button className="ghost" onClick={() => control("skip")} disabled={streaming}>
+          <button className="ctrl-btn" onClick={() => control("skip")} disabled={streaming}>
             skip topic
           </button>
-          <button className="btn submit" onClick={() => void endInterview()} disabled={streaming}>
+          <button className="ctrl-btn primary" onClick={() => void endInterview()} disabled={streaming}>
             end interview
           </button>
         </div>
@@ -347,7 +347,7 @@ export default function InterviewChat() {
 
       {error && <div className="form-error chat-error">{error}</div>}
 
-      <div className="chat-input-row">
+      <div className="composer">
         <AutosizeInput
           value={chat.input}
           onChange={(v) => chat.setInput(v)}
@@ -361,7 +361,7 @@ export default function InterviewChat() {
           placeholder="your answer… (or speak it with the mic)"
         />
         <button
-          className={`ghost mic-btn ${listening ? "on" : ""}`}
+          className={`icon-btn ${listening ? "on" : ""}`}
           onClick={toggleMic}
           title={listening ? "stop listening" : "speak your answer"}
         >
@@ -369,11 +369,11 @@ export default function InterviewChat() {
           {listening && <span className="mic-live">listening…</span>}
         </button>
         {streaming ? (
-          <button className="btn stop" onClick={() => chat.stop()} title="stop generating">
-            <PiStopCircle size={17} /> stop
+          <button className="stop-btn" onClick={() => chat.stop()} title="stop generating">
+            <PiStopCircle size={16} /> stop
           </button>
         ) : (
-          <button className="btn submit" onClick={send} disabled={!chat.input.trim()}>
+          <button className="send-btn" onClick={send} disabled={!chat.input.trim()}>
             send
           </button>
         )}
