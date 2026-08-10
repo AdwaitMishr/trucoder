@@ -32,6 +32,7 @@ export default function InterviewWizard() {
   const [keyState, setKeyState] = useState<"unknown" | "set" | "missing">("unknown");
   const [models, setModels] = useState<string[]>([]);
   const [model, setModel] = useState("deepseek-v4-flash");
+  const [modelOpen, setModelOpen] = useState(false);
 
   useEffect(() => {
     api.courses().then((r) => setCourses(r.courses)).catch(() => setCourses([]));
@@ -318,18 +319,49 @@ export default function InterviewWizard() {
               )}
               <div className="ai-model-row">
                 <span className="muted small">model</span>
-                <select
-                  className="text-input model-select"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                >
-                  {models.length === 0 && <option value="deepseek-v4-flash">deepseek-v4-flash (default)</option>}
-                  {models.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
+                <div className="model-picker">
+                  <button
+                    className="model-trigger"
+                    onClick={() => setModelOpen((v) => !v)}
+                    aria-expanded={modelOpen}
+                  >
+                    <span className="model-trigger-name">{model}</span>
+                    <PiCaretDown size={14} className={`chevron ${modelOpen ? "open" : ""}`} />
+                  </button>
+                  {modelOpen && (
+                    <>
+                      <div className="model-backdrop" onClick={() => setModelOpen(false)} />
+                      <div className="model-pop" role="listbox">
+                        {models.length === 0 && (
+                          <button
+                            className="model-opt"
+                            role="option"
+                            onClick={() => {
+                              setModel("deepseek-v4-flash");
+                              setModelOpen(false);
+                            }}
+                          >
+                            deepseek-v4-flash <span className="muted">(default)</span>
+                          </button>
+                        )}
+                        {models.map((m) => (
+                          <button
+                            key={m}
+                            className={`model-opt ${m === model ? "active" : ""}`}
+                            role="option"
+                            onClick={() => {
+                              setModel(m);
+                              setModelOpen(false);
+                            }}
+                          >
+                            {m}
+                            {m === model && <PiCheck size={14} />}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
             <div className="wizard-nav">
