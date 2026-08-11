@@ -6,7 +6,7 @@ export const config = {
   cookieName: "trucoder_session",
   dataDir: process.env.DATA_DIR || path.join(__dirname, "..", "data"),
   // Owner account seeded on first boot from env.
-  ownerUsername: process.env.OWNER_USERNAME || "adith",
+  ownerUsername: process.env.OWNER_USERNAME || "admin",
   ownerPassword: process.env.OWNER_PASSWORD || "changeme",
   // Agent-authored course content lives in <repo>/courses by default.
   coursesDir:

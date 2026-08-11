@@ -2,8 +2,11 @@
 Description=TruCoder webhook deploy (runs deploy.sh on the host)
 After=docker.service
 
+# Edit User/Group (must be in the docker group) and the paths to match your
+# checkout. DEPLOY_DIR must equal the checkout directory.
 [Service]
 Type=oneshot
-User=adith
-Group=adith
-ExecStart=/home/adith/trucoder/server/scripts/deploy.sh
+User=your-user
+Group=your-user
+Environment=DEPLOY_DIR=/opt/trucoder
+ExecStart=/opt/trucoder/server/scripts/deploy.sh

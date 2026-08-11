@@ -5,6 +5,32 @@ A self-hosted, interactive learning platform. Courses are **fully data-driven**
 course with zero code changes. TruCoder loads, renders, and grades it at
 runtime.
 
+Self-host it with Docker in under five minutes — see
+[Quick start](#quick-start-docker).
+
+## Quick start (Docker)
+
+```bash
+git clone <your-fork-or-this-repo> trucoder && cd trucoder
+cp .env.example .env            # set SESSION_SECRET, OWNER_USERNAME, OWNER_PASSWORD
+docker compose build            # builds app + sandbox + sandbox-node images
+docker compose up -d            # serves on :3001
+```
+
+First boot seeds the owner account from `.env`. Open `http://localhost:3001`,
+and verify the shipped course against the real grading path:
+
+```bash
+docker compose run --rm app node server/scripts/verify.js   # expect 0 failed
+```
+
+Requirements: **Docker + Docker Compose** (that's it — no Node needed for a
+production run; the images build on arm64 and x86_64 alike).
+
+> If your host's docker group gid is not `116`, add it to `.env`
+> (`DOCKER_GID=<gid>` — find it with `getent group docker | cut -d: -f3`).
+> The sandbox daemons use it to access the docker socket.
+
 ## What a lesson can be
 
 Every lesson is an **ordered list of typed blocks** — mix and match:
@@ -41,14 +67,14 @@ courses/                     Course content (.mdx) + authoring contract
   AGENTS.md                  THE contract — read before authoring anything
   kubernetes-fundamentals/   the sample course (tracked in git)
   <your-course>/             local-only by default (see below)
-server/                      Express API, course loader, grading, sandbox
+server/                      Express API, course loader, grading
   src/courses/               loader + types (reads courses/)
-  src/sandbox.ts             runs submissions in an isolated Docker container
+  src/sandbox.ts             grading transport — talks to the sandbox daemons
   scripts/verify.js          runs every lesson's reference solution vs its tests
 web/                         React frontend (builds to web/dist)
 data/                        SQLite DB (users, sessions, progress) — gitignored
-deploy/                      systemd unit example
-.env                         SESSION_SECRET, OWNER_USERNAME, OWNER_PASSWORD
+deploy/                      compose test override + systemd units (webhook trigger)
+.env                         SESSION_SECRET, OWNER_USERNAME, OWNER_PASSWORD, ...
 ```
 
 ### Course content and git
@@ -77,10 +103,12 @@ cd server && npm run build && node scripts/verify.js
 It runs every lesson's reference solution against every test and must report
 `0 failed`. This gate runs in CI on every push and PR.
 
-## Install from a fresh clone
+## Development setup
+
+For working on the platform itself (server/web code), a bare Node setup is
+fine:
 
 ```bash
-git clone <your-repo> trucoder && cd trucoder
 ./setup.sh
 ```
 
@@ -92,35 +120,23 @@ git clone <your-repo> trucoder && cd trucoder
 4. **`.env`** — created from `.env.example` if missing. **Edit it** and set
    `OWNER_PASSWORD` and `SESSION_SECRET`.
 
-Then start the server, and verify the shipped course:
+Then start the server and verify the shipped course:
 
 ```bash
 node server/dist/index.js                 # serves on :3001
 cd server && npm run verify               # every lesson's solution vs its tests
 ```
 
-Requirements: **Node.js v18+**, **npm**, **Docker** (for grading). The sandbox
-base image is `debian:bookworm-slim`, so it builds on arm64 and x86_64 alike.
-The bare-metal flow above is the DEV path. For a production run, skip it and
-use the Docker stack below.
+Requirements: **Node.js 20+**, **npm**, **Docker** (for grading).
 
 > First boot seeds the owner account from `OWNER_USERNAME` / `OWNER_PASSWORD`.
 > Progress and user hashes live in `data/` (gitignored).
 
-## Deploy it yourself (Docker, recommended)
+## Deploy it yourself (Docker)
 
-Production is a compose stack with three services. You need only **Docker +
-Docker Compose** on the host — no Node, no systemd unit for the app.
-
-```bash
-cp .env.example .env          # then edit: SESSION_SECRET, OWNER_USERNAME,
-                              # OWNER_PASSWORD (DEPLOY_SECRET only for the webhook)
-docker compose build          # builds app + sandbox + sandbox-node images
-docker compose up -d          # serves on :3001
-```
-
-First boot seeds the owner account from `.env`. The app binds `3001` — put a
-reverse proxy or Cloudflare tunnel in front of it.
+Production is a compose stack with three services (see the Quick start for the
+three commands). The app binds `:3001` — put a reverse proxy or Cloudflare
+tunnel in front of it for public access.
 
 ### How the pieces talk (grading)
 
@@ -135,59 +151,17 @@ reverse proxy or Cloudflare tunnel in front of it.
   `no-new-privileges`, memory/CPU/pids caps, non-root user, exec tmpfs.
 
 The app calls `http://sandbox:9000` / `http://sandbox-node:9001` over the
-compose network (set `SANDBOX_URL` / `SANDBOX_NODE_URL` to override). The
-daemons mount `/var/run/docker.sock`; if your host's docker group gid is not
-`116`, export `DOCKER_GID=$(getent group docker | cut -d: -f3)` before any
-`docker compose` command. Sandbox ports publish to loopback only, for host
-health checks.
+compose network (override with `SANDBOX_URL` / `SANDBOX_NODE_URL`). The daemons
+mount `/var/run/docker.sock` and publish their ports to loopback only, for
+host health checks.
 
 Volumes: `courses/` (hot-reloaded by the loader), `data/` (SQLite — the DB
 file stays on the host), `.deploy-trigger` + `deploy.log` (webhook plumbing).
 
-Verify the whole stack against the shipped course:
-
-```bash
-docker compose run --rm app node server/scripts/verify.js   # expect 0 failed
-```
-
-### Auto-deploy from your own GitHub repo
-
-1. Install the host-side trigger (a systemd path unit — no sudo inside the
-   app is involved):
-
-   ```bash
-   sudo cp deploy/trucoder-deploy.path deploy/trucoder-deploy.service /etc/systemd/system/
-   sudo systemctl daemon-reload && sudo systemctl enable --now trucoder-deploy.path
-   ```
-
-2. Point GitHub at your instance (the URL must be reachable from GitHub):
-
-   ```bash
-   gh api repos/<owner>/<repo>/hooks -f name=web -F active=true \
-     -f events[]=push \
-     -f config[url]=https://<your-host>/_deploy \
-     -f config[content_type]=json \
-     -f "config[secret]=<your DEPLOY_SECRET>"
-   ```
-
-3. Push to `main`. The flow: GitHub → `/_deploy` (HMAC-verified, main-ref
-   only) → writes `.deploy-trigger` → the path unit runs `deploy.sh` **on the
-   host** → `git pull --ff-only` → `docker compose build` only the changed
-   services → `docker compose up -d` → verify → pings Hark if configured.
-
-`deploy.sh` never runs inside the container being replaced, so a swap cannot
-kill a deploy mid-run. Deploys are serialized with `flock`; the last
-fully-verified SHA lives in `.deployed-sha` and progress in `deploy.log`.
-
-## Internet access
-
-The app listens on `localhost:3001` by default. Expose it with a Cloudflare
-tunnel (or any reverse proxy) → HTTP → `localhost:3001`.
-
 ## Auto-deploy (webhook)
 
-Merges to `main` deploy themselves: GitHub sends a `push` webhook to
-`POST /_deploy` (HMAC-gated by `DEPLOY_SECRET`, verified against the raw
+Optional. Pushes to `main` can deploy themselves: GitHub sends a `push` webhook
+to `POST /_deploy` (HMAC-gated by `DEPLOY_SECRET`, verified against the raw
 payload bytes, main-ref only). The endpoint runs inside the app container, so
 it cannot run host-side deploys — it writes `.deploy-trigger` (bind-mounted
 into the repo), and a host systemd path unit (`deploy/trucoder-deploy.path`)
@@ -200,41 +174,35 @@ ON THE HOST:
    `sandbox-image/` → the sandbox image, `sandbox-image-node/` → the node image,
 3. `docker compose up -d` (swaps only the changed containers),
 4. waits for the sandbox daemons' `/health`,
-5. runs `verify.js` in a throwaway app container and pings the operator
-   (Hark) with the result.
+5. runs `verify.js` in a throwaway app container, then optionally runs a
+   post-deploy notification hook (`~/.hermes/scripts/hark-notify.sh`, if
+   present — replace with your own or drop a script there).
 
 The deploy process lives OUTSIDE the container being replaced, so a swap can
 never kill the deploy mid-run. Deploys are serialized with `flock`
 (`.deploy.lock`); a busy skip is fine because the next push re-triggers.
 Progress lives in `deploy.log` and the last deployed SHA in `.deployed-sha`.
 
-**Pushing from this box**: this box is both the deploy target and the image
-build source, so a same-box push is a deploy no-op (`LOCAL == REMOTE` at
-webhook time) — the code is live as soon as you built the image locally.
-The webhook's real job is GitHub-side changes (PR merges, other
-contributors). To keep `.deployed-sha` truthful after a local push:
+To install the trigger on the deploy host:
 
 ```bash
-docker compose run --rm app node server/scripts/verify.js
-git rev-parse HEAD > .deployed-sha
+# edit the paths + User= in the two units to match your checkout, then:
+sudo cp deploy/trucoder-deploy.path deploy/trucoder-deploy.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now trucoder-deploy.path
 ```
 
-To TEST the webhook pipeline end to end: commit in the dev folder, push
-from a worktree, reset the dev folder back one commit, then
-`echo <sha> > .deploy-trigger` — the path unit runs the full
-pull → verify → marker → hark cycle.
-
-To register the webhook:
+To register the webhook (the URL must be reachable from GitHub):
 
 ```bash
-gh api repos/<owner>/trucoder/hooks -f name=web -F active=true \
+gh api repos/<owner>/<repo>/hooks -f name=web -F active=true \
   -f events[]=push -f config[url]=https://<host>/_deploy \
   -f config[content_type]=json -f "config[secret]=<DEPLOY_SECRET>"
 ```
 
-Note: pushes made FROM the deploy box are a no-op by design (the code is
-already there); the webhook earns its keep for GitHub-side merges (PRs,
-UI edits).
+Note: if you develop on the same host that runs the deployment, a same-host
+push is a deploy no-op (`LOCAL == REMOTE` at webhook time) — the image is
+built from your local checkout, so the code is already live. The webhook earns
+its keep for GitHub-side changes: PR merges, web edits, other contributors.
 
 ## Contributing
 
@@ -260,12 +228,11 @@ block type, propose it there first.
 
 ## Stack
 
-- Backend: Node 20 + Express + TypeScript + SQLite (better-sqlite3).
+- Backend: Node 24 + Express + TypeScript + SQLite (better-sqlite3).
 - Frontend: Vite + React + TypeScript, `@monaco-editor/react`, `react-markdown`
   (+ remark-gfm, remark-directive for callouts), react-router.
 - Sandbox: Docker image `trucoder-sandbox` (JDK 17 + g++/C++17 + Node + Python +
   Gson + nlohmann/json) run with `--network none`, read-only rootfs, mem/CPU/pids
-  caps, `--cap-drop ALL`. (Piston/Judge0 are amd64-only, so they don't run on
-  arm64 — see the `arm64-code-sandbox` skill.)
+  caps, `--cap-drop ALL`.
 
 [Conventional Commits]: https://www.conventionalcommits.org/

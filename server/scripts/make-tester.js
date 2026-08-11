@@ -1,6 +1,5 @@
-// One-off: create the shared test user + wipe adith's progress.
-// NOTE: the live server runs with DATA_DIR=/home/adith/trucoder/data
-// (systemd override) — run with DATA_DIR=<that path> to hit the real db.
+// One-off: create the shared test user + wipe the owner's progress.
+// NOTE: run with DATA_DIR=<live data dir> to hit the real db.
 // better-sqlite3 may abort at process exit; writes are synchronous and
 // committed before the abort, so check output/state with the sqlite3 CLI.
 const crypto = require("crypto");
@@ -18,13 +17,14 @@ try {
 }
 console.log("TESTER_PASSWORD=" + pass);
 
-const adith = db.prepare("SELECT id FROM users WHERE username = ?").get("adith");
-if (adith) {
-  const p = db.prepare("DELETE FROM progress WHERE user_id = ?").run(adith.id);
-  const s = db.prepare("DELETE FROM submissions WHERE user_id = ?").run(adith.id);
-  console.log(`adith progress: ${p.changes} rows, submissions: ${s.changes} rows deleted`);
+const owner = process.env.OWNER_USERNAME || "admin";
+const ownerRow = db.prepare("SELECT id FROM users WHERE username = ?").get(owner);
+if (ownerRow) {
+  const p = db.prepare("DELETE FROM progress WHERE user_id = ?").run(ownerRow.id);
+  const s = db.prepare("DELETE FROM submissions WHERE user_id = ?").run(ownerRow.id);
+  console.log(`owner '${owner}' progress: ${p.changes} rows, submissions: ${s.changes} rows deleted`);
 } else {
-  console.log("adith not found");
+  console.log(`owner '${owner}' not found`);
 }
 
 console.log("users:", db.prepare("SELECT username FROM users ORDER BY id").all().map((u) => u.username).join(", "));

@@ -1,8 +1,9 @@
 [Unit]
 Description=Trigger TruCoder deploy when the webhook trigger file changes
 
+# Edit the path to match your checkout (the file is created on first boot).
 [Path]
-PathChanged=/home/adith/trucoder/.deploy-trigger
+PathChanged=/opt/trucoder/.deploy-trigger
 
 [Install]
 WantedBy=multi-user.target

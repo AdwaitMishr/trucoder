@@ -7,9 +7,9 @@
 #
 # The deploy process lives outside the container being replaced, so the old
 # "deploy killed by its own restart" cgroup saga is gone. No sudo needed:
-# adith is in the docker group.
+# the deploy user must be in the docker group.
 set -u
-REPO_DIR="${DEPLOY_DIR:-/home/adith/trucoder}"
+REPO_DIR="${DEPLOY_DIR:-/opt/trucoder}"
 LOG="$REPO_DIR/deploy.log"
 SHA_FILE="$REPO_DIR/.deployed-sha"
 cd "$REPO_DIR" || exit 1
@@ -76,9 +76,11 @@ echo "$NEW" > "$SHA_FILE"
 
 if [ "$VR" = 0 ]; then
   log "deploy OK ${NEW:0:7} (server=$SERVER web=$WEB sandbox=$SANDBOX sandbox-node=$SANDBOX_NODE) verify=pass"
-  "$HOME/.hermes/scripts/hark-notify.sh" -t "trucoder" "deployed ${NEW:0:7} — verify pass" >/dev/null 2>&1 || true
+  [ -x "$HOME/.hermes/scripts/hark-notify.sh" ] \
+    && "$HOME/.hermes/scripts/hark-notify.sh" -t "trucoder" "deployed ${NEW:0:7} — verify pass" >/dev/null 2>&1 || true
 else
   log "deploy DONE ${NEW:0:7} BUT verify FAILED — inspect immediately"
-  "$HOME/.hermes/scripts/hark-notify.sh" -t "trucoder" "deploy VERIFY FAILED at ${NEW:0:7}" >/dev/null 2>&1 || true
+  [ -x "$HOME/.hermes/scripts/hark-notify.sh" ] \
+    && "$HOME/.hermes/scripts/hark-notify.sh" -t "trucoder" "deploy VERIFY FAILED at ${NEW:0:7}" >/dev/null 2>&1 || true
 fi
 exit 0
