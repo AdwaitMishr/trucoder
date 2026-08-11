@@ -101,27 +101,83 @@ cd server && npm run verify               # every lesson's solution vs its tests
 
 Requirements: **Node.js v18+**, **npm**, **Docker** (for grading). The sandbox
 base image is `debian:bookworm-slim`, so it builds on arm64 and x86_64 alike.
+The bare-metal flow above is the DEV path. For a production run, skip it and
+use the Docker stack below.
 
 > First boot seeds the owner account from `OWNER_USERNAME` / `OWNER_PASSWORD`.
 > Progress and user hashes live in `data/` (gitignored).
 
-## Running as a service (Docker)
+## Deploy it yourself (Docker, recommended)
 
-Production runs as a compose stack — `app` (Express + built React bundle),
-`sandbox` and `sandbox-node` (long-lived daemons that spawn the hardened
-per-run grading containers). The app container has NO docker socket; grading
-goes over the compose network to the daemons.
+Production is a compose stack with three services. You need only **Docker +
+Docker Compose** on the host — no Node, no systemd unit for the app.
 
 ```bash
-docker compose build --build-arg BUILD_COMMIT=$(git rev-parse --short HEAD) app
-docker compose up -d
+cp .env.example .env          # then edit: SESSION_SECRET, OWNER_USERNAME,
+                              # OWNER_PASSWORD (DEPLOY_SECRET only for the webhook)
+docker compose build          # builds app + sandbox + sandbox-node images
+docker compose up -d          # serves on :3001
 ```
 
-Volumes: `courses/` (hot-reloaded by the loader), `data/` (the SQLite DB),
-`.deploy-trigger` + `deploy.log` (webhook plumbing). Env comes from `.env`
-(`env_file`). The old bare-metal unit is preserved as `deploy/trucoder.service`
-for reference; the current production flow needs no systemd service for the
-app itself (`restart: unless-stopped`).
+First boot seeds the owner account from `.env`. The app binds `3001` — put a
+reverse proxy or Cloudflare tunnel in front of it.
+
+### How the pieces talk (grading)
+
+- `app` — the Express server + built React bundle. It has **no docker socket**
+  and never runs learner code itself.
+- `sandbox` / `sandbox-node` — long-lived daemons built from
+  `sandbox-image/` / `sandbox-image-node/`. Each exposes `POST /run` and
+  `GET /health` and spawns the **per-run grading containers** via the host
+  docker socket.
+- One grading run = one throwaway container with the same hardening as
+  before: `--network none`, read-only rootfs, `--cap-drop ALL`,
+  `no-new-privileges`, memory/CPU/pids caps, non-root user, exec tmpfs.
+
+The app calls `http://sandbox:9000` / `http://sandbox-node:9001` over the
+compose network (set `SANDBOX_URL` / `SANDBOX_NODE_URL` to override). The
+daemons mount `/var/run/docker.sock`; if your host's docker group gid is not
+`116`, export `DOCKER_GID=$(getent group docker | cut -d: -f3)` before any
+`docker compose` command. Sandbox ports publish to loopback only, for host
+health checks.
+
+Volumes: `courses/` (hot-reloaded by the loader), `data/` (SQLite — the DB
+file stays on the host), `.deploy-trigger` + `deploy.log` (webhook plumbing).
+
+Verify the whole stack against the shipped course:
+
+```bash
+docker compose run --rm app node server/scripts/verify.js   # expect 0 failed
+```
+
+### Auto-deploy from your own GitHub repo
+
+1. Install the host-side trigger (a systemd path unit — no sudo inside the
+   app is involved):
+
+   ```bash
+   sudo cp deploy/trucoder-deploy.path deploy/trucoder-deploy.service /etc/systemd/system/
+   sudo systemctl daemon-reload && sudo systemctl enable --now trucoder-deploy.path
+   ```
+
+2. Point GitHub at your instance (the URL must be reachable from GitHub):
+
+   ```bash
+   gh api repos/<owner>/<repo>/hooks -f name=web -F active=true \
+     -f events[]=push \
+     -f config[url]=https://<your-host>/_deploy \
+     -f config[content_type]=json \
+     -f "config[secret]=<your DEPLOY_SECRET>"
+   ```
+
+3. Push to `main`. The flow: GitHub → `/_deploy` (HMAC-verified, main-ref
+   only) → writes `.deploy-trigger` → the path unit runs `deploy.sh` **on the
+   host** → `git pull --ff-only` → `docker compose build` only the changed
+   services → `docker compose up -d` → verify → pings Hark if configured.
+
+`deploy.sh` never runs inside the container being replaced, so a swap cannot
+kill a deploy mid-run. Deploys are serialized with `flock`; the last
+fully-verified SHA lives in `.deployed-sha` and progress in `deploy.log`.
 
 ## Internet access
 
