@@ -58,6 +58,103 @@
   src: url("/fonts/space-mono-700.woff2") format("woff2");
 }
 
+/* Editor mono fonts (self-hosted, fontsource latin subsets) — the settings
+   font selector picks among these. Each file is a static instance aliased to
+   its family name + weight, so CSS font matching resolves the right face.
+   Without these @font-face rules the browser falls back to Consolas/
+   monospace and font changes in the editor never take effect. */
+@font-face {
+  font-family: "Fira Code";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/fira-code-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fira Code";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/fira-code-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fira Code";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/fira-code-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Cascadia Code";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/cascadia-code-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Cascadia Code";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/cascadia-code-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Cascadia Code";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/cascadia-code-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/geist-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/geist-mono-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/geist-mono-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/geist-mono-700.woff2") format("woff2");
+}
+
 [data-theme="dark"] {
   --bg: #17181a; --ink: #d7d6d0; --muted: #6f7073;
   --surface: #1e1f21; --surface2: #252628; --hairline: #2e3034;
