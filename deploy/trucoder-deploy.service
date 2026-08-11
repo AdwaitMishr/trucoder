@@ -1,0 +1,9 @@
+[Unit]
+Description=TruCoder webhook deploy (runs deploy.sh on the host)
+After=docker.service
+
+[Service]
+Type=oneshot
+User=adith
+Group=adith
+ExecStart=/home/adith/trucoder/server/scripts/deploy.sh

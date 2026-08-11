@@ -19,6 +19,28 @@ COPY run.sh /usr/local/bin/tru-run
 COPY tru-reporter.js /opt/tru-reporter.js
 RUN chmod +x /usr/local/bin/tru-run
 
+# Static docker CLI for the sandbox daemon (musl-static — the host's glibc
+# docker binary cannot run on alpine). Compose overrides the entrypoint to
+# run sandboxd.js; per-run spawns keep the default tru-run entrypoint.
+# TARGETARCH-aware: arm64 (Pi) vs amd64 (CI) — docker's static dirs are
+# aarch64/ and x86_64/.
+ARG TARGETARCH
+RUN case "$TARGETARCH" in \
+      arm64) DOCKER_ARCH=aarch64 ;; \
+      amd64) DOCKER_ARCH=x86_64 ;; \
+      *) echo "unsupported TARGETARCH=$TARGETARCH"; exit 1 ;; \
+    esac \
+    && wget -qO /tmp/docker.tgz \
+        https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-26.1.4.tgz \
+    && tar -xzf /tmp/docker.tgz -C /tmp docker/docker \
+    && mv /tmp/docker/docker /usr/local/bin/docker \
+    && chmod 755 /usr/local/bin/docker \
+    && rm -rf /tmp/docker /tmp/docker.tgz
+
+COPY sandboxd.js /opt/sandboxd.js
+# copies arrive 600 root-owned — the non-root daemon user must read it
+RUN chmod 644 /opt/sandboxd.js
+
 USER app
 WORKDIR /tmp
 

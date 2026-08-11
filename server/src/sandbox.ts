@@ -1,13 +1,13 @@
-import { execFile } from "child_process";
 import { buildHarness } from "./util/harness";
 import type { Lang } from "./courses/types";
 /**
- * Code sandbox backed by an isolated container.
+ * Code sandbox — now a network service.
  *
- * Piston/Judge0 publish amd64 images only, so they cannot run on this arm64
- * Pi. Instead we run a small arm64 image (trucoder-sandbox) that carries the
- * JDK + Node + Python and Gson. Each submission runs as a fresh container with
- * Docker-level isolation:
+ * The app container has NO docker socket. Grading goes over the internal
+ * compose network to a long-lived sandbox daemon (sandbox:9000 /
+ * sandbox-node:9001, see sandboxd.js in the sandbox image dirs). The daemon
+ * spawns the actual per-run container with the same Docker-level isolation
+ * as before:
  *
  *   - --network none            (no external connectivity)
  *   - --read-only rootfs        (nothing writable except a tmpfs)
@@ -17,22 +17,18 @@ import type { Lang } from "./courses/types";
  *   - non-root user (uid 1000)  (no privilege inside the container either)
  *   - throwaway tmpfs workdir   (no host mounts, no cleanup on the host)
  *
- * The source arrives base64 via env; the args arrive as JSON on stdin. The app
- * talks to the Docker daemon via the docker CLI over the local socket (the app
- * user is in the docker group — no sudo needed).
+ * The source arrives base64 via env; the args arrive as JSON on stdin. The
+ * daemon classifies infra failures (docker missing, daemon down, image
+ * missing, output overflow) and returns the same SandboxResult shape the
+ * old direct-docker code produced — judge.ts is untouched.
  */
 
-const SANDBOX_IMAGE = process.env.SANDBOX_IMAGE || "trucoder-sandbox:latest";
-/** Node module-runner image (JS + TS via Node 24 type stripping). */
-const SANDBOX_NODE_IMAGE =
-  process.env.SANDBOX_NODE_IMAGE || "trucoder-sandbox-node:latest";
-const HEAP_MB = 512;
-const MEMORY_MB = 768;
+const SANDBOX_URL = process.env.SANDBOX_URL || "http://sandbox:9000";
+const SANDBOX_NODE_URL = process.env.SANDBOX_NODE_URL || "http://sandbox-node:9001";
 // Startup overhead (JVM/node/python cold start + container creation) is not
 // part of the algorithm's time budget. Add slack so a correct solution isn't
 // killed just for starting up on the Pi.
 const STARTUP_BUFFER_MS = 5000;
-const COMPILE_SECS = 20;
 
 export interface SandboxRunOptions {
   language: Lang;
@@ -65,156 +61,97 @@ export interface SandboxResult {
   /** Set when compilation failed (Java). Entrypoint exits 2 on compile fail. */
   compileError?: string;
   /**
-   * Infrastructure failure — NOT the learner's fault (docker missing, daemon
-   * down, image missing, output overflow). When set, the run never reached
-   * the learner's code, so the result carries no per-test verdicts.
+   * Infrastructure failure — NOT the learner's fault (daemon down, image
+   * missing, output overflow). When set, the run never reached the learner's
+   * code, so the result carries no per-test verdicts.
    */
   sandboxError?: string;
 }
 
+/** POST a run to a sandbox daemon and translate transport failures into a
+ *  SandboxResult with sandboxError set (never throws). */
+async function postRun(
+  url: string,
+  payload: Record<string, unknown>,
+  effectiveMs: number
+): Promise<SandboxResult> {
+  try {
+    const res = await fetch(`${url}/run`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+      // The daemon's own docker timeout is effectiveMs + 30s; give the HTTP
+      // call a wider window so the daemon's verdict wins, not the abort.
+      signal: AbortSignal.timeout(effectiveMs + 40_000),
+    });
+    if (!res.ok) {
+      const txt = (await res.text()).slice(0, 300);
+      return {
+        stdout: "",
+        stderr: txt,
+        code: 1,
+        timedOut: false,
+        sandboxError: `sandbox service error (HTTP ${res.status}): ${txt.slice(0, 200)}`,
+      };
+    }
+    return (await res.json()) as SandboxResult;
+  } catch (err) {
+    return {
+      stdout: "",
+      stderr: "",
+      code: 1,
+      timedOut: false,
+      sandboxError: `sandbox service unreachable (${url}): ${(err as Error).message}`,
+    };
+  }
+}
+
 /**
- * Verify at boot that the sandbox image exists, so a missing image surfaces
- * in the logs instead of as a confusing runtime error on the first run.
+ * Verify at boot that both sandbox daemons are up and their images exist.
  * Non-fatal: the server still boots (grading just fails with a clear error).
  */
 export function preflightSandbox(): void {
-  execFile("docker", ["image", "inspect", SANDBOX_IMAGE], (err) => {
-    if (err) {
-      console.warn(
-        `[trucoder] WARNING: sandbox image '${SANDBOX_IMAGE}' not found — ` +
-          `grading will fail until it is built. Run: ` +
-          `docker build -t ${SANDBOX_IMAGE} sandbox-image/`
-      );
-    } else {
-      console.log(`[trucoder] sandbox image '${SANDBOX_IMAGE}' present`);
-    }
-  });
-}
-
-const DOCKER_STDERR_PATTERNS: { re: RegExp; message: string }[] = [
-  {
-    re: /Cannot connect to the Docker daemon/i,
-    message:
-      "sandbox unavailable — the Docker daemon is not running. Start it and try again.",
-  },
-  {
-    re: /No such image|pull access denied|repository does not exist/i,
-    message:
-      `sandbox image missing (${SANDBOX_IMAGE}) — build it with: ` +
-      `docker build -t ${SANDBOX_IMAGE} sandbox-image/`,
-  },
-  {
-    re: /permission denied|Is your user in the "docker" group/i,
-    message:
-      "sandbox unavailable — docker permission denied. The app user must be in the docker group.",
-  },
-];
-
-/** Classify a failed docker invocation into a human-readable sandbox error. */
-function classifySandboxError(e: {
-  code?: string | number;
-  killed?: boolean;
-  signal?: string;
-} | null, stderr: string): string | undefined {
-  // The docker binary itself is missing.
-  if (e && e.code === "ENOENT") {
-    return "sandbox unavailable — the docker binary was not found. Is Docker installed and in PATH?";
+  for (const url of [SANDBOX_URL, SANDBOX_NODE_URL]) {
+    void (async () => {
+      try {
+        const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(5000) });
+        const body = (await res.json().catch(() => null)) as
+          | { ok?: boolean; image?: string; error?: string }
+          | null;
+        if (res.ok && body?.ok) {
+          console.log(`[trucoder] sandbox daemon healthy (${url} -> ${body.image})`);
+        } else {
+          console.warn(
+            `[trucoder] WARNING: sandbox daemon unhealthy (${url}): ` +
+              `HTTP ${res.status} ${body?.error ?? "no detail"}`
+          );
+        }
+      } catch (err) {
+        console.warn(
+          `[trucoder] WARNING: sandbox daemon unreachable (${url}) — ` +
+            `grading will fail: ${(err as Error).message}`
+        );
+      }
+    })();
   }
-  // execFile kills the child on stdout overflow — that is NOT a timeout and
-  // NOT the learner's fault; 8MB of captured output is a harness limit.
-  if (e && e.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
-    return "program output exceeded the 8 MB capture limit — the harness cannot receive it.";
-  }
-  const stderrText = stderr || "";
-  for (const p of DOCKER_STDERR_PATTERNS) {
-    if (p.re.test(stderrText)) return p.message;
-  }
-  // exit 125 is docker's "container failed to start" bucket (daemon-side).
-  if (typeof e?.code === "number" && e.code === 125) {
-    return `sandbox container failed to start (exit 125): ${stderrText.slice(0, 300) || "no detail from docker"}`;
-  }
-  return undefined;
 }
 
 export function runInSandbox(options: SandboxRunOptions): Promise<SandboxResult> {
   const source = buildHarness(options.language, options.code);
   const effectiveMs = options.timeLimitMs + STARTUP_BUFFER_MS;
   const timeoutSecs = Math.max(2, Math.ceil(effectiveMs / 1000));
-
-  const args = [
-    "run",
-    "--rm",
-    "-i",
-    "--network",
-    "none",
-    "--read-only",
-    "--memory",
-    `${MEMORY_MB}m`,
-    "--cpus",
-    "1",
-    "--pids-limit",
-    "128",
-    "--cap-drop",
-    "ALL",
-    "--security-opt",
-    "no-new-privileges",
-    "--tmpfs",
-    "/tmp:rw,size=128m,mode=1777,exec",
-    "-e",
-    `SOURCE_B64=${Buffer.from(source, "utf8").toString("base64")}`,
-    "-e",
-    `LANG=${options.language}`,
-    "-e",
-    `TIMEOUT_SECS=${timeoutSecs}`,
-    "-e",
-    `HEAP_MB=${HEAP_MB}`,
-    "-e",
-    `COMPILE_SECS=${COMPILE_SECS}`,
-    SANDBOX_IMAGE,
-  ];
-
-  return new Promise((resolve) => {
-    const child = execFile(
-      "docker",
-      args,
-      {
-        timeout: effectiveMs + 30_000,
-        maxBuffer: 8 * 1024 * 1024,
-      },
-      (err, stdout, stderr) => {
-        const e = err as {
-          code?: string | number;
-          killed?: boolean;
-          signal?: string;
-        } | null;
-        const sandboxError = classifySandboxError(e, stderr || "");
-        if (sandboxError) {
-          resolve({
-            stdout: stdout || "",
-            stderr: stderr || "",
-            code: typeof e?.code === "number" ? e.code : 1,
-            timedOut: false,
-            sandboxError,
-          });
-          return;
-        }
-        const code =
-          e && typeof e.code === "number" ? e.code : e ? (e.killed ? 137 : 1) : 0;
-        const timedOut = code === 124 || code === 137;
-        resolve({
-          stdout: stdout || "",
-          stderr: stderr || "",
-          code,
-          timedOut,
-          compileError:
-            (options.language === "java" || options.language === "cpp") && code === 2
-              ? stderr || undefined
-              : undefined,
-        });
-      }
-    );
-    child.stdin?.end(JSON.stringify({ tests: options.tests }));
-  });
+  return postRun(
+    SANDBOX_URL,
+    {
+      kind: "code",
+      sourceB64: Buffer.from(source, "utf8").toString("base64"),
+      lang: options.language,
+      tests: options.tests,
+      timeoutSecs,
+      maxOutputBytes: 8 * 1024 * 1024,
+    },
+    effectiveMs
+  );
 }
 
 /** Run a module exercise: real files (learner entry + extras + test file)
@@ -225,73 +162,16 @@ export function runModuleInSandbox(
 ): Promise<SandboxResult> {
   const effectiveMs = options.timeLimitMs + STARTUP_BUFFER_MS;
   const timeoutSecs = Math.max(5, Math.ceil(effectiveMs / 1000));
-
-  const args = [
-    "run",
-    "--rm",
-    "-i",
-    "--network",
-    "none",
-    "--read-only",
-    "--memory",
-    `${MEMORY_MB}m`,
-    "--cpus",
-    "1",
-    "--pids-limit",
-    "128",
-    "--cap-drop",
-    "ALL",
-    "--security-opt",
-    "no-new-privileges",
-    "--tmpfs",
-    "/tmp:rw,size=256m,mode=1777,exec",
-    "-e",
-    `FILES_B64=${Buffer.from(JSON.stringify(options.files), "utf8").toString("base64")}`,
-    "-e",
-    `MODULE_ENTRY=${options.entry}`,
-    "-e",
-    `MODULE_TESTFILE=${options.testsFile}`,
-    "-e",
-    `TIMEOUT_SECS=${timeoutSecs}`,
-    SANDBOX_NODE_IMAGE,
-  ];
-
-  return new Promise((resolve) => {
-    const child = execFile(
-      "docker",
-      args,
-      {
-        timeout: effectiveMs + 30_000,
-        maxBuffer: 16 * 1024 * 1024,
-      },
-      (err, stdout, stderr) => {
-        const e = err as {
-          code?: string | number;
-          killed?: boolean;
-          signal?: string;
-        } | null;
-        const sandboxError = classifySandboxError(e, stderr || "");
-        if (sandboxError) {
-          resolve({
-            stdout: stdout || "",
-            stderr: stderr || "",
-            code: typeof e?.code === "number" ? e.code : 1,
-            timedOut: false,
-            sandboxError,
-          });
-          return;
-        }
-        const code =
-          e && typeof e.code === "number" ? e.code : e ? (e.killed ? 137 : 1) : 0;
-        const timedOut = code === 124 || code === 137;
-        resolve({
-          stdout: stdout || "",
-          stderr: stderr || "",
-          code,
-          timedOut,
-        });
-      }
-    );
-    child.stdin?.end();
-  });
+  return postRun(
+    SANDBOX_NODE_URL,
+    {
+      kind: "module",
+      filesB64: Buffer.from(JSON.stringify(options.files), "utf8").toString("base64"),
+      entry: options.entry,
+      testsFile: options.testsFile,
+      timeoutSecs,
+      maxOutputBytes: 16 * 1024 * 1024,
+    },
+    effectiveMs
+  );
 }

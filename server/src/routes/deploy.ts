@@ -2,15 +2,18 @@ import crypto from "crypto";
 import express from "express";
 import fs from "fs";
 import path from "path";
-import { spawn } from "child_process";
 
 // GitHub push webhook → auto-deploy. The endpoint is public but HMAC-gated:
 // only GitHub (holding DEPLOY_SECRET) can trigger a deploy, and only pushes
-// to main are accepted. The actual work runs detached so it survives the
-// express restart the deploy itself performs.
+// to main are accepted. The app container cannot run host-side deploys (no
+// sudo, no systemd), so it writes a trigger file that is bind-mounted into
+// the repo (.deploy-trigger). A systemd path unit on the host
+// (trucoder-deploy.path) notices the change and runs deploy.sh THERE —
+// outside the container, so the container swap can never kill the deploy.
 const DEPLOY_SECRET = process.env.DEPLOY_SECRET ?? "";
-const REPO_DIR = process.env.DEPLOY_DIR ?? "/home/adith/trucoder";
+const REPO_DIR = process.env.DEPLOY_DIR ?? "/app";
 const DEPLOY_LOG = path.join(REPO_DIR, "deploy.log");
+const DEPLOY_TRIGGER = path.join(REPO_DIR, ".deploy-trigger");
 
 function log(msg: string) {
   const line = `[${new Date().toISOString()}] ${msg}\n`;
@@ -54,37 +57,13 @@ deployRouter.post("/_deploy", (req, res) => {
       return res.status(200).json({ ignored: true });
     }
     const head = (payload.after ?? "unknown").slice(0, 7);
-    log(`webhook accepted push ${head} — spawning deploy`);
-    const script = path.join(__dirname, "../../scripts/deploy.sh");
-    // Spawn the deploy in its OWN transient systemd unit. detached:true is
-    // NOT enough: systemd KillMode=control-group kills by cgroup, so the
-    // `sudo systemctl restart trucoder` step reaped the deploy child mid-run
-    // (builds+restart completed, verify/SHA/OK never ran — found 2026-08-09
-    // after the b02dec3 push). systemd-run gives the script its own cgroup,
-    // so it survives the service restart and finishes the bookkeeping.
-    const unit = `trucoder-deploy-${Date.now()}-${head}`;
-    const child = spawn(
-      "sudo",
-      [
-        "-n",
-        "systemd-run",
-        "--collect",
-        `--unit=${unit}`,
-        "--uid=adith",
-        "--setenv=HOME=/home/adith",
-        "--setenv=DEPLOY_DIR=/home/adith/trucoder",
-        "bash",
-        script,
-      ],
-      { stdio: "ignore", env: process.env }
-    );
-    // a missing script (e.g. the repo was checked out to a branch that
-    // predates the webhook) exits instantly with zero output — surface it
-    child.on("error", (err) => log(`deploy SPAWN ERROR: ${err.message}`));
-    child.on("exit", (code, signal) => {
-      if (code === 127) log(`deploy script NOT FOUND: ${script}`);
-    });
-    child.unref();
+    log(`webhook accepted push ${head} — writing deploy trigger`);
+    try {
+      fs.writeFileSync(DEPLOY_TRIGGER, `${payload.after ?? ""}\n`);
+    } catch (err) {
+      log(`deploy TRIGGER WRITE FAILED: ${(err as Error).message}`);
+      return res.status(500).json({ error: "trigger write failed" });
+    }
     res.status(202).json({ accepted: true, head });
   }
 );

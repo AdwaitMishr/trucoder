@@ -1,0 +1,8 @@
+[Unit]
+Description=Trigger TruCoder deploy when the webhook trigger file changes
+
+[Path]
+PathChanged=/home/adith/trucoder/.deploy-trigger
+
+[Install]
+WantedBy=multi-user.target

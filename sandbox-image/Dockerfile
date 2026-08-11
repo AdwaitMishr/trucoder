@@ -28,6 +28,29 @@ RUN mkdir -p /opt/nlohmann \
 COPY run.sh /usr/local/bin/run.sh
 RUN chmod 755 /usr/local/bin/run.sh
 
+# Static docker CLI for the sandbox daemon (spawns per-run hardened
+# containers via the host socket). The image's own entrypoint stays run.sh;
+# the compose service overrides entrypoint to run sandboxd.js.
+# TARGETARCH-aware: the Pi is arm64 (aarch64 static builds), CI is amd64
+# (x86_64 static builds) — docker only publishes those two names.
+ARG TARGETARCH
+RUN case "$TARGETARCH" in \
+      arm64) DOCKER_ARCH=aarch64 ;; \
+      amd64) DOCKER_ARCH=x86_64 ;; \
+      *) echo "unsupported TARGETARCH=$TARGETARCH"; exit 1 ;; \
+    esac \
+    && curl -fsSL -o /tmp/docker.tgz \
+        https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-26.1.4.tgz \
+    && tar -xzf /tmp/docker.tgz -C /tmp docker/docker \
+    && mv /tmp/docker/docker /usr/local/bin/docker \
+    && chmod 755 /usr/local/bin/docker \
+    && rm -rf /tmp/docker /tmp/docker.tgz
+
+COPY sandboxd.js /opt/sandboxd.js
+# write_file-style copies arrive 600 root-owned — the non-root daemon user
+# must be able to read it
+RUN chmod 644 /opt/sandboxd.js
+
 RUN useradd -r -u 1000 -m trucoder
 USER trucoder
 

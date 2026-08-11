@@ -1,0 +1,15 @@
+# Throwaway test stack for the dockerized deploy. Same images as prod, but a
+# separate project (-p trucodertest), port 3002, and an isolated data dir so
+# the live DB and the running production container are never touched.
+#   docker compose -p trucodertest -f docker-compose.yml -f deploy/docker-compose.test.yml up -d
+services:
+  app:
+    ports: !override
+      - "3002:3002"
+    environment:
+      PORT: "3002"
+      DATA_DIR: /app/data
+    volumes:
+      - ./data-test:/app/data:rw
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]

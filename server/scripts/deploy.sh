@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
-# Auto-deploy for GitHub push webhooks (trucoder). Idempotent and safe to
-# re-run: fetches, fast-forwards, rebuilds ONLY what changed, verifies.
-# Runs detached from the webhook request — survives the server restart.
+# Auto-deploy for GitHub push webhooks (trucoder, dockerized 2026-08).
+# Runs ON THE HOST, triggered by the systemd path unit (trucoder-deploy.path)
+# watching .deploy-trigger — which the app's /_deploy endpoint writes after
+# an HMAC-verified push to main. Idempotent: fetches, fast-forwards,
+# rebuilds ONLY what changed, swaps containers with compose.
+#
+# The deploy process lives outside the container being replaced, so the old
+# "deploy killed by its own restart" cgroup saga is gone. No sudo needed:
+# adith is in the docker group.
 set -u
 REPO_DIR="${DEPLOY_DIR:-/home/adith/trucoder}"
 LOG="$REPO_DIR/deploy.log"
@@ -35,30 +41,36 @@ echo "$CHANGED" | grep -q '^sandbox-image/' && SANDBOX=1
 echo "$CHANGED" | grep -q '^sandbox-image-node/' && SANDBOX_NODE=1
 
 log "changes: server=$SERVER web=$WEB sandbox=$SANDBOX sandbox-node=$SANDBOX_NODE (${NEW:0:7})"
+ANY=$((SERVER+WEB+SANDBOX+SANDBOX_NODE))
 
 if [ "$SANDBOX" = 1 ]; then
-  docker build -t trucoder-sandbox:latest "$REPO_DIR/sandbox-image/" >> "$LOG" 2>&1 \
+  docker compose build sandbox >> "$LOG" 2>&1 \
     || { log "deploy FAILED: sandbox image build"; exit 1; }
 fi
 if [ "$SANDBOX_NODE" = 1 ]; then
-  docker build -t trucoder-sandbox-node:latest "$REPO_DIR/sandbox-image-node/" >> "$LOG" 2>&1 \
-    || { log "deploy FAILED: node sandbox image build"; exit 1; }
+  docker compose build sandbox-node >> "$LOG" 2>&1 \
+    || { log "deploy FAILED: sandbox-node image build"; exit 1; }
 fi
-if [ "$SERVER" = 1 ]; then
-  (cd "$REPO_DIR/server" && npx tsc) >> "$LOG" 2>&1 \
-    || { log "deploy FAILED: server tsc"; exit 1; }
-fi
-if [ "$WEB" = 1 ]; then
-  (cd "$REPO_DIR/web" && npm run build) >> "$LOG" 2>&1 \
-    || { log "deploy FAILED: web build"; exit 1; }
-fi
-if [ "$SERVER" = 1 ] || [ "$WEB" = 1 ] || [ "$SANDBOX" = 1 ] || [ "$SANDBOX_NODE" = 1 ]; then
-  sudo systemctl restart trucoder >> "$LOG" 2>&1 \
-    || { log "deploy FAILED: systemctl restart"; exit 1; }
+if [ "$SERVER" = 1 ] || [ "$WEB" = 1 ]; then
+  docker compose build --build-arg BUILD_COMMIT="$NEW" app >> "$LOG" 2>&1 \
+    || { log "deploy FAILED: app image build"; exit 1; }
 fi
 
-# Verify against the running stack (needs dist — built above if server changed).
-(cd "$REPO_DIR/server" && node scripts/verify.js) >> "$LOG" 2>&1
+if [ "$ANY" = 1 ]; then
+  docker compose up -d >> "$LOG" 2>&1 || { log "deploy FAILED: compose up"; exit 1; }
+  # Wait for the sandbox daemons — verify.js below needs them.
+  for port in 9000 9001; do
+    for i in $(seq 1 30); do
+      curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break
+      [ "$i" = 30 ] && log "deploy WARNING: sandbox daemon :$port not healthy after 30s"
+      sleep 1
+    done
+  done
+fi
+
+# Verify against the deployed image (throwaway container on the internal
+# network — same code path as the live app).
+docker compose run --rm app node server/scripts/verify.js >> "$LOG" 2>&1
 VR=$?
 echo "$NEW" > "$SHA_FILE"
 

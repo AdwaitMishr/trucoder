@@ -11,34 +11,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Build sandbox image (for grading)
-        run: docker build -t trucoder-sandbox:latest sandbox-image/
-
-      - name: Build node module-runner sandbox image (for module exercises)
-        run: docker build -t trucoder-sandbox-node:latest sandbox-image-node/
-
-      - name: Server — deps + typecheck
+      # The grading path is now network-based: the app container POSTs to
+      # the sandbox daemons (sandbox:9000 / sandbox-node:9001). CI builds
+      # the real stack and verifies inside it — same code path as prod.
+      - name: Build stack images (app + sandbox daemons)
         run: |
-          cd server
-          npm ci
-          npm run build
+          touch .env
+          docker compose build
 
-      - name: Web — deps + typecheck + build
+      - name: Start sandbox daemons
         run: |
-          cd web
-          npm ci
-          npm run build
+          export DOCKER_GID=$(getent group docker | cut -d: -f3)
+          docker compose up -d sandbox sandbox-node
 
       - name: Verify every tracked lesson's solution vs its tests
         run: |
-          cd server
-          node scripts/verify.js
+          export DOCKER_GID=$(getent group docker | cut -d: -f3)
+          docker compose run --rm app node server/scripts/verify.js
 
       - name: Lint course content (callout syntax + asset references)
         run: |
-          cd server
-          node scripts/lint-courses.js
+          export DOCKER_GID=$(getent group docker | cut -d: -f3)
+          docker compose run --rm app node server/scripts/lint-courses.js

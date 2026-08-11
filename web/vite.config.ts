@@ -5,7 +5,10 @@ import react from "@vitejs/plugin-react";
 
 // Inject the git commit the bundle was built from — shown in the GD
 // easter egg ("build <sha>") so the deployed version is always verifiable.
+// The Docker build passes BUILD_COMMIT as a build-arg (no .git in the
+// build context); local dev falls back to git rev-parse.
 function buildCommit(): string {
+  if (process.env.BUILD_COMMIT) return process.env.BUILD_COMMIT;
   try {
     return execSync("git rev-parse --short HEAD", { cwd: fileURLToPath(new URL("..", import.meta.url)) })
       .toString()

@@ -1,0 +1,91 @@
+# TruCoder production stack (dockerized 2026-08).
+#
+#   app          - Express + React bundle, NO docker socket. Grading calls go
+#                  to the sandbox daemons over the internal network.
+#   sandbox      - long-lived daemon inside trucoder-sandbox:latest; spawns
+#                  the hardened per-run containers via the host socket.
+#   sandbox-node - same daemon for module exercises (trucoder-sandbox-node).
+#
+# Deploy flow: push to main -> GitHub webhook -> /_deploy (inside the app)
+# writes .deploy-trigger -> systemd trucoder-deploy.path on the host runs
+# deploy.sh -> git pull + `docker compose build` changed services + `up -d`.
+# The deploy process lives ON THE HOST, never inside the container being
+# replaced, so a container swap can never kill the deploy mid-run.
+#
+# Security notes:
+#   - docker.sock mounts ONLY into the sandbox services (group_add 116 =
+#     the host docker group gid on this Pi). The tunnel-facing app container
+#     has no daemon access.
+#   - `internal: true` was tried and DROPPED (2026-08): docker 26.1.5 gives
+#     internal networks NO published ports (no gateway, no docker-proxy, no
+#     DNAT) — the tunnel and the loopback health checks died. Plain bridge:
+#     services still DNS-isolated, per-run learner containers still run
+#     --network none, and egress from the app is no worse than the old
+#     bare-metal unit (which had full host network access).
+name: trucoder
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_COMMIT: ${BUILD_COMMIT:-dev}
+    image: trucoder-app:latest
+    ports:
+      - "3001:3001"
+    env_file: .env
+    environment:
+      DATA_DIR: /app/data
+      DEPLOY_DIR: /app
+      SANDBOX_URL: http://sandbox:9000
+      SANDBOX_NODE_URL: http://sandbox-node:9001
+    volumes:
+      - ./courses:/app/courses:rw
+      - ./data:/app/data:rw
+      - ./.deploy-trigger:/app/.deploy-trigger:rw
+      - ./deploy.log:/app/deploy.log:rw
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  sandbox:
+    build: ./sandbox-image
+    image: trucoder-sandbox:latest
+    entrypoint: ["node"]
+    command: ["/opt/sandboxd.js"]
+    environment:
+      SANDBOXD_IMAGE: trucoder-sandbox:latest
+      SANDBOXD_PORT: "9000"
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # host docker group gid — Pi default 116; CI sets DOCKER_GID from the runner
+    group_add: ["${DOCKER_GID:-116}"]
+    networks: [internal]
+    restart: unless-stopped
+
+  sandbox-node:
+    build: ./sandbox-image-node
+    image: trucoder-sandbox-node:latest
+    entrypoint: ["dumb-init", "--", "node"]
+    command: ["/opt/sandboxd.js"]
+    environment:
+      SANDBOXD_IMAGE: trucoder-sandbox-node:latest
+      SANDBOXD_PORT: "9001"
+    ports:
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add: ["${DOCKER_GID:-116}"]
+    networks: [internal]
+    restart: unless-stopped
+
+networks:
+  internal:

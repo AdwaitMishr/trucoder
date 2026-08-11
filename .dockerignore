@@ -1,0 +1,13 @@
+.git
+**/node_modules
+**/dist
+courses
+data
+.env
+*.log
+.deploy*
+sandbox-image
+sandbox-image-node
+sketches
+.hci-build
+course_material.zip

@@ -31,3 +31,4 @@ courses/*
 # deploy artifacts (webhook-driven deploy.sh state)
 .deploy.lock
 .deployed-sha
+.deploy-trigger
