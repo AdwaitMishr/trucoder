@@ -208,15 +208,21 @@ never kill the deploy mid-run. Deploys are serialized with `flock`
 (`.deploy.lock`); a busy skip is fine because the next push re-triggers.
 Progress lives in `deploy.log` and the last deployed SHA in `.deployed-sha`.
 
-**Pushing from this box**: the box is also the deploy target, so a same-box
-push is a deploy no-op (`LOCAL == REMOTE`) — the built image is already the
-current one. To trigger a REAL deploy, push from a worktree:
+**Pushing from this box**: this box is both the deploy target and the image
+build source, so a same-box push is a deploy no-op (`LOCAL == REMOTE` at
+webhook time) — the code is live as soon as you built the image locally.
+The webhook's real job is GitHub-side changes (PR merges, other
+contributors). To keep `.deployed-sha` truthful after a local push:
 
 ```bash
-git worktree add /tmp/wt-push HEAD
-git -C /tmp/wt-push push origin HEAD:main
-git worktree remove /tmp/wt-push
+docker compose run --rm app node server/scripts/verify.js
+git rev-parse HEAD > .deployed-sha
 ```
+
+To TEST the webhook pipeline end to end: commit in the dev folder, push
+from a worktree, reset the dev folder back one commit, then
+`echo <sha> > .deploy-trigger` — the path unit runs the full
+pull → verify → marker → hark cycle.
 
 To register the webhook:
 
