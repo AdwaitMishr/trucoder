@@ -105,20 +105,23 @@ base image is `debian:bookworm-slim`, so it builds on arm64 and x86_64 alike.
 > First boot seeds the owner account from `OWNER_USERNAME` / `OWNER_PASSWORD`.
 > Progress and user hashes live in `data/` (gitignored).
 
-## Running as a service
+## Running as a service (Docker)
 
-A sample systemd unit is in `deploy/trucoder.service` — edit paths, install it,
-and start:
+Production runs as a compose stack — `app` (Express + built React bundle),
+`sandbox` and `sandbox-node` (long-lived daemons that spawn the hardened
+per-run grading containers). The app container has NO docker socket; grading
+goes over the compose network to the daemons.
 
 ```bash
-sudo cp deploy/trucoder.service /etc/systemd/system/trucoder.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now trucoder
-journalctl -u trucoder -f
+docker compose build --build-arg BUILD_COMMIT=$(git rev-parse --short HEAD) app
+docker compose up -d
 ```
 
-Env comes from `.env` via `EnvironmentFile` (see the unit). Pin the Node binary
-in `ExecStart` — nvm's node may mismatch the `better-sqlite3` ABI.
+Volumes: `courses/` (hot-reloaded by the loader), `data/` (the SQLite DB),
+`.deploy-trigger` + `deploy.log` (webhook plumbing). Env comes from `.env`
+(`env_file`). The old bare-metal unit is preserved as `deploy/trucoder.service`
+for reference; the current production flow needs no systemd service for the
+app itself (`restart: unless-stopped`).
 
 ## Internet access
 
@@ -129,19 +132,37 @@ tunnel (or any reverse proxy) → HTTP → `localhost:3001`.
 
 Merges to `main` deploy themselves: GitHub sends a `push` webhook to
 `POST /_deploy` (HMAC-gated by `DEPLOY_SECRET`, verified against the raw
-payload bytes, main-ref only). The server spawns `server/scripts/deploy.sh`
-detached, which:
+payload bytes, main-ref only). The endpoint runs inside the app container, so
+it cannot run host-side deploys — it writes `.deploy-trigger` (bind-mounted
+into the repo), and a host systemd path unit (`deploy/trucoder-deploy.path`)
+starts `deploy/trucoder-deploy.service`, which runs `server/scripts/deploy.sh`
+ON THE HOST:
 
 1. fast-forwards `git pull --ff-only origin main`,
-2. rebuilds only what changed — `server/` → `tsc`, `web/` → `npm run build`,
-   `sandbox-image/` → `docker build`,
-3. restarts the `trucoder` systemd unit when any of those changed,
-4. runs `verify.js` and pings the operator (Hark) with the result.
+2. rebuilds only what changed — `server/` or `web/` → the app image
+   (with the new SHA baked as the `build <sha>` bundle line),
+   `sandbox-image/` → the sandbox image, `sandbox-image-node/` → the node image,
+3. `docker compose up -d` (swaps only the changed containers),
+4. waits for the sandbox daemons' `/health`,
+5. runs `verify.js` in a throwaway app container and pings the operator
+   (Hark) with the result.
 
-Deploys are serialized with `flock` (`.deploy.lock`); a busy skip is fine
-because the next push re-triggers. Progress lives in `deploy.log` and the last
-deployed SHA in `.deployed-sha`. The script is detached so it survives the
-server restart it performs. To register the webhook:
+The deploy process lives OUTSIDE the container being replaced, so a swap can
+never kill the deploy mid-run. Deploys are serialized with `flock`
+(`.deploy.lock`); a busy skip is fine because the next push re-triggers.
+Progress lives in `deploy.log` and the last deployed SHA in `.deployed-sha`.
+
+**Pushing from this box**: the box is also the deploy target, so a same-box
+push is a deploy no-op (`LOCAL == REMOTE`) — the built image is already the
+current one. To trigger a REAL deploy, push from a worktree:
+
+```bash
+git worktree add /tmp/wt-push HEAD
+git -C /tmp/wt-push push origin HEAD:main
+git worktree remove /tmp/wt-push
+```
+
+To register the webhook:
 
 ```bash
 gh api repos/<owner>/trucoder/hooks -f name=web -F active=true \
