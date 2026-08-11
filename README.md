@@ -27,6 +27,23 @@ docker compose run --rm app node server/scripts/verify.js   # expect 0 failed
 Requirements: **Docker + Docker Compose** (that's it — no Node needed for a
 production run; the images build on arm64 and x86_64 alike).
 
+Prefer pulling prebuilt images over building? Every push to `main` publishes
+multi-arch images to GHCR:
+
+```bash
+docker pull ghcr.io/adith2005-20/trucoder-app:latest
+docker pull ghcr.io/adith2005-20/trucoder-sandbox:latest
+docker pull ghcr.io/adith2005-20/trucoder-sandbox-node:latest
+docker tag ghcr.io/adith2005-20/trucoder-app:latest trucoder-app:latest
+docker tag ghcr.io/adith2005-20/trucoder-sandbox:latest trucoder-sandbox:latest
+docker tag ghcr.io/adith2005-20/trucoder-sandbox-node:latest trucoder-sandbox-node:latest
+docker compose up -d
+```
+
+The compose file builds from source by default; the tag step just maps the
+pulled images onto the local names the stack expects. Images are also tagged
+per-commit (`:<sha>`), so you can pin an exact build.
+
 > If your host's docker group gid is not `116`, add it to `.env`
 > (`DOCKER_GID=<gid>` — find it with `getent group docker | cut -d: -f3`).
 > The sandbox daemons use it to access the docker socket.
