@@ -157,6 +157,51 @@ export default function CodeEditor({
     vimRef.current = null;
   }, [settings.keyBinding, editorReady]);
 
+  // Web fonts load asynchronously, but Monaco measures glyph widths when the
+  // editor mounts and keeps those metrics forever. If the selected font was
+  // still downloading (first visit, or a font nothing else in the DOM uses),
+  // Monaco renders with the fallback face from the stack — which is why font
+  // changes appeared to do nothing. Force the @font-face download and tell
+  // Monaco to re-measure once the real face is available.
+  useEffect(() => {
+    if (!editorReady) return;
+    const ed = editorRef.current;
+    const monaco = (window as any).__tcMonaco;
+    if (!ed || !monaco) return;
+    let cancelled = false;
+    // First face of the stack (e.g. "Fira Code" from "'Fira Code', ui-monospace…")
+    const family = FONT_STACKS[settings.font]
+      .split(",")[0]
+      .replace(/['"]/g, "")
+      .trim();
+    const probe = (done: () => void) => {
+      try {
+        // Monaco's own measurement happens on a canvas and never triggers a
+        // CSS font load; fonts.load() kicks the download off explicitly.
+        document.fonts
+          .load(
+            `16px "${family}"`,
+            "0123456789abcdefghijklmnopqrstuvwxyz{}[]()=<>+-*/&|!"
+          )
+          .then(done, done);
+      } catch {
+        done();
+      }
+    };
+    probe(() => {
+      if (cancelled) return;
+      try {
+        monaco.editor.remeasureFonts();
+        ed.layout();
+      } catch {
+        /* non-fatal */
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.font, settings.ligatures, editorReady]);
+
   function beforeMount(monaco: any) {
     (window as any).__tcMonaco = monaco;
     THEMES.forEach((t) => defineEditorTheme(monaco, t));
