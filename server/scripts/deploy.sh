@@ -66,6 +66,23 @@ if [ "$ANY" = 1 ]; then
       sleep 1
     done
   done
+  # Prove the SWAP actually happened: the running app container must bake
+  # THIS commit. compose up -d can silently no-op (observed 2026-08-12:
+  # image retagged, container kept the old image, .deployed-sha advanced
+  # anyway). Verify the bundle label; fail loud if it doesn't match.
+  CID=$(docker compose ps -q app 2>/dev/null | head -1)
+  if [ -n "$CID" ]; then
+    BAKED=$(docker exec "$CID" sh -c "grep -oh 'build \",\"[0-9a-f]*' web/dist/assets/index-*.js | head -1" 2>/dev/null | grep -o '[0-9a-f]\{40\}')
+    if [ "$BAKED" != "$NEW" ]; then
+      log "deploy FAILED: container bakes ${BAKED:-none}, expected $NEW — swap did not take"
+      [ -x "$HOME/.hermes/scripts/hark-notify.sh" ] \
+        && "$HOME/.hermes/scripts/hark-notify.sh" -t "trucoder" "deploy SWAP FAILED at ${NEW:0:7} (still running ${BAKED:-unknown})" >/dev/null 2>&1 || true
+      exit 1
+    fi
+    log "swap verified: container bakes ${NEW:0:7}"
+  else
+    log "deploy WARNING: no app container id — swap check skipped"
+  fi
 fi
 
 # Verify against the deployed image (throwaway container on the internal
