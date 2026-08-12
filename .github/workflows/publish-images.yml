@@ -30,19 +30,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # push: true is NOT the action default — without it (as shipped until
+      # 2026-08) every run built into the ephemeral buildx cache and
+      # discarded the result; nothing was ever published to GHCR.
+      #
+      # Cache: registry backend on a dedicated :cache tag. The gha pool is
+      # too small (each run writes ~5GB of layers, evicting the previous
+      # run's cache before it can be used) and inline cache does not carry
+      # multi-stage build stages. The :cache tag persists in the registry
+      # (public repo -> free storage) and serves both platforms and all
+      # build stages — after the first run, apt/npm-ci layers are reused and
+      # only tsc + the vite build re-run.
       - name: Publish app image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
+          push: true
           build-args: |
             BUILD_COMMIT=${{ github.sha }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/trucoder-app:latest
             ghcr.io/${{ github.repository_owner }}/trucoder-app:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/trucoder-app:cache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/trucoder-app:cache,mode=max
 
       - name: Publish sandbox image
         uses: docker/build-push-action@v6
@@ -50,17 +62,12 @@ jobs:
           context: ./sandbox-image
           file: sandbox-image/Dockerfile
           platforms: linux/amd64,linux/arm64
+          push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/trucoder-sandbox:latest
             ghcr.io/${{ github.repository_owner }}/trucoder-sandbox:${{ github.sha }}
-          # Inline cache rides inside the pushed image instead of the 10GB gha
-          # pool, which every publish run saturates (3 images x 2 arch,
-          # mode=max -> the previous run's layers are evicted before the next
-          # run can use them). The sandbox Dockerfile is single-stage, so its
-          # apt/download layers all live in the final image — the next build
-          # pulls the cache from :latest and skips the emulated apt install.
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/trucoder-sandbox:latest
-          cache-to: type=inline
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/trucoder-sandbox:cache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/trucoder-sandbox:cache,mode=max
 
       - name: Publish node sandbox image
         uses: docker/build-push-action@v6
@@ -68,10 +75,9 @@ jobs:
           context: ./sandbox-image-node
           file: sandbox-image-node/Dockerfile
           platforms: linux/amd64,linux/arm64
+          push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/trucoder-sandbox-node:latest
             ghcr.io/${{ github.repository_owner }}/trucoder-sandbox-node:${{ github.sha }}
-          # Same inline-cache scheme as the main sandbox image (single-stage
-          # Dockerfile, apk + npm layers all in the final image).
-          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/trucoder-sandbox-node:latest
-          cache-to: type=inline
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/trucoder-sandbox-node:cache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/trucoder-sandbox-node:cache,mode=max
