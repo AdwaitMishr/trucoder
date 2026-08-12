@@ -20,7 +20,7 @@ log() { echo "[$(date -Is)] $*" >> "$LOG"; }
 exec 9>"$REPO_DIR/.deploy.lock"
 flock -n 9 || { log "deploy skipped: another deploy is running"; exit 0; }
 
-log "deploy start"
+log "deploy start (md5 $(md5sum "$0" | cut -d' ' -f1) pid $$)"
 git fetch origin >/dev/null 2>&1
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse origin/main)
@@ -57,7 +57,11 @@ if [ "$SERVER" = 1 ] || [ "$WEB" = 1 ]; then
 fi
 
 if [ "$ANY" = 1 ]; then
-  docker compose up -d >> "$LOG" 2>&1 || { log "deploy FAILED: compose up"; exit 1; }
+  log "deploy: ANY=$ANY entering swap phase"
+  docker compose up -d >> "$LOG" 2>&1
+  UPEXIT=$?
+  log "deploy: compose up exit=$UPEXIT"
+  if [ "$UPEXIT" != 0 ]; then log "deploy FAILED: compose up"; exit 1; fi
   # Wait for the sandbox daemons — verify.js below needs them.
   for port in 9000 9001; do
     for i in $(seq 1 30); do
