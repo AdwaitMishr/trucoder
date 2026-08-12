@@ -70,6 +70,12 @@ db.exec(`
   );
 `);
 
+// Expired session rows are dead weight — sweep them at boot (resolveToken
+// also removes them lazily on use, but a user who never returns leaves rows).
+db.prepare("DELETE FROM sessions WHERE expires_at < ?").run(
+  new Date().toISOString()
+);
+
 // ---- users ----
 export interface User {
   id: number;
@@ -147,6 +153,24 @@ export function getProgress(
       `SELECT * FROM progress WHERE user_id = ? AND course_id = ? AND lesson_id = ?`
     )
     .get(userId, courseId, lessonId) as ProgressRow | undefined;
+}
+
+/** Progress rows for many lessons of one course in a single query (the
+ *  course list/detail endpoints call this instead of one query per lesson). */
+export function getProgressForLessons(
+  userId: number,
+  courseId: string,
+  lessonIds: string[]
+): Map<string, ProgressRow> {
+  if (lessonIds.length === 0) return new Map();
+  const placeholders = lessonIds.map(() => "?").join(",");
+  const rows = db
+    .prepare(
+      `SELECT * FROM progress
+       WHERE user_id = ? AND course_id = ? AND lesson_id IN (${placeholders})`
+    )
+    .all(userId, courseId, ...lessonIds) as ProgressRow[];
+  return new Map(rows.map((r) => [r.lesson_id, r]));
 }
 
 /** Mark a content-only lesson as read (progress solved, no submission row). */
@@ -272,4 +296,67 @@ export function recordSubmission(input: {
     now,
     now
   );
+}
+
+// ---- submissions history ----
+export interface SubmissionRow {
+  id: number;
+  verdict: string;
+  language: string;
+  code: string;
+  public_passed: number;
+  public_total: number;
+  private_passed: number;
+  private_total: number;
+  created_at: string;
+}
+
+/** The most recent submissions for one lesson (attempt history). */
+export function getRecentSubmissions(
+  userId: number,
+  courseId: string,
+  lessonId: string,
+  limit = 20
+): SubmissionRow[] {
+  return db
+    .prepare(
+      `SELECT id, verdict, language, code,
+              public_passed, public_total, private_passed, private_total, created_at
+       FROM submissions
+       WHERE user_id = ? AND course_id = ? AND lesson_id = ?
+       ORDER BY id DESC LIMIT ?`
+    )
+    .all(userId, courseId, lessonId, limit) as SubmissionRow[];
+}
+
+// ---- admin stats ----
+export function getAdminStats() {
+  const users = db
+    .prepare(`SELECT id, username, created_at FROM users ORDER BY id`)
+    .all() as { id: number; username: string; created_at: string }[];
+  const solvedByLesson = db
+    .prepare(
+      `SELECT course_id, lesson_id, COUNT(*) AS n FROM progress WHERE solved = 1 GROUP BY course_id, lesson_id`
+    )
+    .all() as { course_id: string; lesson_id: string; n: number }[];
+  const submissionsByLesson = db
+    .prepare(
+      `SELECT course_id, lesson_id, COUNT(*) AS n FROM submissions GROUP BY course_id, lesson_id`
+    )
+    .all() as { course_id: string; lesson_id: string; n: number }[];
+  const submissionCount = (
+    db.prepare(`SELECT COUNT(*) AS n FROM submissions`).get() as { n: number }
+  ).n;
+  const attemptTotal = (
+    db.prepare(`SELECT COALESCE(SUM(attempt_count), 0) AS n FROM progress`).get() as {
+      n: number;
+    }
+  ).n;
+  return {
+    users,
+    solvedByLesson,
+    submissionsByLesson,
+    submissionCount,
+    attemptTotal,
+  };
 }

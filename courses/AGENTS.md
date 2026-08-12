@@ -113,6 +113,7 @@ Use container directives for callouts. See section 6.
 | `tests.private` | yes* | list | Hidden tests (used by **Submit** only). At least one. *Not required for `type: content`.* |
 | `hints` | no | list[string] | Progressive hints. Revealed one at a time in the UI. Start vague, get more specific. |
 | `solution` | no | string | A reference solution. **Never displayed to the learner** — it is for agents/tools and for verifying the tests. |
+| `solutions` | no | map | Optional per-language reference solutions (`solutions: {java: ..., python: ...}`), for multi-language lessons where a single string cannot cover every language. Falls back to `solution` when the requested language has no entry. CI verifies every entry in its own language. |
 
 ### 3.1 Content-only lessons (`type: content`)
 

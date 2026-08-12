@@ -32,6 +32,36 @@ const HEAP_MB = 512;
 const COMPILE_SECS = 20;
 const STARTUP_BUFFER_MS = 5000;
 const DEFAULT_MAX_OUTPUT = 8 * 1024 * 1024;
+// Per-run containers are heavyweight (JVM cold start, ~768MB cgroup each).
+// On the Pi, letting the app fire N containers at once can OOM the host —
+// cap concurrent runs and queue the rest. The app's HTTP timeout
+// (effectiveMs + 40s) is wider than the per-run budget, so queued runs
+// still complete inside the client's window in practice.
+const MAX_CONCURRENT =
+  parseInt(process.env.SANDBOXD_MAX_CONCURRENT || "2", 10) || 2;
+
+// ---- tiny FIFO concurrency gate ----
+let active = 0;
+const queue = [];
+function gate(fn) {
+  return new Promise((resolve, reject) => {
+    queue.push({ fn, resolve, reject });
+    pump();
+  });
+}
+function pump() {
+  while (active < MAX_CONCURRENT && queue.length > 0) {
+    const { fn, resolve, reject } = queue.shift();
+    active += 1;
+    Promise.resolve()
+      .then(fn)
+      .then(resolve, reject)
+      .finally(() => {
+        active -= 1;
+        pump();
+      });
+  }
+}
 
 const DOCKER_STDERR_PATTERNS = [
   {
@@ -137,45 +167,58 @@ function handleRun(req, res, body) {
   const effectiveMs = timeoutSecs * 1000 + STARTUP_BUFFER_MS;
   const maxOutput = Number(payload.maxOutputBytes) || DEFAULT_MAX_OUTPUT;
 
-  const child = execFile(
-    "docker",
-    args,
-    { timeout: effectiveMs + 30_000, maxBuffer: maxOutput },
-    (err, stdout, stderr) => {
-      const e = err || null;
-      const sandboxError = classifySandboxError(e, stderr || "");
-      if (sandboxError) {
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(
-          JSON.stringify({
-            stdout: stdout || "",
-            stderr: stderr || "",
-            code: typeof e?.code === "number" ? e.code : 1,
-            timedOut: false,
-            sandboxError,
-          })
-        );
-        return;
-      }
-      const code =
-        e && typeof e.code === "number" ? e.code : e ? (e.killed ? 137 : 1) : 0;
-      const timedOut = code === 124 || code === 137;
-      res.writeHead(200, { "content-type": "application/json" });
-      res.end(
-        JSON.stringify({
-          stdout: stdout || "",
-          stderr: stderr || "",
-          code,
-          timedOut,
-          compileError:
-            (payload.lang === "java" || payload.lang === "cpp") && code === 2
-              ? stderr || undefined
-              : undefined,
-        })
+  // Serialized through the concurrency gate: at most MAX_CONCURRENT docker
+  // runs at once; the rest wait their turn (each with its own timeout).
+  gate(() => {
+    return new Promise((resolve) => {
+      const child = execFile(
+        "docker",
+        args,
+        { timeout: effectiveMs + 30_000, maxBuffer: maxOutput },
+        (err, stdout, stderr) => {
+          const e = err || null;
+          const sandboxError = classifySandboxError(e, stderr || "");
+          if (sandboxError) {
+            res.writeHead(200, { "content-type": "application/json" });
+            res.end(
+              JSON.stringify({
+                stdout: stdout || "",
+                stderr: stderr || "",
+                code: typeof e?.code === "number" ? e.code : 1,
+                timedOut: false,
+                sandboxError,
+              })
+            );
+            resolve();
+            return;
+          }
+          const code =
+            e && typeof e.code === "number" ? e.code : e ? (e.killed ? 137 : 1) : 0;
+          const timedOut = code === 124 || code === 137;
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(
+            JSON.stringify({
+              stdout: stdout || "",
+              stderr: stderr || "",
+              code,
+              timedOut,
+              compileError:
+                (payload.lang === "java" || payload.lang === "cpp") && code === 2
+                  ? stderr || undefined
+                  : undefined,
+            })
+          );
+          resolve();
+        }
       );
-    }
-  );
-  child.stdin.end(stdin ?? undefined);
+      child.stdin.end(stdin ?? undefined);
+    });
+  }).catch((err) => {
+    // A failure inside the gated promise (should not happen — execFile
+    // reports through the callback) still answers the client.
+    res.writeHead(500, { "content-type": "application/json" });
+    res.end(JSON.stringify({ sandboxError: `sandbox daemon error: ${err.message}` }));
+  });
 }
 
 const server = http.createServer((req, res) => {

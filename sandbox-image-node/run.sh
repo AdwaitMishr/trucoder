@@ -31,11 +31,23 @@ SECS="${TIMEOUT_SECS:-30}"
 # Run only the declared test file (the entry module is imported by it).
 # Custom reporter (this node build has no built-in 'json' reporter) writes
 # NDJSON to a file so the test file's own stdout stays clean = output preview.
+#
+# The exit code must reach the daemon: node:test exits 1 on plain test
+# failures (normal, harmless), and timeout(1) kills with 124/137 when the
+# suite exceeds its budget — the daemon maps those to timedOut so the judge
+# can explain the verdict instead of reporting a silent "0 tests". The
+# results file is emitted BEFORE surfacing the code so a killed run still
+# contributes whatever partial NDJSON it managed to write.
+set +e
 timeout -s KILL -k 2 "$SECS" node --test \
   --test-reporter=/opt/tru-reporter.js \
   --test-reporter-destination=/tmp/run-results.json \
-  "$TESTFILE" || true
+  "$TESTFILE"
+code=$?
+set -e
 
 if [ -f /tmp/run-results.json ]; then
   cat /tmp/run-results.json
 fi
+
+exit "$code"

@@ -3,14 +3,20 @@ import { getCourse, getLesson } from "../courses/loader";
 import type { Block, CodeBlock, Lang, QuizBlock } from "../courses/types";
 import {
   getProgress,
+  getRecentSubmissions,
   getSolvedQuizBlocks,
   markLessonRead,
   recordAnswer,
   recordSubmission,
 } from "../db";
 import { runPublic, runModule, submit } from "../judge";
+import { createRateLimiter } from "../rate-limit";
 
 export const lessonsRouter = Router({ mergeParams: true });
+
+// Sandbox runs spawn real containers — cap the churn per user so a learner
+// (or a stuck client) can't drive the daemon into the ground.
+const judgeLimiter = createRateLimiter(60_000, 15);
 
 function parseBody(body: unknown): { lang: Lang; code: string } | null {
   const b = body as { language?: unknown; code?: unknown };
@@ -152,9 +158,21 @@ lessonsRouter.post("/:lessonId/answer", (req, res) => {
   if (!Array.isArray(body?.answers) || body.answers.length === 0) {
     return res.status(400).json({ error: "invalid answers" });
   }
-  const answers = [...new Set(body.answers.map(Number))].sort((a, b) => a - b);
-  if (answers.some((a) => !Number.isInteger(a) || a < 0)) {
+  // Strict element check BEFORE numeric coercion: Number(null) is 0, so a
+  // naive map(Number) would silently grade [null] as option 0.
+  const rawAnswers = body.answers as unknown[];
+  if (
+    !rawAnswers.every(
+      (a) =>
+        (typeof a === "number" && Number.isInteger(a)) ||
+        (typeof a === "string" && /^\d+$/.test(a))
+    )
+  ) {
     return res.status(400).json({ error: "invalid answer indices" });
+  }
+  const answers = [...new Set(rawAnswers.map(Number))].sort((a, b) => a - b);
+  if (answers.some((a) => a < 0 || a >= target.options.length)) {
+    return res.status(400).json({ error: "answer index out of range" });
   }
 
   let correct: boolean;
@@ -191,6 +209,13 @@ lessonsRouter.post("/:lessonId/answer", (req, res) => {
 
 /** Run the visible public tests (fast feedback while coding). */
 lessonsRouter.post("/:lessonId/run", async (req, res) => {
+  const rl = judgeLimiter.check(`u${req.userId}`);
+  if (!rl.allowed) {
+    return res
+      .status(429)
+      .set("Retry-After", String(rl.retryAfterSecs))
+      .json({ error: `too many runs — try again in ${rl.retryAfterSecs}s` });
+  }
   const { courseId, lessonId } = paramsOf(req);
   const lesson = getLesson(courseId, lessonId);
   if (!lesson) return res.status(404).json({ error: "lesson not found" });
@@ -238,6 +263,13 @@ lessonsRouter.post("/:lessonId/run", async (req, res) => {
 
 /** Final grading: public + hidden tests, then persist progress. */
 lessonsRouter.post("/:lessonId/submit", async (req, res) => {
+  const rl = judgeLimiter.check(`u${req.userId}`);
+  if (!rl.allowed) {
+    return res
+      .status(429)
+      .set("Retry-After", String(rl.retryAfterSecs))
+      .json({ error: `too many submissions — try again in ${rl.retryAfterSecs}s` });
+  }
   const userId = req.userId!;
   const { courseId, lessonId } = paramsOf(req);
   const lesson = getLesson(courseId, lessonId);
@@ -322,14 +354,40 @@ lessonsRouter.post("/:lessonId/solution", async (req, res) => {
   const lesson = getLesson(courseId, lessonId);
   if (!lesson) return res.status(404).json({ error: "lesson not found" });
   const block = codeBlockOf(lesson);
-  if (!block?.solution) {
-    return res.status(404).json({ error: "no solution available" });
-  }
+  if (!block) return res.status(404).json({ error: "no solution available" });
   const body = parseBody(req.body);
   const lang = body?.lang ?? "javascript";
+  // Per-language solution when the lesson provides one; the canonical
+  // `solution` string is the fallback for single-solution lessons.
+  const solution = block.solutions?.[lang as Lang] ?? block.solution;
+  if (!solution) {
+    return res.status(404).json({ error: "no solution available" });
+  }
   res.json({
-    solution: block.solution,
+    solution,
     lang,
     module: block.mode === "module" ? true : false,
+  });
+});
+
+/** Attempt history for a lesson (verdicts + code of the last submissions). */
+lessonsRouter.get("/:lessonId/submissions", (req, res) => {
+  const userId = req.userId!;
+  const { courseId, lessonId } = paramsOf(req);
+  const lesson = getLesson(courseId, lessonId);
+  if (!lesson) return res.status(404).json({ error: "lesson not found" });
+  const rows = getRecentSubmissions(userId, courseId, lessonId);
+  res.json({
+    submissions: rows.map((r) => ({
+      id: r.id,
+      verdict: r.verdict,
+      language: r.language,
+      code: r.code,
+      publicPassed: r.public_passed,
+      publicTotal: r.public_total,
+      privatePassed: r.private_passed,
+      privateTotal: r.private_total,
+      createdAt: r.created_at,
+    })),
   });
 });

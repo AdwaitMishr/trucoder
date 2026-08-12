@@ -1,4 +1,5 @@
 import { runInSandbox, runModuleInSandbox, type SandboxResult } from "./sandbox";
+import { TRU_SENTINEL } from "./util/harness";
 import type { CodeBlock, Lang, TestCase } from "./courses/types";
 import type {
   ModuleRunResult,
@@ -46,9 +47,19 @@ function resultFromLine(line: string, test: TestCase): TestResult {
   };
 }
 
+/** Extract the driver's per-test result lines. The drivers prefix every
+ *  result with the @TRU@ sentinel; anything else on stdout is the learner's
+ *  own output (debug prints) and must not shift results out of alignment. */
 function parseResults(stdout: string, tests: TestCase[]): TestResult[] {
-  const lines = stdout.split("\n");
-  return tests.map((t, i) => resultFromLine(lines[i] ?? "", t));
+  const results: TestResult[] = [];
+  for (const raw of stdout.split("\n")) {
+    const line = raw.trim();
+    if (!line.startsWith(TRU_SENTINEL)) continue;
+    results.push(resultFromLine(line.slice(TRU_SENTINEL.length).trim(), tests[results.length] ?? { name: "test", args: [], expected: "" }));
+  }
+  return tests.map((t, i) =>
+    results[i] ?? { name: t.name, passed: false, error: "(no output for this test)" }
+  );
 }
 
 function compileErrorFrom(lang: Lang, res: SandboxResult): string | undefined {
@@ -62,12 +73,18 @@ async function runBatch(
   code: string,
   tests: TestCase[]
 ): Promise<{ results: TestResult[]; sandboxError?: string }> {
+  // The per-test budget is per test case, but the batch runs every test in
+  // one process under a single wall-clock timeout. Scale the budget with the
+  // number of tests (a 2s-per-test lesson with 10 tests gets 20s, not 2s) and
+  // cap it so one lesson cannot hog the sandbox daemon.
+  const perTestMs = block.timeLimitMs || 2000;
+  const batchMs = Math.min(perTestMs * Math.max(tests.length, 1), 20_000);
   try {
     const res = await runInSandbox({
       language: lang,
       code,
       tests: tests.map((t) => ({ args: t.args })),
-      timeLimitMs: block.timeLimitMs,
+      timeLimitMs: batchMs,
     });
     // Infrastructure failure (docker/image/daemon) — not the learner's fault.
     if (res.sandboxError) {

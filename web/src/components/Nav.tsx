@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { PiPalette, PiSignOut, PiGearSix } from "react-icons/pi";
+import { PiChartLineUp, PiPalette, PiSignOut, PiGearSix } from "react-icons/pi";
 import { api } from "../api";
 import type { User } from "../types";
 import Mascot from "./Mascot";
@@ -27,6 +27,17 @@ export default function Nav({
 
       <div className="nav-right">
         <span className="nav-user">{user.username}</span>
+
+        {user.isOwner && (
+          <Link
+            to="/admin"
+            className="ghost"
+            title="admin"
+            aria-label="admin"
+          >
+            <PiChartLineUp size={16} />
+          </Link>
+        )}
 
         <button
           className="ghost"

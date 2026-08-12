@@ -36,3 +36,8 @@ courses/*
 # local HCI exam-prep build artifacts + source dump
 .hci-build/
 course_material.zip
+
+# Local dev-only courses (flowtest, fonttest, ...). The server only scans
+# COURSES_DIR (default ./courses) — keep throwaway courses here and run with
+# COURSES_DIR=dev-courses in local dev so they never reach a deployed tree.
+dev-courses/

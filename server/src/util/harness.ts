@@ -10,6 +10,10 @@ import type { Lang } from "../courses/types";
  * A per-test exception prints a line of the form {"__tru_error__":"..."} so the
  * judge can show the actual runtime error for that test.
  *
+ * Every result line is prefixed with the sentinel @TRU@. Learner code may
+ * print to stdout (debug prints, stray console.log) — the judge only reads
+ * @TRU@ lines, so extra output can never shift test results out of alignment.
+ *
  * Batching all tests into one execution means a single container (and one
  * javac compile for Java) serves an entire submit, instead of one container per
  * test case.
@@ -18,6 +22,11 @@ import type { Lang } from "../courses/types";
  * /opt/gson.jar) plus reflection so the driver is generic across any solve(...)
  * signature.
  */
+
+/** Printed before each per-test result line so the judge can separate the
+ *  driver's output from the learner's own stdout (debug prints must not
+ *  shift test results). Keep in sync with the @TRU@ prefixes in the drivers. */
+export const TRU_SENTINEL = "@TRU@";
 
 const PYTHON_DRIVER = `
 import json
@@ -28,9 +37,9 @@ def __tru_run():
     for _t in _data["tests"]:
         try:
             _out = solve(*_t["args"])
-            print(json.dumps(_out, separators=(",", ":")))
+            print("@TRU@" + json.dumps(_out, separators=(",", ":")))
         except Exception as _e:
-            print(json.dumps({"__tru_error__": repr(_e)}, separators=(",", ":")))
+            print("@TRU@" + json.dumps({"__tru_error__": repr(_e)}, separators=(",", ":")))
 
 if __name__ == "__main__":
     __tru_run()
@@ -41,9 +50,9 @@ const fs = require('fs');
 const __data = JSON.parse(fs.readFileSync(0, 'utf8'));
 for (const __t of __data.tests) {
   try {
-    process.stdout.write(JSON.stringify(solve(...__t.args)) + "\\n");
+    process.stdout.write("@TRU@" + JSON.stringify(solve(...__t.args)) + "\\n");
   } catch (__e) {
-    process.stdout.write(JSON.stringify({ __tru_error__: String(__e && __e.stack || __e) }) + "\\n");
+    process.stdout.write("@TRU@" + JSON.stringify({ __tru_error__: String(__e && __e.stack || __e) }) + "\\n");
   }
 }
 `;
@@ -88,12 +97,12 @@ public class Main {
                     callArgs[i] = toJava(rawArgs.get(i), target.getParameterTypes()[i]);
                 }
                 Object result = target.invoke(null, callArgs);
-                System.out.println(new Gson().toJson(result));
+                System.out.println("@TRU@" + new Gson().toJson(result));
             } catch (Exception ex) {
                 Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                 JsonObject e = new JsonObject();
                 e.addProperty("__tru_error__", String.valueOf(cause));
-                System.out.println(new Gson().toJson(e));
+                System.out.println("@TRU@" + new Gson().toJson(e));
             }
         }
     }
@@ -198,7 +207,7 @@ static void __tru_append(const json& v, std::string& out) {
 static void __tru_print(const json& v) {
   std::string out;
   __tru_append(v, out);
-  std::cout << out << "\\n";
+  std::cout << "@TRU@" << out << "\\n";
 }
 
 template <std::size_t N>
@@ -232,9 +241,9 @@ int main() {
     try {
       __tru_run(t);
     } catch (const std::exception& e) {
-      std::cout << json{{"__tru_error__", std::string(e.what())}}.dump(-1, ' ', true) << "\\n";
+      std::cout << "@TRU@" << json{{"__tru_error__", std::string(e.what())}}.dump(-1, ' ', true) << "\\n";
     } catch (...) {
-      std::cout << json{{"__tru_error__", "unknown error"}}.dump(-1, ' ', true) << "\\n";
+      std::cout << "@TRU@" << json{{"__tru_error__", "unknown error"}}.dump(-1, ' ', true) << "\\n";
     }
   }
 }

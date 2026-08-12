@@ -3,6 +3,8 @@ import remarkGfm from "remark-gfm";
 import remarkDirective from "remark-directive";
 import katex from "katex";
 import { visit } from "unist-util-visit";
+import { useState } from "react";
+import { PiCheck, PiCopy } from "react-icons/pi";
 import VideoEmbed from "./VideoEmbed";
 
 /** Turn `:::tip` / `:::warning` / `:::note` / `:::example` container
@@ -129,6 +131,50 @@ function InlineMath({ value }: { value: string }) {
   );
 }
 
+/** Flatten react-markdown's children tree into plain text (for copying). */
+function nodeText(node: React.ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(nodeText).join("");
+  if (node && typeof node === "object" && "props" in (node as any)) {
+    return nodeText((node as any).props?.children);
+  }
+  return "";
+}
+
+/** Copy button on every fenced code block. */
+function CodeBlock({ children }: { children: React.ReactNode }) {
+  const [copied, setCopied] = useState(false);
+  const text = nodeText(children).replace(/\n$/, "");
+  return (
+    <div className="md-codeblock">
+      <button
+        className="md-code-copy"
+        aria-label="copy code"
+        title="copy code"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(text);
+          } catch {
+            // Clipboard API unavailable (insecure context) — legacy fallback.
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            ta.remove();
+          }
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+      >
+        {copied ? <PiCheck size={13} /> : <PiCopy size={13} />}
+        {copied ? "copied" : "copy"}
+      </button>
+      <pre>{children}</pre>
+    </div>
+  );
+}
+
 export default function Markdown({ children }: { children: string }) {
   return (
     <ReactMarkdown
@@ -138,6 +184,7 @@ export default function Markdown({ children }: { children: string }) {
         videoEmbed: VideoEmbed,
         mathblock: MathBlock,
         inlinemath: InlineMath,
+        pre: CodeBlock,
       } as unknown as React.ComponentProps<typeof ReactMarkdown>["components"]}
     >
       {children}

@@ -8,6 +8,8 @@ export interface CourseSummary {
   difficultyLevels: string[];
   lessonCount: number;
   solved: number;
+  /** First unsolved lesson (by order) — "continue where you left off". */
+  nextLesson: { id: string; title: string } | null;
   body: string;
 }
 
@@ -161,4 +163,45 @@ export interface AnswerResult {
 export interface User {
   id: number;
   username: string;
+  /** True for the owner account (seeded from OWNER_USERNAME) — unlocks /admin. */
+  isOwner?: boolean;
+}
+
+// ---- attempt history ----
+export interface SubmissionSummary {
+  id: number;
+  verdict: "accepted" | "wrong" | "error" | "timeout";
+  language: string;
+  code: string;
+  publicPassed: number;
+  publicTotal: number;
+  privatePassed: number;
+  privateTotal: number;
+  createdAt: string;
+}
+
+// ---- content search (command palette) ----
+export interface SearchEntry {
+  courseId: string;
+  lessonId: string;
+  title: string;
+  words: string[];
+}
+
+// ---- admin stats ----
+export interface AdminStats {
+  users: { id: number; username: string; created_at: string }[];
+  courses: {
+    id: string;
+    title: string;
+    lessons: {
+      id: string;
+      title: string;
+      hasExercise: boolean;
+      solvedUsers: number;
+      submissions: number;
+    }[];
+  }[];
+  totals: { users: number; submissions: number; attempts: number };
+  loadErrors: Record<string, string>;
 }

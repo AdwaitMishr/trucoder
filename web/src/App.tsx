@@ -11,24 +11,41 @@ import Loader from "./components/Loader";
 import SettingsModal from "./components/SettingsModal";
 import CommandPalette from "./components/CommandPalette";
 import ThemeSelector from "./components/ThemeSelector";
+import AdminDashboard from "./components/AdminDashboard";
 import {
   PiBookOpen,
   PiFileText,
   PiGearSix,
   PiHouse,
   PiKeyboard,
+  PiMagnifyingGlass,
   PiPalette,
   PiSignOut,
 } from "react-icons/pi";
 import { registerCommandSection, type Command } from "./commands";
 import { registerShortcut, useShortcuts } from "./shortcuts";
 import { THEMES, useTheme } from "./theme";
-import type { CourseDetail, CourseSummary } from "./types";
+import type { CourseDetail, CourseSummary, SearchEntry } from "./types";
 
 /** Lazy navigation index (courses + their lessons), cached 2 minutes. */
 let navCache: { courses: CourseSummary[]; details: Record<string, CourseDetail> } | null =
   null;
 let navCacheAt = 0;
+
+/** Content-search index (server-built word lists per lesson), cached 10 min. */
+let searchCache: SearchEntry[] | null = null;
+let searchCacheAt = 0;
+async function loadSearchIndex(): Promise<SearchEntry[]> {
+  if (searchCache && Date.now() - searchCacheAt < 600_000) return searchCache;
+  try {
+    const r = await api.searchIndex();
+    searchCache = r.lessons;
+    searchCacheAt = Date.now();
+  } catch {
+    searchCache = searchCache ?? [];
+  }
+  return searchCache;
+}
 async function loadNavIndex(): Promise<{
   courses: CourseSummary[];
   details: Record<string, CourseDetail>;
@@ -150,6 +167,20 @@ export default function App() {
   });
 
   registerCommandSection({
+    title: "Search lessons",
+    commands: () =>
+      loadSearchIndex().then((entries) =>
+        entries.map((e) => ({
+          id: `search-${e.courseId}-${e.lessonId}`,
+          display: `Find — ${e.title}`,
+          alias: `${e.courseId} ${e.lessonId} ${e.words.join(" ")}`,
+          icon: <PiMagnifyingGlass />,
+          run: () => navigate(`/course/${e.courseId}/lessons/${e.lessonId}`),
+        }))
+      ),
+  });
+
+  registerCommandSection({
     title: "Settings",
     commands: [
       {
@@ -265,6 +296,20 @@ export default function App() {
           <Route
             path="/course/:courseId/lessons/:lessonId"
             element={user ? <LessonView /> : <Navigate to="/login" replace />}
+          />
+          <Route
+            path="/admin"
+            element={
+              user ? (
+                user.isOwner ? (
+                  <AdminDashboard />
+                ) : (
+                  <Navigate to="/" replace />
+                )
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
           />
           <Route
             path="*"

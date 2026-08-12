@@ -70,6 +70,9 @@ export function cookieFor(token: string) {
     options: {
       httpOnly: true,
       sameSite: "lax" as const,
+      // Set COOKIE_SECURE=1 when TruCoder is served over HTTPS
+      // (tunnel/reverse proxy); plain-HTTP LAN setups must leave it off.
+      secure: config.secureCookies,
       maxAge: SESSION_MS,
       path: "/",
     },
@@ -78,5 +81,11 @@ export function cookieFor(token: string) {
 
 export function publicUser(userId: number) {
   const u = userById(userId);
-  return u ? { id: u.id, username: u.username } : null;
+  return u
+    ? {
+        id: u.id,
+        username: u.username,
+        isOwner: u.username === config.ownerUsername,
+      }
+    : null;
 }
