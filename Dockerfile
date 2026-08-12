@@ -8,9 +8,6 @@
 FROM node:24-slim AS build
 WORKDIR /src
 
-ARG BUILD_COMMIT=dev
-ENV BUILD_COMMIT=${BUILD_COMMIT}
-
 # Toolchain insurance: better-sqlite3 13.x ships arm64 glibc prebuilds, but
 # if any native dep ever lacks one, the build stage can compile it.
 RUN apt-get update \
@@ -25,6 +22,15 @@ RUN cd /src/server && npx tsc && npm prune --omit=dev
 COPY web/package.json web/package-lock.json /src/web/
 RUN cd /src/web && npm ci
 COPY web/ /src/web/
+
+# BUILD_COMMIT is consumed ONLY by the vite build (vite.config.ts bakes it
+# into __BUILD_COMMIT__). Declaring it here — after the apt/npm-ci layers —
+# keeps those layers cacheable across pushes: an ARG change invalidates
+# everything after it, and under QEMU-emulated arm64 builds a re-run of apt
+# + both npm ci cost minutes (publish-images used to take ~15 min every
+# push; now only tsc + the vite build re-run).
+ARG BUILD_COMMIT=dev
+ENV BUILD_COMMIT=${BUILD_COMMIT}
 RUN cd /src/web && npm run build
 
 FROM node:24-slim
