@@ -35,6 +35,76 @@ type CourseMap = Map<string, Course>;
 let cache: CourseMap = new Map();
 let loadErrors: Record<string, string> = {};
 
+// ---- content search index ----
+// Per-lesson significant words (markdown, task, hints, quiz text) built at
+// scan time so the command palette can search lesson CONTENT without the
+// client fetching every lesson body. Solutions/starter code are never
+// indexed (the solution must not leak into the client).
+export interface SearchEntry {
+  courseId: string;
+  lessonId: string;
+  title: string;
+  words: string[];
+}
+
+let searchIndex: SearchEntry[] = [];
+
+const STOP_WORDS = new Set([
+  "the", "and", "for", "are", "was", "with", "that", "this", "you",
+  "your", "from", "have", "has", "will", "can", "not", "but", "all",
+  "its", "they", "them", "their", "what", "when", "where", "which",
+  "there", "here", "into", "than", "then", "each", "just", "like",
+  "more", "most", "over", "such", "only", "also", "how", "why", "one",
+  "out", "use", "used", "using", "may", "might", "should", "could",
+  "would", "about", "after", "before", "because", "between", "while",
+  "during", "within", "without", "under", "above", "again", "other",
+  "some", "any", "many", "much", "few", "own", "same", "so", "too",
+  "very", "really", "well", "get", "got", "make", "made", "take",
+  "need", "needs", "want", "see", "look", "come", "go", "know",
+  "think", "say", "says", "thing", "things", "way", "ways", "part",
+  "parts", "kind", "types", "type", "called", "call", "calls", "two",
+  "first", "second", "next", "last", "new", "old", "back", "still",
+  "even", "ever", "never", "always", "often", "sometimes", "instead",
+  "least", "however", "though", "although", "since", "until", "once",
+]);
+
+/** Significant lowercase tokens of a text, deduped and capped (the palette
+ *  matches word prefixes client-side; a bounded set keeps the index small). */
+function lessonWords(text: string): string[] {
+  const seen = new Set<string>();
+  for (const raw of text.toLowerCase().match(/[a-z0-9]+/g) ?? []) {
+    if (raw.length < 3 || STOP_WORDS.has(raw)) continue;
+    seen.add(raw);
+    if (seen.size >= 150) break;
+  }
+  return [...seen];
+}
+
+function lessonSearchText(lesson: Lesson): string {
+  const parts = [lesson.title, ...lesson.tags];
+  for (const b of lesson.blocks) {
+    switch (b.type) {
+      case "markdown":
+        parts.push(b.content);
+        break;
+      case "code":
+        parts.push(b.task, ...b.hints);
+        break;
+      case "mcq":
+      case "mscq":
+        parts.push(b.prompt, ...b.options);
+        break;
+      case "image":
+        parts.push(b.alt, b.caption ?? "");
+        break;
+      case "flowchart":
+        parts.push(b.title ?? "", ...b.nodes);
+        break;
+    }
+  }
+  return parts.join(" ");
+}
+
 const SUPPORTED_LANGS = new Set<Lang>(["java", "javascript", "python", "cpp"]);
 const DIFFS = new Set<string>(["beginner", "easy", "medium", "hard"]);
 
@@ -144,6 +214,10 @@ function parseCodeBlock(d: Record<string, any>): CodeBlock | null {
         }
       : undefined;
 
+  // Per-language reference solutions (optional). `solution` stays the
+  // canonical fallback for lessons that don't split by language.
+  const solutions = normalizeLangMap(d.solutions);
+
   return {
     type: "code",
     task: String(d.task ?? "Implement solve(...) per the signature."),
@@ -155,6 +229,7 @@ function parseCodeBlock(d: Record<string, any>): CodeBlock | null {
     timeLimitMs: typeof d.timeLimitMs === "number" ? d.timeLimitMs : 2000,
     hints: Array.isArray(d.hints) ? d.hints.map(String) : [],
     solution: typeof d.solution === "string" ? d.solution : undefined,
+    solutions: Object.keys(solutions).length > 0 ? solutions : undefined,
     mode,
     module: moduleSpec,
   };
@@ -337,11 +412,19 @@ function loadCourse(dir: string): void {
     body,
     lessons,
   });
+
+  searchIndex = [...searchIndex, ...lessons.map((l) => ({
+    courseId: id,
+    lessonId: l.id,
+    title: l.title,
+    words: lessonWords(lessonSearchText(l)),
+  }))];
 }
 
 export function scanCourses(): void {
   cache = new Map();
   loadErrors = {};
+  searchIndex = [];
   if (!fs.existsSync(config.coursesDir)) return;
   const entries = fs
     .readdirSync(config.coursesDir, { withFileTypes: true })
@@ -371,6 +454,10 @@ export function getLesson(courseId: string, lessonId: string): Lesson | undefine
 
 export function getLoadErrors(): Record<string, string> {
   return loadErrors;
+}
+
+export function getSearchIndex(): SearchEntry[] {
+  return searchIndex;
 }
 
 let watcher: chokidar.FSWatcher | null = null;

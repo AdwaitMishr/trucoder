@@ -2716,3 +2716,85 @@ button.ghost.small-ghost.on { color: var(--accent); }
     height: 6px;
   }
 }
+
+/* ---- attempt history (CodeWorkbench) ---- */
+.history-panel { border-top: 1px solid var(--hairline); padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.history-head { display: flex; align-items: baseline; gap: 10px; }
+.history-list { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
+.history-row {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 6px 8px; border-radius: 6px; border: 1px solid transparent;
+  background: transparent; color: var(--ink); text-align: left; cursor: pointer;
+}
+.history-row:hover { background: var(--surface2); }
+.history-row.active { border-color: var(--accent); background: var(--accent-soft); }
+.history-meta { flex: 1; min-width: 0; font-size: 12.5px; }
+.verdict-chip {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.04em;
+  text-transform: uppercase; padding: 2px 7px; border-radius: 4px;
+  background: var(--surface2); color: var(--muted); flex-shrink: 0;
+}
+.verdict-chip.verdict-accepted { background: var(--ok-soft); color: var(--ok); }
+.verdict-chip.verdict-wrong { background: var(--err-soft); color: var(--err); }
+.verdict-chip.verdict-error, .verdict-chip.verdict-timeout { background: var(--err-soft); color: var(--err); }
+.history-detail { border-top: 1px solid var(--hairline); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.history-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.history-diff {
+  max-height: 260px; overflow: auto; border: 1px solid var(--hairline);
+  border-radius: 6px; background: var(--bg); padding: 8px 10px;
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.55;
+}
+.history-diff .diff-add { color: var(--ok); white-space: pre-wrap; }
+.history-diff .diff-del { color: var(--err); white-space: pre-wrap; }
+.history-code {
+  max-height: 260px; overflow: auto; border: 1px solid var(--hairline);
+  border-radius: 6px; background: var(--bg); padding: 10px;
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.5; white-space: pre-wrap;
+}
+
+/* ---- markdown code block copy button ---- */
+.md-codeblock { position: relative; }
+.md-codeblock pre { padding-top: 30px; }
+.md-code-copy {
+  position: absolute; top: 6px; right: 6px; z-index: 1;
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--hairline); border-radius: 5px;
+  background: var(--surface); color: var(--muted);
+  font-size: 11px; font-family: inherit; padding: 3px 8px; cursor: pointer;
+}
+.md-code-copy:hover { color: var(--ink); border-color: var(--accent); }
+
+/* ---- continue card (course index) ---- */
+.continue-card {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--accent); border-radius: 10px;
+  background: var(--accent-soft); color: var(--ink);
+  padding: 14px 18px; margin-bottom: 18px; text-decoration: none;
+}
+.continue-card:hover { border-color: var(--accent); }
+.continue-label { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.continue-course { font-weight: 600; }
+.continue-lesson { color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- lesson notes ---- */
+.lesson-head-actions { display: flex; align-items: center; gap: 6px; }
+.lesson-notes {
+  width: 100%; min-height: 84px; margin-top: 12px; resize: vertical;
+  border: 1px solid var(--hairline); border-radius: 8px;
+  background: var(--surface); color: var(--ink);
+  padding: 10px 12px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5;
+}
+.lesson-notes:focus { outline: none; border-color: var(--accent); }
+.lesson-notes::placeholder { color: var(--muted); opacity: 0.8; }
+
+/* ---- admin dashboard ---- */
+.admin-section { margin-top: 22px; }
+.admin-heading { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table th {
+  text-align: left; font-weight: 500; color: var(--muted);
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  padding: 6px 10px; border-bottom: 1px solid var(--hairline);
+}
+.admin-table td { padding: 7px 10px; border-bottom: 1px solid var(--hairline); }
+.admin-errors { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--err); }

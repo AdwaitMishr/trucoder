@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import confetti from "canvas-confetti";
+import { PiClock } from "react-icons/pi";
 import { api, ApiError } from "../api";
-import type { CodeBlock, Lang, RunResult, SubmitResult } from "../types";
+import { diffLines } from "../diff";
+import type { CodeBlock, Lang, RunResult, SubmissionSummary, SubmitResult } from "../types";
 import CodeEditor from "./CodeEditor";
 import Mascot from "./Mascot";
 import ResultPanel from "./ResultPanel";
@@ -54,7 +56,70 @@ export default function CodeWorkbench({
   const [showSolution, setShowSolution] = useState(false);
   const [solution, setSolution] = useState("");
   const [solutionLoading, setSolutionLoading] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<SubmissionSummary[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [selectedAttempt, setSelectedAttempt] = useState<number | null>(null);
   const byLang = useRef<Partial<Record<string, string>>>({});
+
+  // ---- debounced localStorage saves ----
+  // A synchronous setItem per keystroke janks low-end machines; the save is
+  // flushed on unmount and before any operation that reads the stored value.
+  const pendingSave = useRef<{ key: string; value: string } | null>(null);
+  const saveTimer = useRef<number>(0);
+  const flushSave = () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = 0;
+    }
+    const p = pendingSave.current;
+    if (!p) return;
+    pendingSave.current = null;
+    try {
+      localStorage.setItem(p.key, p.value);
+    } catch {
+      /* storage full/unavailable — the code still lives in state */
+    }
+  };
+  const scheduleSave = (key: string, value: string) => {
+    pendingSave.current = { key, value };
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(flushSave, 300);
+  };
+  useEffect(() => () => flushSave(), []);
+
+  // ---- attempt history ----
+  async function toggleHistory() {
+    if (historyOpen) {
+      setHistoryOpen(false);
+      return;
+    }
+    setHistoryOpen(true);
+    if (history) return;
+    setHistoryLoading(true);
+    try {
+      const r = await api.submissions(courseId, lessonId);
+      setHistory(r.submissions);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "history unavailable");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  const selectedSubmission =
+    history?.find((s) => s.id === selectedAttempt) ?? null;
+  const diff =
+    selectedSubmission && history
+      ? diffLines(
+          history[history.indexOf(selectedSubmission) + 1]?.code ??
+            (block.starterCode as Record<string, string>)[
+              selectedSubmission.language
+            ] ??
+            "",
+          selectedSubmission.code
+        )
+      : null;
 
   const activeLang = isModule ? moduleLang : lang;
   const starterFor = (l: string) =>
@@ -70,6 +135,9 @@ export default function CodeWorkbench({
       setRun(null);
       setSubmit(null);
       setError("");
+      setHistoryOpen(false);
+      setHistory(null);
+      setSelectedAttempt(null);
       return;
     }
     const langs: Lang[] = block.languages.length ? block.languages : ["java"];
@@ -85,34 +153,42 @@ export default function CodeWorkbench({
     setRun(null);
     setSubmit(null);
     setError("");
+    setHistoryOpen(false);
+    setHistory(null);
+    setSelectedAttempt(null);
   }, [courseId, lessonId, block, lastLanguage, isModule, moduleLang]);
 
   function switchLang(l: Lang) {
     if (l === lang || isModule) return;
+    flushSave();
     byLang.current[lang] = code;
     setCode(byLang.current[l] ?? block.starterCode[l] ?? "");
     setLang(l);
     setRun(null);
     setSubmit(null);
+    setSelectedAttempt(null);
   }
 
   function onCodeChange(v: string) {
     setCode(v);
     byLang.current[activeLang] = v;
-    localStorage.setItem(storageKey(courseId, lessonId, activeLang), v);
+    scheduleSave(storageKey(courseId, lessonId, activeLang), v);
     // The displayed result no longer matches the code — drop it so the user
     // doesn't read a stale "all tests passed" for code they just changed.
     setRun(null);
     setSubmit(null);
+    setSelectedAttempt(null);
   }
 
   function resetCode() {
+    flushSave();
     const starter = starterFor(activeLang);
     byLang.current[activeLang] = starter;
     setCode(starter);
     localStorage.setItem(storageKey(courseId, lessonId, activeLang), starter);
     setRun(null);
     setSubmit(null);
+    setSelectedAttempt(null);
   }
 
   async function doRun() {
@@ -218,12 +294,94 @@ export default function CodeWorkbench({
           <button className="ghost small-ghost" onClick={toggleSolution}>
             {showSolution ? "hide solution" : "solution"}
           </button>
+          <button
+            className={`ghost small-ghost ${historyOpen ? "on" : ""}`}
+            onClick={toggleHistory}
+            title="past submissions"
+          >
+            <PiClock size={13} /> history
+          </button>
           <button className="ghost small-ghost" onClick={resetCode}>
             reset
           </button>
         </div>
         <CodeEditor language={activeLang} value={code} onChange={onCodeChange} />
       </div>
+
+      {historyOpen && (
+        <div className="history-panel">
+          <div className="history-head">
+            <span className="muted small">past submissions</span>
+            {historyLoading && <span className="muted small">loading…</span>}
+            {!historyLoading && history?.length === 0 && (
+              <span className="muted small">no submissions yet — submit once and it shows up here</span>
+            )}
+          </div>
+          {history && history.length > 0 && (
+            <>
+              <div className="history-list">
+                {history.map((s) => (
+                  <button
+                    key={s.id}
+                    className={`history-row ${selectedAttempt === s.id ? "active" : ""}`}
+                    onClick={() => setSelectedAttempt(s.id)}
+                  >
+                    <span className={`verdict-chip verdict-${s.verdict}`}>
+                      {s.verdict}
+                    </span>
+                    <span className="history-meta">
+                      {s.language} · {s.publicPassed}/{s.publicTotal} pub
+                      {s.privateTotal > 0 && ` · ${s.privatePassed}/${s.privateTotal} hidden`}
+                    </span>
+                    <span className="muted small">
+                      {new Date(s.createdAt).toLocaleString()}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {selectedSubmission && (
+                <div className="history-detail">
+                  <div className="history-detail-head">
+                    <span className="muted small">
+                      diff vs the attempt before it {diff && diff.filter((l) => l.kind !== "same").length === 0 && "— identical code"}
+                    </span>
+                    <button
+                      className="ghost small-ghost"
+                      onClick={() => {
+                        flushSave();
+                        byLang.current[activeLang] = selectedSubmission.code;
+                        setCode(selectedSubmission.code);
+                        scheduleSave(
+                          storageKey(courseId, lessonId, activeLang),
+                          selectedSubmission.code
+                        );
+                        setRun(null);
+                        setSubmit(null);
+                        setSelectedAttempt(null);
+                      }}
+                    >
+                      use this code
+                    </button>
+                  </div>
+                  {diff && diff.some((l) => l.kind !== "same") ? (
+                    <pre className="history-diff">
+                      {diff
+                        .filter((l) => l.kind !== "same")
+                        .map((l, i) => (
+                          <div key={i} className={`diff-${l.kind}`}>
+                            {l.kind === "add" ? "+" : "−"} {l.text}
+                          </div>
+                        ))}
+                    </pre>
+                  ) : (
+                    <pre className="history-code">{selectedSubmission.code}</pre>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {showHints && (
         <div className="hints-box">

@@ -5,15 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>TruCoder</title>
-    <script>
-      // Apply the saved theme before React loads to avoid a flash of the wrong palette.
-      (function () {
-        try {
-          var t = localStorage.getItem("tc:theme");
-          if (t) document.documentElement.setAttribute("data-theme", t);
-        } catch (e) {}
-      })();
-    </script>
+    <script src="/theme-preload.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

@@ -66,26 +66,44 @@ export default function CourseIndex() {
           </p>
         </div>
       ) : (
-        <div className="course-grid">
-          {courses.map((c) => {
-            const pct = c.lessonCount ? Math.round((c.solved / c.lessonCount) * 100) : 0;
+        <>
+          {(() => {
+            const cont = courses.find((c) => c.nextLesson);
             return (
-              <Link key={c.id} to={`/course/${c.id}`} className="course-card">
-                <div className="course-card-title">{c.title}</div>
-                <div className="course-card-desc">{c.description}</div>
-                <div className="progress-track-sm">
-                  <div className="progress-fill-sm" style={{ width: `${pct}%` }} />
-                </div>
-                <div className="course-card-meta">
-                  <span>
-                    {c.solved}/{c.lessonCount} done · {pct}%
-                  </span>
-                  <PiArrowRight size={14} />
-                </div>
-              </Link>
+              cont && (
+                <Link
+                  to={`/course/${cont.id}/lessons/${cont.nextLesson!.id}`}
+                  className="continue-card"
+                >
+                  <span className="continue-label">continue where you left off</span>
+                  <span className="continue-course">{cont.title}</span>
+                  <span className="continue-lesson">{cont.nextLesson!.title}</span>
+                  <PiArrowRight size={15} />
+                </Link>
+              )
             );
-          })}
-        </div>
+          })()}
+          <div className="course-grid">
+            {courses.map((c) => {
+              const pct = c.lessonCount ? Math.round((c.solved / c.lessonCount) * 100) : 0;
+              return (
+                <Link key={c.id} to={`/course/${c.id}`} className="course-card">
+                  <div className="course-card-title">{c.title}</div>
+                  <div className="course-card-desc">{c.description}</div>
+                  <div className="progress-track-sm">
+                    <div className="progress-fill-sm" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="course-card-meta">
+                    <span>
+                      {c.solved}/{c.lessonCount} done · {pct}%
+                    </span>
+                    <PiArrowRight size={14} />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </>
       )}
       {/* the easter egg must live INSIDE .page — the route body is a fixed
           height flex column, so an 86vh sibling crushes .page to a sliver

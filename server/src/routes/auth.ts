@@ -9,10 +9,21 @@ import {
   verifyPassword,
 } from "../auth";
 import { userByUsername } from "../db";
+import { createRateLimiter } from "../rate-limit";
 
 export const authRouter = Router();
 
+// The owner account is the only one — brute force is the one real threat.
+const loginLimiter = createRateLimiter(15 * 60 * 1000, 20);
+
 authRouter.post("/login", (req, res) => {
+  const rl = loginLimiter.check(req.ip ?? "?");
+  if (!rl.allowed) {
+    return res
+      .status(429)
+      .set("Retry-After", String(rl.retryAfterSecs))
+      .json({ error: `too many attempts — try again in ${rl.retryAfterSecs}s` });
+  }
   const { username, password } = (req.body ?? {}) as {
     username?: unknown;
     password?: unknown;

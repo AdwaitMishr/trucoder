@@ -12,7 +12,7 @@ Self-host it with Docker in under five minutes — see
 
 ```bash
 git clone <your-fork-or-this-repo> trucoder && cd trucoder
-cp .env.example .env            # set SESSION_SECRET, OWNER_USERNAME, OWNER_PASSWORD
+cp .env.example .env            # set OWNER_USERNAME, OWNER_PASSWORD (COOKIE_SECURE=1 over HTTPS)
 docker compose build            # builds app + sandbox + sandbox-node images
 docker compose up -d            # serves on :3001
 ```
@@ -63,6 +63,10 @@ Every lesson is an **ordered list of typed blocks** — mix and match:
 Legacy lesson formats (body + `starter`/`tests`, or `type: content`) are
 normalized to blocks automatically — nothing needs converting.
 
+Beyond learning, the app ships a small **owner dashboard** at `/admin`
+(per-lesson solve/submission counts, content load errors) and a command
+palette **content search** (⌘K) that indexes lesson text server-side.
+
 - **The loader** scans `courses/` at startup and watches it — drop in a file and
   it reloads without a restart. `courses/AGENTS.md` is the authoring contract
   any contributor should read first.
@@ -91,7 +95,7 @@ server/                      Express API, course loader, grading
 web/                         React frontend (builds to web/dist)
 data/                        SQLite DB (users, sessions, progress) — gitignored
 deploy/                      compose test override + systemd units (webhook trigger)
-.env                         SESSION_SECRET, OWNER_USERNAME, OWNER_PASSWORD, ...
+.env                         OWNER_USERNAME, OWNER_PASSWORD, COOKIE_SECURE, ...
 ```
 
 ### Course content and git
@@ -135,7 +139,7 @@ fine:
 3. **Sandbox image** — `docker build -t trucoder-sandbox:latest sandbox-image/`
    (required for grading; skipped with a warning if Docker isn't running).
 4. **`.env`** — created from `.env.example` if missing. **Edit it** and set
-   `OWNER_PASSWORD` and `SESSION_SECRET`.
+   `OWNER_PASSWORD` (and `COOKIE_SECURE=1` when serving over HTTPS).
 
 Then start the server and verify the shipped course:
 

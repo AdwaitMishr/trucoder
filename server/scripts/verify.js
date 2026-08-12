@@ -120,21 +120,45 @@ function validateQuizBlocks(blocks) {
         }
         continue;
       }
-      const res = await submit(codeBlock, "python", codeBlock.solution);
-      if (res.verdict === "accepted") {
-        pass += 1;
-        console.log(
-          `  PASS ${lesson.id} (${res.publicTests.length} pub + ${res.privateTotal} priv)`
-        );
-      } else {
-        fail += 1;
-        console.log(`  FAIL ${lesson.id} verdict=${res.verdict}`);
-        const bad = res.publicTests.find((t) => t.error) ?? res.publicTests.find((t) => !t.passed);
-        if (bad) {
+      // Verify the canonical `solution` (as python, historical behavior) PLUS
+      // every per-language `solutions` entry in its own language, so a
+      // Java/C++/JS-only regression in a multi-language lesson cannot sail
+      // through CI. A `solutions.python` entry identical to the canonical
+      // solution is skipped (already covered by the python run).
+      const toVerify = [
+        codeBlock.solution ? { lang: "python", code: codeBlock.solution } : null,
+        ...Object.entries(codeBlock.solutions ?? {})
+          .filter(
+            ([lang, code]) =>
+              !(lang === "python" && code === codeBlock.solution)
+          )
+          .map(([lang, code]) => ({ lang, code })),
+      ].filter((v) => v && v.code);
+      let verifiedAny = false;
+      for (const v of toVerify) {
+        verifiedAny = true;
+        const res = await submit(codeBlock, v.lang, v.code);
+        if (res.verdict === "accepted") {
+          pass += 1;
           console.log(
-            "    " + (bad.error || `expected ${bad.expected} got ${bad.actual}`)
+            `  PASS ${lesson.id} [${v.lang}] (${res.publicTests.length} pub + ${res.privateTotal} priv)`
           );
+        } else {
+          fail += 1;
+          console.log(`  FAIL ${lesson.id} [${v.lang}] verdict=${res.verdict}`);
+          const bad =
+            res.publicTests.find((t) => t.error) ??
+            res.publicTests.find((t) => !t.passed);
+          if (bad) {
+            console.log(
+              "    " + (bad.error || `expected ${bad.expected} got ${bad.actual}`)
+            );
+          }
         }
+      }
+      if (!verifiedAny) {
+        fail += 1;
+        console.log(`  FAIL ${lesson.id} (no verifiable solution text)`);
       }
     }
   }

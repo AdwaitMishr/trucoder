@@ -40,6 +40,9 @@ export interface CodeBlock {
   hints: string[];
   /** Reference solution — never sent to the client. */
   solution?: string;
+  /** Per-language reference solutions; `solution` is the fallback when the
+   *  requested language has no entry. Never sent to the client. */
+  solutions?: Partial<Record<Lang, string>>;
   /** "function" (default) | "module" — module exercises run real backend
    *  files against a visible node:test suite instead of solve() functions. */
   mode?: "function" | "module";

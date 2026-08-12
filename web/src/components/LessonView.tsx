@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, ApiError, assetUrl } from "../api";
 import { useDocumentTitle } from "../title";
-import { PiArrowLeft, PiArrowRight, PiArrowSquareOut, PiCheck, PiRows } from "react-icons/pi";
+import { PiArrowLeft, PiArrowRight, PiArrowSquareOut, PiCheck, PiNotePencil, PiRows } from "react-icons/pi";
 import type {
   Block,
   CodeBlock,
@@ -39,6 +39,25 @@ export default function LessonView() {
   });
   const [solvedBlocks, setSolvedBlocks] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notes, setNotes] = useState(() => {
+    try {
+      return localStorage.getItem(`tc:notes:${courseId}:${lessonId}`) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  // Debounced localStorage persist (flushed on change/unmount).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(`tc:notes:${courseId}:${lessonId}`, notes);
+      } catch {
+        /* ignore */
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [notes, courseId, lessonId]);
   const [lightbox, setLightbox] = useState<
     | { src: string; alt: string; caption?: string; w: number; h: number }
     | null
@@ -291,16 +310,34 @@ export default function LessonView() {
           <Link to={`/course/${courseId}`} className="back">
             <PiArrowLeft size={14} /> course
           </Link>
-          {codeBlock && (
+          <div className="lesson-head-actions">
             <button
-              className="ghost"
-              onClick={toggleZen}
-              title={zen ? "exit zen mode" : "zen mode"}
+              className={`ghost ${notesOpen ? "active" : ""}`}
+              onClick={() => setNotesOpen((o) => !o)}
+              title={notesOpen ? "hide notes" : "notes"}
             >
-              <PiRows size={15} /> {zen ? "exit" : "zen"}
+              <PiNotePencil size={15} /> notes
             </button>
-          )}
+            {codeBlock && (
+              <button
+                className="ghost"
+                onClick={toggleZen}
+                title={zen ? "exit zen mode" : "zen mode"}
+              >
+                <PiRows size={15} /> {zen ? "exit" : "zen"}
+              </button>
+            )}
+          </div>
         </div>
+        {notesOpen && (
+          <textarea
+            className="lesson-notes"
+            placeholder="notes for this lesson… (saved locally)"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            spellCheck={false}
+          />
+        )}
         <div className="lesson-head-title-row">
           <h1 className="lesson-head-title">{p.title}</h1>
           {p.progress.solved && (

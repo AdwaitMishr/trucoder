@@ -1,9 +1,12 @@
 import type {
+  AdminStats,
   AnswerResult,
   CourseDetail,
   CourseSummary,
   Lesson,
   RunResult,
+  SearchEntry,
+  SubmissionSummary,
   SubmitResult,
   User,
 } from "./types";
@@ -78,6 +81,15 @@ export const api = {
       `/api/courses/${courseId}/lessons/${lessonId}/answer`,
       { blockId, answers }
     ),
+
+  submissions: (courseId: string, lessonId: string) =>
+    get<{ submissions: SubmissionSummary[] }>(
+      `/api/courses/${courseId}/lessons/${lessonId}/submissions`
+    ),
+
+  searchIndex: () => get<{ lessons: SearchEntry[] }>("/api/courses/search"),
+
+  adminStats: () => get<AdminStats>("/api/admin/stats"),
 };
 
 /** Absolute URL for a course asset (image blocks). */
