@@ -123,18 +123,17 @@ function validateQuizBlocks(blocks) {
       // Verify the canonical `solution` (as python, historical behavior) PLUS
       // every per-language `solutions` entry in its own language, so a
       // Java/C++/JS-only regression in a multi-language lesson cannot sail
-      // through CI. Entries that are the same string as the canonical
-      // solution are skipped (already covered by the python run).
+      // through CI. A `solutions.python` entry identical to the canonical
+      // solution is skipped (already covered by the python run).
       const toVerify = [
         codeBlock.solution ? { lang: "python", code: codeBlock.solution } : null,
-        ...Object.entries(codeBlock.solutions ?? {}).map(([lang, code]) => ({
-          lang,
-          code,
-        })),
-      ].filter(
-        (v) =>
-          v && v.code && !(v.lang === "python" && v.code === codeBlock.solution)
-      );
+        ...Object.entries(codeBlock.solutions ?? {})
+          .filter(
+            ([lang, code]) =>
+              !(lang === "python" && code === codeBlock.solution)
+          )
+          .map(([lang, code]) => ({ lang, code })),
+      ].filter((v) => v && v.code);
       let verifiedAny = false;
       for (const v of toVerify) {
         verifiedAny = true;
