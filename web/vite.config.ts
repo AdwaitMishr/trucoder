@@ -10,7 +10,7 @@ import react from "@vitejs/plugin-react";
 function buildCommit(): string {
   if (process.env.BUILD_COMMIT) return process.env.BUILD_COMMIT;
   try {
-    return execSync("git rev-parse --short HEAD", { cwd: fileURLToPath(new URL("..", import.meta.url)) })
+    return execSync("git rev-parse HEAD", { cwd: fileURLToPath(new URL("..", import.meta.url)) })
       .toString()
       .trim();
   } catch {
