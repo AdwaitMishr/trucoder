@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, ApiError, assetUrl } from "../api";
 import { useDocumentTitle } from "../title";
-import { PiArrowLeft, PiArrowRight, PiArrowSquareOut, PiCheck, PiNotePencil, PiRows } from "react-icons/pi";
+import { PiArrowLeft, PiArrowRight, PiArrowSquareOut, PiCheck, PiPushPin, PiRows } from "react-icons/pi";
 import type {
   Block,
   CodeBlock,
@@ -17,6 +17,7 @@ import Lightbox from "./Lightbox";
 import Markdown from "./Markdown";
 import Mascot from "./Mascot";
 import QuizBlock from "./QuizBlock";
+import StickyNotes from "./StickyNotes";
 import Loader from "./Loader";
 
 const LANGS: { id: Lang; label: string }[] = [
@@ -39,25 +40,7 @@ export default function LessonView() {
   });
   const [solvedBlocks, setSolvedBlocks] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [notes, setNotes] = useState(() => {
-    try {
-      return localStorage.getItem(`tc:notes:${courseId}:${lessonId}`) ?? "";
-    } catch {
-      return "";
-    }
-  });
-  // Debounced localStorage persist (flushed on change/unmount).
-  useEffect(() => {
-    const t = setTimeout(() => {
-      try {
-        localStorage.setItem(`tc:notes:${courseId}:${lessonId}`, notes);
-      } catch {
-        /* ignore */
-      }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [notes, courseId, lessonId]);
+  const [stickyTick, setStickyTick] = useState(0);
   const [lightbox, setLightbox] = useState<
     | { src: string; alt: string; caption?: string; w: number; h: number }
     | null
@@ -305,6 +288,7 @@ export default function LessonView() {
 
   return (
     <div className={`lesson-page ${zen && codeBlock ? "lesson-page-zen" : ""}`} ref={pageRef}>
+      <StickyNotes courseId={courseId} lessonId={lessonId} addTick={stickyTick} />
       <div className="lesson-head">
         <div className="lesson-head-top">
           <Link to={`/course/${courseId}`} className="back">
@@ -312,11 +296,11 @@ export default function LessonView() {
           </Link>
           <div className="lesson-head-actions">
             <button
-              className={`ghost ${notesOpen ? "active" : ""}`}
-              onClick={() => setNotesOpen((o) => !o)}
-              title={notesOpen ? "hide notes" : "notes"}
+              className="ghost"
+              onClick={() => setStickyTick((t) => t + 1)}
+              title="add sticky note"
             >
-              <PiNotePencil size={15} /> notes
+              <PiPushPin size={15} /> sticky
             </button>
             {codeBlock && (
               <button
@@ -329,15 +313,6 @@ export default function LessonView() {
             )}
           </div>
         </div>
-        {notesOpen && (
-          <textarea
-            className="lesson-notes"
-            placeholder="notes for this lesson… (saved locally)"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            spellCheck={false}
-          />
-        )}
         <div className="lesson-head-title-row">
           <h1 className="lesson-head-title">{p.title}</h1>
           {p.progress.solved && (

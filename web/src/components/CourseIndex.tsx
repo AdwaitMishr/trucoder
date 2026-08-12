@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { PiArrowRight } from "react-icons/pi";
+import { PiArrowRight, PiNotepad } from "react-icons/pi";
 import { api } from "../api";
 import { useDocumentTitle } from "../title";
-import type { CourseSummary } from "../types";
+import type { ContinueTarget, CourseSummary } from "../types";
 import GdEasterEgg from "./GdEasterEgg";
 import Loader from "./Loader";
 
 export default function CourseIndex() {
   useDocumentTitle("courses");
   const [courses, setCourses] = useState<CourseSummary[] | null>(null);
+  const [cont, setCont] = useState<ContinueTarget | null>(null);
   const [err, setErr] = useState(false);
   const [tick, setTick] = useState(0);
 
@@ -17,7 +18,10 @@ export default function CourseIndex() {
     setErr(false);
     api
       .courses()
-      .then((r) => setCourses(r.courses))
+      .then((r) => {
+        setCourses(r.courses);
+        setCont(r.continue);
+      })
       .catch(() => setErr(true));
   }, [tick]);
 
@@ -67,20 +71,31 @@ export default function CourseIndex() {
         </div>
       ) : (
         <>
-          {(() => {
-            const cont = courses.find((c) => c.nextLesson);
+          {cont && (() => {
+            const summary = courses.find((c) => c.id === cont.courseId);
             return (
-              cont && (
-                <Link
-                  to={`/course/${cont.id}/lessons/${cont.nextLesson!.id}`}
-                  className="continue-card"
-                >
+              <Link
+                to={`/course/${cont.courseId}/lessons/${cont.lessonId}`}
+                className="continue-card"
+              >
+                <span className="continue-icon">
+                  <PiNotepad size={17} />
+                </span>
+                <span className="continue-text">
                   <span className="continue-label">continue where you left off</span>
-                  <span className="continue-course">{cont.title}</span>
-                  <span className="continue-lesson">{cont.nextLesson!.title}</span>
-                  <PiArrowRight size={15} />
-                </Link>
-              )
+                  <span className="continue-title">
+                    {cont.courseTitle}
+                    <span className="continue-sep">·</span>
+                    {cont.lessonTitle}
+                  </span>
+                </span>
+                {summary && (
+                  <span className="continue-progress">
+                    {summary.solved}/{summary.lessonCount} done
+                  </span>
+                )}
+                <PiArrowRight size={16} className="continue-arrow" />
+              </Link>
             );
           })()}
           <div className="course-grid">

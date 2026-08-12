@@ -1,12 +1,14 @@
 import type {
   AdminStats,
   AnswerResult,
+  ContinueTarget,
   CourseDetail,
   CourseSummary,
   CustomTestResult,
   Lesson,
   RunResult,
   SearchEntry,
+  StickyNote,
   SubmissionSummary,
   SubmitResult,
   User,
@@ -29,13 +31,17 @@ function get<T>(url: string): Promise<T> {
   return fetch(url, { credentials: "same-origin" }).then((r) => parse<T>(r));
 }
 
-function post<T>(url: string, body: unknown): Promise<T> {
+function send<T>(method: string, url: string, body: unknown): Promise<T> {
   return fetch(url, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
     credentials: "same-origin",
   }).then((r) => parse<T>(r));
+}
+
+function post<T>(url: string, body: unknown): Promise<T> {
+  return send<T>("POST", url, body);
 }
 
 export const api = {
@@ -46,7 +52,10 @@ export const api = {
 
   logout: () => post<{ ok: boolean }>("/api/auth/logout", {}),
 
-  courses: () => get<{ courses: CourseSummary[] }>("/api/courses"),
+  courses: () =>
+    get<{ courses: CourseSummary[]; continue: ContinueTarget | null }>(
+      "/api/courses"
+    ),
 
   course: (id: string) => get<CourseDetail>(`/api/courses/${id}`),
 
@@ -104,6 +113,43 @@ export const api = {
   searchIndex: () => get<{ lessons: SearchEntry[] }>("/api/courses/search"),
 
   adminStats: () => get<AdminStats>("/api/admin/stats"),
+
+  // ---- sticky notes ----
+  notes: (courseId: string, lessonId: string) =>
+    get<{ notes: StickyNote[] }>(
+      `/api/courses/${courseId}/lessons/${lessonId}/notes`
+    ),
+
+  createNote: (
+    courseId: string,
+    lessonId: string,
+    x: number,
+    y: number,
+    color: string
+  ) =>
+    post<{ note: StickyNote }>(
+      `/api/courses/${courseId}/lessons/${lessonId}/notes`,
+      { x, y, color }
+    ),
+
+  updateNote: (
+    courseId: string,
+    lessonId: string,
+    noteId: number,
+    patch: Partial<Pick<StickyNote, "x" | "y" | "color" | "text">>
+  ) =>
+    send<{ note: StickyNote }>(
+      "PATCH",
+      `/api/courses/${courseId}/lessons/${lessonId}/notes/${noteId}`,
+      patch
+    ),
+
+  deleteNote: (courseId: string, lessonId: string, noteId: number) =>
+    send<{ ok: boolean }>(
+      "DELETE",
+      `/api/courses/${courseId}/lessons/${lessonId}/notes/${noteId}`,
+      undefined
+    ),
 };
 
 /** Absolute URL for a course asset (image blocks). */

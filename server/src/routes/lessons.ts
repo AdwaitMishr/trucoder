@@ -2,12 +2,16 @@ import { Router } from "express";
 import { getCourse, getLesson } from "../courses/loader";
 import type { Block, CodeBlock, Lang, QuizBlock } from "../courses/types";
 import {
+  createStickyNote,
+  deleteStickyNote,
   getProgress,
   getRecentSubmissions,
   getSolvedQuizBlocks,
+  listStickyNotes,
   markLessonRead,
   recordAnswer,
   recordSubmission,
+  updateStickyNote,
 } from "../db";
 import { runPublic, runModule, submit, runCustom } from "../judge";
 import { createRateLimiter } from "../rate-limit";
@@ -463,4 +467,102 @@ lessonsRouter.get("/:lessonId/submissions", (req, res) => {
       createdAt: r.created_at,
     })),
   });
+});
+
+// ---- sticky notes ----
+// Notes are pinned to the lesson page's margins and synced per user; they
+// follow the learner across devices. Positions are page-relative px.
+const NOTE_COLORS = new Set(["auto", "yellow", "pink", "green", "blue", "purple", "orange"]);
+const NOTE_TEXT_MAX = 5000;
+
+function noteJson(r: {
+  id: number;
+  x: number;
+  y: number;
+  color: string;
+  text: string;
+  updated_at: string;
+}) {
+  return { id: r.id, x: r.x, y: r.y, color: r.color, text: r.text, updatedAt: r.updated_at };
+}
+
+/** All sticky notes on this lesson for the current user. */
+lessonsRouter.get("/:lessonId/notes", (req, res) => {
+  const userId = req.userId!;
+  const { courseId, lessonId } = paramsOf(req);
+  const lesson = getLesson(courseId, lessonId);
+  if (!lesson) return res.status(404).json({ error: "lesson not found" });
+  res.json({ notes: listStickyNotes(userId, courseId, lessonId).map(noteJson) });
+});
+
+/** Create a sticky note (position may be omitted — the client auto-places). */
+lessonsRouter.post("/:lessonId/notes", (req, res) => {
+  const userId = req.userId!;
+  const { courseId, lessonId } = paramsOf(req);
+  const lesson = getLesson(courseId, lessonId);
+  if (!lesson) return res.status(404).json({ error: "lesson not found" });
+  const b = req.body as { x?: unknown; y?: unknown; color?: unknown };
+  const x = typeof b?.x === "number" && Number.isFinite(b.x) ? Math.round(b.x) : 0;
+  const y = typeof b?.y === "number" && Number.isFinite(b.y) ? Math.round(b.y) : 0;
+  const color =
+    typeof b?.color === "string" && NOTE_COLORS.has(b.color) ? b.color : "auto";
+  const note = createStickyNote(userId, courseId, lessonId, x, y, color);
+  res.json({ note: noteJson(note) });
+});
+
+/** Move / recolor / edit a sticky note (owner only). */
+lessonsRouter.patch("/:lessonId/notes/:noteId", (req, res) => {
+  const userId = req.userId!;
+  const { courseId, lessonId } = paramsOf(req);
+  const lesson = getLesson(courseId, lessonId);
+  if (!lesson) return res.status(404).json({ error: "lesson not found" });
+  const noteId = Number(req.params.noteId);
+  if (!Number.isInteger(noteId) || noteId < 0) {
+    return res.status(400).json({ error: "invalid note id" });
+  }
+  const b = req.body as Record<string, unknown>;
+  const patch: { x?: number; y?: number; color?: string; text?: string } = {};
+  if (b.x !== undefined) {
+    if (typeof b.x !== "number" || !Number.isFinite(b.x)) {
+      return res.status(400).json({ error: "invalid x" });
+    }
+    patch.x = Math.round(b.x);
+  }
+  if (b.y !== undefined) {
+    if (typeof b.y !== "number" || !Number.isFinite(b.y)) {
+      return res.status(400).json({ error: "invalid y" });
+    }
+    patch.y = Math.round(b.y);
+  }
+  if (b.color !== undefined) {
+    if (typeof b.color !== "string" || !NOTE_COLORS.has(b.color)) {
+      return res.status(400).json({ error: "invalid color" });
+    }
+    patch.color = b.color;
+  }
+  if (b.text !== undefined) {
+    if (typeof b.text !== "string" || b.text.length > NOTE_TEXT_MAX) {
+      return res.status(400).json({ error: "invalid text" });
+    }
+    patch.text = b.text;
+  }
+  const note = updateStickyNote(userId, noteId, patch);
+  if (!note) return res.status(404).json({ error: "note not found" });
+  res.json({ note: noteJson(note) });
+});
+
+/** Delete a sticky note (owner only). */
+lessonsRouter.delete("/:lessonId/notes/:noteId", (req, res) => {
+  const userId = req.userId!;
+  const { courseId, lessonId } = paramsOf(req);
+  const lesson = getLesson(courseId, lessonId);
+  if (!lesson) return res.status(404).json({ error: "lesson not found" });
+  const noteId = Number(req.params.noteId);
+  if (!Number.isInteger(noteId) || noteId < 0) {
+    return res.status(400).json({ error: "invalid note id" });
+  }
+  if (!deleteStickyNote(userId, noteId)) {
+    return res.status(404).json({ error: "note not found" });
+  }
+  res.json({ ok: true });
 });

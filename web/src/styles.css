@@ -699,6 +699,7 @@ button.ghost:disabled { opacity: 0.5; cursor: default; }
 .lesson-page {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
   padding: 16px 20px; gap: 12px; overflow-y: auto;
+  position: relative; /* coordinate space for sticky notes */
 }
 .lesson-head {
   display: flex; flex-direction: column; gap: 8px;
@@ -2781,28 +2782,189 @@ button.ghost.small-ghost.on { color: var(--accent); }
 }
 .md-code-copy:hover { color: var(--ink); border-color: var(--accent); }
 
+/* ---- sticky notes ---- */
+.sticky-layer {
+  position: absolute; inset: 0; pointer-events: none;
+}
+.sticky-pos {
+  position: absolute; pointer-events: auto;
+}
+.sticky-note {
+  --sn-bg: color-mix(in srgb, var(--accent) 24%, #fffdf4);
+  --sn-ink: color-mix(in srgb, var(--accent) 62%, #2c2517);
+  --sn-edge: rgba(0, 0, 0, 0.09);
+  position: relative;
+  width: 190px; min-height: 120px;
+  padding: 12px 12px 10px;
+  background:
+    /* faint paper sheen + fiber lines */
+    linear-gradient(rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 45%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.016) 0 1px, transparent 1px 3px),
+    var(--sn-bg);
+  color: var(--sn-ink);
+  font-family: "Comic Neue", "Comic Sans MS", cursive;
+  border-radius: 3px;
+  transform: rotate(var(--rot));
+  touch-action: none;
+  cursor: grab;
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.12),
+    0 3px 6px rgba(0, 0, 0, 0.10),
+    0 12px 24px -10px rgba(0, 0, 0, 0.32);
+  transition: box-shadow 0.18s, transform 0.18s;
+}
+.sticky-note[data-color="auto"]    { --sn-bg: color-mix(in srgb, var(--accent) 26%, #fffdf3); --sn-ink: color-mix(in srgb, var(--accent) 62%, #2c2517); }
+.sticky-note[data-color="yellow"]  { --sn-bg: #fff3a2; --sn-ink: #4a4023; }
+.sticky-note[data-color="pink"]    { --sn-bg: #ffc2d3; --sn-ink: #572e3d; }
+.sticky-note[data-color="green"]   { --sn-bg: #c2edbb; --sn-ink: #2f4a2b; }
+.sticky-note[data-color="blue"]    { --sn-bg: #b9d7ff; --sn-ink: #26394f; }
+.sticky-note[data-color="purple"]  { --sn-bg: #dfcbfa; --sn-ink: #45305e; }
+.sticky-note[data-color="orange"]  { --sn-bg: #ffd79e; --sn-ink: #573d1c; }
+/* lifted top edge — the pad's glue line */
+.sticky-note::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 10px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+/* translucent tape strip — sells the "stuck on" look */
+.sticky-tape {
+  position: absolute; top: -11px; left: 50%;
+  width: 62px; height: 22px;
+  transform: translateX(-50%) rotate(-2.5deg);
+  background: linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.30));
+  border-left: 1px dashed rgba(0, 0, 0, 0.05);
+  border-right: 1px dashed rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  pointer-events: none;
+}
+/* curled corner */
+.sticky-note::after {
+  content: ""; position: absolute; right: 0; bottom: 0;
+  width: 18px; height: 18px;
+  background:
+    linear-gradient(315deg, transparent 52%, var(--sn-edge) 52% 64%, transparent 64%),
+    linear-gradient(315deg, transparent 45%, rgba(255, 255, 255, 0.35) 45% 52%, transparent 52%);
+  border-radius: 0 0 3px 0;
+  pointer-events: none;
+}
+.sticky-note:hover, .sticky-note:focus-within {
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.14),
+    0 14px 26px -10px rgba(0, 0, 0, 0.38);
+  z-index: 30;
+}
+.sticky-note.dragging {
+  cursor: grabbing;
+  transform: rotate(0deg) scale(1.04);
+  box-shadow:
+    0 3px 6px rgba(0, 0, 0, 0.16),
+    0 20px 34px -12px rgba(0, 0, 0, 0.45);
+  transition: none;
+}
+.sticky-text {
+  width: 100%; min-height: 76px; max-height: 240px;
+  border: none; outline: none; resize: none;
+  background: transparent; color: var(--sn-ink);
+  font-family: "Comic Neue", "Comic Sans MS", cursive;
+  font-size: 15px; line-height: 1.4;
+}
+.sticky-text::placeholder { color: var(--sn-ink); opacity: 0.45; }
+.sticky-tools {
+  position: absolute; top: -9px; right: -9px;
+  display: none; z-index: 2;
+}
+.sticky-note:hover .sticky-tools,
+.sticky-note:focus-within .sticky-tools,
+.sticky-note.dragging .sticky-tools { display: block; }
+.sticky-delete {
+  width: 20px; height: 20px; border-radius: 50%; border: none;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(30, 26, 18, 0.72); color: #fff;
+  cursor: pointer;
+}
+.sticky-delete:hover { background: #c0392b; }
+.sticky-colors {
+  position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%);
+  display: none; align-items: center; gap: 5px;
+  padding: 4px 7px; border-radius: 999px;
+  background: rgba(28, 24, 16, 0.62);
+  z-index: 2;
+}
+.sticky-note:hover .sticky-colors,
+.sticky-note:focus-within .sticky-colors { display: flex; }
+.sticky-color-dot {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  cursor: pointer; padding: 0;
+}
+.sticky-color-dot[data-color="auto"]    { background: color-mix(in srgb, var(--accent) 45%, #fffdf4); }
+.sticky-color-dot[data-color="yellow"]  { background: #fff59d; }
+.sticky-color-dot[data-color="pink"]    { background: #ffc9d8; }
+.sticky-color-dot[data-color="green"]   { background: #c6efc1; }
+.sticky-color-dot[data-color="blue"]    { background: #bfdcff; }
+.sticky-color-dot[data-color="purple"]  { background: #e2d0fb; }
+.sticky-color-dot[data-color="orange"]  { background: #ffd9a8; }
+.sticky-color-dot.sel { transform: scale(1.25); }
+.sticky-color-dot:hover { transform: scale(1.25); }
+
+/* mobile: notes collapse into a static wall at the bottom of the lesson */
+.sticky-wall { display: none; }
+@media (max-width: 720px) {
+  .sticky-layer { display: none; }
+  .sticky-wall {
+    display: flex; flex-direction: column; gap: 12px;
+    margin-top: 10px; padding: 14px 4px 10px;
+    border-top: 1px dashed var(--hairline);
+  }
+  .sticky-wall .sticky-note {
+    width: 100%; transform: rotate(var(--rot)) scale(1);
+    cursor: default; touch-action: auto;
+  }
+  .sticky-wall .sticky-colors { position: static; transform: none; align-self: flex-start; background: rgba(28,24,16,0.10); margin-top: 6px; display: flex; }
+  .sticky-wall .sticky-tools { display: block; }
+  .sticky-wall .sticky-text { min-height: 44px; }
+}
+
 /* ---- continue card (course index) ---- */
 .continue-card {
-  display: flex; align-items: center; gap: 10px;
-  border: 1px solid var(--accent); border-radius: 10px;
-  background: var(--accent-soft); color: var(--ink);
-  padding: 14px 18px; margin-bottom: 18px; text-decoration: none;
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface);
+  border: 1px solid var(--hairline); border-radius: 12px;
+  padding: 13px 18px; margin-bottom: 18px;
+  color: var(--ink); text-decoration: none;
+  box-shadow: var(--card);
+  transition: border-color 0.15s, transform 0.15s;
 }
 .continue-card:hover { border-color: var(--accent); }
-.continue-label { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
-.continue-course { font-weight: 600; }
-.continue-lesson { color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* ---- lesson notes ---- */
-.lesson-head-actions { display: flex; align-items: center; gap: 6px; }
-.lesson-notes {
-  width: 100%; min-height: 84px; margin-top: 12px; resize: vertical;
-  border: 1px solid var(--hairline); border-radius: 8px;
-  background: var(--surface); color: var(--ink);
-  padding: 10px 12px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5;
+.continue-card:hover .continue-arrow { transform: translateX(3px); color: var(--accent); }
+.continue-icon {
+  flex: 0 0 auto;
+  width: 34px; height: 34px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent-soft); color: var(--accent);
 }
-.lesson-notes:focus { outline: none; border-color: var(--accent); }
-.lesson-notes::placeholder { color: var(--muted); opacity: 0.8; }
+.continue-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.continue-label {
+  font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600;
+}
+.continue-title {
+  font-size: 14.5px; font-weight: 600; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.continue-sep { margin: 0 6px; color: var(--muted); font-weight: 400; }
+.continue-progress {
+  flex: 0 0 auto;
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--muted); background: var(--bg);
+  border: 1px solid var(--hairline); border-radius: 999px;
+  padding: 3px 10px;
+}
+.continue-arrow { flex: 0 0 auto; color: var(--muted); transition: transform 0.15s, color 0.15s; }
+
+/* ---- lesson head ---- */
+.lesson-head-actions { display: flex; align-items: center; gap: 6px; }
 
 /* ---- admin dashboard ---- */
 .admin-section { margin-top: 22px; }

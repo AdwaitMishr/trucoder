@@ -8,9 +8,18 @@ export interface CourseSummary {
   difficultyLevels: string[];
   lessonCount: number;
   solved: number;
-  /** First unsolved lesson (by order) — "continue where you left off". */
+  /** First unsolved lesson (by order). */
   nextLesson: { id: string; title: string } | null;
   body: string;
+}
+
+/** "Continue where you left off" — most recently active course, first
+ *  unsolved lesson at/after the last visited one. Null when nothing to do. */
+export interface ContinueTarget {
+  courseId: string;
+  courseTitle: string;
+  lessonId: string;
+  lessonTitle: string;
 }
 
 export interface LessonMeta {
@@ -187,6 +196,17 @@ export interface SubmissionSummary {
   privatePassed: number;
   privateTotal: number;
   createdAt: string;
+}
+
+// ---- sticky notes ----
+export interface StickyNote {
+  id: number;
+  x: number;
+  y: number;
+  /** 'auto' resolves to a theme-derived pastel; otherwise a palette id. */
+  color: string;
+  text: string;
+  updatedAt: string;
 }
 
 // ---- content search (command palette) ----

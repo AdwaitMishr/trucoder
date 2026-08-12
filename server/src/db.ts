@@ -68,6 +68,19 @@ db.exec(`
     answered_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (user_id, course_id, lesson_id, block_id)
   );
+
+  CREATE TABLE IF NOT EXISTS sticky_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    course_id TEXT NOT NULL,
+    lesson_id TEXT NOT NULL,
+    x REAL NOT NULL DEFAULT 0,
+    y REAL NOT NULL DEFAULT 0,
+    color TEXT NOT NULL DEFAULT 'auto',
+    text TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Expired session rows are dead weight — sweep them at boot (resolveToken
@@ -327,6 +340,106 @@ export function getRecentSubmissions(
        ORDER BY id DESC LIMIT ?`
     )
     .all(userId, courseId, lessonId, limit) as SubmissionRow[];
+}
+
+// ---- sticky notes ----
+export interface StickyNoteRow {
+  id: number;
+  user_id: number;
+  course_id: string;
+  lesson_id: string;
+  x: number;
+  y: number;
+  color: string;
+  text: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export function listStickyNotes(
+  userId: number,
+  courseId: string,
+  lessonId: string
+): StickyNoteRow[] {
+  return db
+    .prepare(
+      `SELECT * FROM sticky_notes
+       WHERE user_id = ? AND course_id = ? AND lesson_id = ?
+       ORDER BY id`
+    )
+    .all(userId, courseId, lessonId) as StickyNoteRow[];
+}
+
+export function createStickyNote(
+  userId: number,
+  courseId: string,
+  lessonId: string,
+  x: number,
+  y: number,
+  color: string
+): StickyNoteRow {
+  const info = db
+    .prepare(
+      `INSERT INTO sticky_notes (user_id, course_id, lesson_id, x, y, color)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .run(userId, courseId, lessonId, x, y, color);
+  return db
+    .prepare(`SELECT * FROM sticky_notes WHERE id = ?`)
+    .get(info.lastInsertRowid) as StickyNoteRow;
+}
+
+/** Update a note owned by this user; returns the updated row or undefined
+ *  when the note does not exist / is not theirs. */
+export function updateStickyNote(
+  userId: number,
+  noteId: number,
+  patch: { x?: number; y?: number; color?: string; text?: string }
+): StickyNoteRow | undefined {
+  const sets: string[] = [];
+  const vals: (string | number)[] = [];
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) continue;
+    sets.push(`${k} = ?`);
+    vals.push(v);
+  }
+  if (sets.length === 0) return undefined;
+  sets.push(`updated_at = datetime('now')`);
+  const info = db
+    .prepare(
+      `UPDATE sticky_notes SET ${sets.join(", ")}
+       WHERE id = ? AND user_id = ?`
+    )
+    .run(...vals, noteId, userId);
+  if (info.changes === 0) return undefined;
+  return db
+    .prepare(`SELECT * FROM sticky_notes WHERE id = ?`)
+    .get(noteId) as StickyNoteRow;
+}
+
+export function deleteStickyNote(
+  userId: number,
+  noteId: number
+): boolean {
+  const info = db
+    .prepare(`DELETE FROM sticky_notes WHERE id = ? AND user_id = ?`)
+    .run(noteId, userId);
+  return info.changes > 0;
+}
+
+// ---- continue-where-you-left-off ----
+/** The course + lesson of the user's most recently touched progress row. */
+export function getMostRecentProgress(
+  userId: number
+): { course_id: string; lesson_id: string } | null {
+  const row = db
+    .prepare(
+      `SELECT course_id, lesson_id FROM progress
+       WHERE user_id = ? AND last_attempt_at IS NOT NULL
+       ORDER BY last_attempt_at DESC LIMIT 1`
+    )
+    .get(userId) as { course_id: string; lesson_id: string } | undefined;
+  return row ?? null;
 }
 
 // ---- admin stats ----
