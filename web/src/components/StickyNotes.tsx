@@ -154,7 +154,10 @@ export default function StickyNotes({
 
   const page = () => pageRef.current?.parentElement ?? null;
 
-  /** The free-space zones beside the content column, in page coordinates. */
+  /** The free-space zones beside the content column, in page coordinates.
+   *  Only meaningful when the content column is centered (margins on BOTH
+   *  sides): in split mode the "right zone" would be the workbench panel,
+   *  so no zones are reported there and notes float freely. */
   const marginZones = useCallback((): {
     left: number;
     right: number;
@@ -167,10 +170,13 @@ export default function StickyNotes({
     if (!content) return null;
     const p = el.getBoundingClientRect();
     const c = content.getBoundingClientRect();
+    const contentCenter = c.left + c.width / 2 - p.left;
+    const pageCenter = p.width / 2;
+    if (Math.abs(contentCenter - pageCenter) > 80) return null; // split mode
     return {
       left: Math.round(c.left - p.left),
       right: Math.round(p.right - c.right),
-      center: Math.round(c.left + c.width / 2 - p.left),
+      center: Math.round(contentCenter),
     };
   }, []);
 
@@ -228,7 +234,7 @@ export default function StickyNotes({
 
   // ---- drag ----
   const onDragStart = (e: React.PointerEvent, note: StickyNote) => {
-    if (window.innerWidth < 721) return; // wall mode on mobile
+    if (window.innerWidth < 900) return; // wall mode on phones/tablets
     if ((e.target as HTMLElement).closest(".sticky-text, .sticky-tools, .sticky-colors"))
       return;
     e.preventDefault();
@@ -314,15 +320,15 @@ export default function StickyNotes({
     const head = el.querySelector<HTMLElement>(".lesson-head");
     const headH = head ? head.offsetHeight + 24 : 106;
     const scrollTop = el.scrollTop || 0;
-    // Prefer the left margin; fall back to right, then free space.
+    // Prefer the left margin; fall back to right, then the left edge.
     let x = GAP;
     let y = scrollTop + headH;
     if (!zones || zones.left < NOTE_W + GAP * 2) {
       if (zones && zones.right >= NOTE_W + GAP * 2) {
         x = el.clientWidth - zones.right + GAP;
-      } else {
-        x = Math.max(GAP, (el.clientWidth - NOTE_W) / 2 - 40);
       }
+      // no margin fits (split mode, small laptops): left edge — the least
+      // intrusive spot; the user drags it where they want it
     }
     const spot = findFreeSpot(x, y);
     const c = clampPos(spot.x, spot.y);
