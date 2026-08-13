@@ -155,20 +155,28 @@ export default function StickyNotes({
   const page = () => pageRef.current?.parentElement ?? null;
 
   /** The free-space zones beside the content column, in page coordinates. */
-  const marginZones = useCallback((): { left: number; right: number } | null => {
+  const marginZones = useCallback((): {
+    left: number;
+    right: number;
+    /** Center of the content column — the zone choice flips at this x. */
+    center: number;
+  } | null => {
     const el = page();
     if (!el) return null;
     const content = el.querySelector<HTMLElement>(".zen-body, .lesson-content");
     if (!content) return null;
     const p = el.getBoundingClientRect();
     const c = content.getBoundingClientRect();
-    const left = Math.round(c.left - p.left);
-    const right = Math.round(p.right - c.right);
-    return { left, right };
+    return {
+      left: Math.round(c.left - p.left),
+      right: Math.round(p.right - c.right),
+      center: Math.round(c.left + c.width / 2 - p.left),
+    };
   }, []);
 
   /** Clamp (x,y) into the margin zone nearest the note's center; falls back
-   *  to free movement when no margin is wide enough for a note. */
+   *  to free movement when no margin is wide enough for a note. Dragging
+   *  across the content column's midline flips the note to the other side. */
   const clampPos = useCallback(
     (x: number, y: number): { x: number; y: number } => {
       const el = page();
@@ -177,11 +185,25 @@ export default function StickyNotes({
       const pageH = Math.max(el.scrollHeight, el.clientHeight);
       const zones = marginZones();
       let cx = Math.min(Math.max(x, 0), Math.max(pageW - NOTE_W, 0));
-      if (zones && zones.left >= NOTE_W + GAP * 2) {
-        cx = Math.min(Math.max(x, GAP), zones.left - GAP - NOTE_W);
-      } else if (zones && zones.right >= NOTE_W + GAP * 2) {
-        const rightZoneX = pageW - zones.right + GAP;
-        cx = Math.min(Math.max(x, rightZoneX), pageW - NOTE_W - GAP);
+      if (zones) {
+        const leftFits = zones.left >= NOTE_W + GAP * 2;
+        const rightFits = zones.right >= NOTE_W + GAP * 2;
+        if (leftFits && !rightFits) {
+          cx = Math.min(Math.max(x, GAP), zones.left - GAP - NOTE_W);
+        } else if (rightFits && !leftFits) {
+          cx = Math.min(Math.max(x, pageW - zones.right + GAP), pageW - NOTE_W - GAP);
+        } else if (leftFits && rightFits) {
+          // Nearest zone by the note's center — crossing the content column
+          // midline flips it to the other margin.
+          if (x + NOTE_W / 2 < zones.center) {
+            cx = Math.min(Math.max(x, GAP), zones.left - GAP - NOTE_W);
+          } else {
+            cx = Math.min(
+              Math.max(x, pageW - zones.right + GAP),
+              pageW - NOTE_W - GAP
+            );
+          }
+        }
       }
       return {
         x: cx,
