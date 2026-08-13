@@ -12,8 +12,16 @@ const MONACO_LANG: Record<string, string> = {
   cpp: "cpp",
 };
 
+/** Monaco only accepts 6-digit hex (3-digit shorthand throws "Illegal value
+ *  for token color"). Expand shorthand so no theme can crash the editor. */
+function normalizeHex(hex: string): string {
+  return /^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/.test(hex)
+    ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+    : hex;
+}
+
 function hexToRgba(hex: string, a: number): string {
-  const n = hex.replace("#", "");
+  const n = normalizeHex(hex).replace("#", "");
   const r = parseInt(n.slice(0, 2), 16);
   const g = parseInt(n.slice(2, 4), 16);
   const b = parseInt(n.slice(4, 6), 16);
@@ -42,29 +50,38 @@ const monacoThemeName = (id: string) => monacoNameById.get(id) ?? `trucoder-${id
  *  is tinted from the theme palette while token colors are inherited from the
  *  matching light/dark base so syntax highlighting stays crisp. */
 function defineEditorTheme(monaco: any, t: ThemeDef) {
-  const c = t.colors;
-  monaco.editor.defineTheme(monacoThemeName(t.id), {
-    base: t.kind === "dark" ? "vs-dark" : "vs",
-    inherit: true,
-    rules: [],
-    colors: {
-      "editor.background": c.bg,
-      "editor.foreground": c.ink,
-      "editorCursor.foreground": c.caret,
-      "editor.selectionBackground": hexToRgba(c.accent, 0.28),
-      "editor.inactiveSelectionBackground": hexToRgba(c.accent, 0.1),
-      "editor.lineHighlightBackground": c.surface2,
-      "editorLineNumber.foreground": c.muted,
-      "editorLineNumber.activeForeground": c.ink,
-      "editorGutter.background": c.bg,
-      "editorWidget.background": c.surface,
-      "editorWidget.border": c.hairline,
-      "editorIndentGuide.background1": c.hairline,
-      "editorIndentGuide.activeBackground1": hexToRgba(c.muted, 0.5),
-      "scrollbarSlider.background": hexToRgba(c.muted, 0.3),
-      "scrollbarSlider.hoverBackground": hexToRgba(c.muted, 0.45),
-    },
-  });
+  const c = { ...t.colors };
+  for (const key of Object.keys(c) as (keyof typeof c)[]) {
+    c[key] = normalizeHex(c[key]);
+  }
+  try {
+    monaco.editor.defineTheme(monacoThemeName(t.id), {
+      base: t.kind === "dark" ? "vs-dark" : "vs",
+      inherit: true,
+      rules: [],
+      colors: {
+        "editor.background": c.bg,
+        "editor.foreground": c.ink,
+        "editorCursor.foreground": c.caret,
+        "editor.selectionBackground": hexToRgba(c.accent, 0.28),
+        "editor.inactiveSelectionBackground": hexToRgba(c.accent, 0.1),
+        "editor.lineHighlightBackground": c.surface2,
+        "editorLineNumber.foreground": c.muted,
+        "editorLineNumber.activeForeground": c.ink,
+        "editorGutter.background": c.bg,
+        "editorWidget.background": c.surface,
+        "editorWidget.border": c.hairline,
+        "editorIndentGuide.background1": c.hairline,
+        "editorIndentGuide.activeBackground1": hexToRgba(c.muted, 0.5),
+        "scrollbarSlider.background": hexToRgba(c.muted, 0.3),
+        "scrollbarSlider.hoverBackground": hexToRgba(c.muted, 0.45),
+      },
+    });
+  } catch {
+    // ponytail: a broken theme is skipped rather than killing the editor;
+    // the app keeps running and the user can switch away. Remove the
+    // try/catch if themes ever get validated at build time.
+  }
 }
 
 /** Turn off Monaco's JS/TS diagnostics. The sandbox (not Monaco) is the judge,
