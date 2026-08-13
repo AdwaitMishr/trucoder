@@ -31,7 +31,11 @@ const Ctx = createContext<ThemeCtx | null>(null);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [themeId, setThemeId] = useState<string>(() => {
     try {
-      return localStorage.getItem(THEME_KEY) ?? DEFAULT_THEME;
+      const stored = localStorage.getItem(THEME_KEY) ?? DEFAULT_THEME;
+      // A stored id that no longer exists would silently fall back to the
+      // default while being re-saved forever; drop it instead so the next
+      // load starts clean.
+      return THEMES.some((t) => t.id === stored) ? stored : DEFAULT_THEME;
     } catch {
       return DEFAULT_THEME;
     }

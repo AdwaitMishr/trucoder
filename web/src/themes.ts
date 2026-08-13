@@ -210,7 +210,7 @@ export const THEMES: ThemeDef[] = [
   {
     id: "aurora", name: "aurora", kind: "dark",
     colors: {
-      bg: "#011926", ink: "#fff", muted: "#245c69",
+      bg: "#011926", ink: "#ffffff", muted: "#245c69",
       surface: "#000c13", surface2: "#00121c", hairline: "#143e4b",
       accent: "#00e980", accentInk: "#011926", caret: "#00e980",
       ok: "#4ead6e", err: "#b94da1",
@@ -246,7 +246,7 @@ export const THEMES: ThemeDef[] = [
   {
     id: "bliss", name: "bliss", kind: "dark",
     colors: {
-      bg: "#262727", ink: "#fff", muted: "#665957",
+      bg: "#262727", ink: "#ffffff", muted: "#665957",
       surface: "#343231", surface2: "#2d2c2c", hairline: "#494241",
       accent: "#f0d3c9", accentInk: "#262727", caret: "#f0d3c9",
       ok: "#4ead6e", err: "#bd4141",
@@ -507,9 +507,9 @@ export const THEMES: ThemeDef[] = [
   {
     id: "dots", name: "dots", kind: "dark",
     colors: {
-      bg: "#121520", ink: "#fff", muted: "#676e8a",
+      bg: "#121520", ink: "#ffffff", muted: "#676e8a",
       surface: "#1b1e2c", surface2: "#161a26", hairline: "#41465a",
-      accent: "#fff", accentInk: "#121520", caret: "#fff",
+      accent: "#ffffff", accentInk: "#121520", caret: "#ffffff",
       ok: "#4ead6e", err: "#da3333",
     },
   },
@@ -687,7 +687,7 @@ export const THEMES: ThemeDef[] = [
   {
     id: "grape", name: "grape", kind: "dark",
     colors: {
-      bg: "#2c003e", ink: "#fff", muted: "#6e225e",
+      bg: "#2c003e", ink: "#ffffff", muted: "#6e225e",
       surface: "#1f002d", surface2: "#260036", hairline: "#501350",
       accent: "#ff8f00", accentInk: "#2c003e", caret: "#ff8f00",
       ok: "#4ead6e", err: "#ff4081",
@@ -975,9 +975,9 @@ export const THEMES: ThemeDef[] = [
   {
     id: "mexican", name: "mexican", kind: "light",
     colors: {
-      bg: "#f8ad34", ink: "#eee", muted: "#333",
+      bg: "#f8ad34", ink: "#eeeeee", muted: "#333333",
       surface: "#f9b951", surface2: "#f8b342", hairline: "#8c6a33",
-      accent: "#b12189", accentInk: "#f8ad34", caret: "#eee",
+      accent: "#b12189", accentInk: "#f8ad34", caret: "#eeeeee",
       ok: "#2c613d", err: "#da3333",
     },
   },
@@ -993,7 +993,7 @@ export const THEMES: ThemeDef[] = [
   {
     id: "miami_nights", name: "miami_nights", kind: "dark",
     colors: {
-      bg: "#18181a", ink: "#fff", muted: "#47bac0",
+      bg: "#18181a", ink: "#ffffff", muted: "#47bac0",
       surface: "#0f0f10", surface2: "#141415", hairline: "#327175",
       accent: "#e4609b", accentInk: "#18181a", caret: "#e4609b",
       ok: "#4ead6e", err: "#fff591",
@@ -1263,9 +1263,9 @@ export const THEMES: ThemeDef[] = [
   {
     id: "phantom", name: "phantom", kind: "dark",
     colors: {
-      bg: "#001", ink: "#c0caf5", muted: "#414868",
+      bg: "#000011", ink: "#c0caf5", muted: "#414868",
       surface: "#24283b", surface2: "#121426", hairline: "#242841",
-      accent: "#7aa2f7", accentInk: "#001", caret: "#bb9af7",
+      accent: "#7aa2f7", accentInk: "#000011", caret: "#bb9af7",
       ok: "#4ead6e", err: "#f7768e",
     },
   },
@@ -1362,10 +1362,10 @@ export const THEMES: ThemeDef[] = [
   {
     id: "rgb", name: "rgb", kind: "dark",
     colors: {
-      bg: "#111", ink: "#eee", muted: "#444",
+      bg: "#111111", ink: "#eeeeee", muted: "#444444",
       surface: "#1a1a1a", surface2: "#161616", hairline: "#2d2d2d",
-      accent: "#eee", accentInk: "#111", caret: "#eee",
-      ok: "#4ead6e", err: "#eee",
+      accent: "#eeeeee", accentInk: "#111111", caret: "#eeeeee",
+      ok: "#4ead6e", err: "#eeeeee",
     },
   },
   {
@@ -1452,10 +1452,10 @@ export const THEMES: ThemeDef[] = [
   {
     id: "shadow", name: "shadow", kind: "dark",
     colors: {
-      bg: "#000", ink: "#eee", muted: "#444",
+      bg: "#000000", ink: "#eeeeee", muted: "#444444",
       surface: "#171717", surface2: "#0c0c0c", hairline: "#252525",
-      accent: "#eee", accentInk: "#000", caret: "#eee",
-      ok: "#4ead6e", err: "#fff",
+      accent: "#eeeeee", accentInk: "#000000", caret: "#eeeeee",
+      ok: "#4ead6e", err: "#ffffff",
     },
   },
   {
@@ -1677,7 +1677,7 @@ export const THEMES: ThemeDef[] = [
   {
     id: "trance", name: "trance", kind: "dark",
     colors: {
-      bg: "#00021b", ink: "#fff", muted: "#3c4c79",
+      bg: "#00021b", ink: "#ffffff", muted: "#3c4c79",
       surface: "#18214c", surface2: "#0c1234", hairline: "#212b4f",
       accent: "#e51376", accentInk: "#00021b", caret: "#e51376",
       ok: "#4ead6e", err: "#02d3b0",
