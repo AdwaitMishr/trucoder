@@ -2867,9 +2867,12 @@ button.ghost.small-ghost.on { color: var(--accent); }
   border: none; outline: none; resize: none;
   background: transparent; color: var(--sn-ink);
   font-family: "Comic Neue", "Comic Sans MS", cursive;
+  /* Comic Neue 400 is light — 700 keeps the handwritten look but stays
+     legible on the pastel background */
+  font-weight: 700;
   font-size: 15px; line-height: 1.4;
 }
-.sticky-text::placeholder { color: var(--sn-ink); opacity: 0.45; }
+.sticky-text::placeholder { color: var(--sn-ink); opacity: 0.45; font-weight: 400; }
 .sticky-tools {
   position: absolute; top: -9px; right: -9px;
   display: none; z-index: 2;
@@ -2908,9 +2911,11 @@ button.ghost.small-ghost.on { color: var(--accent); }
 .sticky-color-dot.sel { transform: scale(1.25); }
 .sticky-color-dot:hover { transform: scale(1.25); }
 
-/* mobile: notes collapse into a static wall at the bottom of the lesson */
-.sticky-wall { display: none; }
-@media (max-width: 720px) {
+/* mobile/tablet: notes collapse into a static wall at the bottom of the
+   lesson (order: 99 — the lesson page is a flex column, so the wall always
+   lands after the head, the content, and the split panels) */
+.sticky-wall { display: none; order: 99; }
+@media (max-width: 900px) {
   .sticky-layer { display: none; }
   .sticky-wall {
     display: flex; flex-direction: column; gap: 12px;
@@ -2924,6 +2929,11 @@ button.ghost.small-ghost.on { color: var(--accent); }
   .sticky-wall .sticky-colors { position: static; transform: none; align-self: flex-start; background: rgba(28,24,16,0.10); margin-top: 6px; display: flex; }
   .sticky-wall .sticky-tools { display: block; }
   .sticky-wall .sticky-text { min-height: 44px; }
+}
+/* between the wall breakpoint and the stacked-split breakpoint the
+   horizontal panels must not collapse to make room for the wall */
+@media (min-width: 861px) and (max-width: 900px) {
+  .split-group { min-height: 50vh; }
 }
 
 /* ---- continue card (course index) ---- */
