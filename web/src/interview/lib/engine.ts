@@ -7,7 +7,6 @@ import REPORT_GRADER from "../prompts/report-grader.md?raw";
 
 const RESUME_CAP = 8000; // chars of resume used in context
 const MODULE_CAP = 12000; // total chars of module reference used
-const HISTORY_TURNS = 16; // last N messages kept in the prompt
 
 /** Fetch + flatten lesson text for the selected module references. */
 export async function fetchModuleText(modules: string[]): Promise<string> {
@@ -62,45 +61,6 @@ export function buildSystemPrompt(ctx: InterviewContext): string {
     );
   }
   return sections.join("\n\n");
-}
-
-/** Build the full messages array for a chat call. */
-export function buildMessages(
-  system: string,
-  history: InterviewMessage[],
-  control?: { kind: "hint" | "go-deeper" | "skip"; topic?: string }
-): { role: string; content: string }[] {
-  const msgs: { role: string; content: string }[] = [{ role: "system", content: system }];
-  const recent = history.slice(-HISTORY_TURNS);
-  for (const m of recent)
-    msgs.push({
-      // the API knows system/user/assistant — "interviewer" is our display role
-      role: m.role === "interviewer" ? "assistant" : "user",
-      content: m.content,
-    });
-  if (control) {
-    const hint =
-      control.kind === "hint"
-        ? `\n[The candidate asked for a hint. Give ONE small hint in the shape of a real interviewer ("think about…") — never the full answer.]`
-        : control.kind === "go-deeper"
-          ? `\n[The candidate wants to go DEEPER on the current topic${control.topic ? ` (${control.topic})` : ""}. Ask a harder, more subtle follow-up on it — trade-offs, edge cases, design decisions. One question.]`
-          : `\n[The candidate wants to move on. Wrap the current topic in one short sentence and open the next topic with one question.]`;
-    msgs.push({ role: "user", content: "‹control›" + hint });
-  }
-  return msgs;
-}
-
-/** One interviewer turn: returns the interviewer's text (streamed via onDelta). */
-export async function interviewerTurn(
-  ctx: InterviewContext,
-  history: InterviewMessage[],
-  control?: { kind: "hint" | "go-deeper" | "skip"; topic?: string },
-  onDelta?: (t: string) => void,
-  signal?: AbortSignal
-): Promise<string> {
-  const system = buildSystemPrompt(ctx);
-  const msgs = buildMessages(system, history, control);
-  return relay.streamChat(ctx.model, msgs, onDelta ?? (() => {}), signal);
 }
 
 /** End-of-interview grading pass (separate prompt, JSON output). */

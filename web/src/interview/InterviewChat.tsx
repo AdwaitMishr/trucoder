@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useChat, type Message } from "@ai-sdk/react";
 import { PiMicrophone, PiMicrophoneSlash, PiStopCircle, PiPencilLine } from "react-icons/pi";
@@ -11,6 +11,11 @@ import Markdown from "../components/Markdown";
 import BlackboardModal from "./BlackboardModal";
 
 const RELAY = "http://127.0.0.1:3177";
+// Only the last N messages are sent to the model per request — the SDK
+// otherwise resends the full history, which grows without bound on long
+// interviews (16 turns ≈ 32 messages is plenty of conversational context;
+// resume/modules live in the system prompt).
+const SENT_HISTORY = 32;
 
 function errMsg(e: unknown): string {
   return typeof e === "string" ? e : e instanceof Error ? e.message : JSON.stringify(e);
@@ -141,19 +146,25 @@ export default function InterviewChat() {
     api: RELAY + "/v1/chat/text",
     streamProtocol: "text",
     body: { system: systemRef.current, model: modelRef.current },
-    onFinish: () => {
-      setSession((prev) => {
-        if (!prev) return prev;
-        const next = { ...prev, messages: toSession(chat.messages) };
-        void sessionStore.put(next);
-        return next;
-      });
-    },
+    // Keep the request bounded even though the SDK keeps the full list for
+    // the UI: slice the messages that actually go to the relay.
+    experimental_prepareRequestBody: ({ messages, requestBody }) => ({
+      ...(requestBody as Record<string, unknown>),
+      messages: messages.slice(-SENT_HISTORY).map((m) => ({
+        role: m.role,
+        content: typeof m.content === "string" ? m.content : "",
+      })),
+    }),
     onError: (e) => setError(errMsg(e)),
   });
 
   useEffect(() => {
     if (!id) return;
+    // Fresh mount state per session id — React Router reuses this component
+    // between /interviews/:id routes, so stale session/seeded state must not
+    // leak across ids.
+    setSession(null);
+    setSeeded(false);
     sessionStore.get(id).then((s) => {
       setSession(s ?? null);
       if (s) {
@@ -193,6 +204,25 @@ export default function InterviewChat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat.messages.length, chat.isLoading]);
+
+  // Persist the transcript once per completed turn. NOTE: this must NOT be
+  // done in useChat's onFinish — in @ai-sdk/react 0.0.70 that callback is
+  // captured in a first-render closure (useCallback([]) inside the SDK),
+  // so it would always see the initial empty messages and wipe the saved
+  // session after every turn. An effect on the isLoading edge always sees
+  // the latest render's chat.messages.
+  const prevLoading = useRef(chat.isLoading);
+  useEffect(() => {
+    const finished = prevLoading.current && !chat.isLoading;
+    prevLoading.current = chat.isLoading;
+    if (!finished || !seeded) return;
+    setSession((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, messages: toSession(chat.messages) };
+      void sessionStore.put(next);
+      return next;
+    });
+  }, [chat.isLoading, chat.messages, seeded]);
 
   function send() {
     const text = chat.input.trim();
@@ -322,10 +352,9 @@ export default function InterviewChat() {
             </div>
           ) : null
         )}
-        {streaming && lastAssistant && (
+        {streaming && lastAssistant && lastAssistant.content.length === 0 && (
           <div className="chat-msg interviewer">
             <div className="chat-bubble typing">
-              {lastAssistant.content.slice(0, 300)}
               <span className="typing-dots" />
             </div>
           </div>

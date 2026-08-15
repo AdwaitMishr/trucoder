@@ -10,29 +10,56 @@ Run:  relay/stt-venv/bin/python relay/stt-server.py   (or: npm run stt)
 import base64
 import io
 import json
-import re
+import os
 import sys
 import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MODEL_SIZE = "base"  # small = more accurate, slower; base = good + fast
 PORT = 3178
+# ~30 minutes of 16 kHz mono PCM (32 KB/s) — anything larger is junk or abuse
+MAX_BODY = 32 * 1024 * 1024
 
 from faster_whisper import WhisperModel  # noqa: E402
 
 model = WhisperModel(MODEL_SIZE, device="cpu", compute_type="int8")
 
-LOCAL_ORIGIN = re.compile(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$")
+# Only the app (3001) and the vite dev server (5173) may call the STT
+# service; anything else (another localhost page, a DNS-rebinding attacker)
+# is rejected before any work happens.
+APP_ORIGIN = os.environ.get("APP_ORIGIN", "http://localhost:3001")
+ALLOWED_ORIGINS = {
+    APP_ORIGIN,
+    APP_ORIGIN.replace("://localhost:", "://127.0.0.1:"),
+    APP_ORIGIN.replace("://127.0.0.1:", "://localhost:"),
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+}
 
 
 class Handler(BaseHTTPRequestHandler):
     def _cors(self):
         origin = self.headers.get("Origin", "")
-        if LOCAL_ORIGIN.match(origin):
+        if origin in ALLOWED_ORIGINS:
             self.send_header("Access-Control-Allow-Origin", origin)
         self.send_header("Access-Control-Allow-Methods", "POST,OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Access-Control-Max-Age", "86400")
+
+    def _origin_allowed(self) -> bool:
+        origin = self.headers.get("Origin", "")
+        # no Origin (curl, tests) = local by construction
+        return not origin or origin in ALLOWED_ORIGINS
+
+    def _reject(self, code: int, message: str):
+        body = json.dumps({"error": message}).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Connection", "close")  # body may be unread — no keep-alive
+        self._cors()
+        self.end_headers()
+        self.wfile.write(body)
 
     def log_message(self, fmt, *args):  # keep the console quiet
         pass
@@ -43,6 +70,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        if not self._origin_allowed():
+            return self._reject(403, "origin not allowed")
         if self.path == "/health":
             body = json.dumps({"ok": True, "model": MODEL_SIZE}).encode()
             self.send_response(200)
@@ -56,11 +85,18 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
+        if not self._origin_allowed():
+            return self._reject(403, "origin not allowed")
         if self.path != "/transcribe":
             self.send_response(404)
             self.end_headers()
             return
-        length = int(self.headers.get("Content-Length", 0))
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return self._reject(400, "bad content-length")
+        if length <= 0 or length > MAX_BODY:
+            return self._reject(413, "payload too large")
         raw = self.rfile.read(length)
         try:
             payload = json.loads(raw)

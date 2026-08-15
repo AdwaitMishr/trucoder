@@ -8,12 +8,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "relay": "node ../relay/server.js",
-    "stt": "python3 ../relay/stt-server.py"
+    "stt": "sh -c 'PY=../relay/stt-venv/bin/python; [ -x \"$PY\" ] || PY=python3; exec \"$PY\" ../relay/stt-server.py'"
   },
   "dependencies": {
-    "@excalidraw/excalidraw": "^0.18.1",
     "@monaco-editor/react": "^4.6.0",
-    "ai": "^3.4.33",
+    "@ai-sdk/react": "0.0.70",
     "canvas-confetti": "^1.9.4",
     "katex": "^0.18.1",
     "mammoth": "^1.12.0",

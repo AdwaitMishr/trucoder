@@ -75,7 +75,9 @@ export default function BlackboardModal({
               onMount={(editor) => {
                 editorRef.current = editor as BoardEditor;
                 // test/debug hook: reach the tldraw editor from the console
-                (window as unknown as Record<string, unknown>).__bb = editor;
+                if (import.meta.env.DEV) {
+                  (window as unknown as Record<string, unknown>).__bb = editor;
+                }
               }}
             />
           </Suspense>

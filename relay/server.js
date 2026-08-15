@@ -20,14 +20,30 @@ const APP_ORIGIN = process.env.APP_ORIGIN || "http://localhost:3001";
 const KEY_DIR = path.join(os.homedir(), ".trucoder-interview");
 const KEY_FILE = path.join(KEY_DIR, "key");
 
-function cors(req, res) {
-  // Reflect any localhost origin (prod: 3001, vite dev: 5173, …). Safe because
-  // the relay only binds 127.0.0.1 — remote pages can never reach it.
+// Only the app (prod: 3001) and the vite dev server (5173) may talk to the
+// relay. Reflecting ANY localhost origin (or merely falling back to
+// APP_ORIGIN) lets a page served from another local port — or a remote page
+// via DNS rebinding + a simple text/plain POST — spend the stored key and
+// read the responses.
+const ALLOWED_ORIGINS = new Set([
+  APP_ORIGIN,
+  APP_ORIGIN.replace("://localhost:", "://127.0.0.1:"),
+  APP_ORIGIN.replace("://127.0.0.1:", "://localhost:"),
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+]);
+
+/** Browsers always send Origin on cross-origin fetches; requests without
+ *  one (curl, tests) are local by construction. */
+function originAllowed(req) {
   const origin = req.headers.origin;
-  if (origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+  return !origin || ALLOWED_ORIGINS.has(origin);
+}
+
+function cors(req, res) {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
-  } else {
-    res.setHeader("Access-Control-Allow-Origin", APP_ORIGIN);
   }
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -117,6 +133,9 @@ function proxy(req, res, pathname) {
 
 const server = http.createServer((req, res) => {
   cors(req, res);
+  // Reject foreign pages BEFORE any work happens — CORS headers alone only
+  // stop the response from being READ, not the request from EXECUTING.
+  if (!originAllowed(req)) return json(res, 403, { error: "rejected: origin not allowed" });
   if (req.method === "OPTIONS") return res.writeHead(204).end();
 
   const url = new URL(req.url, "http://localhost");

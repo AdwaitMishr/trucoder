@@ -358,6 +358,20 @@ export default function App() {
               element={user ? <InterviewChat /> : <Navigate to="/login" replace />}
             />
             <Route
+              path="/admin"
+              element={
+                user ? (
+                  user.isOwner ? (
+                    <AdminDashboard />
+                  ) : (
+                    <Navigate to="/" replace />
+                  )
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
+            <Route
               path="*"
               element={<Navigate to={user ? "/" : "/login"} replace />}
             />

@@ -31,7 +31,15 @@ npm run relay                            # in web/  (node ../relay/server.js)
 npm run stt                              # in web/  (relay/stt-server.py)
 ```
 
-Vite dev mode works too — the relay reflects any localhost origin.
+First-time STT setup (once): `npm run stt` prefers a local venv and falls
+back to the system `python3` — create the venv so the model + deps are
+self-contained:
+
+```sh
+python3 -m venv relay/stt-venv && relay/stt-venv/bin/pip install faster-whisper
+```
+
+Vite dev mode works too — the relay allowlists `http://localhost:5173` alongside the prod origin.
 
 ## Files
 
@@ -43,5 +51,5 @@ Vite dev mode works too — the relay reflects any localhost origin.
 - `lib/db.ts` — IndexedDB session store
 - `lib/resume.ts` — client-side PDF/DOCX parsing (pdf.js + mammoth)
 - `lib/engine.ts` — context assembly + turn logic
-- `BlackboardModal.tsx` — Excalidraw infinite canvas (send as mermaid)
+- `BlackboardModal.tsx` — tldraw canvas (send as mermaid)
 - `GRADER-REVIEW.md` — qwen3.7-max grading report (goal + standards)

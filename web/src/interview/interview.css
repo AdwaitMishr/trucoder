@@ -47,6 +47,15 @@
 .sidebar-item:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); }
 .sidebar-item.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 
+/* phones/tablets: the sidebar is always a slim icon rail — a 168px column
+   would leave ~half the screen for content. The mascot toggle can still
+   expand it, but the default is compact. */
+@media (max-width: 860px) {
+  .sidebar, .sidebar.collapsed { width: 54px; }
+  .sidebar .sidebar-item { justify-content: center; padding: 8px 0; }
+  .sidebar .sidebar-item span { display: none; }
+}
+
 /* wizard */
 .wizard { max-width: 680px; margin: 0 auto; height: 100%; overflow-y: auto; padding: 6px 10px 24px; scroll-behavior: smooth; }
 .wizard-steps {
@@ -483,7 +492,7 @@
 .report-raw pre { font-size: 11.5px; white-space: pre-wrap; background: color-mix(in srgb, var(--ink) 5%, transparent); padding: 12px; border-radius: 9px; }
 .report-actions { display: flex; gap: 8px; align-items: center; }
 
-/* blackboard (Excalidraw modal) */
+/* blackboard (tldraw modal) */
 .blackboard-panel {
   width: min(960px, 94vw);
   height: min(640px, 88vh);
@@ -509,4 +518,4 @@
 .blackboard-actions { margin-left: auto; display: flex; align-items: center; gap: 7px; }
 .blackboard-canvas { flex: 1; min-height: 0; }
 .blackboard-loading { padding: 40px; text-align: center; }
-.blackboard-canvas .excalidraw { --theme-filter: none; }
+

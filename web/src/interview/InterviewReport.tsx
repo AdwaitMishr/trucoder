@@ -99,7 +99,8 @@ export default function InterviewReport({ session }: { session: InterviewSession
                 <h3>review these modules</h3>
                 <ul className="report-list report-recs">
                   {recs.map((r, i) => {
-                    const [course, lesson] = r.split(":");
+                    // models may emit "course-id:lesson-id" or "courseId/lessonId"
+                    const [course, lesson] = r.split(/[:/]/);
                     return (
                       <li key={i}>
                         {course && lesson ? (
