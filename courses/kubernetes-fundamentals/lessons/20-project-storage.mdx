@@ -1,0 +1,179 @@
+---
+id: project-storage
+title: "Project: Storage & Wiring It All Together"
+difficulty: medium
+order: 20
+tags: [project, pvc, storage, consistency]
+blocks:
+  - type: markdown
+    content: |
+      ShopAPI writes weekly reports to `/data`. The last manifest:
+
+      ```yaml
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: shop-reports
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+      ```
+
+      And the Deployment side (from lesson 16):
+
+      ```yaml
+                volumeMounts:
+                  - name: reports
+                    mountPath: /data
+            volumes:
+              - name: reports
+                persistentVolumeClaim:
+                  claimName: shop-reports
+      ```
+
+      The wiring has three names that must agree: the volume's `name`
+      (`reports`), the mount's `name` (`reports`), and the claim's
+      `claimName` (`shop-reports` — which must match the PVC's
+      `metadata.name`).
+
+      :::warning
+      `ReadWriteOnce` = one node at a time. ShopAPI runs 3 replicas but
+      only ONE mounts the PVC (a sidecar pattern). Mounting an RWO claim
+      from every replica leaves the others stuck in ContainerCreating.
+      :::
+
+      :::tip
+      This is the classic interview question: "how do you give state to a
+      stateless deployment?" The answer is the claim + mount pair — the
+      deployment stays a Deployment, the state lives behind a PVC.
+      :::
+  - type: code
+    task: "Parse a manifest. For a PersistentVolumeClaim return [\"pvc\", storage_request, access_modes, storage_class]. For a Deployment return [\"deployment\", claim_name, mount_path]. storage_request = the requests.storage string (e.g. \"1Gi\"). access_modes = the accessModes list. storage_class = spec.storageClassName, or None. claim_name = the persistentVolumeClaim claimName of the first volume (or None). mount_path = the mountPath of the volumeMount whose name matches that volume (or None)."
+    languages: [python]
+    signature:
+      python: "def solve(manifest: str) -> list"
+    starter:
+      python: |
+        import yaml
+
+        def solve(manifest: str) -> list:
+            # PVC        -> ["pvc", request, access_modes, storage_class]
+            # Deployment -> ["deployment", claim_name, mount_path]
+            return []
+    tests:
+      public:
+        - name: "canonical pvc"
+          args:
+            - |
+              apiVersion: v1
+              kind: PersistentVolumeClaim
+              metadata:
+                name: shop-reports
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 1Gi
+          expected: ["pvc", "1Gi", ["ReadWriteOnce"], null]
+        - name: "deployment with pvc mount"
+          args:
+            - |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: shop-api
+              spec:
+                selector:
+                  matchLabels:
+                    app: shop-api
+                template:
+                  metadata:
+                    labels:
+                      app: shop-api
+                  spec:
+                    containers:
+                      - name: shop-api
+                        image: ghcr.io/adith2005-20/shop-api:v1
+                        volumeMounts:
+                          - name: reports
+                            mountPath: /data
+                    volumes:
+                      - name: reports
+                        persistentVolumeClaim:
+                          claimName: shop-reports
+          expected: ["deployment", "shop-reports", "/data"]
+      private:
+        - name: "pvc with storage class"
+          args:
+            - |
+              apiVersion: v1
+              kind: PersistentVolumeClaim
+              metadata:
+                name: shop-reports
+              spec:
+                storageClassName: fast-ssd
+                accessModes:
+                  - ReadWriteOnce
+                  - ReadOnlyMany
+                resources:
+                  requests:
+                    storage: 500Mi
+          expected: ["pvc", "500Mi", ["ReadWriteOnce", "ReadOnlyMany"], "fast-ssd"]
+        - name: "deployment with no storage"
+          args:
+            - |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: shop-api
+              spec:
+                selector:
+                  matchLabels:
+                    app: shop-api
+                template:
+                  metadata:
+                    labels:
+                      app: shop-api
+                  spec:
+                    containers:
+                      - name: shop-api
+                        image: ghcr.io/adith2005-20/shop-api:v1
+          expected: ["deployment", null, null]
+    hints:
+      - "Branch on kind — PersistentVolumeClaim vs Deployment."
+      - "For the Deployment, find the first volume that has a persistentVolumeClaim key, then match its name against volumeMounts."
+      - "storageClassName is optional — use .get()."
+    solution: |
+      import yaml
+
+      def solve(manifest: str) -> list:
+          d = yaml.safe_load(manifest)
+          if d["kind"] == "PersistentVolumeClaim":
+              spec = d["spec"]
+              return [
+                  "pvc",
+                  spec["resources"]["requests"]["storage"],
+                  spec["accessModes"],
+                  spec.get("storageClassName"),
+              ]
+          spec = d["spec"]
+          vols = spec["template"]["spec"].get("volumes", [])
+          claim = None
+          vname = None
+          for v in vols:
+              if "persistentVolumeClaim" in v:
+                  vname = v["name"]
+                  claim = v["persistentVolumeClaim"]["claimName"]
+                  break
+          mount = None
+          if vname:
+              for m in spec["template"]["spec"]["containers"][0].get("volumeMounts", []):
+                  if m["name"] == vname:
+                      mount = m["mountPath"]
+                      break
+          return ["deployment", claim, mount]
+---

@@ -1,0 +1,195 @@
+---
+id: project-ingress-hpa
+title: "Project: Ingress & Autoscaling"
+difficulty: medium
+order: 19
+tags: [project, ingress, hpa, autoscaling]
+blocks:
+  - type: markdown
+    content: |
+      Outside traffic needs a door, and load needs a brain. For ShopAPI:
+
+      ```yaml
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: shop-ingress
+      spec:
+        ingressClassName: nginx
+        rules:
+          - host: shop.example.com
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: shop-api
+                      port:
+                        number: 80
+      ```
+
+      ```yaml
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: shop-api-hpa
+      spec:
+        scaleTargetRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: shop-api
+        minReplicas: 2
+        maxReplicas: 6
+        metrics:
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+                averageUtilization: 70
+      ```
+
+      The HPA watches the Deployment's average CPU. Above 70% it adds
+      replicas (up to 6); below, it removes them (down to 2).
+
+      :::warning
+      The HPA needs a `requests.cpu` on the container — the utilization
+      percentage is computed against the request, not the limit. No
+      request = the HPA cannot calculate utilization.
+      :::
+
+      :::tip
+      Ingress backends reference a Service by name + port number — the
+      same Service you validated in the previous lesson. The three pieces
+      (Deployment labels → Service selector → Ingress backend) must name
+      the same things or the chain breaks silently.
+      :::
+  - type: code
+    task: "Parse an Ingress or HPA manifest. For an Ingress return [\"ingress\", host, path, service_name, service_port, tls_secret]. For an HPA return [\"hpa\", min_replicas, max_replicas, target_percent]. tls_secret = the first TLS secretName, or None."
+    languages: [python]
+    signature:
+      python: "def solve(manifest: str) -> list"
+    starter:
+      python: |
+        import yaml
+
+        def solve(manifest: str) -> list:
+            # Ingress -> ["ingress", host, path, service, port, tls]
+            # HPA     -> ["hpa", min, max, target_percent]
+            return []
+    tests:
+      public:
+        - name: "canonical ingress"
+          args:
+            - |
+              apiVersion: networking.k8s.io/v1
+              kind: Ingress
+              metadata:
+                name: shop-ingress
+              spec:
+                ingressClassName: nginx
+                rules:
+                  - host: shop.example.com
+                    http:
+                      paths:
+                        - path: /
+                          pathType: Prefix
+                          backend:
+                            service:
+                              name: shop-api
+                              port:
+                                number: 80
+          expected: ["ingress", "shop.example.com", "/", "shop-api", 80, null]
+        - name: "canonical hpa"
+          args:
+            - |
+              apiVersion: autoscaling/v2
+              kind: HorizontalPodAutoscaler
+              metadata:
+                name: shop-api-hpa
+              spec:
+                scaleTargetRef:
+                  apiVersion: apps/v1
+                  kind: Deployment
+                  name: shop-api
+                minReplicas: 2
+                maxReplicas: 6
+                metrics:
+                  - type: Resource
+                    resource:
+                      name: cpu
+                      target:
+                        type: Utilization
+                        averageUtilization: 70
+          expected: ["hpa", 2, 6, 70]
+      private:
+        - name: "ingress with tls"
+          args:
+            - |
+              apiVersion: networking.k8s.io/v1
+              kind: Ingress
+              metadata:
+                name: shop-ingress
+              spec:
+                ingressClassName: nginx
+                tls:
+                  - hosts:
+                      - shop.example.com
+                    secretName: shop-tls
+                rules:
+                  - host: shop.example.com
+                    http:
+                      paths:
+                        - path: /
+                          pathType: Prefix
+                          backend:
+                            service:
+                              name: shop-api
+                              port:
+                                number: 80
+          expected: ["ingress", "shop.example.com", "/", "shop-api", 80, "shop-tls"]
+        - name: "aggressive hpa"
+          args:
+            - |
+              apiVersion: autoscaling/v2
+              kind: HorizontalPodAutoscaler
+              metadata:
+                name: shop-api-hpa
+              spec:
+                scaleTargetRef:
+                  apiVersion: apps/v1
+                  kind: Deployment
+                  name: shop-api
+                minReplicas: 1
+                maxReplicas: 12
+                metrics:
+                  - type: Resource
+                    resource:
+                      name: cpu
+                      target:
+                        type: Utilization
+                        averageUtilization: 40
+          expected: ["hpa", 1, 12, 40]
+    hints:
+      - "Branch on d['kind'] — 'Ingress' vs 'HorizontalPodAutoscaler'."
+      - "The first rule is at spec.rules[0]; its first path at spec.rules[0].http.paths[0]."
+      - "For the HPA, the target percentage lives at spec.metrics[0].resource.target.averageUtilization."
+    solution: |
+      import yaml
+
+      def solve(manifest: str) -> list:
+          d = yaml.safe_load(manifest)
+          kind = d["kind"]
+          if kind == "HorizontalPodAutoscaler":
+              spec = d["spec"]
+              target = spec["metrics"][0]["resource"]["target"]["averageUtilization"]
+              return ["hpa", spec["minReplicas"], spec["maxReplicas"], target]
+          spec = d["spec"]
+          rule = spec["rules"][0]
+          path = rule["http"]["paths"][0]
+          backend = path["backend"]["service"]
+          tls = spec.get("tls")
+          secret = tls[0].get("secretName") if tls else None
+          return ["ingress", rule["host"], path["path"], backend["name"], backend["port"]["number"], secret]
+---

@@ -1,0 +1,129 @@
+---
+id: project-config
+title: "Project: ConfigMap & Secret"
+difficulty: medium
+order: 18
+tags: [project, configmap, secret]
+blocks:
+  - type: markdown
+    content: |
+      Configuration leaves the image. For ShopAPI:
+
+      ```yaml
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: shop-config
+      data:
+        APP_ENV: production
+        LOG_LEVEL: info
+      ```
+
+      ```yaml
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: shop-secrets
+      type: Opaque
+      data:
+        REDIS_PASSWORD: c3VwZXJzZWNyZXQ=
+        API_TOKEN: YWJjMTIz
+      ```
+
+      The Deployment wires both in with `envFrom`:
+
+      ```yaml
+            envFrom:
+              - configMapRef:
+                  name: shop-config
+              - secretRef:
+                  name: shop-secrets
+      ```
+
+      :::warning
+      Secret values are base64 — readable by anyone with cluster access.
+      The lesson here is *separation*, not encryption: the image never
+      contains the secret, so a rebuild is never needed to rotate it.
+      :::
+
+      :::tip
+      The order of keys in `data` is not meaningful — YAML maps are
+      unordered. Sort the keys before joining so the answer is stable.
+      :::
+  - type: code
+    task: "Parse a ConfigMap or Secret manifest. Return [kind, name, keys, type]. keys = the data keys, sorted alphabetically, comma-joined. type = the Secret's type, or None for a ConfigMap."
+    languages: [python]
+    signature:
+      python: "def solve(manifest: str) -> list"
+    starter:
+      python: |
+        import yaml
+
+        def solve(manifest: str) -> list:
+            # Return [kind, name, keys, type]
+            return []
+    tests:
+      public:
+        - name: "canonical configmap"
+          args:
+            - |
+              apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                name: shop-config
+              data:
+                APP_ENV: production
+                LOG_LEVEL: info
+          expected: ["configmap", "shop-config", "APP_ENV,LOG_LEVEL", null]
+        - name: "canonical secret"
+          args:
+            - |
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: shop-secrets
+              type: Opaque
+              data:
+                REDIS_PASSWORD: c3VwZXJzZWNyZXQ=
+                API_TOKEN: YWJjMTIz
+          expected: ["secret", "shop-secrets", "API_TOKEN,REDIS_PASSWORD", "Opaque"]
+      private:
+        - name: "three-key configmap"
+          args:
+            - |
+              apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                name: shop-config
+              data:
+                LOG_LEVEL: debug
+                APP_ENV: staging
+                FEATURE_CART: "true"
+          expected: ["configmap", "shop-config", "APP_ENV,FEATURE_CART,LOG_LEVEL", null]
+        - name: "tls secret"
+          args:
+            - |
+              apiVersion: v1
+              kind: Secret
+              metadata:
+                name: shop-tls
+              type: kubernetes.io/tls
+              data:
+                tls.crt: aGVsbG8=
+                tls.key: d29ybGQ=
+          expected: ["secret", "shop-tls", "tls.crt,tls.key", "kubernetes.io/tls"]
+    hints:
+      - "kind is at the top level; name under metadata; data keys under data."
+      - "sort(data.keys()) then ','.join(...)."
+      - "Only Secrets have a type field."
+    solution: |
+      import yaml
+
+      def solve(manifest: str) -> list:
+          d = yaml.safe_load(manifest)
+          kind = d["kind"].lower()
+          name = d["metadata"]["name"]
+          keys = ",".join(sorted(d.get("data", {}).keys()))
+          typ = d.get("type") if kind == "secret" else None
+          return [kind, name, keys, typ]
+---

@@ -1,0 +1,240 @@
+---
+id: project-deployment
+title: "Project: ShopAPI Deployment Manifest"
+difficulty: medium
+order: 16
+tags: [project, deployment, manifest, probes]
+blocks:
+  - type: markdown
+    content: |
+      Welcome to the ShopAPI project. Over the next five lessons you will
+      read — and prove you understand — the complete manifest set for a
+      real three-tier app: a Deployment, a Service, config, an Ingress with
+      autoscaling, and storage. Lesson 21 then runs the whole stack for
+      real on your laptop with kind.
+
+      ## The canonical deployment
+
+      This is the manifest you would write for the API tier. Read every
+      line — the tests will make you find the details:
+
+      ```yaml
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: shop-api
+      spec:
+        replicas: 3
+        selector:
+          matchLabels:
+            app: shop-api
+        template:
+          metadata:
+            labels:
+              app: shop-api
+          spec:
+            containers:
+              - name: shop-api
+                image: ghcr.io/adith2005-20/shop-api:v1
+                ports:
+                  - containerPort: 8080
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8080
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8080
+                envFrom:
+                  - configMapRef:
+                      name: shop-config
+                  - secretRef:
+                      name: shop-secrets
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+                volumeMounts:
+                  - name: reports
+                    mountPath: /data
+            volumes:
+              - name: reports
+                persistentVolumeClaim:
+                  claimName: shop-reports
+      ```
+
+      :::tip
+      The selector `matchLabels: {app: shop-api}` must be an exact subset
+      of the template's `labels` — the Deployment controller uses it to
+      claim pods, the Service uses the same labels to route. Change one
+      side and the Deployment creates pods nobody can find.
+      :::
+
+      :::warning
+      A missing `readinessProbe` means the Service sends traffic to a pod
+      that is still starting. A missing `livenessProbe` means a hung pod
+      is never restarted. Both are production requirements, not
+      decorations.
+      :::
+  - type: code
+    task: "Parse the Deployment manifest string. Return a list [image, replicas, selector_ok, readiness_path, liveness_path]. image = the first container's image. selector_ok = every matchLabels pair in spec.selector exists in the pod template labels with the same value. readiness_path / liveness_path = the probe's httpGet path, or None if that probe is missing."
+    languages: [python]
+    signature:
+      python: "def solve(manifest: str) -> list"
+    starter:
+      python: |
+        import yaml
+
+        def solve(manifest: str) -> list:
+            # Parse the manifest and return:
+            # [image, replicas, selector_ok, readiness_path, liveness_path]
+            return []
+    tests:
+      public:
+        - name: "canonical deployment"
+          args:
+            - |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: shop-api
+              spec:
+                replicas: 3
+                selector:
+                  matchLabels:
+                    app: shop-api
+                template:
+                  metadata:
+                    labels:
+                      app: shop-api
+                  spec:
+                    containers:
+                      - name: shop-api
+                        image: ghcr.io/adith2005-20/shop-api:v1
+                        ports:
+                          - containerPort: 8080
+                        readinessProbe:
+                          httpGet:
+                            path: /readyz
+                            port: 8080
+                        livenessProbe:
+                          httpGet:
+                            path: /healthz
+                            port: 8080
+          expected: ["ghcr.io/adith2005-20/shop-api:v1", 3, true, "/readyz", "/healthz"]
+        - name: "broken selector"
+          args:
+            - |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: shop-api
+              spec:
+                replicas: 3
+                selector:
+                  matchLabels:
+                    app: shop-api
+                template:
+                  metadata:
+                    labels:
+                      app: shopapi
+                  spec:
+                    containers:
+                      - name: shop-api
+                        image: ghcr.io/adith2005-20/shop-api:v1
+                        ports:
+                          - containerPort: 8080
+                        readinessProbe:
+                          httpGet:
+                            path: /readyz
+                            port: 8080
+                        livenessProbe:
+                          httpGet:
+                            path: /healthz
+                            port: 8080
+          expected: ["ghcr.io/adith2005-20/shop-api:v1", 3, false, "/readyz", "/healthz"]
+      private:
+        - name: "missing readiness probe"
+          args:
+            - |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: shop-api
+              spec:
+                replicas: 3
+                selector:
+                  matchLabels:
+                    app: shop-api
+                template:
+                  metadata:
+                    labels:
+                      app: shop-api
+                  spec:
+                    containers:
+                      - name: shop-api
+                        image: ghcr.io/adith2005-20/shop-api:v1
+                        ports:
+                          - containerPort: 8080
+                        livenessProbe:
+                          httpGet:
+                            path: /healthz
+                            port: 8080
+          expected: ["ghcr.io/adith2005-20/shop-api:v1", 3, true, null, "/healthz"]
+        - name: "v2 single replica"
+          args:
+            - |
+              apiVersion: apps/v1
+              kind: Deployment
+              metadata:
+                name: shop-api
+              spec:
+                replicas: 1
+                selector:
+                  matchLabels:
+                    app: shop-api
+                template:
+                  metadata:
+                    labels:
+                      app: shop-api
+                  spec:
+                    containers:
+                      - name: shop-api
+                        image: ghcr.io/adith2005-20/shop-api:v2
+                        ports:
+                          - containerPort: 8080
+                        readinessProbe:
+                          httpGet:
+                            path: /readyz
+                            port: 8080
+                        livenessProbe:
+                          httpGet:
+                            path: /healthz
+                            port: 8080
+          expected: ["ghcr.io/adith2005-20/shop-api:v2", 1, true, "/readyz", "/healthz"]
+    hints:
+      - "yaml.safe_load(manifest) gives you a dict. Containers live at spec.template.spec.containers."
+      - "Compare the selector dict against the pod labels dict: every selector key must exist in the labels with the same value."
+      - "A missing probe means the key is absent — use .get() so you can return None."
+    solution: |
+      import yaml
+
+      def solve(manifest: str) -> list:
+          d = yaml.safe_load(manifest)
+          spec = d["spec"]
+          selector = spec["selector"]["matchLabels"]
+          labels = spec["template"]["metadata"]["labels"]
+          selector_ok = all(labels.get(k) == v for k, v in selector.items())
+          c = spec["template"]["spec"]["containers"][0]
+          image = c["image"]
+          replicas = spec.get("replicas", 1)
+          readiness = c.get("readinessProbe", {}).get("httpGet", {}).get("path")
+          liveness = c.get("livenessProbe", {}).get("httpGet", {}).get("path")
+          return [image, replicas, selector_ok, readiness, liveness]
+---

@@ -1,0 +1,152 @@
+---
+id: storage
+title: "Storage: PVs, PVCs, and Volumes"
+difficulty: medium
+order: 11
+tags: [storage, pv, pvc, volume, persistence]
+blocks:
+  - type: markdown
+    content: |
+      Containers are ephemeral by design: files vanish with the pod. When
+      state matters (databases, uploads, reports), Kubernetes gives you
+      **volumes** — storage that outlives the container, and sometimes the
+      pod.
+
+      ## The volume ladder
+
+      | Volume | Lifetime | Use it for |
+      |--------|----------|------------|
+      | `emptyDir` | as long as the pod exists | scratch space, caches, sidecar exchange |
+      | `hostPath` | as long as the node exists | node logs, daemonset agents — rarely apps |
+      | `persistentVolumeClaim` | until you delete the claim | real state: databases, reports, uploads |
+
+      ```yaml
+      # scratch space that dies with the pod
+      volumes:
+        - name: scratch
+          emptyDir: {}
+      ```
+
+      :::warning
+      `hostPath` mounts a directory from the **node** into the pod. A pod
+      can land on any node — two pods on different nodes do not share a
+      hostPath, and the data is tied to one machine. Never use hostPath for
+      app state.
+      :::
+
+      ## PVC → PV → storage: the three roles
+
+      - **PersistentVolumeClaim (PVC)** — what your pod asks for: "I need
+        1Gi, readable/writable once."
+      - **PersistentVolume (PV)** — a piece of real storage (a disk, an NFS
+        share, a cloud volume) offered to the cluster.
+      - **StorageClass** — the *provisioner*: when you create a PVC, a
+        StorageClass can create the PV automatically (dynamic provisioning).
+
+      ```yaml
+      # the claim — what the app asks for
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: shop-reports
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+      ```
+
+      ```yaml
+      # the pod uses it like any volume
+      spec:
+        containers:
+          - name: app
+            image: ghcr.io/adith2005-20/shop-api:v1
+            volumeMounts:
+              - name: reports
+                mountPath: /data
+        volumes:
+          - name: reports
+            persistentVolumeClaim:
+              claimName: shop-reports
+      ```
+
+      ## Access modes
+
+      | Mode | Who can mount it |
+      |------|------------------|
+      | `ReadWriteOnce` | one node (read/write) — the default choice |
+      | `ReadOnlyMany` | many nodes (read-only) |
+      | `ReadWriteMany` | many nodes (read/write) — needs shared storage (NFS, cloud FS) |
+
+      :::warning
+      A `ReadWriteOnce` volume cannot be attached to pods on *different
+      nodes at the same time*. A Deployment with replicas: 3 that all mount
+      the same RWO PVC will leave two pods stuck in `ContainerCreating` —
+      that is a top interview gotcha.
+      :::
+
+      ## The commands
+
+      ```bash
+      kubectl get pv,pvc
+      kubectl describe pvc shop-reports     # shows the bound PV, phase, capacity
+      kubectl get storageclass
+      kubectl delete pvc shop-reports       # also frees the dynamically provisioned PV
+      ```
+
+      ## Reclaim policy
+
+      When a PVC is deleted, what happens to the PV?
+
+      | Policy | Result |
+      |--------|--------|
+      | `Retain` | the PV stays; you must clean it up manually |
+      | `Delete` | the PV (and its storage) is deleted — the default for cloud provisioners |
+      | `Recycle` | deprecated |
+
+      ## The mental model
+
+      ```text
+      pod ──mounts──> PVC ──binds──> PV ──points at──> real storage
+      ```
+
+      The pod never sees the real storage. It sees the claim. That is the
+      whole abstraction: the app asks for "1Gi, RWO" and someone else (the
+      StorageClass) finds the disk.
+
+      :::example
+      ShopAPI writes weekly reports to `/data`. You create `shop-reports`
+      (1Gi, RWO), mount it in the Deployment, and a cloud StorageClass
+      provisions the disk automatically. Pod restarts, node failures,
+      even cluster re-creates — the reports survive.
+      :::
+  - type: mcq
+    prompt: "Which volume type survives a pod deletion?"
+    options:
+      - "emptyDir"
+      - "hostPath"
+      - "persistentVolumeClaim"
+      - "all of them"
+    answer: 2
+    explanation: "emptyDir dies with the pod. hostPath survives but is node-bound and unsafe for app state. A PVC-backed volume is the durable, portable choice."
+  - type: mcq
+    prompt: "A Deployment with replicas: 3 mounts an RWO PVC. What happens?"
+    options:
+      - "all three pods share it happily"
+      - "two pods stay ContainerCreating — RWO allows one node at a time"
+      - "the PVC is deleted"
+      - "the deployment fails to create"
+    answer: 1
+    explanation: "ReadWriteOnce = one node. Three pods on different nodes cannot attach simultaneously; the extras wait in ContainerCreating."
+  - type: mscq
+    prompt: "Which statements about PVCs are TRUE?"
+    options:
+      - "A StorageClass can provision a PV automatically when the PVC appears"
+      - "The pod references the PV by name"
+      - "accessModes ReadWriteMany requires shared storage like NFS"
+      - "ReclaimPolicy Delete removes the underlying storage"
+    answer: [0, 2, 3]
+    explanation: "Dynamic provisioning is the norm in the cloud. Pods reference the CLAIM, never the PV. RWM needs shared filesystems. Delete policy cleans up the disk too."
+---

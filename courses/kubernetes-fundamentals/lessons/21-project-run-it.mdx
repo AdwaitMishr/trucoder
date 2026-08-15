@@ -1,0 +1,139 @@
+---
+id: project-run-it
+title: "Project: Run ShopAPI on kind"
+difficulty: medium
+order: 21
+tags: [project, kind, walkthrough, resume]
+blocks:
+  - type: markdown
+    content: |
+      The graded lessons proved you can *read* the manifests. Now run them
+      for real. This is the part you put on your resume: a complete
+      three-tier app deployed on a real cluster on your laptop.
+
+      ## 1. Install kind (Kubernetes in Docker)
+
+      ```bash
+      # linux (or brew install kind / choco install kind)
+      curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
+      chmod +x kind && sudo mv kind /usr/local/bin/
+
+      kind create cluster --name shop
+      kubectl cluster-info
+      ```
+
+      ## 2. Write the manifests (you know them by now)
+
+      Create a folder and write each manifest from the previous lessons:
+
+      ```bash
+      mkdir shop && cd shop
+      # 01-deployment.yaml  (lesson 16)
+      # 02-service.yaml     (lesson 17)
+      # 03-config.yaml      (lesson 18 — configmap + secret)
+      # 04-ingress.yaml     (lesson 19)
+      # 05-pvc.yaml         (lesson 20)
+      ```
+
+      :::tip
+      Type them by hand. The muscle memory of writing YAML is half the
+      interview skill — you will be asked to sketch a Deployment on a
+      whiteboard.
+      :::
+
+      ## 3. Apply in dependency order
+
+      ```bash
+      kubectl apply -f 05-pvc.yaml          # storage first — nothing mounts before it exists
+      kubectl apply -f 03-config.yaml       # config next — the deployment references it
+      kubectl apply -f 01-deployment.yaml
+      kubectl apply -f 02-service.yaml
+      kubectl apply -f 04-ingress.yaml
+      kubectl get pods -w                   # watch them become Running
+      ```
+
+      ## 4. Prove it works
+
+      ```bash
+      kubectl get all
+      kubectl get endpoints shop-api        # pod IPs behind the service
+      kubectl port-forward svc/shop-api 8080:80
+      curl localhost:8080/readyz            # the readiness probe
+      curl localhost:8080/api/items         # the app itself
+      ```
+
+      ## 5. The drills — do each one, then undo it
+
+      ```bash
+      # rolling update: bump the image tag, watch it roll
+      kubectl set image deploy/shop-api shop-api=ghcr.io/adith2005-20/shop-api:v2
+      kubectl rollout status deploy/shop-api
+      kubectl rollout undo deploy/shop-api
+
+      # the HPA in action: generate load, watch replicas climb
+      kubectl get hpa -w &
+      for i in $(seq 1 20); do curl -s localhost:8080/api/items > /dev/null; done
+
+      # crash recovery: kill a pod, watch the controller replace it
+      kubectl delete pod -l app=shop-api
+
+      # secrets: prove the pod has them
+      kubectl exec deploy/shop-api -- printenv REDIS_PASSWORD
+      ```
+
+      ## 6. Clean up
+
+      ```bash
+      kind delete cluster --name shop
+      ```
+
+      ## What you can now claim (and defend)
+
+      On your resume, under Projects:
+
+      > Deployed a three-tier ShopAPI on Kubernetes (kind): rolling
+      > updates, readiness/liveness probes, ConfigMaps & Secrets, Ingress
+      > routing, HPA autoscaling, and PVC-backed storage — all as
+      > versioned manifests.
+
+      The three questions an interviewer will ask — have answers ready:
+
+      1. **How does a rolling update work?** The Deployment creates a new
+         ReplicaSet and scales it up while scaling the old one down —
+         pod-by-pod, respecting `maxSurge`/`maxUnavailable`, and the new
+         pod only counts once it is Ready (that is what the readiness
+         probe is for).
+      2. **How does the HPA decide to scale?** It reads average CPU
+         utilization — actual usage divided by the container's
+         `requests.cpu` — every sync period, and scales to
+         `ceil(current × util / target)`, clamped to min/maxReplicas.
+      3. **Why a PVC and not a hostPath?** hostPath is tied to one node
+         and dies with it. A PVC is a portable request that a StorageClass
+         satisfies — the pod can land anywhere and the data follows.
+
+      :::example
+      The whole arc in one sentence for an interview: "I deployed a
+      stateless API tier with probes and HPA, gave it config and secrets
+      without rebuilding the image, routed traffic through Ingress, and
+      attached durable storage through a PVC — then verified each behavior
+      on a real kind cluster."
+      :::
+  - type: mcq
+    prompt: "During a rolling update, when does the new pod start receiving traffic?"
+    options:
+      - "as soon as it is created"
+      - "once its readiness probe passes"
+      - "once the old ReplicaSet is deleted"
+      - "after the HPA approves"
+    answer: 1
+    explanation: "The Service only routes to Ready pods. Readiness is the gate that makes rollouts safe."
+  - type: mcq
+    prompt: "The HPA computes CPU utilization against…"
+    options:
+      - "the container's limits.cpu"
+      - "the container's requests.cpu"
+      - "the node's total CPU"
+      - "the image size"
+    answer: 1
+    explanation: "Utilization = usage / request. No request, no utilization — the HPA cannot act."
+---

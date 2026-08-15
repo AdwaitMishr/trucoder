@@ -1,0 +1,181 @@
+---
+id: rbac-and-security
+title: "RBAC & Security Hardening"
+difficulty: medium
+order: 14
+tags: [rbac, serviceaccount, securitycontext, networkpolicy]
+blocks:
+  - type: markdown
+    content: |
+      Kubernetes trusts too much by default: every pod can talk to every
+      pod, and the default service account can do almost nothing — but also
+      almost everything it is given. A hardened cluster is built from three
+      levers: **who** (RBAC), **how the container runs** (securityContext),
+      and **what can talk to what** (NetworkPolicy).
+
+      ## ServiceAccounts — who the pod is
+
+      Every pod has a service account. It is the pod's identity for API
+      calls (and, with the right setup, for external services).
+
+      ```yaml
+      apiVersion: v1
+      kind: ServiceAccount
+      metadata:
+        name: shop-api
+      ```
+
+      ```yaml
+      spec:
+        serviceAccountName: shop-api   # the pod presents THIS identity
+        containers: [...]
+      ```
+
+      :::warning
+      The `default` service account in a namespace is shared by every pod
+      that does not declare one. If your app talks to the API server, give
+      it a dedicated account and scope its permissions — never let it run
+      as `default`.
+      :::
+
+      ## RBAC — Role, RoleBinding, and the cluster-wide cousins
+
+      ```yaml
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: Role
+      metadata:
+        name: shop-api-role
+        namespace: shop
+      rules:
+        - apiGroups: [""]
+          resources: ["pods", "services"]
+          verbs: ["get", "list", "watch"]
+      ---
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: RoleBinding
+      metadata:
+        name: shop-api-binding
+        namespace: shop
+      subjects:
+        - kind: ServiceAccount
+          name: shop-api
+          namespace: shop
+      roleRef:
+        kind: Role
+        name: shop-api-role
+        apiGroup: rbac.authorization.k8s.io
+      ```
+
+      | Object | Scope |
+      |--------|-------|
+      | Role | one namespace |
+      | RoleBinding | binds a Role in one namespace |
+      | ClusterRole | cluster-wide (or namespaced, when bound) |
+      | ClusterRoleBinding | binds cluster-wide |
+
+      :::tip
+      The pattern to remember: **subject + roleRef**. The binding is the
+      glue — a Role grants nothing until a Binding attaches a subject.
+      `kubectl auth can-i get pods --as=system:serviceaccount:shop:shop-api`
+      checks what an identity can actually do.
+      :::
+
+      ## securityContext — how the container runs
+
+      ```yaml
+      spec:
+        securityContext:                    # pod-level defaults
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+          - name: app
+            securityContext:
+              readOnlyRootFilesystem: true
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop: ["ALL"]
+              runAsUser: 1000
+      ```
+
+      | Setting | Why |
+      |---------|-----|
+      | `runAsNonRoot: true` | refuse to start as uid 0 |
+      | `readOnlyRootFilesystem: true` | the app cannot write its own image |
+      | `capabilities.drop: [ALL]` | strip every Linux capability |
+      | `allowPrivilegeEscalation: false` | block setuid tricks |
+
+      ## NetworkPolicy — what can talk to what
+
+      ```yaml
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      metadata:
+        name: shop-api-policy
+        namespace: shop
+      spec:
+        podSelector:
+          matchLabels:
+            app: shop-api
+        policyTypes: [Ingress]
+        ingress:
+          - from:
+              - podSelector:
+                  matchLabels:
+                    app: shop-web
+            ports:
+              - port: 8080
+      ```
+
+      Only pods labeled `app=shop-web` may reach `shop-api` on 8080.
+      Everything else is dropped.
+
+      :::warning
+      NetworkPolicy needs a CNI that enforces it (Calico, Cilium, Weave).
+      The default cluster network usually allows everything — writing a
+      NetworkPolicy without a policy-enforcing CNI does nothing.
+      :::
+
+      ## The mental model
+
+      ```text
+      RBAC            who may call the API server
+      securityContext how the container behaves on the node
+      NetworkPolicy   what may reach what at the network layer
+      ```
+
+      :::example
+      The hardened ShopAPI: a dedicated `shop-api` ServiceAccount, a Role
+      that can only read pods/services in `shop`, a securityContext that
+      drops all capabilities and forces uid 1000, and a NetworkPolicy that
+      admits only the web tier on 8080. Nothing to do with the business
+      logic — all three are manifest concerns.
+      :::
+  - type: mcq
+    prompt: "A RoleBinding attaches…"
+    options:
+      - "a Role to a namespace"
+      - "a subject (user, group, or service account) to a Role"
+      - "a Role to a pod"
+      - "a pod to a node"
+    answer: 1
+    explanation: "The binding is the glue between subject and role. The Role itself grants nothing until bound."
+  - type: mcq
+    prompt: "runAsNonRoot: true makes a container…"
+    options:
+      - "run with all capabilities"
+      - "refuse to start as uid 0"
+      - "run as the node's root"
+      - "skip image pulls"
+    answer: 1
+    explanation: "It rejects startup with uid 0 — forcing the app to use an unprivileged user (often combined with runAsUser: 1000)."
+  - type: mscq
+    prompt: "Which statements are TRUE?"
+    options:
+      - "ClusterRoleBindings grant cluster-wide permissions"
+      - "NetworkPolicy requires a policy-enforcing CNI"
+      - "capabilities.drop: [ALL] removes every Linux capability from the container"
+      - "the default service account is the most secure choice"
+    answer: [0, 1, 2]
+    explanation: "All true except the last: default is shared and over-permissioned. Give each app its own scoped account."
+---

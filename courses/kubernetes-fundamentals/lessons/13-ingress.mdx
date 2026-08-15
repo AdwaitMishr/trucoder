@@ -1,0 +1,169 @@
+---
+id: ingress
+title: "Ingress: L7 Routing into the Cluster"
+difficulty: medium
+order: 13
+tags: [ingress, http, routing, tls]
+blocks:
+  - type: markdown
+    content: |
+      A Service gives your app a cluster-internal address. **Ingress** is
+      how traffic from the *outside* finds the right Service — by hostname
+      and URL path, at layer 7.
+
+      ## The traffic path
+
+      ```text
+      browser
+        │  https://shop.example.com
+        ▼
+      Ingress Controller   (nginx, traefik, cloud LB — the actual server)
+        │  reads the Ingress rules
+        ▼
+      Service (shop-api)   (ClusterIP, port 80)
+        │  selector
+        ▼
+      Pods (shop-api-xxx)
+      ```
+
+      Two things, and people mix them constantly:
+
+      - **Ingress Controller** — a real deployment that terminates traffic.
+        You must install it (nginx-ingress, traefik, or the cloud LB).
+      - **Ingress resource** — declarative *rules*: "host X, path Y goes to
+        Service Z."
+
+      ## A minimal Ingress
+
+      ```yaml
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: shop-ingress
+      spec:
+        ingressClassName: nginx
+        rules:
+          - host: shop.example.com
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: shop-api
+                      port:
+                        number: 80
+      ```
+
+      ## Hosts and paths
+
+      | Rule | Meaning |
+      |------|---------|
+      | `host: shop.example.com` | this rule only matches that host |
+      | `path: /` + `pathType: Prefix` | everything under that host |
+      | `path: /api` + `pathType: Prefix` | only /api… |
+      | `pathType: Exact` | byte-exact match (rare) |
+
+      Two hosts, one Ingress:
+
+      ```yaml
+      spec:
+        rules:
+          - host: shop.example.com
+            http:
+              paths:
+                - path: /
+                  backend:
+                    service: { name: shop-api, port: { number: 80 } }
+          - host: admin.shop.example.com
+            http:
+              paths:
+                - path: /
+                  backend:
+                    service: { name: shop-admin, port: { number: 80 } }
+      ```
+
+      ## TLS
+
+      ```yaml
+      spec:
+        tls:
+          - hosts:
+              - shop.example.com
+            secretName: shop-tls        # a Secret with tls.crt + tls.key
+        rules:
+          - host: shop.example.com
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: shop-api
+                      port:
+                        number: 80
+      ```
+
+      The controller terminates TLS with the certificate from the Secret.
+      In real setups the cert is provisioned automatically by
+      cert-manager (Let's Encrypt).
+
+      ## The commands
+
+      ```bash
+      kubectl get ingress
+      kubectl describe ingress shop-ingress   # shows the resolved backend
+      # with nginx-ingress installed:
+      kubectl get pods -n ingress-nginx
+      kubectl logs -n ingress-nginx deploy/ingress-nginx-controller
+      ```
+
+      :::warning
+      Creating an Ingress resource does nothing until an Ingress Controller
+      is running. `kubectl get ingress` shows your rules; the controller's
+      pods in `ingress-nginx` (or the cloud LB) are what actually serve
+      traffic. Missing controller = rule accepted, nothing happens.
+      :::
+
+      ## Ingress vs the other exposure types
+
+      | Exposure | Layer | Use |
+      |----------|-------|-----|
+      | `port-forward` | dev tool | your laptop, one service |
+      | `NodePort` | L4 | quick tests, no hostnames |
+      | `LoadBalancer` | L4 | one public IP per service — costly at scale |
+      | `Ingress` | L7 | hostnames, paths, TLS, many services behind one entry |
+
+      :::example
+      `shop.example.com` hits the shop, `admin.shop.example.com` hits the
+      admin panel, both on the same cluster, same controller, same TLS
+      cert — one Ingress resource with two rules.
+      :::
+  - type: mcq
+    prompt: "What actually terminates the HTTPS connection when you use an Ingress?"
+    options:
+      - "the Ingress resource itself"
+      - "the Ingress Controller (nginx/traefik/cloud LB)"
+      - "the Service"
+      - "the pod"
+    answer: 1
+    explanation: "The Ingress resource is just rules. The controller is the running server that terminates TLS and routes."
+  - type: mcq
+    prompt: "You applied an Ingress and curl gets connection refused. What is the FIRST thing to check?"
+    options:
+      - "the Service selector"
+      - "that an Ingress Controller is installed and running"
+      - "the pod restart policy"
+      - "the PVC binding"
+    answer: 1
+    explanation: "No controller = no listener. Check for the controller deployment before touching rules or selectors."
+  - type: mscq
+    prompt: "Which statements about Ingress are TRUE?"
+    options:
+      - "One Ingress can route multiple hosts"
+      - "pathType Prefix routes /api to the matching backend"
+      - "TLS certificates live in a Secret referenced by the Ingress"
+      - "Ingress replaces the need for Services entirely"
+    answer: [0, 1, 2]
+    explanation: "Multi-host rules, Prefix matching, and TLS via Secret are all core. But the Ingress routes TO a Service — the Service still exists and still selects pods."
+---

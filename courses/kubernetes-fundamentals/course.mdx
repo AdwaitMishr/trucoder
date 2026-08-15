@@ -1,7 +1,7 @@
 ---
 id: kubernetes-fundamentals
 title: "Kubernetes Fundamentals"
-description: "A hands-on introduction to Kubernetes: cluster architecture, pods, deployments, services, probes, autoscaling, and scheduling. Mostly reading with real kubectl commands and YAML — plus two small coding exercises where the math genuinely matters."
+description: "A complete, hands-on Kubernetes course: cluster architecture, pods, deployments, services, probes, config, storage, ingress, security, autoscaling — and a capstone project where you deploy a real three-tier app (ShopAPI) on kind. Mostly reading with real kubectl commands and YAML, plus graded manifest exercises and two arithmetic exercises where the math genuinely matters."
 difficultyLevels: [beginner, easy, medium]
 ---
 
@@ -13,9 +13,16 @@ either a command you run or a number you reason about.
 
 Most lessons here are **reading**: the concept, the `kubectl` commands, and the
 YAML that makes it real. Read them like the docs you wish existed — then run
-the commands on a cluster (or `minikube`/`kind` on your laptop) to make them
-stick. Two lessons are **coding exercises**, kept only where the math is
+the commands on a cluster (or `kind`/`minikube` on your laptop) to make them
+stick. Two early lessons are **coding exercises**, kept only where the math is
 genuinely worth practicing: resource units and HPA math.
+
+The second half of the course is a **capstone project**: ShopAPI, a real
+three-tier app. Five graded lessons make you *prove* you can read and validate
+production manifests (Deployment, Service, ConfigMap/Secret, Ingress/HPA,
+PVC wiring) — including catching broken ones. The final lesson runs the whole
+stack for real on a `kind` cluster and gives you the interview answers that
+turn the project into a resume line.
 
 Work through the lessons **in order**:
 
@@ -27,9 +34,23 @@ Work through the lessons **in order**:
 6. Probes — readiness vs liveness, and the timing math.
 7. HPA math — the autoscaler's formula (code).
 8. Taints & tolerations — who is allowed on which node.
+9. Namespaces — folders, budgets, and the DNS name.
+10. ConfigMaps & Secrets — config that changes without a rebuild.
+11. Storage — PVs, PVCs, and when state survives.
+12. Beyond Deployments — Jobs, CronJobs, DaemonSets, StatefulSets.
+13. Ingress — L7 routing into the cluster.
+14. RBAC & security — who, how, and what can talk to what.
+15. Observability & Helm — logs, metrics, and packaging.
+16. **Project** — the Deployment manifest (graded).
+17. **Project** — the Service (graded).
+18. **Project** — ConfigMap & Secret (graded).
+19. **Project** — Ingress & HPA (graded).
+20. **Project** — storage and full wiring (graded).
+21. **Project** — run ShopAPI on kind, for real.
 
 By the end you will read a Deployment manifest and see *why* every number is
-there — and you will know the command to type when something misbehaves.
+there — and you will have deployed a complete, production-shaped app on a
+real cluster, with the vocabulary to defend it in an interview.
 
 ## The roadmap
 
@@ -43,3 +64,20 @@ there — and you will know the command to type when something misbehaves.
 | 6 | Probes | readiness vs liveness, timing | reading |
 | 7 | HPA math | `ceil(replicas × util / target)`, min 1 | code |
 | 8 | Taints & tolerations | scheduling constraints | reading |
+| 9 | Namespaces | folders, budgets, DNS scope | reading |
+| 10 | ConfigMaps & Secrets | config without rebuilds | reading |
+| 11 | Storage | PVs, PVCs, access modes | reading |
+| 12 | Beyond Deployments | Jobs, CronJobs, DaemonSets, StatefulSets | reading |
+| 13 | Ingress | L7 routing, hosts, paths, TLS | reading |
+| 14 | RBAC & security | service accounts, roles, policies | reading |
+| 15 | Observability & Helm | logs, metrics, packaging | reading |
+| 16 | Project: Deployment | read + validate the app manifest | code |
+| 17 | Project: Service | ports, selectors, endpoints | code |
+| 18 | Project: Config & Secret | keys, types, separation | code |
+| 19 | Project: Ingress & HPA | routing + autoscaling manifests | code |
+| 20 | Project: Storage | PVC wiring, consistency | code |
+| 21 | Project: run it | kind walkthrough + interview prep | reading |
+
+The project uses a consistent manifest set — every lesson references the same
+ShopAPI. Do the graded lessons in order; the final walkthrough assumes you
+know all five manifests.

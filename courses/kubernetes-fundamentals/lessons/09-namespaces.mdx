@@ -1,0 +1,128 @@
+---
+id: namespaces
+title: "Namespaces"
+difficulty: easy
+order: 9
+tags: [namespaces, isolation, quotas]
+blocks:
+  - type: markdown
+    content: |
+      A **namespace** is a named folder for cluster objects. It does not give
+      you security — it gives you *separation*: distinct names, distinct
+      teams, distinct budgets.
+
+      ## Why namespaces exist
+
+      Without namespaces, every object in the cluster needs a unique name.
+      With namespaces, `web` can exist in `staging` and `prod` at the same
+      time, and each team gets a corner of the cluster that does not collide
+      with anyone else's.
+
+      | Concern | Namespace helps? | Notes |
+      |---------|------------------|-------|
+      | name collisions | yes | object names are unique per namespace |
+      | team separation | yes | `kubectl -n team-a get pods` |
+      | security boundary | **no** | pods in different namespaces can still talk (default) |
+      | resource limits | yes, via quotas | see below |
+
+      ## The four built-ins
+
+      - `default` — where everything lands unless you say otherwise.
+      - `kube-system` — control-plane pods (kube-proxy, coredns, metrics-server).
+      - `kube-public` — readable by everyone.
+      - `kube-node-lease` — node heartbeats.
+
+      ## The commands
+
+      ```bash
+      kubectl get namespaces          # or: kubectl get ns
+      kubectl create namespace staging
+      kubectl config set-context --current --namespace=staging   # default ns for this context
+      kubectl get pods -n staging                                # one-off namespace
+      kubectl get pods -A                                         # ALL namespaces
+      kubectl delete namespace staging                            # removes everything inside
+      ```
+
+      :::warning
+      `kubectl get pods` without `-n` or `-A` shows only `default`. Your pod
+      is probably fine — you are just looking in the wrong folder. This is
+      the number-one "where did my pod go" moment.
+      :::
+
+      ## DNS inside a namespace
+
+      A Service `api` in namespace `payments` resolves to
+      `api.payments.svc.cluster.local`. Pods in the *same* namespace can use
+      the short name `api`; pods elsewhere need the full name. Namespaces
+      are part of the DNS name — that is how two `api` services can exist.
+
+      ## Resource quotas
+
+      A namespace can carry a budget:
+
+      ```yaml
+      apiVersion: v1
+      kind: ResourceQuota
+      metadata:
+        name: staging-quota
+        namespace: staging
+      spec:
+        hard:
+          requests.cpu: "4"
+          requests.memory: 8Gi
+          limits.cpu: "8"
+          limits.memory: 16Gi
+          count/pods: "40"
+      ```
+
+      Exceed the quota and the API server refuses the object. This is how a
+      platform team stops one team from eating the cluster.
+
+      :::tip
+      `kubectl get quota -n staging` shows current usage. `kubectl describe
+      quota` explains a refused create — the message names the exact limit
+      you blew.
+      :::
+
+      ## The mental model
+
+      ```text
+      cluster            the whole thing (one kube-apiserver)
+      └── namespace      a folder + a budget
+          └── objects    names unique inside the namespace only
+      ```
+
+      :::example
+      You deploy a todo app to `staging` and `prod`:
+      `kubectl create ns staging && kubectl create ns prod`, then apply the
+      same manifests with `-n staging` and `-n prod`. Same YAML, two
+      independent worlds.
+      :::
+  - type: mcq
+    prompt: "Two teams deploy a Service named api. Where can both exist safely?"
+    options:
+      - "in the same namespace with different YAML"
+      - "in different namespaces — names are unique per namespace"
+      - "never — Service names are cluster-global"
+      - "only if one uses a different port"
+    answer: 1
+    explanation: "Object names are unique per namespace, so api in team-a and api in team-b coexist. The cluster-global part of a Service is its DNS name, which includes the namespace."
+  - type: mcq
+    prompt: "You run kubectl get pods and your pod is missing — but the deployment says it exists. What is the most likely cause?"
+    options:
+      - "the pod crashed before scheduling"
+      - "the pod is in a different namespace"
+      - "the node is offline"
+      - "kubectl is out of date"
+    answer: 1
+    explanation: "kubectl get pods shows only the default namespace unless you pass -n or -A. Check kubectl get pods -A first."
+  - type: mscq
+    prompt: "Which statements about namespaces are TRUE?"
+    options:
+      - "A ResourceQuota can cap total pods in a namespace"
+      - "Namespaces provide network isolation by default"
+      - "The DNS name of a Service includes its namespace"
+      - "Deleting a namespace deletes the objects inside it"
+    answer: [0, 2, 3]
+    explanation: "Quotas cap usage, DNS is name.namespace.svc, and deleting a namespace is a bulk delete. Network isolation does NOT come free — that needs NetworkPolicies."
+---

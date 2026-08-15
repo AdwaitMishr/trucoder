@@ -1,0 +1,133 @@
+---
+id: observability-and-helm
+title: "Observability & Helm"
+difficulty: medium
+order: 15
+tags: [observability, logs, metrics, helm]
+blocks:
+  - type: markdown
+    content: |
+      "It works on my machine" is not a thing in a cluster. You debug with
+      **logs** (what the app printed), **events** (what the cluster did),
+      and **metrics** (what it looks like over time). Then you package it
+      all for reuse with **Helm**.
+
+      ## Logs
+
+      ```bash
+      kubectl logs deploy/shop-api              # current pod's logs
+      kubectl logs deploy/shop-api --tail=100   # last 100 lines
+      kubectl logs deploy/shop-api -f           # follow
+      kubectl logs deploy/shop-api --previous   # logs of the pod BEFORE restart
+      ```
+
+      :::tip
+      `--previous` is the first thing to try after a crash loop: the
+      current pod logs nothing useful because it died, but the previous
+      incarnation usually printed the panic.
+      :::
+
+      In production, logs are collected cluster-wide (DaemonSet agents like
+      fluentd → Elasticsearch/Loki/S3) and queried in one place. `kubectl
+      logs` is the local-first tool; the agent pipeline is the scale tool.
+
+      ## Events — what the cluster did and why
+
+      ```bash
+      kubectl get events --sort-by=.lastTimestamp
+      kubectl describe pod <pod>      # includes events at the bottom
+      ```
+
+      Failed pulls, evictions, probe failures — the scheduler and kubelet
+      write events. When a pod is stuck in `Pending` with no obvious cause,
+      `kubectl describe` + the events section is the answer.
+
+      ## Metrics
+
+      ```bash
+      kubectl top nodes               # cpu/memory per node
+      kubectl top pods                # per pod — needs metrics-server
+      ```
+
+      metrics-server gives you current usage (and feeds the HPA). For
+      history, dashboards, and alerting: Prometheus scrapes, Grafana
+      displays, Alertmanager pings. The pattern is always the same —
+      *scrape, store, query*.
+
+      ## The debugging order
+
+      ```text
+      1. kubectl get pods -A          what exists?
+      2. kubectl describe pod <pod>   events: why is it stuck?
+      3. kubectl logs <pod>           what did the app print?
+      4. kubectl logs <pod> --previous   what did the LAST one print?
+      5. kubectl top pods             is it resource-starved?
+      ```
+
+      ## Helm — packaging a deployment
+
+      A Helm chart is a template folder: `Chart.yaml` (metadata),
+      `values.yaml` (the knobs), `templates/` (manifests with
+      `{{ .Values.x }}` placeholders).
+
+      ```text
+      myapp/
+        Chart.yaml
+        values.yaml        # image.tag, replicas, service.port ...
+        templates/
+          deployment.yaml  # uses {{ .Values.replicas }}
+          service.yaml
+      ```
+
+      ```bash
+      helm install shop ./shop-chart              # deploy it
+      helm upgrade shop ./shop-chart --set image.tag=v2   # change one value
+      helm rollback shop 1                         # undo
+      helm list                                    # what is installed
+      helm repo add bitnami https://charts.bitnami.com/bitnami
+      helm install redis bitnami/redis             # install a published chart
+      ```
+
+      Helm turns "ten YAML files with copy-paste edits" into "one chart,
+      one values file, one command". That is why it is the default package
+      manager for Kubernetes.
+
+      :::warning
+      Helm does not replace the API server's guarantees — it generates the
+      same manifests you could write by hand. Understand the manifests
+      FIRST; use Helm to avoid repeating yourself, not to avoid learning.
+      :::
+
+      :::example
+      A release = a chart + a values file + a name. `helm upgrade shop -f
+      prod-values.yaml` promotes the same chart to prod with different
+      knobs — the templating is the entire point.
+      :::
+  - type: mcq
+    prompt: "A pod crashes in a loop. Which command shows the logs of the pod that ran BEFORE the current one?"
+    options:
+      - "kubectl logs deploy/shop-api"
+      - "kubectl logs deploy/shop-api --previous"
+      - "kubectl top pods"
+      - "kubectl get events --previous"
+    answer: 1
+    explanation: "--previous fetches the terminated incarnation's logs — usually where the panic is."
+  - type: mcq
+    prompt: "kubectl top pods requires…"
+    options:
+      - "a LoadBalancer"
+      - "metrics-server (or equivalent) installed"
+      - "an Ingress Controller"
+      - "Prometheus"
+    answer: 1
+    explanation: "top reads the metrics pipeline; metrics-server is the minimal install (Prometheus also works and adds history)."
+  - type: mscq
+    prompt: "Which statements about Helm are TRUE?"
+    options:
+      - "A chart is a folder of templated manifests"
+      - "helm rollback reverts a release to a previous revision"
+      - "helm install can deploy charts from public repos"
+      - "Helm makes the underlying manifests unnecessary to understand"
+    answer: [0, 1, 2]
+    explanation: "Charts, rollbacks, and repos are core. Understanding the manifests is still required — Helm only generates them."
+---

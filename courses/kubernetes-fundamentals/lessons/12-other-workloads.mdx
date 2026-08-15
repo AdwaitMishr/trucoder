@@ -1,0 +1,179 @@
+---
+id: other-workloads
+title: "Beyond Deployments: Jobs, CronJobs, DaemonSets, StatefulSets"
+difficulty: medium
+order: 12
+tags: [job, cronjob, daemonset, statefulset, workloads]
+blocks:
+  - type: markdown
+    content: |
+      A Deployment is for *long-running* services: N replicas, forever. But
+      not every workload runs forever. Kubernetes has a controller for each
+      job shape — and the shape is a *choice you make in the manifest*.
+
+      ## The four controllers
+
+      | Controller | Runs | Example |
+      |------------|------|---------|
+      | Deployment | N replicas, always | web API |
+      | Job | once to completion | migrate the database |
+      | CronJob | Job on a schedule | nightly backup |
+      | DaemonSet | exactly one per node | logs agent, kube-proxy |
+      | StatefulSet | N replicas with stable identity | databases, message brokers |
+
+      ## Job — run something to completion
+
+      ```yaml
+      apiVersion: batch/v1
+      kind: Job
+      metadata:
+        name: db-migrate
+      spec:
+        completions: 1
+        parallelism: 1
+        template:
+          spec:
+            restartPolicy: Never
+            containers:
+              - name: migrate
+                image: ghcr.io/adith2005-20/shop-api:v1
+                command: ["node", "migrate.js"]
+      ```
+
+      The pod runs until it exits 0. On failure it retries (or, with
+      `restartPolicy: Never` + `backoffLimit`, gives up after N tries).
+      `kubectl get jobs`, `kubectl logs job/db-migrate`.
+
+      :::warning
+      A Job pod must NOT use `restartPolicy: Always` — that is the
+      Deployment default and Jobs reject it. `Never` or `OnFailure` only.
+      :::
+
+      ## CronJob — the scheduler
+
+      ```yaml
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: nightly-backup
+      spec:
+        schedule: "0 2 * * *"        # 2 AM every day — standard cron syntax
+        concurrencyPolicy: Forbid    # don't overlap runs
+        jobTemplate:
+          spec:
+            template:
+              spec:
+                restartPolicy: Never
+                containers:
+                  - name: backup
+                    image: ghcr.io/adith2005-20/shop-api:v1
+                    command: ["node", "backup.js"]
+      ```
+
+      `kubectl get cronjobs` shows the schedule; `kubectl get jobs -l
+      job-name=nightly-backup` shows the runs. A missed run is gone — the
+      schedule is not a backlog.
+
+      ## DaemonSet — one pod per node
+
+      ```yaml
+      apiVersion: apps/v1
+      kind: DaemonSet
+      metadata:
+        name: fluentd
+      spec:
+        selector:
+          matchLabels:
+            name: fluentd
+        template:
+          metadata:
+            labels:
+              name: fluentd
+          spec:
+            containers:
+              - name: fluentd
+                image: fluent/fluentd:v1.16
+      ```
+
+      New node joins the cluster → a pod appears on it automatically. That
+      is how log collectors, metrics agents, and kube-proxy work.
+
+      ## StatefulSet — stable identity for stateful apps
+
+      ```yaml
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: redis
+      spec:
+        serviceName: redis-headless   # a headless Service (clusterIP: None)
+        replicas: 3
+        selector:
+          matchLabels:
+            app: redis
+        template:
+          metadata:
+            labels:
+              app: redis
+          spec:
+            containers:
+              - name: redis
+                image: redis:7
+        volumeClaimTemplates:
+          - metadata:
+              name: data
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 1Gi
+      ```
+
+      Pods get *ordered, stable* names: `redis-0`, `redis-1`, `redis-2`.
+      Each gets its own PVC (the `volumeClaimTemplate` makes one per pod).
+      Scaling and updates happen one at a time, in order. Databases and
+      message brokers need this; stateless web apps do not.
+
+      ## The decision
+
+      ```text
+      Does it serve traffic forever?      -> Deployment
+      Does it finish a task?              -> Job / CronJob
+      Does every node need one?           -> DaemonSet
+      Does it need stable names + disks?  -> StatefulSet
+      ```
+
+      :::example
+      ShopAPI: the API itself is a Deployment, the DB migration is a Job,
+      the nightly report is a CronJob, the log collector is a DaemonSet,
+      and Redis is a StatefulSet. One cluster, five different controllers —
+      each picked because of *how the work behaves*.
+      :::
+  - type: mcq
+    prompt: "Which controller guarantees exactly one pod per node?"
+    options:
+      - "Deployment"
+      - "DaemonSet"
+      - "StatefulSet"
+      - "Job"
+    answer: 1
+    explanation: "DaemonSet places exactly one pod on every node and adds one automatically when a node joins."
+  - type: mcq
+    prompt: "Why does a StatefulSet exist for Redis but not for a stateless web app?"
+    options:
+      - "statefulsets run faster"
+      - "Redis needs stable pod names and per-pod storage"
+      - "stateless apps cannot use statefulsets"
+      - "statefulsets are cheaper"
+    answer: 1
+    explanation: "Stable identity (redis-0) and one PVC per pod via volumeClaimTemplates are what distributed state needs. Stateless apps get no benefit."
+  - type: mscq
+    prompt: "Which statements are TRUE?"
+    options:
+      - "A CronJob creates Jobs on a schedule"
+      - "Job pods must set restartPolicy to Never or OnFailure"
+      - "volumeClaimTemplates gives each StatefulSet pod its own PVC"
+      - "DaemonSet pods are deleted when the node is deleted"
+    answer: [0, 1, 2]
+    explanation: "All true except the last: DaemonSet pods disappear WITH the node — that is expected, the controller only runs where nodes exist."
+---
