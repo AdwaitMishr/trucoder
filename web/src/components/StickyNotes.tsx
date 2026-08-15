@@ -341,9 +341,16 @@ export default function StickyNotes({
   }, [clampPos, courseId, lessonId, findFreeSpot, marginZones]);
 
   // The header's "＋ sticky" button bumps addTick.
+  // addNote is kept behind a ref so the effect depends ONLY on addTick: a
+  // note must be created exactly when the user presses the button. Depending
+  // on addNote too would re-fire the effect on every lesson navigation (its
+  // identity changes with courseId/lessonId) and spawn phantom empty notes
+  // on lessons the user never touched.
+  const addNoteRef = useRef(addNote);
+  addNoteRef.current = addNote;
   useEffect(() => {
-    if (addTick > 0) void addNote();
-  }, [addTick, addNote]);
+    if (addTick > 0) void addNoteRef.current();
+  }, [addTick]);
 
   if (!loaded) return null;
 

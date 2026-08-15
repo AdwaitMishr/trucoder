@@ -705,7 +705,13 @@ button.ghost:disabled { opacity: 0.5; cursor: default; }
   display: flex; flex-direction: column; gap: 8px;
   padding: 2px 2px 14px; border-bottom: 1px solid var(--hairline);
 }
-.lesson-head-top { display: flex; align-items: center; justify-content: space-between; }
+.lesson-head-top {
+  display: flex; align-items: center; justify-content: space-between;
+  /* sticky: the slim header row (course link + sticky/zen buttons) stays
+     visible while the lesson scrolls — keeps the note button reachable */
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bg);
+}
 .lesson-head-top .back { margin: 0; }
 .lesson-head-title-row { display: flex; align-items: center; gap: 12px; }
 .lesson-head-title {
@@ -2677,6 +2683,9 @@ button.ghost.small-ghost.on { color: var(--accent); }
     z-index: 60;
     background: var(--bg);
   }
+  /* the lesson header row sticks BELOW the sticky nav (nav ≈ 45px tall:
+     10px padding ×2 + 24px brand + 1px border) */
+  .lesson-head-top { top: 45px; }
   /* Monaco needs a definite height once the flex chain releases */
   .workbench {
     height: auto;
@@ -2911,10 +2920,10 @@ button.ghost.small-ghost.on { color: var(--accent); }
 .sticky-color-dot.sel { transform: scale(1.25); }
 .sticky-color-dot:hover { transform: scale(1.25); }
 
-/* mobile/tablet: notes collapse into a static wall at the bottom of the
-   lesson (order: 99 — the lesson page is a flex column, so the wall always
-   lands after the head, the content, and the split panels) */
-.sticky-wall { display: none; order: 99; }
+/* mobile/tablet: notes collapse into a static wall at the TOP of the
+   lesson (order: -1 — the lesson page is a flex column, so the wall always
+   lands before the head and the content) */
+.sticky-wall { display: none; order: -1; }
 @media (max-width: 900px) {
   .sticky-layer { display: none; }
   .sticky-wall {
