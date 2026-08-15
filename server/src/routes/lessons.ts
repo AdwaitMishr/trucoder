@@ -506,6 +506,14 @@ lessonsRouter.post("/:lessonId/notes", (req, res) => {
   const y = typeof b?.y === "number" && Number.isFinite(b.y) ? Math.round(b.y) : 0;
   const color =
     typeof b?.color === "string" && NOTE_COLORS.has(b.color) ? b.color : "auto";
+  // Idempotency guard: rapid duplicate POSTs (button spam, retries) used to
+  // stack empty notes on the same spot — the "phantom sticky notes" bug.
+  // Reuse an existing EMPTY note at the exact same position instead of
+  // inserting a new row.
+  const existing = listStickyNotes(userId, courseId, lessonId).find(
+    (n) => n.text === "" && n.x === x && n.y === y
+  );
+  if (existing) return res.json({ note: noteJson(existing) });
   const note = createStickyNote(userId, courseId, lessonId, x, y, color);
   res.json({ note: noteJson(note) });
 });

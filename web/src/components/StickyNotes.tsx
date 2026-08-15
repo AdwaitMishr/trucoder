@@ -36,6 +36,8 @@ interface NoteViewProps {
   onDelete: (note: StickyNote) => void;
   /** Wall (mobile) rendering — no drag, no absolute position. */
   static?: boolean;
+  /** Passed to the root element so the add-note guard can target the textarea. */
+  "data-note-id"?: number;
 }
 
 function NoteView({
@@ -47,6 +49,7 @@ function NoteView({
   onColor,
   onDelete,
   static: isStatic,
+  "data-note-id": noteIdAttr,
 }: NoteViewProps) {
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -64,6 +67,7 @@ function NoteView({
 
   return (
     <div
+      data-note-id={isStatic ? noteIdAttr : undefined}
       className={`sticky-note ${dragging ? "dragging" : ""}`}
       data-color={note.color}
       style={{ "--rot": tilt(note.id) } as React.CSSProperties}
@@ -313,6 +317,17 @@ export default function StickyNotes({
   );
 
   const addNote = useCallback(async () => {
+    // Never stack a second EMPTY draft: the existing empty note IS the
+    // draft — focus it so the user sees where to type (the "phantom
+    // sticky notes" bug was N empty notes from button spam/retries).
+    const draft = notesRef.current.find((n) => n.text === "");
+    if (draft) {
+      const ta = page()?.querySelector<HTMLTextAreaElement>(
+        `[data-note-id="${draft.id}"] .sticky-text`
+      );
+      ta?.focus();
+      return;
+    }
     const el = page();
     if (!el) return;
     const zones = marginZones();
@@ -361,6 +376,7 @@ export default function StickyNotes({
         {notes.map((n) => (
           <div
             key={n.id}
+            data-note-id={n.id}
             className="sticky-pos"
             style={{ left: n.x, top: n.y, zIndex: dragId === n.id ? 40 : 10 }}
           >
@@ -385,6 +401,7 @@ export default function StickyNotes({
           {notes.map((n) => (
             <NoteView
               key={n.id}
+              data-note-id={n.id}
               note={n}
               dragging={false}
               static
