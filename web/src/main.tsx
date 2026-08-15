@@ -10,6 +10,7 @@ import App from "./App";
 import { ThemeProvider } from "./theme";
 import { SettingsProvider } from "./settings";
 import "./styles.css";
+import "./interview/interview.css";
 import "katex/dist/katex.min.css";
 
 // Use the locally bundled monaco (no runtime CDN fetch) and route every

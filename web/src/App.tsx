@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import { api } from "./api";
 import type { User } from "./types";
 import Login from "./components/Login";
@@ -8,12 +8,14 @@ import CourseIndex from "./components/CourseIndex";
 import CourseDashboard from "./components/CourseDashboard";
 import LessonView from "./components/LessonView";
 import Loader from "./components/Loader";
+import Mascot from "./components/Mascot";
 import SettingsModal from "./components/SettingsModal";
 import CommandPalette from "./components/CommandPalette";
 import ThemeSelector from "./components/ThemeSelector";
 import AdminDashboard from "./components/AdminDashboard";
 import {
   PiBookOpen,
+  PiChatCircle,
   PiFileText,
   PiGearSix,
   PiHouse,
@@ -26,6 +28,9 @@ import { registerCommandSection, type Command } from "./commands";
 import { registerShortcut, useShortcuts } from "./shortcuts";
 import { THEMES, useTheme } from "./theme";
 import type { CourseDetail, CourseSummary, SearchEntry } from "./types";
+import InterviewsIndex from "./interview/InterviewsIndex";
+import InterviewWizard from "./interview/InterviewWizard";
+import InterviewChat from "./interview/InterviewChat";
 
 /** Lazy navigation index (courses + their lessons), cached 2 minutes. */
 let navCache: { courses: CourseSummary[]; details: Record<string, CourseDetail> } | null =
@@ -81,11 +86,52 @@ function ThemeHint({ t }: { t: (typeof THEMES)[number] }) {
   );
 }
 
+/** Sidebar — switch between Courses and Interviews. Collapsible via the TruCoder mascot. */
+function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  return (
+    <nav className={`sidebar ${collapsed ? "collapsed" : ""}`} aria-label="sections">
+      <button
+        className="sidebar-toggle"
+        onClick={onToggle}
+        title={collapsed ? "expand sidebar" : "collapse sidebar"}
+        aria-expanded={!collapsed}
+      >
+        <Mascot size={20} />
+      </button>
+      <NavLink
+        to="/"
+        end
+        className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}
+        title="courses"
+      >
+        <PiBookOpen size={17} />
+        {!collapsed && <span>courses</span>}
+      </NavLink>
+      <NavLink
+        to="/interviews"
+        className={({ isActive }) => `sidebar-item ${isActive ? "active" : ""}`}
+        title="interviews"
+      >
+        <PiChatCircle size={17} />
+        {!collapsed && <span>interviews</span>}
+      </NavLink>
+    </nav>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [themePopOpen, setThemePopOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("trucoder-sidebar") === "1"
+  );
+  const toggleSidebar = () =>
+    setSidebarCollapsed((v) => {
+      localStorage.setItem("trucoder-sidebar", v ? "0" : "1");
+      return !v;
+    });
   const [settingsTab, setSettingsTab] = useState<
     "editor" | "theme" | "shortcuts" | "advanced"
   >("editor");
@@ -279,43 +325,58 @@ export default function App() {
           }}
         />
       )}
-      <div className="route-body">
-        <Routes>
-          <Route
-            path="/login"
-            element={user ? <Navigate to="/" replace /> : <Login onLogin={setUser} />}
-          />
-          <Route
-            path="/"
-            element={user ? <CourseIndex /> : <Navigate to="/login" replace />}
-          />
-          <Route
-            path="/course/:courseId"
-            element={user ? <CourseDashboard /> : <Navigate to="/login" replace />}
-          />
-          <Route
-            path="/course/:courseId/lessons/:lessonId"
-            element={user ? <LessonView /> : <Navigate to="/login" replace />}
-          />
-          <Route
-            path="/admin"
-            element={
-              user ? (
-                user.isOwner ? (
-                  <AdminDashboard />
+      <div className="app-main">
+        {user && <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />}
+        <div className="route-body">
+          <Routes>
+            <Route
+              path="/login"
+              element={user ? <Navigate to="/" replace /> : <Login onLogin={setUser} />}
+            />
+            <Route
+              path="/"
+              element={user ? <CourseIndex /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/course/:courseId"
+              element={user ? <CourseDashboard /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/course/:courseId/lessons/:lessonId"
+              element={user ? <LessonView /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/interviews"
+              element={user ? <InterviewsIndex /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/interviews/new"
+              element={user ? <InterviewWizard /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/interviews/:id"
+              element={user ? <InterviewChat /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/admin"
+              element={
+                user ? (
+                  user.isOwner ? (
+                    <AdminDashboard />
+                  ) : (
+                    <Navigate to="/" replace />
+                  )
                 ) : (
-                  <Navigate to="/" replace />
+                  <Navigate to="/login" replace />
                 )
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
-          />
-          <Route
-            path="*"
-            element={<Navigate to={user ? "/" : "/login"} replace />}
-          />
-        </Routes>
+              }
+            />
+            <Route
+              path="*"
+              element={<Navigate to={user ? "/" : "/login"} replace />}
+            />
+          </Routes>
+        </div>
       </div>
 
       {user && themePopOpen && (
