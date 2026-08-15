@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         g++ \
         nodejs \
         python3 \
+        python3-yaml \
         curl \
         ca-certificates \
         coreutils \

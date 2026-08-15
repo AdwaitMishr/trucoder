@@ -39,6 +39,9 @@ ENV NODE_ENV=production
 
 COPY --from=build /src/server/dist /app/server/dist
 COPY --from=build /src/server/scripts /app/server/scripts
+# write_file-created scripts can land in the context as 600 — the runtime
+# user (uid 1000) must be able to READ them (verify.js, lint-courses.js).
+RUN chmod 644 /app/server/scripts/*.js
 COPY --from=build /src/server/package.json /app/server/package.json
 COPY --from=build /src/server/node_modules /app/server/node_modules
 COPY --from=build /src/web/dist /app/web/dist
