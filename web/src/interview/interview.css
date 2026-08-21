@@ -54,7 +54,7 @@
    Breakpoint is generous (≤1024px OR any coarse-pointer/touch device)
    because phones in "desktop site" mode render at ~980px and would
    otherwise keep the rail and lose horizontal space. */
-@media (max-width: 1024px), (hover: none) {
+@media (max-width: 1024px), (hover: none) and (pointer: coarse) {
   .app-main { display: block; }
   .sidebar, .sidebar.collapsed {
     position: fixed;
