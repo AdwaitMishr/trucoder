@@ -24,8 +24,8 @@ log "deploy start (md5 $(md5sum "$0" | cut -d' ' -f1) pid $$)"
 git fetch origin >/dev/null 2>&1
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse origin/main)
-if [ "$LOCAL" = "$REMOTE" ]; then
-  log "deploy no-op: already at ${REMOTE:0:7}"
+if [ "$LOCAL" = "$REMOTE" ] && [ "$(cat "$SHA_FILE" 2>/dev/null)" = "$LOCAL" ]; then
+  log "deploy no-op: already at ${REMOTE:0:7} (sha marker matches)"
   exit 0
 fi
 
