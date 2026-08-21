@@ -2718,14 +2718,6 @@ button.ghost.small-ghost.on { color: var(--accent); }
     height: 46vh;
     min-height: 300px;
   }
-  /* clearance for the rail → fixed bottom nav (2026-08 mobile rework);
-     deeper than the iOS-pill padding since the bar itself is ~56px tall */
-  .page,
-  .lesson-page,
-  .lesson-scroll,
-  .zen-body {
-    padding-bottom: calc(env(safe-area-inset-bottom) + 76px);
-  }
 }
 
 /* ── settings modal on phones: sidebar becomes a top tab strip ─────── */

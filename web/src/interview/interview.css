@@ -50,8 +50,11 @@
 /* phones/tablets: the left icon rail becomes a fixed BOTTOM nav (2026-08,
    user-approved full mobile rework). Taking the rail out of flow gives the
    route body the full viewport width — no width theft, no overflow. The
-   mascot collapse toggle is pointless on a bottom bar, so it hides. */
-@media (max-width: 860px) {
+   mascot collapse toggle is pointless on a bottom bar, so it hides.
+   Breakpoint is generous (≤1024px OR any coarse-pointer/touch device)
+   because phones in "desktop site" mode render at ~980px and would
+   otherwise keep the rail and lose horizontal space. */
+@media (max-width: 1024px), (hover: none) {
   .app-main { display: block; }
   .sidebar, .sidebar.collapsed {
     position: fixed;
@@ -79,6 +82,13 @@
     font-family: var(--font-mono);
   }
   .sidebar .sidebar-item span { display: block; }
+  /* clearance for the fixed bottom bar (deeper than the iOS-pill padding) */
+  .page,
+  .lesson-page,
+  .lesson-scroll,
+  .zen-body {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 76px);
+  }
 }
 
 /* wizard */
