@@ -182,7 +182,7 @@ export default function LessonView() {
       case "mscq":
         return (
           <QuizBlock
-            key={i}
+            key={`${courseId}/${lessonId}/${i}`}
             courseId={courseId}
             lessonId={lessonId}
             blockId={i}
@@ -332,6 +332,7 @@ export default function LessonView() {
             </div>
             <div className="zen-editor">
               <CodeWorkbench
+                key={`${courseId}/${lessonId}/zen`}
                 courseId={courseId}
                 lessonId={lessonId}
                 block={codeBlock}
@@ -364,6 +365,7 @@ export default function LessonView() {
 
             <Panel defaultSize={58} minSize={42} className="workbench">
               <CodeWorkbench
+                key={`${courseId}/${lessonId}/wb`}
                 courseId={courseId}
                 lessonId={lessonId}
                 block={codeBlock}
