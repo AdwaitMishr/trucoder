@@ -234,3 +234,12 @@ export interface AdminStats {
   totals: { users: number; submissions: number; attempts: number };
   loadErrors: Record<string, string>;
 }
+
+// ---- admin course visibility ----
+/** One user's row in the access matrix (every course, default visible). */
+export interface AdminUserVisibility {
+  id: number;
+  username: string;
+  isOwner: boolean;
+  courses: { courseId: string; visible: boolean }[];
+}

@@ -81,6 +81,15 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  -- Per-user course visibility. Absent row = visible (opt-out hiding).
+  -- The owner account is exempt at the route layer and never written here.
+  CREATE TABLE IF NOT EXISTS course_visibility (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    course_id TEXT NOT NULL,
+    visible INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (user_id, course_id)
+  );
 `);
 
 // Expired session rows are dead weight — sweep them at boot (resolveToken
@@ -472,4 +481,49 @@ export function getAdminStats() {
     submissionCount,
     attemptTotal,
   };
+}
+
+// ---- per-user course visibility ----
+/** Course ids explicitly hidden from a user (absent rows mean visible). */
+export function getHiddenCourseIds(userId: number): Set<string> {
+  const rows = db
+    .prepare(`SELECT course_id FROM course_visibility WHERE user_id = ? AND visible = 0`)
+    .all(userId) as { course_id: string }[];
+  return new Set(rows.map((r) => r.course_id));
+}
+
+/** Set one user×course cell (upsert). Owner rows are rejected at the route. */
+export function setCourseVisibility(
+  userId: number,
+  courseId: string,
+  visible: boolean
+): void {
+  db.prepare(
+    `INSERT INTO course_visibility (user_id, course_id, visible)
+     VALUES (?, ?, ?)
+     ON CONFLICT(user_id, course_id) DO UPDATE SET visible = excluded.visible`
+  ).run(userId, courseId, visible ? 1 : 0);
+}
+
+/** Every user with their visibility rows (LEFT JOIN — a user with no rows has
+ *  courseId NULL and is fully visible). */ 
+export function getCourseVisibilityMatrix(): {
+  userId: number;
+  username: string;
+  courseId: string | null;
+  visible: number | null;
+}[] {
+  return db
+    .prepare(
+      `SELECT u.id AS userId, u.username, cv.course_id AS courseId, cv.visible
+       FROM users u
+       LEFT JOIN course_visibility cv ON cv.user_id = u.id
+       ORDER BY u.id, cv.course_id`
+    )
+    .all() as {
+    userId: number;
+    username: string;
+    courseId: string | null;
+    visible: number | null;
+  }[];
 }

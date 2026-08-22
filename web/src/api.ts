@@ -1,5 +1,6 @@
 import type {
   AdminStats,
+  AdminUserVisibility,
   AnswerResult,
   ContinueTarget,
   CourseDetail,
@@ -113,6 +114,15 @@ export const api = {
   searchIndex: () => get<{ lessons: SearchEntry[] }>("/api/courses/search"),
 
   adminStats: () => get<AdminStats>("/api/admin/stats"),
+
+  adminVisibility: () => get<{ users: AdminUserVisibility[] }>("/api/admin/visibility"),
+
+  setAdminVisibility: (userId: number, courseId: string, visible: boolean) =>
+    send<{ ok: boolean }>("PUT", "/api/admin/visibility", {
+      userId,
+      courseId,
+      visible,
+    }),
 
   // ---- sticky notes ----
   notes: (courseId: string, lessonId: string) =>
