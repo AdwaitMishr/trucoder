@@ -5,6 +5,7 @@ import { api } from "../api";
 import { useDocumentTitle } from "../title";
 import type { ContinueTarget, CourseSummary } from "../types";
 import GdEasterEgg from "./GdEasterEgg";
+import SectionTabs from "./SectionTabs";
 import Loader from "./Loader";
 
 export default function CourseIndex() {
@@ -60,6 +61,8 @@ export default function CourseIndex() {
         <h1>courses</h1>
         <p>pick one and work through it at your own pace.</p>
       </header>
+
+      <SectionTabs />
 
       {courses.length === 0 ? (
         <div className="empty">

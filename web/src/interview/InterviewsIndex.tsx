@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { PiPlus, PiChatCircle, PiTrash } from "react-icons/pi";
 import { sessionStore, type InterviewSession } from "./lib/db";
 import { relay } from "./lib/relay";
+import SectionTabs from "../components/SectionTabs";
 
 export default function InterviewsIndex() {
   const [sessions, setSessions] = useState<InterviewSession[] | null>(null);
@@ -33,6 +34,8 @@ export default function InterviewsIndex() {
         <h1>interviews</h1>
         <p>practice with a senior-dev interviewer — resume-based, module-grounded, fully private.</p>
       </header>
+
+      <SectionTabs />
 
       {relayUp === false && (
         <div className="form-error" style={{ marginBottom: 14 }}>

@@ -2638,7 +2638,16 @@ button.ghost.small-ghost.on { color: var(--accent); }
   /* phones: tighter page, single full-width clean course cards, and the
      username hidden so the nav never crowds (2026-08 mobile rework) */
   .page {
-    padding: 22px 16px calc(env(safe-area-inset-bottom) + 76px);
+    padding: 22px 16px calc(env(safe-area-inset-bottom) + 56px);
+  }
+  /* no more bottom bar — the topbar carries everything; the palette
+     trigger shrinks to an icon and the kbd hint hides */
+  .nav-search span,
+  .nav-search .nav-kbd {
+    display: none;
+  }
+  .nav-search {
+    padding: 6px 8px;
   }
   .course-grid {
     grid-template-columns: 1fr;

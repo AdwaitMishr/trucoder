@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { PiChartLineUp, PiPalette, PiSignOut, PiGearSix } from "react-icons/pi";
+import { PiChartLineUp, PiPalette, PiSignOut, PiGearSix, PiMagnifyingGlass } from "react-icons/pi";
 import { api } from "../api";
 import type { User } from "../types";
 import Mascot from "./Mascot";
@@ -10,12 +10,14 @@ export default function Nav({
   themePopOpen,
   onToggleThemePop,
   onOpenSettings,
+  onOpenPalette,
 }: {
   user: User;
   onLogout: () => void;
   themePopOpen: boolean;
   onToggleThemePop: () => void;
   onOpenSettings: () => void;
+  onOpenPalette: () => void;
 }) {
   return (
     <header className="nav">
@@ -24,6 +26,16 @@ export default function Nav({
         <span className="brand-tru">tru</span>
         <span className="brand-coder">coder</span>
       </Link>
+
+      <button
+        className="nav-search"
+        onClick={onOpenPalette}
+        aria-label="search and commands"
+      >
+        <PiMagnifyingGlass size={14} />
+        <span>search anything…</span>
+        <kbd className="nav-kbd">⌘K</kbd>
+      </button>
 
       <div className="nav-right">
         <span className="nav-user">{user.username}</span>

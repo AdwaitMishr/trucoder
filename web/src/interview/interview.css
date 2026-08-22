@@ -2,93 +2,39 @@
 /* Interviews — personal mock-interview feature (minimal, theme-matched) */
 /* ------------------------------------------------------------------ */
 
-/* sidebar (courses | interviews) */
-.app-main { display: flex; flex: 1; min-height: 0; }
-.sidebar {
-  width: 168px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--hairline);
-  padding: 10px 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  transition: width 0.18s ease;
-  overflow: hidden;
-}
-.sidebar-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  margin: 0 auto 6px;
-  border: 1px solid var(--hairline);
-  border-radius: 9px;
+/* section tabs (courses | interviews) — index pages only; navigation lives
+   in the ⌘K palette, this row is at-a-glance context */
+.section-tabs {
+  display: flex; gap: 2px; padding: 3px; border-radius: 8px; width: fit-content;
   background: color-mix(in srgb, var(--ink) 4%, transparent);
-  color: var(--ink);
-  cursor: pointer;
-  transition: border-color 0.12s, background 0.12s;
+  margin-bottom: 20px;
 }
-.sidebar-toggle:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
-.sidebar.collapsed { width: 54px; }
-.sidebar.collapsed .sidebar-item { justify-content: center; padding: 8px 0; }
-.sidebar-item {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 500;
-  text-decoration: none;
+.section-tab {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 13px; border-radius: 6px;
+  color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none;
   transition: color 0.12s, background 0.12s;
 }
-.sidebar-item:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); }
-.sidebar-item.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.section-tab:hover { color: var(--ink); }
+.section-tab.active {
+  color: var(--accent); background: var(--surface2);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+}
 
-/* phones/tablets: the left icon rail becomes a fixed BOTTOM nav (2026-08,
-   user-approved full mobile rework). Taking the rail out of flow gives the
-   route body the full viewport width — no width theft, no overflow. The
-   mascot collapse toggle is pointless on a bottom bar, so it hides.
-   Breakpoint is generous (≤1024px OR any coarse-pointer/touch device)
-   because phones in "desktop site" mode render at ~980px and would
-   otherwise keep the rail and lose horizontal space. */
-@media (max-width: 1024px), (hover: none) and (pointer: coarse) {
-  .app-main { display: block; }
-  .sidebar, .sidebar.collapsed {
-    position: fixed;
-    left: 0; right: 0; bottom: 0; top: auto;
-    width: auto; height: auto;
-    flex-direction: row;
-    align-items: stretch;
-    gap: 2px;
-    border-right: none;
-    border-top: 1px solid var(--hairline);
-    background: var(--bg);
-    padding: 6px 8px calc(env(safe-area-inset-bottom) + 6px);
-    margin: 0;
-    z-index: 60;
-  }
-  .sidebar-toggle { display: none; }
-  .sidebar .sidebar-item {
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    padding: 8px 4px;
-    font-size: 10.5px;
-    font-family: var(--font-mono);
-  }
-  .sidebar .sidebar-item span { display: block; }
-  /* clearance for the fixed bottom bar (deeper than the iOS-pill padding) */
-  .page,
-  .lesson-page,
-  .lesson-scroll,
-  .zen-body {
-    padding-bottom: calc(env(safe-area-inset-bottom) + 76px);
-  }
+/* palette trigger in the topbar — a quiet fake-input that opens ⌘K */
+.nav-search {
+  display: flex; align-items: center; gap: 8px;
+  margin-left: 6px; padding: 6px 12px;
+  background: none; border: none; border-radius: 6px; cursor: pointer;
+  color: var(--muted); font-family: inherit; font-size: 12.5px;
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  transition: color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.nav-search:hover { color: var(--ink); background: var(--surface2); }
+.nav-kbd {
+  font-family: var(--font-mono); font-size: 10.5px; line-height: 1;
+  padding: 3px 5px; border-radius: 4px; color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--hairline);
 }
 
 /* wizard */
