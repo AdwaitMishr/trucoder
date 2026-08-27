@@ -1,0 +1,247 @@
+---
+id: grid-coloring-ii
+title: Grid Coloring II
+difficulty: hard
+order: 382
+tags:
+  - additional
+  - 2-sat
+  - graph-coloring
+  - bipartite
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — list-coloring the grid via 2-SAT
+
+      We have an `n×m` grid where each cell is a letter `A`, `B` or `C`. We must
+      re-colour every cell so that **(a)** the new letter of a cell differs from
+      its old letter, and **(b)** no two edge-adjacent cells share a letter.
+
+      The crucial observation is small but powerful:
+
+      > Each cell can only use the **two** letters that are ≠ its old one.
+
+      So every cell is a boolean! Let a cell's *two* candidate letters be its
+      "true" and "false" choices. Now every adjacency condition — "these two
+      cells must differ" — is a constraint between two booleans, which is
+      exactly what **2-SAT** can express. The whole grid becomes one boolean
+      satisfiability instance with one variable per cell.
+
+      **Building the clauses.** For an adjacent pair `(u,v)`, they must not be
+      equal. If `u` and `v` share a candidate letter `s`, we must forbid
+      *"u = s and v = s"*. "Not (both)" is a disjunction:
+
+      ```
+      (u ≠ s)  OR  (v ≠ s)
+      ```
+
+      which is a valid 2-SAT clause (each side is one literal of a boolean).
+      If two cells share **two** candidate letters, we add both corresponding
+      clauses. Cells sharing no candidate letter are automatically different and
+      impose nothing.
+
+      A 2-SAT instance is solved in linear time by **strongly connected
+      components** (Kosaraju) on the implication graph: nodes are every literal
+      `(cell, choice)`; for each clause `(p OR q)` add the implications
+      `¬p → q` and `¬q → p`. Unsatisfiable exactly when some literal and its
+      negation land in the same SCC; otherwise read any satisfying assignment
+      and colour the grid.
+
+      :::tip
+      **Interview tip:** "Each element may only use 2 of 3 options, with pairwise
+      not-equal constraints" screams **2-SAT** (a 2-colouring CSP). The shift
+      from "pick one of 3" to "pick a boolean" because one option is forbidden
+      is the key move. 2-SAT also solves assignment/partitioning problems where
+      every choice is binary and constraints are pairwise "not both".
+      :::
+
+  - type: markdown
+    content: |-
+      ## The Problem
+
+      You are given an `n×m` grid where each cell contains one character `A`,
+      `B` or `C`. For each cell, you must change the character to `A`, `B` or
+      `C`. The new character must be different from the old one. Your task is to
+      change the characters in every cell such that no two adjacent cells have
+      the same character.
+
+      **Input.** The first line has two integers `n` and `m`: the number of rows
+      and columns. The next `n` lines each have `m` characters: the description
+      of the grid.
+
+      **Output.** Print `n` lines each with `m` characters: the description of
+      the final grid. You may print any valid solution. If no solution exists,
+      just print `IMPOSSIBLE`.
+
+      **Constraints**
+      - `1 ≤ n, m ≤ 500`
+
+      **Sample**
+
+      Input:
+      ```
+      3 4
+      AAAA
+      CCBB
+      ABCA
+      ```
+
+      Output:
+      ```
+      BCBC
+      ABCA
+      CABC
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(3^(nm)).** Backtrack over all `3^(n·m)` colourings,
+      pruning when a cell equals its old letter or a neighbour. Correct for
+      thumb-sized grids, but `n·m` up to 250 000 makes it astronomically
+      impossible.
+
+      **② Optimization — O(nm) 2-SAT.** The real algorithm: one boolean per
+      cell (its two candidate letters), forbidding equal letters on edges with
+      2-SAT clauses, then solve with Kosaraju SCC.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,m; cin>>n>>m;
+          vector<string> g(n);
+          for(auto &s:g) cin>>s;
+          int N=n*m, V=2*N;
+          // col0/col1: the two allowed letters (true -> col0, false -> col1)
+          vector<int> col0(N), col1(N);
+          for(int r=0;r<n;r++)for(int c=0;c<m;c++){
+              int old=g[r][c]-'A';
+              int a=-1,b=-1; for(int x=0;x<3;x++) if(x!=old){ if(a<0)a=x; else b=x; }
+              col0[r*m+c]=a; col1[r*m+c]=b;
+          }
+          vector<vector<int>> G(V), RG(V);
+          auto node=[&](int v,int t){ return 2*v+(t?1:0); };
+          auto addImp=[&](int a,int b){ G[a].push_back(b); RG[b].push_back(a); };
+          auto addClause=[&](int a,int av,int b,int bv){   // (a==av) OR (b==bv)
+              addImp(node(a,!av), node(b,bv));
+              addImp(node(b,!bv), node(a,av));
+          };
+          for(int r=0;r<n;r++)for(int c=0;c<m;c++){
+              int u=r*m+c;
+              for(int dir=0; dir<2; dir++){
+                  int nr=r+(dir?0:1), nc=c+(dir?1:0); if(nr>=n||nc>=m) continue;
+                  int v=nr*m+nc;
+                  for(int s=0;s<3;s++){                 // forbidden: u==s && v==s
+                      bool uh=(col0[u]==s||col1[u]==s), vh=(col0[v]==s||col1[v]==s);
+                      if(uh&&vh){
+                          int ut=(col0[u]==s); int vt=(col0[v]==s);
+                          addClause(u,!ut, v,!vt);       // (u != s) OR (v != s)
+                      }
+                  }
+              }
+          }
+          // iterative Kosaraju (3-state DFS)
+          vector<int> order; order.reserve(V); vector<int> state(V,0);
+          for(int s=0;s<V;s++){
+              if(state[s]) continue;
+              vector<int> st{s};
+              while(!st.empty()){
+                  int x=st.back();
+                  if(state[x]==0){ state[x]=1; for(int y:G[x]) if(!state[y]) st.push_back(y); }
+                  else if(state[x]==1){ state[x]=2; order.push_back(x); st.pop_back(); }
+                  else st.pop_back();
+              }
+          }
+          vector<int> comp(V,-1); int cid=0;
+          for(int it=V-1; it>=0; it--){
+              int s=order[it]; if(comp[s]!=-1) continue;
+              vector<int> st{s}; comp[s]=cid;
+              while(!st.empty()){ int x=st.back(); st.pop_back();
+                  for(int y:RG[x]) if(comp[y]==-1){ comp[y]=cid; st.push_back(y); } }
+              cid++;
+          }
+          for(int v=0;v<N;v++) if(comp[2*v]==comp[2*v+1]){ cout<<"IMPOSSIBLE\n"; return 0; }
+          vector<string> res(n,string(m,'?'));
+          for(int r=0;r<n;r++)for(int c=0;c<m;c++){
+              int v=r*m+c;
+              bool truth = comp[2*v] < comp[2*v+1];    // satisfying assignment
+              res[r][c]=char('A'+(truth? col0[v]: col1[v]));
+          }
+          for(auto &row: res) cout<<row<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: O(N+E) with N=2·nm nodes and E=O(nm) clause implications —
+      linear, easily inside `n,m ≤ 500`.*
+
+      **③ Further optimization.** The SCC phase is already linear; there is no
+      faster asymptotic exact method for this 2-SAT. The only "further" step is
+      freeing memory — the constraint count is so low that it is unnecessary.
+
+      **④ Alternative / note.** This is list-colouring with size-2 lists, and a
+      general 3-colouring with forbidden colours is NP-hard, so a naive greedy
+      ("paint a checkerboard, fix conflicts with the third colour") is **not
+      complete** — it can fail or backtrack on grids that do have a solution.
+      2-SAT is the clean, guaranteed-optimal method, so we use it as the one
+      canonical answer.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(nm) 2-SAT. Key lines:
+
+      1. **One boolean per cell.** `col0[v]`/`col1[v]` are the two colours ≠ the
+         old one; `truth=true` picks `col0`, `false` picks `col1`.
+      2. **Clauses.** For each pair of adjacent cells `(u,v)` and each shared
+         candidate colour `s`, add `(u != s) OR (v != s)` — forbidding both
+         cells taking `s`.
+      3. **Implication graph** via `addClause`, then Kosaraju on `G`/`RG` to get
+         SCC ids (`comp`), using an iterative 3-state DFS to avoid stack
+         overflow at 2·250 000 nodes.
+      4. **Satisfiability check.** A cell both `=` and `≠` a colour in one SCC
+         ⇒ `IMPOSSIBLE`. Otherwise set each cell's truth as
+         `comp[false-node] < comp[true-node]` and print the colours.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n=3, m=4`
+      ```
+      AAAA
+      CCBB
+      ABCA
+      ```
+      Cell `(0,0)` reads `A`, so its candidates are `{B,C}`; cell `(0,1)` also
+      reads `A` with candidates `{B,C}`. The clause for their shared letters
+      forbids `B=B` and `C=C`, forcing the two booleans apart, so the top row
+      alternates. The solver assigns truth values per cell and prints a valid
+      grid:
+
+      | row | cell letters (old) | printed |
+      |-----|---------------------|---------|
+      | 0   | A A A A             | B C B C |
+      | 1   | C C B B             | A B C A |
+      | 2   | A B C A             | C A B C |
+
+      Verify: every cell's new letter ≠ its old letter ✓, and no two horizontally
+      or vertically adjacent cells are equal ✓ (e.g. `(0,0)=B` vs `(1,0)=A`,
+      `(0,1)=C` vs `(0,0)=B`). This satisfies every clause, so it is accepted;
+      the printed *expected* output `BCBC/ABCA/CABC` is another valid solution.
+
+  - type: mcq
+    prompt: "Why can the whole Grid Coloring II problem be encoded as 2-SAT rather than general SAT?"
+    options:
+      - "Because every cell may only use two candidate letters (the two different from its old one), so each cell is a boolean and every adjacency rule is a binary clause."
+      - "Because the grid has at most 500 rows and columns."
+      - "Because the problem always has exactly two solutions."
+      - "Because A, B and C encode the booleans false, true and a third value."
+    answer: 0
+    explanation: "Each cell forbids only its own old colour, leaving exactly two choices — hence a boolean variable. An adjacency restriction 'these two cells differ' becomes a set of forbidding clauses (u != s) OR (v != s), a binary constraint. Boolean variables with binary (2-clause) constraints is precisely 2-SAT, solvable linearly by SCC."
+
+type: content
+---

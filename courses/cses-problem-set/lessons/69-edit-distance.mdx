@@ -1,0 +1,292 @@
+---
+id: edit-distance
+title: Edit Distance
+difficulty: medium
+order: 69
+tags:
+  - dynamic-programming
+  - levenshtein
+  - string-dp
+  - 2d-dp
+blocks:
+  - type: markdown
+    content: |
+      # Edit Distance
+
+      **The technique: Levenshtein/edit distance by DP over prefixes.** The edit
+      distance between two strings is the minimum number of operations — **insert**,
+      **delete**, or **replace** one character — needed to turn one string into the
+      other. Call the strings `a` (length `n`) and `b` (length `m`).
+
+      Define `dp[i][j]` = the edit distance between the **first `i` characters of
+      `a`** and the **first `j` characters of `b`**. The key insight: to build
+      `a[0..i-1]` into `b[0..j-1]`, look at the last characters:
+
+      ```
+      if a[i-1] == b[j-1]:  dp[i][j] = dp[i-1][j-1]          // match, no cost
+      else:                 dp[i][j] = 1 + min(
+                                     dp[i-1][j],   // delete a[i-1]
+                                     dp[i][j-1],   // insert b[j-1]
+                                     dp[i-1][j-1]  // replace a[i-1] with b[j-1]
+                                 )
+      ```
+
+      **Interpreting each branch.** `dp[i-1][j]` = delete `a[i-1]` and then solve the
+      shorter prefix; `dp[i][j-1]` = insert `b[j-1]` and solve against one fewer
+      char; `dp[i-1][j-1]` = replace `a[i-1]` with `b[j-1]`. When the chars already
+      match, doing *nothing* is always optimal, so we just inherit the diagonal.
+
+      **Base cases.** `dp[0][j] = j` (insert all `j` characters) and `dp[i][0] = i`
+      (delete all `i` characters).
+
+      **Worked mini-example.** `a = "abc"`, `b = "yabd"`:
+
+      |   | . | y | a | b | d |
+      |---|----|----|----|----|----|
+      | . | 0 | 1 | 2 | 3 | 4 |
+      | a | 1 | 1 | 1 | 2 | 3 |
+      | b | 2 | 2 | 2 | 1 | 2 |
+      | c | 3 | 3 | 3 | 2 | **2** |
+
+      Edit distance = **2** (replace `a→y`, insert `d`). ✓
+
+      **Complexity.** Filling all `(n+1)(m+1)` cells, each O(1): **O(n·m)** time and
+      **O(n·m)** space for the full table, or **O(min(n,m))** space with a rolling two
+      rows. For `n, m ≤ 5000` that is up to `25·10^6` cells — well within the limits.
+
+      **When you reach for it:** spellcheck/did-you-mean, DNA sequence alignment,
+      plagiarism similarity, fuzzy string matching, and diffing. Any "minimum number
+      of single-character edits" problem is Levenshtein.
+
+      :::tip
+      **Interview tip:** edit distance is one of the most frequently asked DP
+      problems (LeetCode #72). Make sure you can *derive* the recurrence from the
+      three operations rather than memorizing it. Interviewers follow up with the
+      state-compression question ("can you reduce memory?") — the answer is a
+      two-row rolling array because `dp[i][*]` only depends on `dp[i-1][*]`. A rarer
+      bonus question: reconstruct the actual edits by back-tracking the DP table.
+      :::
+  - type: markdown
+    content: |
+      # Question — Edit Distance
+
+      The edit distance between two strings is the minimum number of operations
+      required to transform one string into the other. The allowed operations are:
+
+      - **Add** one character to the string.
+      - **Remove** one character from the string.
+      - **Replace** one character in the string.
+
+      For example, the edit distance between `LOVE` and `MOVIE` is 2, because you can
+      first replace `L` with `M`, and then add `I`.
+
+      Your task is to calculate the edit distance between two strings.
+
+      **Constraints:**
+      - `1 ≤ n, m ≤ 5000`
+      - Strings contain characters between `A`–`Z`.
+
+      **Input:** the first input line has a string with `n` characters. The second
+      input line has a string with `m` characters.
+
+      **Output:** one integer — the edit distance between the two strings.
+
+      Sample input:
+
+      ```
+      LOVE
+      MOVIE
+      ```
+
+      Sample output:
+
+      ```
+      2
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — exponential recursion** *(only for small strings)*
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int dist(string& a, string& b, int i, int j) {
+          if (i == 0) return j;                 // insert all of b[0..j)
+          if (j == 0) return i;                 // delete all of a[0..i)
+          if (a[i - 1] == b[j - 1])
+              return dist(a, b, i - 1, j - 1);  // match
+          return 1 + min({dist(a, b, i - 1, j),     // delete
+                          dist(a, b, i, j - 1),     // insert
+                          dist(a, b, i - 1, j - 1)});// replace
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string a, b; cin >> a >> b;
+          cout << dist(a, b, (int)a.size(), (int)b.size()) << "\n";
+          return 0;
+      }
+      ```
+      Correct but recomputes subproblems endlessly → exponential; unusable at
+      `n, m = 5000`.
+
+      **② Optimization — full 2D DP, O(n·m) time, O(n·m) space** *(the solution)*
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string a, b; cin >> a >> b;
+          int n = (int)a.size(), m = (int)b.size();
+          vector<vector<int>> dp(n + 1, vector<int>(m + 1, 0));
+
+          for (int i = 0; i <= n; ++i) dp[i][0] = i;   // delete all
+          for (int j = 0; j <= m; ++j) dp[0][j] = j;   // insert all
+
+          for (int i = 1; i <= n; ++i) {
+              for (int j = 1; j <= m; ++j) {
+                  if (a[i - 1] == b[j - 1]) {
+                      dp[i][j] = dp[i - 1][j - 1];
+                  } else {
+                      dp[i][j] = 1 + min({dp[i - 1][j],     // delete
+                                          dp[i][j - 1],     // insert
+                                          dp[i - 1][j - 1]});// replace
+                  }
+              }
+          }
+          cout << dp[n][m] << "\n";
+          return 0;
+      }
+      ```
+      O(n·m) time, O(n·m) space. 25 million cells for max inputs — fast, and the full
+      table lets you reconstruct edits later.
+
+      **③ Further optimization — two-row rolling DP, O(n·m) time, O(m) space** *(the
+      chosen solution)*
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string a, b; cin >> a >> b;
+          int n = (int)a.size(), m = (int)b.size();
+          if (n > m) { swap(a, b); swap(n, m); }   // keep memory to the smaller length
+
+          vector<int> prev(m + 1);       // dp[i-1][*]
+          for (int j = 0; j <= m; ++j) prev[j] = j;   // row 0: insert all
+
+          for (int i = 1; i <= n; ++i) {
+              vector<int> cur(m + 1, 0);
+              cur[0] = i;                            // delete all
+              for (int j = 1; j <= m; ++j) {
+                  if (a[i - 1] == b[j - 1]) cur[j] = prev[j - 1];
+                  else cur[j] = 1 + min({prev[j],     // delete
+                                         cur[j - 1],  // insert
+                                         prev[j - 1]});// replace
+              }
+              prev.swap(cur);
+          }
+          cout << prev[m] << "\n";
+          return 0;
+      }
+      ```
+      O(n·m) time, O(min(n,m)) space. Row `i` reads only row `i-1` (plus the cell just
+      computed in row `i` for the insert branch), so two rows suffice.
+
+      **④ Alternative — none needed.** The O(n·m) DP is optimal in time (any algorithm
+      must consider all prefix pairs); Hirschberg's algorithm can cut space to O(m)
+      while also reconstructing the alignment, but for merely returning the distance
+      the two-row DP is already optimal in both dimensions.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **③ the two-row rolling DP.** Reading the code:
+
+      - **Two rows, not a full table.** `prev` holds the previous `dp[i-1][*]` row;
+      `cur` accumulates `dp[i][*]`. Each cell needs `prev[j]` (delete), `cur[j-1]`
+      (insert — the cell just written on the same row), and `prev[j-1]` (replace).
+      This is exactly why a sliding window of two rows is enough.
+      - **Ordering the strings.** Swapping so `m = min(n, m)` shrinks both rows to the
+        smaller dimension — memory drops to O(min(n,m)) against the smaller string.
+      - **Base row.** `prev[j] = j` simulates `dp[0][j]` (insert all `j` chars of `b`),
+        and `cur[0] = i` writes `dp[i][0] = i` (delete all `i` chars).
+      - **Match branch short-circuits cost.** When `a[i-1] == b[j-1]`, the diagonal
+        value is taken as-is — deliberately *not* `1 + anything`, because leaving the
+        matching char untouched is always cheapest.
+      - **`min({...})` of the three operations.** The three candidates are the true
+        costs of delete / insert / replace for this last character; adding 1 charges
+        the single operation.
+      - **Final answer** is `prev[m]` after the last row — the edit distance of the
+        full strings.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      LOVE
+      MOVIE
+      ```
+      `a = "LOVE"`, `b = "MOVIE"`. Full DP table (`dp[i][j]`, rows = L,O,V,E; columns
+      = M,O,V,I,E):
+
+      |   | . | M | O | V | I | E |
+      |---|----|----|----|----|----|----|
+      | . | 0 | 1 | 2 | 3 | 4 | 5 |
+      | L | 1 | 1 | 2 | 3 | 4 | 5 |
+      | O | 2 | 2 | 1 | 2 | 3 | 4 |
+      | V | 3 | 3 | 2 | 1 | 2 | 3 |
+      | E | 4 | 4 | 3 | 2 | 2 | **2** |
+
+      Building the last cell `dp[4][5]`: here `a[3]='E'`, `b[4]='E'` — they **match**,
+      so `dp[4][5] = dp[3][4]`? No — check: `dp[3][4]` (row V, col I) = 2. Actually the
+      match branch gives `dp[4][5] = dp[3][4] = 2`. Final answer **2**.
+
+      One optimal operation sequence (as in the statement): replace `L` with `M`, then
+      insert `I` → `LOVE` → `MOVE` → `MOVIE`. Cost = 2. ✓
+
+      The two must still be minimum: could we delete `L`, insert `M`, insert `I`
+      (3 ops) — worse. The DP's min over the three operations at every cell guarantees
+      the 2 is a true minimum.
+
+      **Edge cases:**
+      - Identical strings (`"ABC"`, `"ABC"`): the diagonal match path, answer 0.
+      - One empty (`"", "abc"`): base row/column, answer 3.
+      - Disjoint charsets (`"AAA"`, `"BBB"`): replace each → 3.
+      - Swap-heavy (e.g. same chars different order): deletions + insertions dominate,
+        e.g. `"ab"` vs `"ba"` = 2 (delete+insert, or two replaces = also 2).
+  - type: flowchart
+    title: "Levenshtein cell computation"
+    nodes:
+      - "dp[i][j], chars a[i-1], b[j-1]"
+      - "chars match?"
+      - "dp[i][j] = dp[i-1][j-1]"
+      - "1 + min(delete, insert, replace)"
+      - "next cell (i,j+1)"
+      - "all i,j filled?"
+      - "answer = dp[n][m]"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "yes"}
+      - {from: 1, to: 3, label: "no"}
+      - {from: 2, to: 4}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 0, label: "no"}
+      - {from: 5, to: 6, label: "yes"}
+  - type: mcq
+    prompt: In edit distance, why is the diagonal taken unchanged when the two characters match, rather than as 1 + something?
+    options:
+      - Because matching characters are always replaced to keep the strings aligned
+      - Because leaving an already-equal character untouched costs 0 and is provably at least as good as any operation on it, so inheriting dp[i-1][j-1] is optimal and never worse than the three 1+cost branches
+      - Because the diagonal value is always zero
+      - Because insertions are only allowed on mismatches
+    answer: 1
+    explanation: 'When a[i-1] == b[j-1], the optimal alignment can leave that pair untouched (cost 0), so dp[i][j] = dp[i-1][j-1]. Any delete/insert/replace on this equal pair would add at least 1 and thus can never beat simply carrying the diagonal forward. Hence the match branch is a direct inheritance, and the three-cost min is only taken when the characters differ. This is the whole reason edit distance costs 0 for equal prefixes.'
+type: content
+---

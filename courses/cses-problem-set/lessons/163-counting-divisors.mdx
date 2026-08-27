@@ -1,0 +1,266 @@
+---
+id: counting-divisors
+title: "Counting Divisors"
+type: content
+difficulty: easy
+order: 163
+tags:
+  - sieve
+  - divisor-count
+  - number-theory
+blocks:
+  - type: markdown
+    content: |
+      # Counting Divisors — a sieve of divisor counts
+
+      For each of up to `10^5` numbers in `[1, 10^6]` we must report how many
+      divisors it has. A number's divisors are all the integers `d` with
+      `d | x` (and `1 | x`, `x | x` are always included).
+
+      The classic trick is to **reverse the thinking**: instead of, for a
+      number `x`, scanning `1..sqrt(x)` for divisors, run a **sieve that
+      accumulates** divisor counts. For every `i` from `1` to the maximum
+      value `M`, `i` is a divisor of every multiple of it:
+
+      ```
+      for i in 1..M:
+          for j in multiples of i (i, 2i, 3i, ...):
+              divcount[j] += 1
+      ```
+
+      After the sieve, `divcount[x]` is exactly the number of divisors of `x`,
+      and every query is answered in `O(1)`.
+
+      The cost is the total number of `(i, multiple)` pairs, which is
+      `M/1 + M/2 + M/3 + ... + M/M = M * H(M) = O(M log M)`. For `M = 10^6`
+      that is roughly `10^6 * 14 ≈ 1.4 * 10^7` steps — comfortably fast, and
+      far better than doing trial division for every query.
+
+      **Time:** `O(M log M)` preprocessing + `O(1)` per query. **Space:**
+      `O(M)`.
+
+      :::tip
+      **Interview tip:** "count divisors of many numbers / of a range" is a
+      strong signal for a **counting sieve** — iterate the *divisor*, not the
+      value. A divisor `i` divides exactly the multiples `i, 2i, 3i, ...`, so
+      the symmetry of multiplication turns a per-number scan into one sweep.
+      Recognize it so you reach for `O(M log M)` instead of `O(n sqrt(M))`.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given `n` integers, your task is to report for each integer the number
+      of its divisors.
+
+      For example, if `x=18`, the correct answer is `6` because its divisors
+      are `1,2,3,6,9,18`.
+
+      ## Input
+
+      The first input line has an integer `n`: the number of integers.
+
+      After this, there are `n` lines, each containing an integer `x`.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `1 <= x <= 10^6`
+
+      ## Output
+
+      For each integer, print the number of its divisors.
+
+      ## Example
+
+      Input:
+
+      ```
+      3
+      16
+      17
+      18
+      ```
+
+      Output:
+
+      ```
+      5
+      2
+      6
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — trial division per query, O(n sqrt(M))**
+
+      For each `x`, scan `d` from `1` to `sqrt(x)`: every time `d` divides `x`,
+      count two divisors (`d` and `x/d`), being careful to count `d*d == x`
+      exactly once. Correct, but for `n = 10^5` queries against `x ~ 10^6`
+      this is around `10^5 * 10^3 = 10^8` iterations — too slow for a 1s limit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          while(n--){
+              ll x; cin>>x;
+              int cnt = 0;
+              for(ll d = 1; d*d <= x; d++){
+                  if(x % d == 0) cnt += (d*d == x) ? 1 : 2;
+              }
+              cout << cnt << "\n";
+          }
+      }
+      ```
+
+      *`O(n sqrt(M))` ~ `10^8` — too slow.*
+
+      **② Optimization — counting sieve, O(M log M) + O(1) per query**
+
+      Precompute `divcount[j]` for every value once, then answer each query in
+      `O(1)`. This is the optimal tier.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int M = 1000000;
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          vector<int> divcount(M + 1, 0);
+          for(int i = 1; i <= M; i++)
+              for(int j = i; j <= M; j += i)
+                  divcount[j]++;          // i is a divisor of j
+
+          int n; cin>>n;
+          while(n--){ int x; cin>>x; cout << divcount[x] << "\n"; }
+      }
+      ```
+
+      *`O(M log M)` preprocessing (~`1.4e7` steps), `O(1)` per query.*
+
+      **③ Further optimization — O(M) sieve via smallest prime factor**
+
+      Instead of accumulating multiples, build a smallest-prime-factor (`spf`)
+      sieve in `O(M log log M)`, then factor each `x` and derive the divisor
+      count from the prime factorization:
+
+      ```
+      if x = p1^e1 * p2^e2 * ... * pk^ek,  then  τ(x) = (e1+1)(e2+1)...(ek+1)
+      ```
+
+      Each factorization is `O(log x)`. (This is the method shown as tier ④
+      below.)
+
+      **④ Alternative algorithm — SPF + factorization, O(M log log M) precompute**
+
+      Same divisor-count formula, but obtained by factoring each query rather
+      than by a counting sieve. Useful when the same sieve also serves other
+      problems (Least Common Multiple, largest prime factor, ...).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int M = 1000000;
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          vector<int> spf(M + 1, 0);
+          for(int i = 2; i <= M; i++) if(spf[i] == 0){
+              spf[i] = i;
+              if(1LL*i*i <= M)
+                  for(long long j = 1LL*i*i; j <= M; j += i) if(spf[j] == 0) spf[j] = i;
+          }
+          int n; cin>>n;
+          while(n--){
+              int x; cin>>x;
+              long long ans = 1;
+              while(x > 1){
+                  int p = spf[x], e = 0;
+                  while(x % p == 0){ x /= p; e++; }
+                  ans *= (e + 1);
+              }
+              cout << ans << "\n";
+          }
+      }
+      ```
+
+      *`O(M log log M)` sieve + `O(log x)` per query — a fine alternative with
+      a reusable `spf` prime table.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on **②**:
+
+      - **Inner loop steps by `i`.** `j` visits exactly the multiples of `i`.
+        Every such `(i, j)` pair means *`i` is a divisor of `j`*, so
+        `divcount[j]++` accumulates each divisor exactly once across the whole
+        sweep.
+
+      - **Every divisor is visited once.** A divisor `d` of `x` is an `i`
+        value in the outer loop and `x` is one of its multiples, so the pair
+        `(d, x)` is hit exactly once. The array never over-counts.
+
+      - **The cost is harmonic.** `i = 1` touches `M` entries, `i = 2` touches
+        `M/2`, `i = 3` touches `M/3`, ... `M * (1 + 1/2 + 1/3 + ... + 1/M) =
+        M * H(M) = O(M log M)`.
+
+      - **O(1) queries.** After the sieve, reading `divcount[x]` answers a
+        query — no per-query looping at all.
+
+      In **④**, the `spf` array records, for every composite, its smallest
+      prime factor. Dividing `x` out by `p` repeatedly extracts each prime
+      power `p^e`, and `(e+1)` is multiplied into the running answer.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the counting sieve **②** for the sample values up to `x = 18`
+      (only rows `i` that divide them are shown):
+
+      | i | multiples touched | effect on divcount |
+      |---|-------------------|--------------------|
+      | 1 | 1,2,3,...,18 | +1 to everything |
+      | 2 | 2,4,6,8,10,12,14,16,18 | +1 to each even |
+      | 3 | 3,6,9,12,15,18 | +1 to multiples of 3 |
+      | 4 | 4,8,12,16 | +1 to multiples of 4 |
+      | 5 | 5,10,15 | ... |
+      | 6 | 6,12,18 | ... |
+
+      Final counts for the samples: `divcount[16] = 5` (divisors
+      `1,2,4,8,16`), `divcount[17] = 2` (`1,17`), `divcount[18] = 6`
+      (`1,2,3,6,9,18`).
+
+      | query | divisors | divcount |
+      |-------|----------|----------|
+      | 16 | 1,2,4,8,16 | 5 |
+      | 17 | 1,17 | 2 |
+      | 18 | 1,2,3,6,9,18 | 6 |
+
+      Expected (sample) — `5 2 6`. Actual — `5 2 6`. Match.
+  - type: flowchart
+    title: "Sieve divisor counts up to M"
+    nodes: ["init divcount[0..M] = 0", "i = 1", "i > M? (sieve done)", "j = i", "j <= M?", "divcount[j] += 1; j += i", "i++, loop", "answer each query as divcount[x]"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 7, label: "yes"}
+      - {from: 2, to: 3, label: "no"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 6, label: "no"}
+      - {from: 4, to: 5, label: "yes"}
+      - {from: 5, to: 4}
+      - {from: 6, to: 2}
+  - type: mcq
+    prompt: "Why does the counting-sieve inner loop step by i instead of by 1?"
+    options:
+      - "To make the array sorted."
+      - "So that it visits exactly the multiples of i — every (i, j) pair means i divides j, which is precisely one divisor contributed to j."
+      - "To reduce memory usage."
+      - "Because stepping by i counts prime numbers."
+    answer: 1
+    explanation: "A divisor i of j means j is a multiple of i. Starting j at i and adding i each time enumerates every multiple, so each 'i is a divisor of j' fact is recorded exactly once. The total number of (i, multiple) pairs is the harmonic sum M·H(M) = O(M log M)."
+---

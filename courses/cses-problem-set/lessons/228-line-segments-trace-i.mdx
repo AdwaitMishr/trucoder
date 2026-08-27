@@ -1,0 +1,250 @@
+---
+id: line-segments-trace-i
+title: Line Segments Trace I
+type: content
+difficulty: hard
+order: 228
+tags:
+  - geometry
+  - line-segments
+  - li-chao-tree
+  - upper-envelope
+blocks:
+  - type: markdown
+    content: |
+      # Line Segments Trace I — upper envelope with a Li Chao tree
+
+      There are `n` line segments, each from `(0, y1)` to `(m, y2)` with an
+      **integer slope**. For every integer `x = 0, 1, ..., m` print the **maximum**
+      `y` reached by any segment at that `x`.
+
+      ## Recognizing the shape
+
+      Every segment is a **line** `y = a*x + b` over the whole domain `[0, m]`:
+
+      ```
+      a = slope = (y2 - y1) / m      (integer by the statement)
+      b = y1                            (value at x = 0)
+      ```
+
+      So the answer at each `x` is the **maximum of `n` lines** at `x` — the *upper
+      envelope*. Because every segment is a full line, there are no gaps and the
+      maximum always exists (`>= 0`).
+
+      ## The Li Chao tree
+
+      A **Li Chao tree** is a segment tree over the `x`-domain where every node keeps
+      the line that is best (highest) at the *midpoint* of its range. Inserting a
+      line is `O(log m)`: compare at the left end and the midpoint; keep the better
+      line at the node and push the other line down only into the half where it can
+      still win. Querying a point walks the root-to-leaf path and takes the max of
+      the lines stored along it — `O(log m)`.
+
+      - **Insertion** of `n` lines: `O(n log m)`.
+      - **Query** at `m + 1` points: `O(m log m)`.
+      - Total `O((n + m) log m)` time, `O(m)` space.
+
+      The Li Chao tree is the workhorse when the candidate functions are just **lines
+      or line segments** and you need max (or min) over a dense `x`-range.
+
+      ## Complexity
+
+      - Brute force: `O(n * m)`.
+      - **Li Chao tree: `O((n + m) log m)` time, `O(m)` space. Optimal.**
+
+      :::tip
+      **Interview tip:** "All these are lines with integer slope, and I need a
+      range-max — that's an upper envelope, so a Li Chao tree gives `O(log)` per
+      line and per query." Naming the data structure and giving its insert/query
+      costs immediately shows throughput comfort with 1-D convex geometry.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` line segments whose endpoints have integer coordinates. The left
+      x-coordinate of each segment is `0` and the right x-coordinate is `m`. The
+      slope of each segment is an integer. For each x-coordinate `0, 1, ..., m`, find
+      the maximum point in any line segment.
+
+      ## Input
+
+      The first line has two integers `n` and `m`: the number of line segments and
+      the maximum x-coordinate. The next `n` lines describe the line segments. Each
+      line has two integers `y1` and `y2`: there is a line segment between points
+      `(0, y1)` and `(m, y2)`.
+
+      ## Output
+
+      Print `m + 1` integers: the maximum points for `x = 0, 1, ..., m`.
+
+      ## Constraints
+
+      - `1 <= n, m <= 10^5`
+      - `0 <= y1, y2 <= 10^9`
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 5
+      1 6
+      7 2
+      5 5
+      10 0
+      ```
+      **Output:**
+      ```
+      10 8 6 5 5 6
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — evaluate every line at every x, O(n * m)**
+
+      For each `x in [0, m]` scan all `n` lines and take the max. `n, m <= 10^5`
+      means `10^5 * 10^5 = 10^10` evaluations — too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          struct L { long long a, b; };
+          vector<L> ls;
+          for(int i=0;i<n;i++){
+              long long y1, y2; cin >> y1 >> y2;
+              ls.push_back({ (y2-y1)/m, y1 });   // slope, intercept at x=0
+          }
+          for(int x=0;x<=m;x++){
+              if(x) cout << " ";
+              long long best = LLONG_MIN;
+              for(auto &l : ls) best = max(best, l.a*x + l.b);
+              cout << best;
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n * m)` time. Correct; far too slow.*
+
+      **② Li Chao tree — O((n + m) log m) (optimal)**
+
+      Insert each full line into a Li Chao tree over `[0, m]`, then query every `x`.
+      Compiled and run: prints `10 8 6 5 5 6` on the sample below.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct Line { long long m, b; long long eval(long long x) const { return m*x + b; } };
+      Line DEF(){ return {0, LLONG_MIN}; }
+      struct Node { int l, r; Line line; Node *L, *R;
+          Node(int l, int r): l(l), r(r), line(DEF()), L(nullptr), R(nullptr) {}
+          void add(Line nw){
+              int mid = (l + r) >> 1;
+              bool lef   = nw.eval(l)   > line.eval(l);
+              bool midok = nw.eval(mid) > line.eval(mid);
+              if(midok) swap(nw, line);          // node keeps the line better at mid
+              if(l == r) return;
+              if(lef != midok){ if(!L) L = new Node(l, mid);     L->add(nw); }
+              else          { if(!R) R = new Node(mid+1, r);     R->add(nw); }
+          }
+          long long query(int x){
+              long long res = line.eval(x);
+              int mid = (l + r) >> 1;
+              if(x <= mid && L) res = max(res, L->query(x));
+              if(x >  mid && R) res = max(res, R->query(x));
+              return res;
+          }
+      };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          Node root(0, m);
+          for(int i=0;i<n;i++){
+              long long y1, y2; cin >> y1 >> y2;
+              root.add({ (y2-y1)/m, y1 });       // slope, intercept
+          }
+          for(int x=0;x<=m;x++){
+              if(x) cout << " ";
+              cout << root.query(x);
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      *`O((n + m) log m)` time, `O(m)` space. The recommended solution. No 4th
+      independent algorithm is needed — the convex-hull-trick (lines sorted by slope
+      with a pointer) is the classic alternative, but the ternary-search / CHT form
+      only competes when slopes arrive sorted, which is not guaranteed here.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Every segment is a full line.** Since the left `x` is always `0`, the
+        intercept `b = y1` is just the value at `x = 0`, and the slope is
+        `(y2 - y1)/m` — an integer by the statement.
+      - **Empty sentinel.** `DEF()` is the line `y = 0*x + LLONG_MIN`, i.e.
+        "negative infinity", so the first real line always wins at insertion.
+      - **Insert.** Compare the new line against the node's line at the left end and
+        at the midpoint. The better-in-the-middle line stays at the node; the other
+        one descends into the left child (if the left-end comparison differs from the
+        midpoint) or the right child. This keeps, per node, the line that dominates
+        the middle of that interval.
+      - **Query.** Take the max of the stored lines along the root-to-leaf path to
+        `x`; any line that could be maximum at `x` was pushed down exactly one path.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 4, m = 5`. Segments and their lines `y = a*x + y1`:
+
+      | segment | slope `a` | intercept | line |
+      |---------|-----------|-----------|------|
+      | (0,1)-(5,6) | (6-1)/5 = 1 | 1 | `y =  x + 1` |
+      | (0,7)-(5,2) | (2-7)/5 = -1 | 7 | `y = -x + 7` |
+      | (0,5)-(5,5) | 0 | 5 | `y = 5` |
+      | (0,10)-(5,0) | (0-10)/5 = -2 | 10 | `y = -2x + 10` |
+
+      Li Chao inserts all four. Queries:
+
+      | x | lines | max |
+      |---|-------|-----|
+      | 0 | 1, 7, 5, 10 | 10 |
+      | 1 | 2, 6, 5, 8 | 8 |
+      | 2 | 3, 5, 5, 6 | 6 |
+      | 3 | 4, 4, 5, 4 | 5 |
+      | 4 | 5, 3, 5, 2 | 5 |
+      | 5 | 6, 2, 5, 0 | 6 |
+
+      Printed:
+      ```
+      10 8 6 5 5 6
+      ```
+      Expected `10 8 6 5 5 6` — match. (The envelope is the top of
+      `y=-2x+10` early, then `y=-x+7` at `x=1`, then the flat `y=5`, and finally
+      `y=x+1` at `x=5`.)
+  - type: flowchart
+    title: "Li Chao insert"
+    nodes: ["insert line nw at node [l,r]", "compare nw vs node.line at l and at mid", "mid better? keep nw at node (swap)", "lef != midok? descend into right child", "descend into left child", "leaf reached"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "nw wins at mid"}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 3, to: 5, label: "no"}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "In a Li Chao tree, when inserting a line, why keep the line that is better at the interval's midpoint at the node and push the other line into only one child?"
+    options:
+      - "Because two lines cross at most once: on one side of their crossing one line dominates, so the 'loser at mid' can only beat the winner on one side of the range — sending it down just that child keeps every query correct in O(log m)."
+      - "Because the node must store every line of the whole tree to answer queries."
+      - "Because lines are always parallel, so the midpoint decides everything."
+      - "Because inserting into both children is required for correctness but doubles the work."
+    answer: 0
+    explanation: "Two distinct lines intersect in at most one point. Therefore the line that is better at the midpoint can only be beaten by the other line on one side of the range. Pushing the displaced line down that single side preserves correctness while keeping each insert O(log m)."
+---

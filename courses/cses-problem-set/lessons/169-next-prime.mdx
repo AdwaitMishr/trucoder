@@ -1,0 +1,321 @@
+---
+id: next-prime
+title: Next Prime
+difficulty: medium
+order: 169
+tags:
+  - math
+  - number-theory
+  - primality
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — finding the next prime after n
+
+      To find the smallest prime `> n` we scan `n+1, n+2, …` and test each candidate.
+      The hard part is the **primality test**, not the scan: consecutive primes are
+      close together (below `10^12` the largest prime gap is a few hundred), so the
+      scan is short — but naive trial division up to `√candidate` costs `O(√n)` per
+      candidate, and `√(10^12) = 10^6` per test across ~20 queries is too slow.
+
+      Two robust fast tests:
+
+      - **Trial division against a sieve.** Precompute all primes up to
+        `√(10^12) = 10^6` once. A candidate is prime iff no precomputed prime
+        `≤ √candidate` divides it. Deterministic, easy to reason about; cost per
+        test is `π(√n) ≈ 78,000` divisions.
+      - **Miller–Rabin.** A probabilistic-in-origin but *deterministic-for-64-bit*
+        test: write `n−1 = d·2^s`, pick small bases `a`, and check
+        `a^d ≡ 1 (mod n)` or `a^(d·2^r) ≡ −1 (mod n)` for some `r < s`. For
+        `n < 2^64` a fixed set of small bases
+        `{2,3,5,7,11,13,17,19,23,29,31,37}` proves primality with certainty. Each
+        test is `O(log³ n)` modular exponentiations.
+
+      **Time complexity:** `O(gap · cost(test))`, where the prime gap `gap` is tiny
+      (`O(log n)` on average); practical total is a few microseconds per query.
+
+      :::tip
+      **Interview tip:** Miller–Rabin's deterministic small-base set for 64-bit is
+      worth memorising — it turns "check this huge number is prime" into a routine.
+      Remember the two structural pieces (write `n−1` as `d·2^s`; test each base) and
+      that bases only need to reach `2^64`, and you can answer "is n prime / find the
+      next prime" in any language. For small bounds, the sieve+trial-division answer
+      is equally accepted and simpler to defend.
+      :::
+  - type: markdown
+    content: |
+      ## Question
+
+      Given a positive integer `n`, find the next prime number after it.
+
+      **Input**
+
+      The first line has an integer `t`: the number of tests.
+
+      After that, each line has a positive integer `n`.
+
+      **Output**
+
+      For each test, print the next prime after `n`.
+
+      **Constraints**
+
+      - `1 <= t <= 20`
+      - `1 <= n <= 10^12`
+
+      **Example**
+
+      Input:
+
+      ```
+      5
+      1
+      2
+      3
+      42
+      1337
+      ```
+
+      Output:
+
+      ```
+      2 3 5 43 1361
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(√n · gap) time per query, O(1) space (trial-divide every candidate).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      bool brutePrime(ll x) {
+          if (x < 2) return false;
+          for (ll d = 2; d * d <= x; d++) if (x % d == 0) return false;
+          return true;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int t; cin >> t;
+          while (t--) {
+              ll n; cin >> n;
+              ll cand = n + 1;
+              while (!brutePrime(cand)) cand++;
+              cout << cand << (t ? " " : "");
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      The definition: test each candidate by dividing up to its square root. Perfectly
+      correct, but for `n ≈ 10^12` each test walks up to `10^6` integers and a large
+      prime gap makes it `O(√n · gap)` per query — far too slow in aggregate. It only
+      finishes on the toy sample.
+
+      **② Optimization — O(π(√n) · gap) time per query, O(√n) space (sieve primes up to √n, then trial-divide).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const int LIM = 1000000;          // sqrt(10^12)
+
+      vector<int> primes;
+      void build() {                     // sieve all primes up to sqrt(max n)
+          vector<char> bs(LIM + 1, 1);
+          bs[0] = bs[1] = 0;
+          for (int i = 2; i * i <= LIM; i++) if (bs[i])
+              for (int j = i * i; j <= LIM; j += i) bs[j] = 0;
+          for (int i = 2; i <= LIM; i++) if (bs[i]) primes.push_back(i);
+      }
+
+      bool isPrime(ll x) {
+          if (x < 2) return false;
+          ll r = (ll)sqrt((long double)x);
+          for (int p : primes) {
+              if (p > r) break;
+              if (x % p == 0) return false;
+          }
+          return true;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          build();
+          int t; cin >> t;
+          while (t--) {
+              ll n; cin >> n;
+              ll cand = n + 1;
+              while (!isPrime(cand)) cand++;
+              cout << cand << (t ? " " : "");
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      Only the `≤ √candidate` primes are tested, and those are precomputed once. For
+      `n ≤ 10^12` a candidate needs at most `π(10^6) ≈ 78,000` modulo checks; with a
+      short prime gap that's well within the limit over all `20` queries. Deterministic
+      and easy to justify — the "sieve + next scan" approach.
+
+      **③ Further optimization — O(log³ n · gap) time per query, O(1) space (Miller–Rabin).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      ll mulmod(ll a, ll b, ll m) { return (ll)((__int128)a * b % m); }
+      ll powmod(ll a, ll e, ll m) {
+          ll r = 1 % m;
+          while (e) {
+              if (e & 1) r = mulmod(r, a, m);
+              a = mulmod(a, a, m);
+              e >>= 1;
+          }
+          return r;
+      }
+
+      bool isPrime(ll n) {
+          if (n < 2) return false;
+          for (ll p : {2LL,3LL,5LL,7LL,11LL,13LL,17LL,19LL,23LL,29LL,31LL,37LL})
+              if (n % p == 0) return n == p;
+
+          ll d = n - 1, s = 0;
+          while ((d & 1) == 0) { d >>= 1; s++; }
+
+          for (ll a : {2LL,3LL,5LL,7LL,11LL,13LL,17LL,19LL,23LL,29LL,31LL,37LL}) {
+              ll x = powmod(a, d, n);
+              if (x == 1 || x == n - 1) continue;
+              bool witness = true;
+              for (ll r = 1; r < s; r++) {
+                  x = mulmod(x, x, n);
+                  if (x == n - 1) { witness = false; break; }
+              }
+              if (witness) return false;   // base a proves n composite
+          }
+          return true;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int t; cin >> t;
+          while (t--) {
+              ll n; cin >> n;
+              ll cand = n + 1;
+              while (!isPrime(cand)) cand++;
+              cout << cand << (t ? " " : "");
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      No sieve, no big array — a constant set of modular exponentiations per candidate.
+      For `n < 2^64` the fixed bases `{2,…,37}` are provably deterministic, so the
+      result is exact. Each test is `O(log³ n)`, the fastest practical option; the
+      multiplications are done with `__int128` to avoid overflow. This is the fastest
+      tier.
+
+      **④ Alternative algorithm — O(gap · √n/32) window sieve, O(gap) space (segmented sieve).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const int LIM = 1000000;
+      vector<int> primes;
+      void build() {
+          vector<char> bs(LIM + 1, 1);
+          bs[0] = bs[1] = 0;
+          for (int i = 2; i * i <= LIM; i++) if (bs[i])
+              for (int j = i * i; j <= LIM; j += i) bs[j] = 0;
+          for (int i = 2; i <= LIM; i++) if (bs[i]) primes.push_back(i);
+      }
+
+      ll nextPrime(ll n) {
+          ll L = n + 1, R = L + 100000;             // window: prime gap is tiny here
+          vector<char> seg(R - L + 1, 1);
+          for (ll p : primes) {
+              if (p * p > R) break;
+              ll start = max(p * p, (L + p - 1) / p * p);
+              for (ll m = start; m <= R; m += p) seg[m - L] = 0;
+          }
+          if (L < 2) seg[0] = 0;
+          for (int i = 0; i < (int)seg.size(); i++)
+              if (seg[i]) return L + i;
+          return -1;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          build();
+          int t; cin >> t;
+          while (t--) {
+              ll n; cin >> n;
+              cout << nextPrime(n) << (t ? " " : "");
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      Mark all composites in a small window right after `n` using the sieved primes
+      that divide within it. The window (100,000 is far wider than any relevant prime
+      gap below `10^12`) is filled in one pass, so the answer is the first still-marked
+      cell. A clearly different, memory-lean technique that reuses the same primes.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      Whatever tier you pick, the driver is identical: `cand = n + 1; while (!isPrime(cand)) cand++;`.
+      The tiers differ only in `isPrime`:
+
+      - **②** pre-sieves primes in `O(√n log log √n)` once, then `isPrime` breaks at
+        the first precomputed prime exceeding `√x`. Cost is bounded by `π(√n)` checks.
+      - **③** writes `n−1 = d·2^s`, then for each base `a` computes `a^d mod n` and
+        repeatedly squares. "Pass" means the sequence `a^d, a^(2d), …, a^(2^s d)`
+        reaches `1` correctly or hits `n−1`. All bases passing ⇒ prime (for `n < 2^64`).
+      - **④** flips a window `[n+1, n+gap]` false for every multiple of a small prime,
+        then takes the first surviving index.
+
+      All results are `long long`-safe; tier ③ uses `__int128` to multiply two residues
+      that can each be near `10^12` (product near `10^24`, past 64-bit range).
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      Trace the Miller–Rabin tier on the sample queries (expected `2 3 5 43 1361`):
+
+      | n | scan begins | first prime found | why                        |
+      |---|-------------|-------------------|----------------------------|
+      | 1 | 2           | 2                 | 2 is prime                 |
+      | 2 | 3           | 3                 | 3 is prime                 |
+      | 3 | 4           | 5                 | 4 even (composite), 5 prime|
+      | 42| 43          | 43                | 43 is prime (odd, no divisor < √43) |
+      | 1337 | 1338    | 1361              | 1338..1360 composite, 1361 prime |
+
+      Spot-check `43`: `43−1 = 42 = 21·2^1`, `s = 1`. Bases `2,3,5,…` all satisfy
+      `a^21 ≡ ±1 (mod 43)`, so `43` is certified prime → returned for input `42`. The
+      MR output reproduces the sample exactly: `2 3 5 43 1361`.
+  - type: mcq
+    prompt: Why is the "next-prime scan" quick even though n can be as large as 10^12?
+    options:
+      - 'Because consecutive primes are close together (the prime gap below 10^12 is at most a few hundred), so after a cheap primality test per candidate only a handful of candidates are tried.'
+      - 'Because 10^12 itself is always a power of two, so the scan is just a few multiplications.'
+      - 'Because the input is guaranteed to already be near a prime.'
+      - 'Because the time limit only counts the input reading, not the primality checks.'
+    answer: 0
+    explanation: 'The gap to the next prime is small — on the order of log n on average and only a few hundred even in the worst case below 10^12. Combine that with an O(log³ n) Miller–Rabin test (or a sieve-based trial division) and the whole scan costs a few microseconds, instead of the O(√n·gap) of naive trial division.'
+type: content
+---

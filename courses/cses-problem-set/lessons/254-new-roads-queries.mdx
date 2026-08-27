@@ -1,0 +1,294 @@
+---
+id: new-roads-queries
+title: New Roads Queries
+type: content
+difficulty: hard
+order: 254
+tags:
+  - dsu
+  - lca
+  - kruskal-reconstruction-tree
+  - offline-queries
+blocks:
+  - type: markdown
+    content: |
+      # New Roads Queries — first connection time via a union tree
+
+      Cities start disconnected. Every day a new road opens (in a known order —
+      `m` roads total), and you must answer `q` queries of the form: *"after how
+      many days can we first travel from city `a` to city `b`?"* If they never
+      connect, print `-1`.
+
+      A direct approach answers one query at a time: re-run a **DSU** while
+      replaying roads from day 1 until `a` and `b` land in the same component.
+      That is `O(q·m·α)` — up to `4·10¹⁰` with `q = m = 2·10⁵`. Instead, we bake
+      the whole build order into a single tree and answer every query with an
+      **LCA** — `O((n+m+q) log n)` total.
+
+      ## The Kruskal reconstruction (union) tree
+
+      During Kruskal's algorithm we maintain a DSU of components. The trick is
+      to record *how* components merge. Whenever two components merge, create a
+      **new node** whose two children are the representatives of the two merged
+      components, and give the new node the **day number** as its weight:
+
+      ```
+      process roads in day order:
+        ra, rb = find(a), find(b)
+        if ra == rb: continue                      # already connected
+        w = new node, children = treeRoot[ra], treeRoot[rb], weight = day
+        union ra, rb; treeRoot[newroot] = w
+      ```
+
+      The resulting structure is a **forest** (one tree per final component), and
+      it has a beautiful property: **the LCA of two original city nodes `a` and
+      `b` is exactly the node whose weight is the day they first became
+      connected.**
+
+      Why? A city is a leaf. Its ancestors are the merge-nodes it passed
+      through, ordered by increasing day. The first day `a` and `b` are in the
+      same component is precisely the merge that first brought the two chains
+      together — i.e. their **lowest common ancestor** in the tree.
+
+      ## Complexity
+
+      Building the tree is one DSU pass: `O(m·α(n))`. Answering each query is a
+      binary-lifting LCA: `O(log n)`. Total `O((n+m+q) log n)` time, `O(n+m)`
+      space.
+
+      :::tip
+      **Interview tip:** the Kruskal reconstruction tree turns "when did these
+      two nodes first become connected" (and the dual "what is the minimum
+      bottleneck edge connecting `a` and `b`", e.g. the classic **Big Road /
+      offline MST** question) into a single LCA lookup. Dynamic-connectivity-
+      by-build-order problems almost always hint at this structure; the
+      alternative — per-query replay — is a quadratic trap that interviewers
+      expect you to notice.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` cities in Byteland but no roads between them. However, each
+      day, a new road will be built. There will be a total of `m` roads.
+
+      Your task is to process `q` queries of the form: "after how many days can
+      we travel from city `a` to city `b` for the first time?"
+
+      ## Input
+
+      The first input line has three integers `n`, `m` and `q`: the number of
+      cities, roads and queries. The cities are numbered `1, 2, …, n`.
+
+      After this, there are `m` lines that describe the roads in the order they
+      are built. Each line has two integers `a` and `b`: there will be a road
+      between cities `a` and `b`.
+
+      Finally, there are `q` lines that describe the queries. Each line has two
+      integers `a` and `b`: we want to travel from city `a` to city `b`.
+
+      **Constraints:** `1 <= n, m, q <= 2·10^5`, `1 <= a, b <= n`
+
+      ## Output
+
+      For each query, print the number of days, or `-1` if it is never possible.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 4 3
+      1 2
+      2 3
+      1 3
+      2 5
+      1 3
+      3 4
+      3 5
+      ```
+      **Output:**
+      ```
+      2
+      -1
+      4
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — replay roads per query, O(q·m)**
+
+      For each query, start a fresh DSU and add roads one day at a time, stopping
+      as soon as `a` and `b` connect.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct DSU {
+          vector<int> p;
+          DSU(int n){ p.resize(n); iota(p.begin(), p.end(), 0); }
+          int f(int x){ return p[x]==x ? x : p[x]=f(p[x]); }
+          void u(int a,int b){ a=f(a); b=f(b); if(a!=b) p[a]=b; }
+      };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m, q; cin >> n >> m >> q;
+          vector<pair<int,int>> r(m);
+          for (auto& e : r){ cin >> e.first >> e.second; e.first--; e.second--; }
+          while (q--) {
+              int a, b; cin >> a >> b; a--; b--;
+              if (a == b){ cout << 0 << "\n"; continue; }   // already "there"
+              DSU d(n); int ans = -1;
+              for (int i = 0; i < m; i++) {
+                  d.u(r[i].first, r[i].second);
+                  if (d.f(a) == d.f(b)){ ans = i + 1; break; }
+              }
+              cout << ans << "\n";
+          }
+      }
+      ```
+
+      *`O(q·m·α)` worst case — `4·10¹⁰` steps. Correct but far too slow.*
+
+      **② Optimization — union tree + LCA, O((n+m+q) log n) (optimal)**
+
+      Build the Kruskal reconstruction forest once, then answer every query with
+      binary-lifting LCA. This is the tier we compile and verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct DSU {
+          vector<int> p, sz;
+          DSU(int n){ p.resize(n); sz.assign(n,1); iota(p.begin(),p.end(),0); }
+          int find(int x){ return p[x]==x?x:p[x]=find(p[x]); }
+      };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m, q; cin >> n >> m >> q;
+          vector<pair<int,int>> roads(m);
+          for (int i=0;i<m;i++){ cin>>roads[i].first>>roads[i].second; roads[i].first--; roads[i].second--; }
+          DSU dsu(n);
+          vector<int> treeRoot(n); iota(treeRoot.begin(), treeRoot.end(), 0);
+          vector<vector<int>> ch(2*n);
+          vector<int> wt(2*n, 0), sz(n,1);                 // sz rescoped: reuse dsu sizes below
+          for(int i=0;i<n;i++) sz[i]=1;
+          int nc = n;
+          for (int day=0; day<m; day++) {
+              int a=roads[day].first, b=roads[day].second;
+              int ra=dsu.find(a), rb=dsu.find(b);
+              if (ra==rb) continue;
+              int w = nc++; wt[w] = day+1;                 // new node weight = day number
+              ch[w].push_back(treeRoot[ra]); ch[w].push_back(treeRoot[rb]);
+              if (sz[ra] < sz[rb]) swap(ra, rb);           // union by size
+              dsu.p[rb] = ra; sz[ra] += sz[rb];
+              treeRoot[ra] = w;
+          }
+          int LOG = 1; while ((1<<LOG) <= nc) LOG++;
+          vector<vector<int>> up(nc, vector<int>(LOG, -1));
+          vector<int> par(nc, -1), depth(nc, 0);
+          for (int w=0; w<nc; w++) for (int c : ch[w]) par[c] = w;   // child -> tree parent
+          for (int v=0; v<nc; v++) up[v][0] = par[v];
+          for (int v=nc-1; v>=0; v--) if (par[v]!=-1) depth[v] = depth[par[v]] + 1; // parents have larger indices
+          for (int j=1; j<LOG; j++) for (int v=0; v<nc; v++)
+              if (up[v][j-1] != -1) up[v][j] = up[up[v][j-1]][j-1];
+          auto lca = [&](int u, int v){
+              if (depth[u] < depth[v]) swap(u, v);
+              for (int j=LOG-1; j>=0; j--)
+                  if (up[u][j] != -1 && depth[up[u][j]] >= depth[v]) u = up[u][j];
+              if (u == v) return u;
+              for (int j=LOG-1; j>=0; j--)
+                  if (up[u][j] != up[v][j] && up[u][j] != -1 && up[v][j] != -1){ u = up[u][j]; v = up[v][j]; }
+              return up[u][0];
+          };
+          for (int i=0; i<q; i++) {
+              int a, b; cin >> a >> b; a--; b--;
+              if (dsu.find(a) != dsu.find(b)) cout << -1 << "\n";       // different final components
+              else cout << wt[lca(a, b)] << "\n";                        // first connection day
+          }
+          return 0;
+      }
+      ```
+
+      *`O(m·α + (n+m+q) log n)` time, `O(n+m)` space. Binary lifting gives
+      each query an `O(log n)` LCA.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Union tree node.** Each merge creates a fresh node `w = nc++` whose
+        children are the current tree-roots of the two components and whose
+        weight `wt[w]` is the 1-based day the connecting road opened. We record
+        road order as the tree structure — time becomes parentage.
+      - **Starting leaves.** City `v` is leaf `v`, with `treeRoot[component]=v`
+        until its component first merges. Original city nodes have `wt = 0`.
+      - **Depth in index order.** Merge nodes are created in increasing index,
+        and a parent always has a larger index than its children (a parent is
+        created after its children already existed or are leaves). Processing
+        `v` from largest to smallest index therefore computes all depths
+        correctly — this ordering is essential and easy to get wrong.
+      - **Binary lifting.** `up[v][j]` is the `2^j`-th ancestor. The classic
+        lift-to-same-depth, then lift-both-together LCA gives the merge node
+        where the two paths first meet.
+      - **Final component check.** If `dsu.find(a) != dsu.find(b)` after all
+        roads, the two cities are in different trees of the forest — never
+        connected → `-1`. Otherwise `wt[lca(a,b)]` is the exact first day.
+      - **Self-query.** `a == b` returns `lca(a,a) = a`, whose weight is `0` —
+        you are already in the same city, "day 0". No special case needed.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5`, roads in order:
+      ```
+      day 1: 1-2   day 2: 2-3   day 3: 1-3   day 4: 2-5
+      ```
+      Queries: `(1,3)`, `(3,4)`, `(3,5)`.
+
+      **Build the union tree:**
+      ```
+      day1  merge {1},{2}: node5, wt=1, children {1,2}
+      day2  merge {1,2},{3}: node6, wt=2, children {5, 3}
+      day3  edge 1-3: same component, skip
+      day4  merge {1,2,3},{5}: node7, wt=4, children {6, 5}
+      ```
+      City 4 is never touched. The forest: root `7` over component `{1,2,3,5}`,
+      and an isolated leaf `4`.
+
+      **Query (1,3):** `lca(1, 3)`: node1's chain is `1 → 5 → 6 → 7`, node3's is
+      `3 → 6 → 7`. Their LCA is `6`, weight `2`. Answer `2`.
+      (Day 2 road `2-3` first connects them — correct: day 1 only joined 1–2.)
+
+      **Query (3,4):** `find(3)` and `find(4)` are in different final components
+      (4 is isolated). Answer `-1`.
+
+      **Query (3,5):** 3's chain `3 → 6 → 7`, node5's `5 → 7`. LCA is `7`, weight
+      `4`. Answer `4` (road `2-5` on day 4 first connects city 5).
+
+      Printed output:
+      ```
+      2
+      -1
+      4
+      ```
+      Expected (sample) `2`, `-1`, `4` — **match**.
+  - type: flowchart
+    title: "First-connection day via union tree + LCA"
+    nodes: ["read cities / roads / queries", "DSU pass in day order; create merge nodes with weight=day", "forest of Kruskal reconstruction trees", "binary lift (depth + ancestors)", "query: same final component?", "yes: print weight(LCA(a,b))", "no: print -1"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5, label: "yes"}
+      - {from: 4, to: 6, label: "no"}
+  - type: mcq
+    prompt: "Why does weight(LCA(a, b)) in the union forest give the first day a and b become connected?"
+    options:
+      - "Because the LCA's weight equals the number of roads ever built, which is the day everything is connected."
+      - "Because a merge node is created exactly when two components first merge, and its ancestors are ordered by strictly increasing day. a and b are together from the lowest such merge on — their LCA — and that node's weight is that first day."
+      - "Because original city nodes store the day they were built as roads."
+      - "Because DSU always merges the pair of nodes that share the road with the earliest day."
+    answer: 1
+    explanation: "Each city is a leaf whose upward chain records, in increasing weight, every component it has belonged to. Two leaves share a component exactly from the moment their chains converge, which is at their lowest common ancestor. Since merge-node weights are the 1-based day numbers, the LCA's weight is precisely the first day a and b can travel."
+---

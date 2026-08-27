@@ -1,0 +1,258 @@
+---
+id: elevator-rides
+title: Elevator Rides
+type: content
+difficulty: medium
+order: 78
+tags:
+  - dp
+  - bitmask
+  - subset-dp
+blocks:
+  - type: markdown
+    content: |
+      # Elevator Rides — DP over subsets (bitmask DP)
+
+      There are `n` people with weights `w_i` and one elevator of capacity `x`.
+      We must split them into the **fewest rides** such that a ride may hold any
+      group whose total weight is at most `x`. The order inside a ride and the
+      order of rides do not matter — only *who goes together*.
+
+      This is the *bin packing* problem. It is NP-hard in general, and its
+      natural brute force is hopeless. But `n <= 20` is tiny, so a clever
+      exhaustive search — **dynamic programming over subsets** — is fast.
+
+      ## The bitmask idea
+
+      Number the people `0..n-1`. Any subset of people is encoded by an integer
+      `mask` in `[0, 2^n)` where bit `i` being set means person `i` is in the
+      subset. There are at most `2^20 = 1,048,576` subsets.
+
+      Define `dp[mask]` = a pair describing the *best* way to carry exactly the
+      people in `mask`:
+      - `dp[mask].rides` — the fewest rides needed,
+      - `dp[mask].cur` — the used weight of the *last* ride in that optimum, kept
+        small as a tie-breaker so future people fit more easily.
+
+      To build `dp[mask]`, take the last person added: `dp[mask]` extends some
+      `dp[mask \ {j}]` by adding person `j`. If person `j` fits in the current
+      last ride (`cur + w[j] <= x`) we keep the same ride count and increase the
+      load; otherwise `j` starts a brand-new ride (ride count `+1`, load `w[j]`).
+
+      Because `rides` dominates the choice, and a *smaller* current load is never
+      worse (it leaves more room for the next person), the tie-break
+      `(fewer rides, then smaller load)` is safe.
+
+      :::tip
+      **Interview tip:** "Pack these items into the minimum number of bins of
+      capacity X" (bin packing) is a staple interview/competitive problem. The
+      tell is the constraint `n <= 20`: that is the author inviting you to write
+      `2^n` DP. The same subset-DP skeleton (`dp[mask]` formed by adding one
+      element at a time, tie-breaking optimally) reuses directly for problems
+      like minimizing travel or maximizing covered weight. Spot the small `n`,
+      reach for the bitmask.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` people who want to get to the top of a building which has
+      only one elevator. You know the weight of each person and the maximum
+      allowed weight in the elevator. What is the **minimum number of elevator
+      rides**?
+
+      ## Input
+
+      The first input line has two integers `n` and `x`: the number of people
+      and the maximum allowed weight in the elevator.
+
+      The second line has `n` integers `w1, w2, ..., wn`: the weight of each
+      person.
+
+      **Constraints:** `1 <= n <= 20`, `1 <= x <= 10^9`, `1 <= wi <= x`
+
+      ## Output
+
+      Print one integer: the minimum number of rides.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 10
+      4 8 6 1
+      ```
+      **Output:**
+      ```
+      2
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — exponential in the number of ways**
+
+      Try every way of assigning people to rides: process people one by one and,
+      for each, either place them into any existing ride that still has room or
+      open a new ride. Taking the minimum over all complete assignments is
+      correct, but the recursion fans out over "which ride goes where" and is
+      `O(R^n)` in the worst case (roughly the Bell number when packing is tight).
+      For `n = 20` this is astronomically slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long best;
+      long long X;
+      vector<long long> W;
+
+      void rec(int idx, vector<long long>& loads, int n) {
+          if (idx == n) { best = min(best, (long long)loads.size()); return; }
+          for (int i = 0; i < (int)loads.size(); i++) {
+              if (loads[i] + W[idx] <= X) {
+                  loads[i] += W[idx];
+                  rec(idx + 1, loads, n);
+                  loads[i] -= W[idx];
+              }
+          }
+          loads.push_back(W[idx]);
+          rec(idx + 1, loads, n);
+          loads.pop_back();
+      }
+
+      long long solve(int n, long long x, const vector<long long>& w) {
+          X = x; W = w; best = LLONG_MAX;
+          vector<long long> loads;
+          rec(0, loads, n);
+          return best;
+      }
+      ```
+
+      *O(rides^n) time — correct but unusable for `n = 20`.*
+
+      **② Optimization — subset DP, O(2^n · n)**
+
+      Replace the exponential recursion with `2^n` states. For every `mask` and
+      every person `j` not yet in it, extend `dp[mask]` by adding `j`, keeping
+      the best `(rides, load)` tuple.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(int n, long long x, const vector<long long>& w) {
+          int S = 1 << n;
+          vector<pair<int, long long>> dp(S, {INT_MAX, 0});
+          dp[0] = {1, 0};                              // sentinel: one empty ride
+          for (int mask = 0; mask < S; mask++) {
+              auto [rides, cur] = dp[mask];
+              for (int j = 0; j < n; j++) {
+                  if (mask & (1 << j)) continue;       // already carried {j}
+                  int nmask = mask | (1 << j);
+                  long long nw = cur + w[j];
+                  int nr = rides;
+                  if (nw > x) { nw = w[j]; nr = rides + 1; }   // new ride
+                  if (nr < dp[nmask].first ||
+                      (nr == dp[nmask].first && nw < dp[nmask].second))
+                      dp[nmask] = {nr, nw};            // tie-break on smaller load
+              }
+          }
+          return dp[S - 1].first;
+      }
+      ```
+
+      *O(2^n · n) time, O(2^n) space. For `n = 20`: ~20 million transitions,
+      well within the limit.*
+
+      **③ Further optimization — none needed**
+
+      At `2^n · n` with `n = 20` the problem is already solved in microseconds.
+      This is the canonical optimal profile for a small-`n` packing problem; a
+      third optimization is unnecessary.
+
+      **④ Alternative — not meaningful here**
+
+      Because the capacity `x` can be up to `10^9`, any capacity-indexed DP (or
+      meet-in-the-middle on weights) is dominated by the bitmask DP. The subset
+      DP is the intended and best approach, so we stop here.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The subset DP has three ingredients, each of which maps onto THIS problem:
+
+      - **State.** `dp[mask]` describes the optimal way to carry exactly the set
+        of people whose bits are set in `mask`. Two numbers ride along: how many
+        rides we used (`rides`) and how heavy the *current* (open) ride is
+        (`cur`). Pens a compact encoding of "who is already transported".
+
+      - **Transition.** We remove one person `j` from the set to look at "the
+        set without `j`", then try adding `j` back. Two cases:
+        - `cur + w[j] <= x`: `j` slots into the current ride — same `rides`,
+          load becomes `cur + w[j]`;
+        - otherwise `j` must open a new ride — `rides + 1` rides, load `w[j]`.
+        We pick the tuple with strictly fewer rides, breaking ties toward the
+        smaller trailing load.
+
+      - **Order of processing.** Every transition adds a bit, so `nmask > mask`
+        always. Iterating `mask` from `0` upward guarantees every
+        already-transported subset is finalised before it is extended.
+
+      - **Answer.** `dp[full]` where `full = (1 << n) - 1` carries the entire
+        set; its `.first` is the minimum ride count. The sentinel `dp[0] = {1, 0}`
+        is a phantom empty ride so the first real person simply fills it — it is
+        never read back because `mask = 0` is never the final state.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(4, 10, {4, 8, 6, 1})`. Bit `i` (from the right) = person `i`
+      with weight `4, 8, 6, 1` respectively. A selection of `dp` entries:
+
+      | mask | people       | best (rides, cur)          | how                            |
+      |------|--------------|----------------------------|--------------------------------|
+      | `0001` | {0} (4)    | (1, 4)                     | new ride → 1 ride, load 4     |
+      | `0011` | {0,1} (4,8)| (2, 8)                     | 4+8=12 > 10 → open ride        |
+      | `0101` | {0,2} (4,6)| (1, 10)                    | 4+6=10 fits → 1 ride          |
+      | `1001` | {0,3} (4,1)| (1, 5)                     | 4+1=5 fits                     |
+      | `1101` | {0,2,3} (4,6,1) | (2, 1)    | {4,6} then 1 opens a new ride   |
+      | `1111` | all        | **(2, 9)**                 | rides {4,6} + {8,1} (last ride load 9) |
+
+      Let's read the interesting rows:
+
+      - `{0,2}` = persons of weight `4` and `6`: they fit together (`4+6=10`),
+        so `dp = (1, 10)` — one ride, full.
+      - `{1,3}` = weights `8` and `1`: fit together, `dp = (1, 9)`.
+      - The whole set `{0,1,2,3}` can be split as `{4,6}` + `{8,1}` = 2 rides, or
+        `{4,1}` + `{8,6}`? 8+6 = 14 overflow, so that fails. Every two-ride
+        splitting ends with a trailing ride containing the `8`; the lightest such
+        trailing load is `{8,1}` = 9, so `dp[1111] = (2, 9)`.
+
+      The DP compares all such splittings and reports the minimum ride count.
+
+      Expected (sample) — `2`. Actual — `2`. Match. And since every ride is full
+      or as full as possible, `2` rides is also an easy lower bound (total
+      weight `4+8+6+1 = 19`, and `19 > 10` proves `2` rides are required).
+  - type: flowchart
+    title: "Subset DP for Elevator Rides"
+    nodes: ["start: dp[0] = (1 ride, load 0)", "pick mask in 0..2^n-1", "extend by person j not in mask", "fits in current ride? keep rides", "else open new ride (rides+1)", "keep best (rides, then smaller load)", "answer = dp[full].rides"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "yes"}
+      - {from: 2, to: 4, label: "no"}
+      - {from: 3, to: 5}
+      - {from: 4, to: 5}
+      - {from: 5, to: 1}
+      - {from: 1, to: 6, label: "done"}
+  - type: mcq
+    prompt: "In the elevator-rides subset DP, why do we break ties toward the smaller current ride load rather than only the ride count?"
+    options:
+      - "A smaller load makes the ``rides`` number smaller, so it is always optimal."
+      - "A smaller current load leaves more room for the next person, so it is never worse and helps reach the real optimum."
+      - "It lets us ignore the capacity ``x`` entirely."
+      - "It reduces the time complexity from O(2^n · n) to O(2^n)."
+    answer: 1
+    explanation: "The ride count is the primary objective; once two ways need the same number of rides, the one carrying less in its open last ride is at least as good because any future person that fits the heavier load also fits the lighter one. Keeping that better state never loses the optimum."
+---

@@ -1,0 +1,280 @@
+---
+id: word-combinations
+title: Word Combinations
+type: content
+difficulty: medium
+order: 197
+tags:
+  - string
+  - trie
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      # Word Combinations — count the ways to build a string from dictionary words
+
+      You are given a string and a dictionary of words. Count the number of
+      different ways to *concatenate* dictionary words so they form exactly the
+      string, using modulo `10^9+7`.
+
+      The moment you hear **"in how many ways can a string be split into words
+      from a dictionary"**, think dynamic programming. Let `dp[i]` = number of
+      ways to form the *prefix* `s[0..i-1]`. Then `dp[0] = 1` (the empty prefix),
+      and for each prefix we append one dictionary word:
+
+      > `dp[i + len(w)] += dp[i]`   whenever `w` matches `s` starting at position `i`
+
+      The answer is `dp[n]`. The only hard part is checking "which words match
+      at position `i`" *fast* — and that is exactly what a **trie** is for.
+
+      ## Why a trie?
+
+      A trie stores the dictionary so that every word shares its common prefix
+      with other words. To find all words that match `s` at position `i`, you
+      walk the trie from the root following `s[i], s[i+1], ...`; every time a
+      path walks through a node flagged as a word-end, you found a matching
+      word ending at that offset. Total work across all positions is roughly
+      `n` walk lengths, with each walk bounded by the deepest dictionary path.
+
+      ## Complexity
+
+      - Building the trie: `O(total length of words)` (and `O(total length)`
+        nodes).
+      - DP walk: `O(n · L)` where `L` is the deepest word; with `n <= 5000`
+        this is easily within the limit.
+      - Space: `O(total length of words + n)`.
+
+      :::tip
+      **Interview tip:** "Number of ways to decode/segment a string into
+      dictionary words" is a classic. The trie turns the inner "which words fit
+      here" lookup from `O(k)` (scanning all words) into `O(L)` (depth of the
+      matched path) — the exact optimisation interviewers fish for.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given a string of length `n` and a dictionary containing `k`
+      words. In how many ways can you create the string using the words?
+
+      ## Input
+
+      The first input line has a string containing `n` characters between
+      `a` and `z`.
+
+      The second line has an integer `k`: the number of words.
+
+      Finally there are `k` lines describing the words. Each word is unique and
+      consists of characters `a`–`z`.
+
+      **Constraints:** `1 <= n <= 5000`, `1 <= k <= 10^5`, the total length of
+      the words is at most `10^6`.
+
+      ## Output
+
+      Print the number of ways modulo `10^9+7`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      ababc
+      4
+      ab
+      abab
+      c
+      cb
+      ```
+      **Output:**
+      ```
+      2
+      ```
+      The possible ways are `ab+ab+c` and `abab+c`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — try every word at every position, O(n·k·|L|)**
+
+      For each position `i`, scan all `k` words and test each one with a
+      substring comparison. `O(n)` positions × `O(k)` words × `O(|w|)`
+      comparison = `O(n · k · |L|)`; with `k = 10^5` and `n = 5000` that is
+      far past `10^9`. Much too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin>>s; int n=s.size();
+          int k; cin>>k; vector<string> w(k);
+          for(auto&x:w) cin>>x;
+          const int MOD=1000000007;
+          vector<int> dp(n+1,0); dp[0]=1;
+          for(int i=0;i<n;i++){
+              if(!dp[i]) continue;
+              for(auto&x:w){
+                  int L=x.size();
+                  if(i+L<=n && s.substr(i,L)==x) dp[i+L]=(dp[i+L]+dp[i])%MOD;
+              }
+          }
+          cout<<dp[n]<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n·k·|L|)` time. Too slow for `k = 10^5`.*
+
+      **② Optimization — trie + DP, O(n·L) (optimal)**
+
+      Store the dictionary in a trie (array-based for speed). For each position
+      `i` with `dp[i] > 0`, walk the trie along `s[i..]`; whenever a node marks
+      the end of a word at distance `len`, do `dp[i+len] += dp[i]`. Compiled and
+      run against the sample below.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int MOD = 1000000007;
+      struct Node { int next[26]; int word; Node(){ memset(next,-1,sizeof next); word=0; } };
+      Node trie[1000005];
+      int sz = 1;
+      void insert(const string& w){
+          int v=0;
+          for(char ch:w){ int c=ch-'a'; if(trie[v].next[c]==-1) trie[v].next[c]=sz++; v=trie[v].next[c]; }
+          trie[v].word=1;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin>>s; int n=s.size();
+          int k; cin>>k; string w;
+          for(int i=0;i<k;i++){ cin>>w; insert(w); }
+          vector<int> dp(n+1,0); dp[0]=1;
+          for(int i=0;i<n;i++){
+              if(dp[i]==0) continue;
+              int v=0;
+              for(int j=i;j<n;j++){
+                  int c=s[j]-'a';
+                  if(trie[v].next[c]==-1) break;
+                  v=trie[v].next[c];
+                  if(trie[v].word) dp[j+1]=(dp[j+1]+dp[i])%MOD;
+              }
+          }
+          cout<<dp[n]<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n·L)` time (each `i` walks at most the trie depth `L <= n`),
+      `O(total word length)` space. The recommended solution.*
+
+      **③ Alternative — rolling hash + DP, O(n²) big-O but fine for n ≤ 5000**
+
+      Hash every dictionary word into a set, then for each position `i` and
+      each length `L`, compute the rolling hash of `s[i..i+L-1]` in `O(1)` and
+      test membership. This is `O(n²) = 2.5 * 10^7` for `n = 5000` — passes the
+      limit and avoids a trie.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll M1=1000000007, M2=1000000009, B=911382323;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin>>s; int n=s.size();
+          int k; cin>>k;
+          unordered_set<ll> ws;
+          for(int i=0;i<k;i++){
+              string w; cin>>w; ll h1=0,h2=0;
+              for(char ch:w){ h1=(h1*B+ch)%M1; h2=(h2*B+ch)%M2; }
+              ws.insert((h1<<32)|h2);
+          }
+          const ll MOD=1000000007;
+          vector<ll> p1(n+1,1), p2(n+1,1), h1(n+1,0), h2(n+1,0);
+          for(int i=0;i<n;i++){
+              p1[i+1]=p1[i]*B%M1; p2[i+1]=p2[i]*B%M2;
+              h1[i+1]=(h1[i]*B+s[i])%M1; h2[i+1]=(h2[i]*B+s[i])%M2;
+          }
+          auto sub=[&](int l,int r,vector<ll>&ha,vector<ll>&pa,ll M){
+              return ((ha[r+1]-ha[l]*pa[r-l+1])%M+M)%M;
+          };
+          vector<ll> dp(n+1,0); dp[0]=1;
+          for(int i=0;i<n;i++){
+              if(!dp[i]) continue;
+              for(int L=1; i+L<=n; L++){
+                  ll a=sub(i,i+L-1,h1,p1,M1), b=sub(i,i+L-1,h2,p2,M2);
+                  if(ws.count((a<<32)|b)) dp[i+L]=(dp[i+L]+dp[i])%MOD;
+              }
+          }
+          cout<<dp[n]<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n²)` time, `O(total word length + n)` space. A double rolling hash
+      makes collisions practically impossible.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Array trie.** `trie[v].next[c]` holds the child for character `c`
+      (`-1` if missing); `trie[v].word = 1` flags that node as the end of a
+      dictionary word. Nodes are allocated in a flat array (`sz++`) so there is
+      no pointer overhead and no allocation churn — important when the total
+      word length reaches `10^6`.
+      - **DP direction.** `dp[i]` = ways to build `s[0..i-1]`. We only expand
+        from reachable prefixes (`dp[i] > 0`), skipping dead positions so we
+        never waste work. This is a *forward* DP: we push counts to later
+        positions `dp[i+len]` instead of pulling from earlier ones.
+      - **Walking the trie.** At position `i` we walk the trie following
+        `s[j]` for `j = i, i+1, ...`. The walk naturally stops the moment an
+        edge is missing — a word that isn't a prefix of `s[i..]` is pruned in
+        `O(1)`. Every node reached with `word = 1` means `s[i..j]` is a valid
+        dictionary word, so we add `dp[i]` to `dp[j+1]`.
+      - **Modulo.** All additions are wrapped in `MOD = 10^9+7` to keep counts
+        bounded; `long long` storage is used in the hash version.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `s = "ababc"`, words `{ab, abab, c, cb}`.
+
+      `dp = [1, 0, 0, 0, 0, 0]` (`dp[0]=1`, target `dp[5]`).
+
+      - **i = 0** (`dp[0]=1`). Walk trie from tree root: `a`→`b` hits word **ab**
+      at `j=1` → `dp[2] += 1`; continue `a`→`b`→`a`→`b` hits word **abab** at
+      `j=3` → `dp[4] += 1`. Now `dp = [1,0,1,0,1,0]`.
+      - **i = 1** (`dp[1]=0`) — dead, skip.
+      - **i = 2** (`dp[2]=1`). Walk `a`→`b` hits **ab** at `j=3` → `dp[4] += 1`
+      ⇒ `dp[4]=2`; continuing past `ab` we need `ababc[2..]` = `abc`; the next
+      edge `c` from node `ab` doesn't exist, walk stops.
+      - **i = 3** (`dp[3]=0`) — skip.
+      - **i = 4** (`dp[4]=2`). Walk `c` hits word **c** at `j=4` → `dp[5] += 2`.
+
+      Printed:
+      ```
+      2
+      ```
+      Expected `2` — match. The two ways are `ab + ab + c` and `abab + c`.
+      (Note `cb` never matches: no prefix `c` then `b` that forms the tail.)
+  - type: flowchart
+    title: "Trie + DP word segmentation"
+    nodes: ["dp[0] = 1", "position i with dp[i] > 0?", "walk trie along s[i..]", "reached word-end at j?  add dp[i] to dp[j+1]", "advance / next i", "answer = dp[n]"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "yes"}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 1}
+      - {from: 1, to: 5, label: "i = n"}
+  - type: mcq
+    prompt: "Why does the trie speed up the transition over just checking each dictionary word at each position?"
+    options:
+      - "Because the trie de-duplicates shared word prefixes, so the per-position scan only follows characters spelled by s[i..] and stops the instant a prefix stops being a dictionary prefix — O(depth) instead of O(k·|w|)."
+      - "Because a trie lets you insert words in O(1) regardless of length."
+      - "Because a trie makes the DP answer exact without any modulo arithmetic."
+      - "Because the trie converts the problem from counting to sorting."
+    answer: 0
+    explanation: "A trie shares storage for common prefixes, and a walk from s[i] descends one edge per character. Every missing edge immediately prunes all words sharing that prefix. The comparison is character-bounded by the matched depth, not by scanning all k words or copying substrings."
+---

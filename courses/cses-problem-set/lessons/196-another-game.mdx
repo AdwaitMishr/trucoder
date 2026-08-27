@@ -1,0 +1,218 @@
+---
+id: another-game
+title: "Another Game"
+difficulty: medium
+order: 196
+tags:
+  - mathematics
+  - game-theory
+  - parity
+  - nim
+blocks:
+  - type: markdown
+    content: |
+      # Another Game — a multi-pile parity game
+
+      There are `n` heaps of coins. On each move a player selects **some** of
+      the non-empty heaps and removes **one coin from each** of them. Whoever
+      removes the last coin wins. Who wins with optimal play?
+
+      This is *not* standard Nim: instead of emptying one heap, a move deducts
+      `1` from many heaps at once. The surprising outcome is that the game lives
+      entirely on **parity**: the first player wins exactly when **at least one
+      heap has an odd number of coins**.
+
+      ## The parity argument
+
+      Call a heap *odd* if it has an odd count. Removing one coin from a heap
+      flips its parity. Two observations close the case:
+
+      1. **If every heap is even,** then any legal move flips a chosen set of
+         heaps, so the position is left with at least one odd heap (you must
+         remove from a non-empty heap, making it odd). You can *never* hand the
+         opponent "all even".
+      2. **If at least one heap is odd,** the first player can remove one coin
+         from *every* **odd** heap (and none from even heaps), turning every
+         heap even. Now the opponent faces "all even" — a state from which they
+         can only ever hand back an odd-containing position, which the first
+         player again zeroes.
+
+      So "all heaps even" is a losing position (whatever you do, you hand the
+      opponent a winning one), and "some heap odd" is winning (you move to all
+      even). The game ends exactly when all heaps are empty — an all-even
+      state — which is why the player to move on "all even" is always the loser.
+
+      **Time:** O(n) per test, **Space:** O(1). Only a scan for any odd value
+      is required.
+
+      :::tip
+      **Interview tip:** when a game's moves change every affected pile by the
+      *same amount*, parity is usually the whole story. "Can I move the whole
+      position into a canonical even state and dump the bad position on my
+      opponent?" is a powerful template — it turns a multi-pile game into a
+      single boolean. Recognize it whenever a move touches several piles
+      uniformly.
+      :::
+  - type: markdown
+    content: |
+      # Question — Another Game
+
+      There are `n` heaps of coins and two players who move alternately. On
+      each move, a player selects some of the non-empty heaps and removes one
+      coin from each heap. The player who removes the last coin wins the game.
+
+      Your task is to find out who wins if both players play optimally.
+
+      **Input**
+
+      The first input line contains an integer `t`: the number of tests. After
+      this, `t` test cases are described:
+
+      The first line contains an integer `n`: the number of heaps.
+
+      The next line has `n` integers `x_1, x_2, ..., x_n`: the number of coins
+      in each heap.
+
+      **Output**
+
+      For each test case, print "first" if the first player wins the game and
+      "second" if the second player wins the game.
+
+      **Constraints**
+
+      - `1 <= t <= 2·10^5`
+      - `1 <= n <= 2·10^5`
+      - `1 <= x_i <= 10^9`
+      - the sum of all `n` is at most `2·10^5`
+
+      **Example**
+
+      Input:
+
+      ```
+      2
+      2
+      2 2
+      3
+      1 2 3
+      ```
+
+      Output:
+
+      ```
+      second
+      first
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — minimax over coin-state vectors, exponential**
+
+      Model each heap's coin count as a coordinate and try every non-empty
+      subset of heaps to decrement. Exhaustive and correct, but the state space
+      is the product of all `x_i` (up to `10^9` each), so it cannot run:
+
+      ```cpp
+      // pick any non-empty subset of nonempty heaps, decrement each chosen heap
+      bool win(vector<long long> v) {
+          for (int mask = 1; mask < (1 << v.size()); mask++) {
+              vector<long long> u = v;
+              bool legal = false;
+              for (int i = 0; i < (int)v.size(); i++)
+                  if (mask & (1 << i)) {
+                      if (v[i] == 0) { legal = false; break; }
+                      u[i]--; legal = true;
+                  }
+              if (!legal) continue;
+              if (!win(u)) return true;    // hand the opponent a losing state
+          }
+          return false;                     // every move loses
+      }
+      ```
+
+      **② Optimization — scan for any odd heap, O(n) time, O(1) space**
+
+      The parity characterisation collapses the whole search into a single pass:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+
+          int t;
+          cin >> t;
+          while (t--) {
+              int n;
+              cin >> n;
+              bool odd = false;
+              for (int i = 0; i < n; i++) {
+                  long long x;
+                  cin >> x;
+                  if (x & 1) odd = true;     // any heap with an odd count?
+              }
+              cout << (odd ? "first" : "second") << "\n";
+          }
+      }
+      ```
+
+      **③ Further optimisation** — none: the input alone (`n` integers) is the
+      lower bound; we can't avoid reading every heap, and `O(n)` is already
+      ideal.
+
+      **④ Alternative algorithm** — an equivalent framing: reduce each heap to
+      its last bit (`x & 1`) and think of a move as flipping an arbitrary
+      non-empty subset of bits. "All bits 0" is P-position; any 1-bit present
+      is N-position, because you can clear every 1-bit at once. This recovers
+      exactly the same "first iff some heap is odd" rule from a pure parity /
+      bit-flipping perspective.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walk through the `O(n)` solution:
+
+      - `odd` is initialised `false`; the loop flips it to `true` the moment any
+        `x_i` has its lowest bit set (`x & 1` is `1` exactly for odd values).
+      - We do not need to count or locate odd heaps — existence is everything,
+        because the winning strategy ("clear all odd heaps in one move") works
+        whenever one exists.
+      - "All heaps even" ⇔ `odd == false` ⇔ losing for the player to move.
+      - `odd ? "first" : "second"` maps that directly. `long long` handles coin
+        counts up to `10^9`.
+      - The code is deliberately minimal: no recursion, no game table, just a
+        parity scan — which is the whole content of the game.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      For each test, check whether any heap holds an odd number of coins.
+
+      - Test 1: heaps `[2, 2]`. Both are even → `odd == false` → **second**.
+      - Test 2: heaps `[1, 2, 3]`. Heaps `1` and `3` are odd → `odd == true` →
+        **first**. (First clears the two odd heaps in one move, handing
+        `[0, 2, 0]`; whatever second does to the `2`, first mirrors and wins the
+        last coin.)
+
+      | test | heaps | any odd? | result |
+      |------|-------|----------|--------|
+      | 1 | 2 2 | no | **second** |
+      | 2 | 1 2 3 | yes | **first** |
+
+      Both match the expected output. Note the trap: `[2, 2]` is *losing*
+      despite lots of coins still being on the table — the whole game depends on
+      parity, not on total coins.
+  - type: mcq
+    prompt: 'Which single observation lets the whole game be decided by checking "is any heap odd?"'
+    options:
+      - 'When some heap is odd, the first player can remove one coin from every odd heap in one move, handing the opponent an all-even position; all-even is losing because any move must create an odd heap.'
+      - 'An odd first total number of coins guarantees the first player wins by always taking one coin.'
+      - 'Because a move can never touch an even heap.'
+      - 'Because XOR of all heap sizes being 0 decides the game.'
+    answer: 0
+    explanation: 'The color-flip view is decisive: "all-even" is a P-position (any move necessarily creates an odd heap, so you can never hand it back), and any odd heap lets the mover reach all-even in a single move by clearing each odd heap once.'
+type: content
+---

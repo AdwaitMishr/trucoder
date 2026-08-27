@@ -1,0 +1,282 @@
+---
+id: permutation-inversions
+title: Permutation Inversions
+type: content
+difficulty: medium
+order: 331
+tags:
+  - dynamic-programming
+  - prefix-sums
+  - combinatorics
+  - counting
+blocks:
+  - type: markdown
+    content: |
+      # Permutation Inversions — count permutations by inversion count
+
+      An **inversion** in a permutation is a pair of positions `(i, j)` with
+      `i < j` but `a[i] > a[j]`. We count the number of permutations of `1..n`
+      that have exactly `k` inversions.
+
+      Naively enumerating all `n!` permutations is impossible, and there is no
+      simple closed form. The standard approach is a **DP that builds up the
+      permutation element by element** and tracks the running inversion count,
+      accelerated with **prefix sums** to make each transition `O(1)`.
+
+      ## The insertion view
+
+      Build permutations of `1, 2, …, i` from those of `1, 2, …, i-1` by
+      inserting the new largest element `i`. It is larger than all existing
+      elements, so inserting it:
+
+      - into the **last** position adds `0` new inversions,
+      - one position from the end adds `1`, …,
+      - into the **first** position adds `i - 1` new inversions.
+
+      So each permutation of size `i-1` with `j` inversions yields, by inserting
+      `i` at exactly one of `i` possible spots, permutations of size `i` with
+      inversion counts `j, j+1, …, j + (i-1)`.
+
+      ## DP + prefix sums
+
+      Let `dp[j]` = number of permutations of the current size with exactly `j`
+      inversions. When we grow the size to `i`:
+
+      ```
+      newdp[j] = dp[j] + dp[j-1] + dp[j-2] + ... + dp[j-(i-1)]
+                 (terms with negative index treated as 0)
+      ```
+
+      That is a **sliding window sum of width `i`** over `dp` — which is exactly
+      a prefix-sum ranging query. With a prefix array `pref`, each `newdp[j]` is
+      `pref[j+1] - pref[max(0, j-(i-1))]` in `O(1)`.
+
+      The largest possible inversion count is `n(n-1)/2` (the fully reversed
+      permutation), so arrays are that size.
+
+      **Complexity:** `n` size steps, each filling `O(k)` inversion values in
+      `O(1)` per value → `O(n·k)` time, `O(k)` space. For `n ≤ 500` and
+      `k ≤ n(n-1)/2` that is at most `500 × 124750 ≈ 6.2×10^7` — comfortably
+      within the limit.
+
+      :::tip
+      **Interview tip:** "number of permutations with exactly k inversions" is a
+      classic. The signature move is the **insertion idea** (place the largest
+      `i` into one of `i` slots) combined with a **windowed prefix-sum**
+      recurrence `newdp[j] = Σ dp[j-t]` for `t=0..i-1`. Interviewers are very
+      likely to stop you at the naive `O(n·k·n)` triple loop and ask you to
+      remove the inner sum — the answer is a sliding-window range query. Knowing
+      this "DP + prefix sum to turn a summation transition into O(1)" pattern is
+      broadly reusable (coin-change-style counting, subsets sums, range-DP).
+      :::
+
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to count the number of permutations of `1, 2, …, n` that have
+      exactly `k` inversions (i.e., pairs of elements in the wrong order).
+
+      For example, when `n = 4` and `k = 3`, there are 6 such permutations:
+
+      - `[1, 4, 3, 2]`
+      - `[2, 3, 4, 1]`
+      - `[2, 4, 1, 3]`
+      - `[3, 1, 4, 2]`
+      - `[3, 2, 1, 4]`
+      - `[4, 1, 2, 3]`
+
+      ## Input
+
+      The only input line has two integers `n` and `k`.
+
+      ## Output
+
+      Print the answer modulo `10^9 + 7`.
+
+      ## Constraints
+
+      - `1 ≤ n ≤ 500`
+      - `0 ≤ k ≤ n(n-1)/2`
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 3
+      ```
+
+      **Output:**
+      ```
+      6
+      ```
+
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      **① Brute force — enumerate all `n!` permutations, O(n!·n) (too slow)**
+
+      Generate every permutation of `1..n`, count its inversions with a nested
+      `O(n²)` (or `O(n log n)`) scan, and tally those with exactly `k`. Correct
+      but `n!` blows up immediately — hopeless past `n ≈ 11`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; long long k; cin>>n>>k;
+          vector<int> p(n); iota(p.begin(),p.end(),1);
+          long long cnt=0;
+          do{
+              int inv=0;
+              for(int i=0;i<n;i++) for(int j=i+1;j<n;j++) if(p[i]>p[j]) inv++;
+              if(inv==k) cnt++;
+          } while(next_permutation(p.begin(),p.end()));
+          cout<<cnt<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n!·n)` — enumeration, unusable beyond `n ≈ 11`.*
+
+      **② Optimization — DP over insertion positions, O(n·k²) window (too slow)**
+
+      Apply the insertion idea with a nested summation: for each new size and for
+      each target inversion count, loop over the `i` possible insertion
+      contributions.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+      int main(){
+          int n; ll k; cin>>n>>k;
+          ll K = 1LL*n*(n-1)/2;
+          vector<ll> dp(K+1), ndp(K+1);
+          dp[0]=1;
+          for(int i=1;i<=n;i++){
+              fill(ndp.begin(),ndp.end(),0);
+              for(ll j=0;j<=K;j++)
+                  for(int t=0;t<=i-1 && j>=t;t++)
+                      ndp[j]=(ndp[j]+dp[j-t])%MOD;
+              dp.swap(ndp);
+          }
+          cout<<dp[k]<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n·k·n)` — the inner `t` loop makes it three nested loops; correct but
+      too slow for `n = 500`.*
+
+      **③ Further optimization — prefix sums for O(1) transitions, O(n·k) (optimal)**
+
+      The inner sum `ndp[j] = Σ_{t=0}^{i-1} dp[j-t]` is a **width-`i` sliding
+      window** over `dp`. Build a prefix array each size step, then each `ndp[j]`
+      is a single range query `pref[j+1] - pref[max(0, j-(i-1))]`. This is the
+      tier we compile and run (matches the sample `n = 4, k = 3` → `6`).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; ll k; cin>>n>>k;
+          ll K = 1LL*n*(n-1)/2;
+          vector<ll> dp(K+1), ndp(K+1), pref(K+2);
+          dp[0]=1;
+          for(int i=1;i<=n;i++){
+              pref[0]=0;
+              for(ll j=0;j<=K;j++) pref[j+1]=(pref[j]+dp[j])%MOD;
+              fill(ndp.begin(),ndp.end(),0);
+              for(ll j=0;j<=K;j++){
+                  ll lo = max(0LL, j-(i-1));     // window lower bound
+                  ll hi = j;                     // window upper bound
+                  ndp[j]=(pref[hi+1]-pref[lo]+MOD)%MOD;
+              }
+              dp.swap(ndp);
+          }
+          cout<<dp[k]<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n·k)` time, `O(k)` space — the intended solution.*
+
+      **④ Alternative — same DP, top-down or generating-function flavour**
+
+      The recurrence is the well-known Mahonian generating function
+      `Π_{i=1}^{n} (1 + x + x² + … + x^{i-1})`; the answer is the coefficient of
+      `x^k`. Keeping prefix sums with a fixed rolling window is the efficient way
+      to expand that polynomial. A top-down memoised version is identical in
+      complexity; there is no meaningfully faster exact method for the single
+      `(n, k)` pair at these constraints.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`dp[j]` is the running count for the perm being built.** After
+        processing sizes `1..i`, `dp[j]` = number of perms of `1..i` with `j`
+        inversions.
+      - **`dp[0] = 1`** — the empty permutation has zero inversions.
+      - **Prefix array** `pref[j+1] = pref[j] + dp[j]` lets any contiguous sum
+        of `dp` be answered in `O(1)`.
+      - **Window width is `i`.** When growing to size `i`, inserting `i` into
+        one of `i` slots adds between `0` and `i-1` inversions, so `ndp[j]`
+        accumulates `dp[j-t]` for `t = 0..i-1`. That equals
+        `sum(dp[lo..j])` with `lo = max(0, j-(i-1))`.
+      - **`pref[hi+1] - pref[lo]`** implements that window sum; `+MOD` keeps it
+        non-negative before the final `%`.
+      - **Ranges are clamped** — `lo` never goes below `0`, and since `j ≤ K`
+        and the schedule never exceeds `K`, `hi` is always in bounds.
+      - **Rolling arrays** `dp ↔ ndp` keep memory `O(k)` instead of `O(n·k)`.
+
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 4, k = 3`.
+
+      `K = 4·3/2 = 6`. Grow sizes `i = 1, 2, 3, 4`.
+
+      - **`i = 1`, `dp = [1,0,0,0,0,0,0]`** (only `[1]`, 0 inversions).
+      - **`i = 2`:** window width `2`. `ndp[0]=dp[0]=1`; `ndp[1]=dp[1]+dp[0]=1`;
+        rest `0`. `dp = [1,1,0,0,0,0,0]` (perms `[1,2]`,`[2,1]`).
+      - **`i = 3`:** window width `3`. `ndp[j] = dp[j]+dp[j-1]+dp[j-2]`:
+        `ndp[0]=1`, `ndp[1]=1+1=2`, `ndp[2]=0+1+1=2`, `ndp[3]=0+0+1=1`.
+        `dp = [1,2,2,1,0,0,0]`.
+      - **`i = 4`:** window width `4`. `ndp[3] = dp[3]+dp[2]+dp[1]+dp[0] =
+        1+2+2+1 = 6`.
+
+      `dp[3] = 6` for `n = 4`. Expected (sample) `6` — **match**. These are
+      exactly the six permutations listed in the problem statement.
+
+      Output:
+      ```
+      6
+      ```
+  - type: flowchart
+    title: "Permutation Inversions — DP with sliding-window prefix sums"
+    nodes: ["read n, k", "dp[0]=1, all else 0", "for size i = 1..n", "build prefix array pref over dp", "for each inversion count j: ndp[j] = pref[j+1] - pref[max(0, j-(i-1))]", "dp = ndp", "print dp[k]"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 2, label: "next size"}
+      - {from: 5, to: 6, label: "i reached n"}
+  - type: mcq
+    prompt: "In the transition ndp[j] = Σ_{t=0}^{i-1} dp[j-t], where does the upper limit i-1 come from?"
+    options:
+      - "Inserting the new largest element i into a permutation of 1..i-1 adds between 0 and i-1 new inversions, depending on how many smaller elements it is placed before."
+      - "The upper limit is always k, the requested inversion count."
+      - "It is the number of elements already placed times two."
+      - "There is no bound; every i contributes arbitrarily many inversions."
+    answer: 0
+    explanation: "The new element i is larger than all of 1..i-1. If inserted in the last slot 0 smaller elements are after it (0 new inversions); if inserted in the first slot all i-1 smaller elements are after it (i-1 new inversions). Any slot in between gives a count in [0, i-1]. Summing dp[j] over all t in that window builds newdp[j]. This is the core insertion-count argument."
+---

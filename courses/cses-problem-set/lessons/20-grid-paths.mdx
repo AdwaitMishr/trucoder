@@ -1,0 +1,342 @@
+---
+id: grid-paths
+title: Grid Paths
+difficulty: medium
+order: 20
+tags:
+  - intro
+  - grid
+  - dfs
+  - backtracking
+blocks:
+  - type: markdown
+    content: |
+      # Grid Paths
+
+      **The technique: DFS backtracking for Hamiltonian paths.** A *Hamiltonian
+      path* is a path that visits every cell of the grid exactly once. Counting
+      all Hamiltonian paths from a fixed start to a fixed end is a classic
+      brute-force enumeration: from the top-left cell we try each legal step
+      (up / down / left / right), mark the cell visited, recurse, and undo the
+      mark before trying the next direction ("backtracking"). When we reach the
+      bottom-right corner we count a path only if we have placed all `n²` cells.
+
+      **When you reach for it:** small-grid enumeration problems where the state
+      is the whole set of visited cells — counting paths, tiling, or
+      placement/search problems up to about `7×7`. Because the number of simple
+      paths explodes, the grid size must be kept tiny; `n = 7` is already the
+      practical limit even with strong pruning.
+
+      **A crucial first observation: parity.** Colour the grid like a
+      chessboard (cell `(r,c)` is black when `r + c` is even, white when odd).
+      Every step flips the colour, so after an odd number of moves you are on a
+      white cell and after an even number on a black cell. On an `n×n` grid
+      with even `n`, the two corners `(0,0)` and `(n-1,n-1)` share the *same*
+      colour but the path would need `n²-1` (odd) moves between them — a
+      contradiction, so the answer is always **0** for even grids. This saves
+      the entire search on such boards.
+
+      **Pruning for `n = 7`.** A plain DFS on `7×7` visits ~10⁹+ states and
+      takes ~90 seconds. The standard fix: *connectivity pruning* — before
+      committing to a step, check that the remaining unvisited cells still form
+      one connected region. If our move would split the unvisited cells into two
+      disconnected islands, no path can ever finish, so we prune that branch
+      immediately. This brings `7×7` down to a couple of seconds (answer
+      `111712`).
+
+      **Complexity.** Worst case is exponential, `O(n²!)` in the number of
+      cells (every ordering of cells is a candidate path — far too many), with
+      `O(n²)` memory for the `visited` board. The parity argument turns even
+      boards into `O(1)`. Pruning shrinks the constant enormously for odd
+      boards.
+
+      :::tip
+      **Interview tip:** backtracking over a "visited set" state is the core of
+      many puzzle and flow problems (word search, Sudoku, N-Queens, Knight's
+      Tour, maze path counting). Interviewers look for three things: you recurse
+      *and un-recurse* correctly (mark → recurse → unmark), you add pruning that
+      removes provably hopeless branches, and you reason about why the state
+      space is small enough to explore. The parity/chessboard-colouring argument
+      is a great way to impress in a follow-up.
+      :::
+  - type: markdown
+    content: |
+      # Question — Grid Paths
+
+      Consider an `n × n` grid of cells. A **path** is a sequence of cells where
+      each consecutive pair shares an edge (you may move one step up, down,
+      left, or right — never diagonally), and **every one of the `n²` cells is
+      visited exactly once**. A path starts at the top-left cell `(0,0)` and
+      ends at the bottom-right cell `(n-1,n-1)`.
+
+      Count the number of distinct such paths.
+
+      **Constraints:** `1 ≤ n ≤ 7`.
+
+      **Input:** one line containing the integer `n`.
+      **Output:** a single integer — the number of valid paths.
+
+      Sample input:
+
+      ```
+      3
+      ```
+
+      Sample output:
+
+      ```
+      2
+      ```
+
+      For `n = 3` the two valid paths are:
+
+      - `(0,0)→(1,0)→(2,0)→(2,1)→(1,1)→(0,1)→(0,2)→(1,2)→(2,2)`
+      - `(0,0)→(0,1)→(0,2)→(1,2)→(1,1)→(1,0)→(2,0)→(2,1)→(2,2)`
+
+      Each visits all nine cells exactly once and ends at `(2,2)`. Any path
+      that reaches `(2,2)` before placing all nine cells is invalid.
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — plain backtracking DFS, O(n²!)**
+
+      The simplest correct search: mark → recurse → unmark over all four
+      directions; arriving at `(n-1,n-1)` counts only when all `n²` cells are
+      placed. No parity shortcut, no pruning.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int N; long long cnt;
+      vector<vector<int>> vis;
+      int dr[4] = {-1, 1, 0, 0}, dc[4] = {0, 0, -1, 1};
+
+      void dfs(int r, int c, int placed) {
+          if (r == N - 1 && c == N - 1) {
+              if (placed == N * N) cnt++;   // reached end after placing every cell
+              return;
+          }
+          for (int k = 0; k < 4; ++k) {
+              int nr = r + dr[k], nc = c + dc[k];
+              if (nr < 0 || nr >= N || nc < 0 || nc >= N) continue;
+              if (vis[nr][nc]) continue;
+              vis[nr][nc] = 1;
+              dfs(nr, nc, placed + 1);
+              vis[nr][nc] = 0;              // backtrack
+          }
+      }
+
+      long long solve(long long n) {
+          N = (int)n; cnt = 0;
+          if (N == 1) return 1;
+          vis.assign(N, vector<int>(N, 0));
+          vis[0][0] = 1;
+          dfs(0, 0, 1);
+          return cnt;
+      }
+      ```
+
+      **O(n²!)** time, O(n²) memory. For `n = 7` this explores ~10⁹+ states and
+      takes ~90 seconds — correct but far too slow.
+
+      **② Optimization — parity shortcut**
+
+      Chessboard-colour the board. Since every step flips colour, reaching a
+      corner of the *same* colour requires an even number of moves, but a full
+      covering path uses `n²−1` moves — odd when `n` is even. So even boards
+      answer **0 with no search at all**.
+
+      ```cpp
+      long long solve(long long n) {
+          N = (int)n; cnt = 0;
+          if (N == 1) return 1;
+          if (N % 2 == 0) return 0;         // parity / chessboard-colouring argument
+          vis.assign(N, vector<int>(N, 0));
+          vis[0][0] = 1;
+          dfs(0, 0, 1);                     // same plain DFS as tier ①
+          return cnt;
+      }
+      ```
+
+      **O(n²!)** for odd boards (unchanged), **O(1)** for even boards. This is a
+      big win but still ~90 s for `n = 7`.
+
+      **③ Further optimization — connectivity pruning (submission)**
+
+      Prune any branch whose move would split the remaining unvisited cells
+      into two disconnected regions — then no Hamiltonian completion is
+      possible. We check this exactly with a small flood fill over the unvisited
+      cells after each move.
+
+      ```cpp
+      const int MXN = 9;
+      int N; long long cnt; bool vis[MXN][MXN];
+
+      // count how many unvisited interior cells one seed reaches (flood fill)
+      int reachable(int& totCount) {
+          int seed = -1;
+          totCount = 0;
+          for (int i = 1; i <= N; ++i) for (int j = 1; j <= N; ++j)
+              if (!vis[i][j]) { totCount++; if (seed < 0) seed = i * MXN + j; }
+          if (totCount == 0) return 0;
+          bool seen[MXN][MXN] = {}; int reached = 0;
+          deque<pair<int,int>> q; int sr = seed / MXN, sc = seed % MXN;
+          seen[sr][sc] = true; q.push_back({sr, sc});
+          while (!q.empty()) {
+              auto [r, c] = q.front(); q.pop_front(); reached++;
+              for (int k = 0; k < 4; ++k) {
+                  int nr = r + dr[k], nc = c + dc[k];
+                  if (nr < 1 || nr > N || nc < 1 || nc > N || vis[nr][nc] || seen[nr][nc]) continue;
+                  seen[nr][nc] = true; q.push_back({nr, nc});
+              }
+          }
+          return reached;
+      }
+
+      void dfs(int r, int c, int steps) {
+          if (r == N && c == N) { if (steps == N * N) cnt++; return; }
+          for (int k = 0; k < 4; ++k) {
+              int nr = r + dr[k], nc = c + dc[k];
+              if (nr < 1 || nr > N || nc < 1 || nc > N || vis[nr][nc]) continue;
+              vis[nr][nc] = true;
+              int tot;
+              if (nr == N && nc == N || reachable(tot) == tot)  // remaining stay connected
+                  dfs(nr, nc, steps + 1);
+              vis[nr][nc] = false;
+          }
+      }
+
+      long long solve(long long n) {
+          N = (int)n; cnt = 0;
+          if (N == 1) return 1;
+          if (N % 2 == 0) return 0;
+          memset(vis, 0, sizeof vis);
+          vis[1][1] = true; dfs(1, 1, 1);
+          return cnt;
+      }
+      ```
+
+      Still worst-case exponential, but the connectivity check removes almost
+      every hopeless branch: `n = 7` finishes in a few seconds and returns
+      **111712** ✓. This is the tier you'd submit.
+
+      **④ Alternative — subset / bitmask DP (for tiny boards)**
+
+      A completely different, bottom-up approach: count Hamiltonian paths with a
+      **mask DP** (Held–Karp style). `dp[mask][v]` = number of ways to have
+      visited exactly the cells in `mask`, ending at cell `v`. We extend by any
+      in-bounds neighbour not yet in the mask. This is a *different algorithm
+      family* than backtracking, but the state space is `2^(n²)` states, so it
+      is only usable for tiny boards (`n ≤ 3` practically); for `n = 7` it is
+      hopeless and DFS + pruning (tier ③) is the right tool.
+
+      ```cpp
+      long long solve(int n) {
+          if (n == 1) return 1;
+          int S = n * n, full = (1 << S) - 1;
+          auto id = [n](int r, int c) { return r * n + c; };
+          vector<vector<long long>> dp(1 << S, vector<long long>(S, 0));
+          dp[1 << 0][0] = 1;
+          for (int mask = 1; mask < (1 << S); ++mask)
+              for (int last = 0; last < S; ++last) {
+                  if (!(mask >> last & 1) || !dp[mask][last]) continue;
+                  int r = last / n, c = last % n;
+                  for (int k = 0; k < 4; ++k) {
+                      int nr = r + dr[k], nc = c + dc[k];
+                      if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+                      int ni = id(nr, nc);
+                      if (mask >> ni & 1) continue;
+                      dp[mask | (1 << ni)][ni] += dp[mask][last];
+                  }
+              }
+          long long ans = 0; int end = id(n - 1, n - 1);
+          for (int m = 0; m < (1 << S); ++m) if (m == full) ans += dp[m][end];
+          return ans;
+      }
+      ```
+
+      **O(n² · 2^(n²))** time, **O(n² · 2^(n²))** space — only meaningful for
+      tiny `n` (e.g. `n = 3` gives 2). For `n ≥ 5` the memory alone is
+      prohibitive, so this tier is included to illustrate the DP alternative,
+      not to submit.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The tiers build on each other; the final answer comes from tier ③.
+
+      - **Tier ① (brute).** `vis[r][c]` says the cell is already on the current
+        path; `placed` counts how many cells are on it. From each cell we try
+        the four in-bounds, unvisited neighbours — *mark*, *recurse*,
+        *unmark* — which is what makes it a backtracking search. The base case
+        adds to the count only when we stand on `(n-1,n-1)` *and* `placed ==
+        n*n`: entering the end early without covering the grid is invalid.
+      - **Tier ② (parity).** Every move flips `r+c` parity, so after `m` moves
+        we are on colour `(m mod 2)`. For even `n`, the two corners `(0,0)` and
+        `(n-1,n-1)` have the same colour but a full covering path needs `n²-1`
+        (odd) moves — contradiction. So even boards short-circuit to `0`.
+      - **Tier ③ (connectivity).** After committing to a move we flood the
+        remaining unvisited cells from an arbitrary seed; if they are not all
+        reachable (`reachable != tot`), the unvisited set is split and no
+        Hamiltonian completion exists, so we backtrack without recursing. The
+        goal cell is exempt because it may legitimately be the last cell
+        reached. This one check collapses the search tree.
+      - **Tier ④ (mask DP).** Subsets are indexed by bitmasks; extending a
+        state by an unused neighbour mirrors the DFS recursion but in
+        bottom-up order with no backtracking. Its value is conceptual — the
+        exponential-in-`n²` state count makes it impractical at `n = 7`.
+
+      Every tier is *correct*; they differ only in how fast they reach the same
+      count.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 3`. Start at `(0,0)` with `placed = 1`. The DFS tries
+      neighbours in order and backtracks when a branch is exhausted.
+
+      From `(0,0)` only `(1,0)` (down) and `(0,1)` (right) are in bounds.
+
+      - **Branch 1 — go down first.** `(0,0)→(1,0)→(2,0)→(2,1)→(1,1)→(0,1)→(0,2)→(1,2)→(2,2)`.
+        On stepping onto `(2,2)` all `9` cells are placed → `placed = 9`, so the
+        base case **counts it** (answer = 1).
+      - **Branch 2 — go right first.** Mirror image, also placing all `9` cells
+        on arrival → **counted** (answer = 2).
+      - **Rejected branches.** Any route reaching `(2,2)` after fewer than `9`
+        cells (e.g. `(0,0)→(0,1)→(0,2)→(1,2)→(2,2)`) fails the `placed == N*N`
+        check and is **not** counted. Branches that dead-end simply return
+        without adding.
+
+      | branch | cells placed at `(2,2)` | result |
+      |--------|--------------------------|--------|
+      | down-first (snake middle + end) | 9 | counted |
+      | right-first (mirror snake) | 9 | counted |
+      | short top-row run | 5 | rejected (too early) |
+
+      Final count returned: **2** ✓ (matches the sample). The same `2` is
+      produced by tier ④'s mask DP for `n = 3`.
+
+      **Input:** `n = 4`. `n` is even → tier ②'s parity shortcut returns `0`
+      without a single DFS step. **Input:** `n = 7` → the connectivity-pruned
+      tier ③ returns **111712**.
+
+      | n | parity condition | answer |
+      |---|------------------|--------|
+      | 1 | odd (trivial) | 1 |
+      | 3 | odd | 2 |
+      | 4 | even → 0 | 0 |
+      | 5 | odd | 104 |
+      | 7 | odd | 111712 |
+  - type: mcq
+    prompt: Why does the DFS immediately return 0 for even values of n?
+    options:
+      - Even-sized grids have too many cells to search in time
+      - 'The two corners (0,0) and (n-1,n-1) share the same chessboard colour, but any path between them must use an odd number of moves and flip colour an odd number of times — a contradiction'
+      - Even grids have no Hamiltonian paths because cells come in pairs
+      - The visited array cannot fit in memory for even n
+    answer: 1
+    explanation: 'Colour the board like a chessboard. (0,0) and (n-1,n-1) have equal r+c parity on even n, yet a full covering path from one to the other would need n^2-1 (an odd number) moves, each flipping the colour — it would end on the wrong colour. So the count is provably 0 for even n.'
+type: content
+---

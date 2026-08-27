@@ -1,0 +1,202 @@
+---
+id: hamming-distance
+title: Hamming Distance
+difficulty: medium
+order: 235
+tags:
+  - advanced-techniques
+  - hamming-distance
+  - bitmask
+  - brute-force
+blocks:
+  - type: markdown
+    content: |
+      # Hamming Distance — the minimum two bit strings differ
+
+      The **Hamming distance** between two equal-length strings `a, b` is the
+      number of positions where they differ. For bit strings this is exactly
+      the **popcount of their XOR**: `dist(a,b) = popcount(a XOR b)`. For two
+      strings we only need O(1) work per pair once each string fits in one
+      machine word (here `k ≤ 30`, so it does).
+
+      The problem asks for the **minimum** Hamming distance over all pairs, so
+      the goal is to make each *pair comparison* as cheap as possible and then
+      sweep all `n(n-1)/2` pairs.
+
+      **Two ideas matter here.**
+      1. **Bit-parallel comparison** — pack each string `s` of `k` bits into a
+         single 32-bit integer once, up front. Comparing two strings is then
+         `XOR` (O(1)) + `__builtin_popcount` (O(1) hardware instruction), not a
+         `k`-character loop.
+      2. **The search is small.** With `n ≤ 2·10^4`, there are at most
+         `~2·10^8` pairs. Each pair costs one `popcount`, which the CPU does in
+         a few cycles — the whole sweep is a few hundred milliseconds. This is
+         exactly the intended complexity: **O(n²)** word operations.
+
+      The brute-force O(n²·k) version replaces the O(1) popcount with a
+      `k`-step string walk, which is the same loop count but `k`× more work per
+      pair — fine for tiny inputs, ~30× too slow at the limit.
+
+      :::tip
+      **Interview tip:** the "Hamming distance = popcount(XOR)" identity is one
+      of the most questioned bit-manipulation facts in phone screens. Always
+      keep `bitset::_Find`-free reasoning available: `x ^ y` isolates differing
+      bits, and `__builtin_popcount` / `__builtin_popcountll` (or Kernighan's
+      loop) counts them. It shows up in LeetCode DNA-string / bitmask problems
+      and in design questions that compare binary descriptors.
+      :::
+  - type: markdown
+    content: |
+      # Question — Hamming Distance
+
+      The Hamming distance between two strings `a` and `b` of equal length is
+      the number of positions where the strings differ.
+
+      You are given `n` bit strings, each of length `k`, and your task is to
+      calculate the **minimum Hamming distance** between two strings.
+
+      **Input.** The first input line has two integers `n` and `k`: the number
+      of bit strings and their length. Then there are `n` lines each consisting
+      of one bit string of length `k`.
+
+      **Output.** Print the minimum Hamming distance between two strings.
+
+      **Constraints**
+      - `2 ≤ n ≤ 2·10^4`
+      - `1 ≤ k ≤ 30`
+
+      **Example**
+      ```
+      Input:
+      5 6
+      110111
+      001000
+      100001
+      101000
+      101110
+
+      Output:
+      1
+      ```
+      Explanation: the strings `101000` and `001000` differ only at the first
+      position, so their Hamming distance is 1 (which is minimal).
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — pairwise character walk, O(n²·k)**
+
+      For every pair, count differing positions by walking the strings
+      character by character.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,k; cin>>n>>k;
+          vector<string> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          int ans = k;
+          for(int i=0;i<n;i++)
+              for(int j=i+1;j<n;j++){
+                  int d=0;
+                  for(int p=0;p<k;p++) if(a[i][p]!=a[j][p]) d++;
+                  ans = min(ans, d);
+              }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n²·k)** time — with `n = 2·10^4, k = 30` that is ~6·10^9 character
+      comparisons, far past the 1 s limit. Correct but unusable.
+
+      **② Optimization — bit-parallel popcount, O(n²) (submission)**
+
+      Pack each string into an `int`, then `ans = min(ans, popcount(a[i]^a[j]))`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,k; if(!(cin>>n>>k)) return 0;
+          vector<int> a(n);
+          for(int i=0;i<n;i++){
+              string s; cin>>s;
+              int x=0;
+              for(char c: s){ x<<=1; if(c=='1') x|=1; }
+              a[i]=x;
+          }
+          int ans = k;
+          for(int i=0;i<n;i++)
+              for(int j=i+1;j<n;j++)
+                  ans = min(ans, __builtin_popcount(a[i]^a[j]));
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n²)** time, **O(n)** space. `k ≤ 30` guarantees the XOR result fits a
+      32-bit word, so each pair is one XOR + one hardware popcount → ~2·10^8
+      pairs at the limit, well inside the time budget. This is the submission.
+
+      **③ Further optimization — none needed; alternative viewpoint**
+
+      No asymptotic improvement beats O(n²) word comparisons here, because
+      `n(n-1)/2` distinct pairs of a general set must each be accounted for; the
+      constant is what matters and the XOR+popcount version already makes each
+      pair O(1). One genuinely *different* method is a **multi-source BFS over
+      the Hamming cube** — build the graph whose nodes are the `2^k` bit
+      patterns (edges = single-bit flips) and grow waves from every given
+      string until two waves from distinct sources meet; that is O(2^k·k) and
+      only wins for very small `k` (≤ ~20). For the given `k ≤ 30, n ≤ 2·10^4`,
+      the O(n²) bit-parallel sweep is the intended and cleanest answer.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **Empty answer = k.** The maximum possible Hamming distance is `k`
+        (all positions differ), so initialize `ans = k` and only ever shrink it.
+      - **Pack once.** Reading `110111` becomes `(1<<5)|(1<<4)|(1<<2)|(1<<1)|1`
+        — the integer whose bits mirror the string. Packing is O(k·n) total, a
+        one-time cost.
+      - **`a[i] ^ a[j]` isolates differences.** A set bit in the XOR means the
+        two strings differ there; `__builtin_popcount` sums them, O(1).
+      - **Symmetric pairs only.** The `j = i+1` loop visits each unordered pair
+        once; distance is symmetric so this is a 2× constant-factor saving.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n=5, k=6` and strings
+      `110111 001000 100001 101000 101110`.
+
+      Pack each string to an integer:
+
+      | string | value (binary) |
+      |--------|----------------|
+      | 110111 | 110111 |
+      | 001000 | 001000 |
+      | 100001 | 100001 |
+      | 101000 | 101000 |
+      | 101110 | 101110 |
+
+      `ans` starts at `k = 6`. Sweeping pairs (first notable ones):
+
+      - `001000 ^ 101000 = 100000` → popcount **1** → `ans = 1`.
+      - Every other pair is ≥ 1 (e.g. `110111 ^ 101110 = 011001` → popcount 3;
+        `100001 ^ 101000 = 001001` → popcount 2), so `ans` stays 1.
+
+      Output: **1** — matches the expected **1** (the compiled submission
+      prints `1`).
+  - type: mcq
+    prompt: 'Why is the Hamming distance between two bit strings computed as popcount(a XOR b) ?'
+    options:
+      - XOR keeps exactly the positions where the two bits differ, and popcount counts them
+      - XOR flips all bits, and popcount sums the common positions
+      - AND keeps the differing positions, and popcount divides them
+      - OR merges both strings and popcount subtracts the overlap
+    answer: 0
+    explanation: XOR yields a bit set to 1 exactly where the inputs differ (1^0=1 and 0^1=1, while 0^0=1^1=0). __builtin_popcount counts those set bits, which is precisely the number of differing positions — the Hamming distance. The entire trick is that this is a single machine operation rather than a k-character loop.

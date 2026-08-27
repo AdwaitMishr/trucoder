@@ -1,0 +1,259 @@
+---
+id: bit-substrings
+title: Bit Substrings
+difficulty: hard
+order: 389
+tags:
+  - additional
+  - combinatorics
+  - fft
+  - prefix-sums
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting substrings from zero-runs, then a convolution
+
+      We need, for every `k = 0…n`, the number of non-empty substrings containing
+      exactly `k` ones. The bit string is `0/1`; the naive scan is O(n²) which
+      is far too slow at `n ≤ 2·10⁵`. Two ideas combine to win.
+
+      **Idea 1 — decompose on the zero-runs.** Forget the bits; record only the
+      **length of every maximal run of zeros**, including the two ends. Suppose
+      the runs have lengths `z_0, z_1, …, z_m` (there are `m` ones, so `m+1`
+      zero-runs around them). Build
+
+      ```
+      Z[i] = z_i + 1            (i = 0..m)
+      ```
+
+      **Substrings with exactly `k ≥ 1` ones.** Such a substring is "anchored" on
+      a consecutive block of `k` ones. If that block is preceded by zero-run
+      `i` and followed by zero-run `i+k`, then the substring may start at any of
+      the `z_i + 1` positions (the `z_i` zeros plus the block's first `1`) and
+      end at any of the `z_{i+k} + 1` positions. So:
+
+      ```
+      ans[k] = Σ_i  Z[i] · Z[i+k]         (for k = 1..m)
+      ```
+
+      **Substrings with `k = 0` ones** are just the substrings that live entirely
+      inside one zero-run of length `z`: `z(z+1)/2` of them. Total:
+
+      ```
+      ans[0] = Σ_i  z_i(z_i+1) / 2
+      ```
+
+      **Idea 2 — convolution computes all `ans[k]` at once.** The sum
+      `Σ_i Z[i]·Z[i+k]` is the **self-correlation** of `Z`. A self-correlation
+      is a convolution: `conv(Z, reversed(Z))[m−k] = Σ_i Z[i]·Z[i+k]`. An FFT
+      computes all coefficients of a length-`(2m+1)` convolution in
+      `O(m log m)`, giving every `ans[1..m]` in a single pass.
+
+      :::tip
+      **Interview tip:** "Count pairs/elements at relative offset `k` for every
+      `k`" is the classic signal for a **correlation**, computed with **FFT** in
+      `O(n log n)` instead of `O(n²)`. The recogniser is: the answer for offset
+      `k` is a sum of products `A[i]·B[i+k]`, and you need *all* offsets.
+      Decomposing on maximal runs (here, zero-runs) turns a bit-string count into
+      exactly such a product-sum.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given a bit string of length `n`. Your task is to calculate for
+      each `k` between `0…n` the number of non-empty substrings that contain
+      exactly `k` ones.
+
+      For example, if the string is `101`, there are:
+      - 1 substring that contains 0 ones: `0`
+      - 4 substrings that contain 1 one: `01`, `1`, `1`, `10`
+      - 1 substring that contains 2 ones: `101`
+      - 0 substrings that contain 3 ones
+
+      **Input.** The only input line contains a binary string of length `n`.
+
+      **Output.** Print `n+1` values as specified above.
+
+      **Constraints**
+      - `1 ≤ n ≤ 2·10^5`
+
+      **Sample**
+
+      Input:
+      ```
+      101
+      ```
+
+      Output:
+      ```
+      1 4 1 0
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²).** Enumerate every substring, count its ones with a
+      running total, and increment the matching bucket. Correct, but there are
+      `n(n+1)/2 ≈ 2·10¹⁰` substrings at the limit — far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin>>s; int n=s.size();
+          vector<long long> ans(n+1,0);
+          for(int i=0;i<n;i++){ int ones=0;
+              for(int j=i;j<n;j++){ if(s[j]=='1') ones++; ans[ones]++; }
+          }
+          for(int k=0;k<=n;k++) cout<<ans[k]<<" \n"[k==n];
+      }
+      ```
+      *Complexity: O(n²) — at `n = 2·10⁵` this is ~4·10¹⁰ operations, multiple
+      orders of magnitude over the limit.*
+
+      **② Optimization — O(n) per k via zero-run products (still O(n²) total).**
+      First compute the zero-runs. For a *single fixed* `k`, `ans[k] = Σ_i
+      Z[i]·Z[i+k]` runs in `O(m)`; doing this for every `k` is `O(m²)` overall.
+      This removes the redundant ones-counting but leaves the quadratic
+      correlation.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin>>s; int n=s.size();
+          vector<ll> z; ll run=0;
+          for(char ch:s){ if(ch=='0') run++; else { z.push_back(run); run=0; } }
+          z.push_back(run); int m=(int)z.size()-1;   // m = number of ones
+          vector<ll> Z(m+1); for(int i=0;i<=m;i++) Z[i]=z[i]+1;
+          vector<ll> ans(n+1,0);
+          for(int i=0;i<=m;i++) ans[0]+=z[i]*(z[i]+1)/2;
+          for(int k=1;k<=m;k++){
+              ll sum=0;
+              for(int i=0;i+k<=m;i++) sum+=Z[i]*Z[i+k];
+              ans[k]=sum;
+          }
+          for(int k=0;k<=n;k++) cout<<ans[k]<<" \n"[k==n];
+      }
+      ```
+      *Complexity: O(m²) time — the inner convolution per `k` is still quadratic
+      (`m ≤ 2·10⁵`). Better, but not fast enough.*
+
+      **③ Further optimization — FFT — O(n log n).** The product-sums are the
+      self-correlation of `Z`; a single FFT convolution computes all of them.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      using cd = complex<double>;
+      const double PI = acos(-1);
+      void fft(vector<cd>&a,bool inv){
+          int n=a.size();
+          for(int i=1,j=0;i<n;i++){int bit=n>>1; for(;j&bit;bit>>=1)j^=bit; j^=bit; if(i<j)swap(a[i],a[j]);}
+          for(int len=2;len<=n;len<<=1){
+              double ang=2*PI/len*(inv?-1:1); cd w(cos(ang),sin(ang));
+              for(int i=0;i<n;i+=len){ cd cur=1;
+                  for(int j=0;j<len/2;j++){ cd u=a[i+j],v=a[i+j+len/2]*cur; a[i+j]=u+v; a[i+j+len/2]=u-v; cur*=w; } } }
+          if(inv) for(auto&x:a) x/=n;
+      }
+      vector<ll> conv(const vector<ll>&A,const vector<ll>&B){
+          int n=1; while(n<(int)(A.size()+B.size())) n<<=1;
+          vector<cd> fa(n),fb(n);
+          for(int i=0;i<(int)A.size();i++)fa[i]=A[i];
+          for(int i=0;i<(int)B.size();i++)fb[i]=B[i];
+          fft(fa,false); fft(fb,false);
+          for(int i=0;i<n;i++)fa[i]*=fb[i];
+          fft(fa,true);
+          vector<ll> r(n); for(int i=0;i<n;i++) r[i]=llround(fa[i].real());
+          return r;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin>>s; int n=s.size();
+          vector<ll> z; ll run=0;
+          for(char ch:s){ if(ch=='0') run++; else { z.push_back(run); run=0; } }
+          z.push_back(run); int m=(int)z.size()-1;
+          vector<ll> Z(m+1), Zr;
+          for(int i=0;i<=m;i++){ Z[i]=z[i]+1; Zr.push_back(Z[i]); }
+          reverse(Zr.begin(),Zr.end());
+          vector<ll> cc=conv(Z,Zr);          // cc[m-k] = sum_i Z[i]*Z[i+k]
+          vector<ll> ans(n+1,0);
+          for(int i=0;i<=m;i++) ans[0]+=z[i]*(z[i]+1)/2;
+          for(int k=1;k<=m;k++) ans[k]=cc[m-k];
+          for(int k=0;k<=n;k++) cout<<ans[k]<<" \n"[k==n];
+      }
+      ```
+      *Complexity: O(n log n) time, O(n) space — instant for `n ≤ 2·10⁵`.*
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n log n) via FFT self-correlation. Key lines:
+
+      1. **Zero-runs.** One pass over the string records every maximal run length
+         `z[i]` (including leading/trailing runs); `m` is the total number of
+         ones.
+      2. **`Z[i] = z[i] + 1`** are the "choices" at each boundary — how far a
+         substring can extend into a zero-run.
+      3. **`ans[0]`** = `Σ z[i](z[i]+1)/2`, substrings entirely inside one
+         zero-run.
+      4. **Convolution.** `conv(Z, reversed(Z))` — index `m−k` equals `Σ Z[i]·Z[i+k]`,
+         which is exactly `ans[k]`. All `m` values fall out of one FFT.
+      5. **Printing** `ans[0..n]` (values past `m` are `0`).
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `101` → expected `1 4 1 0`.
+
+      Zero-runs of `101`: `z = [0, 1, 0]`, so `m = 2` (ones), and
+      `Z = [1, 2, 1]`.
+
+      - `ans[0] = 0·1/2 + 1·2/2 + 0·1/2 = 1`. ✓ the single `0`.
+      - `ans[1] = Z[0]Z[1] + Z[1]Z[2] = 1·2 + 2·1 = 4`. ✓ (`01`, `1`, `1`, `10`).
+      - `ans[2] = Z[0]Z[2] = 1·1 = 1`. ✓ (`101`).
+      - `ans[3] = 0` (only 2 ones exist).
+
+      The convolution: `Z = [1,2,1]`, `rev(Z) = [1,2,1]`,
+      `conv = [1,4,6,4,1]`. For `k=1`: `cc[m−k] = cc[2−1] = cc[1] = 4` ✓.
+      For `k=2`: `cc[m−k] = cc[0] = 1` ✓.
+
+      Output: `1 4 1 0`. Matches the sample exactly.
+
+  - type: flowchart
+    title: "Bit Substrings via zero-run self-correlation"
+    nodes:
+      - Find all maximal zero-run lengths z[i] (m zeros-run count)
+      - Build Z[i] = z[i] + 1
+      - ans[0] = sum z[i](z[i]+1)/2
+      - FFT convolution Z with reversed(Z)
+      - ans[k] = cc[m-k] for k=1..m
+      - Print ans[0..n]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 1, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 2, to: 5, label: ""}
+      - {from: 4, to: 5, label: ""}
+
+  - type: mcq
+    prompt: "Why is the number of substrings with exactly k>=1 ones equal to sum_i Z[i]*Z[i+k] where Z[i] = (length of the i-th zero-run)+1?"
+    options:
+      - "A substring with exactly k ones must anchor on a block of k consecutive ones; it can start anywhere in the zero-run before that block and end anywhere in the zero-run after it, giving (run+1) choices of each end."
+      - "Because every substring contains a fixed number of zeros independent of k."
+      - "Because Z[i] counts the ones, not extensions."
+      - "Because the FFT stores the answer directly without any product sums."
+    answer: 0
+    explanation: "Take the block of k consecutive ones framed by the zero-run at position i on its left and position i+k on its right. To keep exactly those k ones the substring may start at any of the left run's z_i positions plus the first '1' (z_i+1 choices) and end at any of the right run's z_{i+k} positions plus that '1' (z_{i+k}+1 choices). Multiplying the two extension counts for each block and summing over all blocks yields exactly the number of distinct substrings containing precisely k ones. Hence ans[k] = Σ Z[i]*Z[i+k]."
+type: content
+---

@@ -1,0 +1,207 @@
+---
+id: counting-reorders
+title: Counting Reorders
+difficulty: medium
+order: 337
+tags:
+  - counting
+  - combinatorics
+  - inclusion-exclusion
+  - permutations
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — reorders of a multiset with no adjacent equal characters
+
+      We are given a string and must count distinct permutations (reorders) in
+      which **no two adjacent characters are equal**. This is a *multiset
+      permutation with a forbidden-adjacency constraint*, and the standard tool
+      is inclusion–exclusion where we **merge identical letters into blocks**.
+
+      **The block-merge idea.** Take one letter that appears `c` times. In a
+      candidate arrangement, group its `c` copies into `g` non-empty "runs"
+      (blocks) of consecutive copies. The number of ways to split `c` identical
+      copies into `g` non-empty identical groups is the stars-and-bars count
+      `C(c−1, g−1)`. Forcing the copies to sit in blocks is what the
+      inclusion–exclusion "violation" looks like: think of gluing the copies
+      together so that each block becomes one unit. By inclusion–exclusion we
+      sum over every number of blocks per letter:
+
+      ```
+      answer = Σ_{g1..gm} (Π_j C(c_j−1, g_j−1) · (−1)^{c_j−g_j})
+                          · (g1+…+gm)! / Π_j (g_j)!
+      ```
+
+      Here `m` is the number of distinct letters, `c_j` the count of letter `j`,
+      `g_j ∈ [1, c_j]` the number of blocks that letter's copies are split into,
+      the alternating factor `(−1)^{c_j−g_j}` is the inclusion–exclusion sign,
+      and the multinomial `(Σg)! / Π(g_j!)` counts the ways to arrange the blocks
+      (blocks of the same letter are indistinguishable, hence dividing by each
+      `g_j!`).
+
+      **Making it O(n²).** The full product over letters is too slow, but it
+      factors: process letters one at a time with a knapsack-style DP `dp[t]` =
+      the accumulated weight for arrangements using a total of `t` blocks so far,
+      `dp'[t+g_j] += dp[t] · C(c_j−1, g_j−1) · (−1)^{c_j−g_j} / g_j!`. At the end
+      `answer = Σ_t dp[t] · t!`.
+
+      :::tip
+      **Interview tip:** "How many ways to arrange a multiset so no two alike are
+      adjacent" (also "decorate a string / arrange people with disliked
+      neighbours") is the canonical application of *inclusion–exclusion with
+      block merging*. The signal to reach for it: the elements come in **types
+      with multiplicities**, and the forbidden pattern is only about equality,
+      not about ordering within a type. It turns up in word-arrangement and
+      scheduling interview problems.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Calculate the number of ways you can reorder the characters of a string so
+      that no two adjacent characters are the same. For example, the answer for
+      `aabc` is 6, because the possible orders are `abac`, `abca`, `acab`,
+      `acba`, `baca`, and `caba`.
+
+      **Input.** The only input line has a string that consists of `n` characters
+      between `a`–`z`.
+
+      **Output.** Print an integer: the answer modulo `10^9+7`.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 5000`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      aabc
+      ```
+
+      **Output:**
+      ```
+      6
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(P·n) where P = number of distinct permutations.**
+      Generate every distinct rearrangement with `sort` + `next_permutation`,
+      count those whose adjacent characters differ. Correct but `P` can be as
+      large as `n!`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          string s; cin>>s; long long cnt=0; sort(s.begin(),s.end());
+          do{ bool ok=true;
+              for(int i=0;i+1<(int)s.size();i++) if(s[i]==s[i+1]){ok=false;break;}
+              if(ok) cnt++;
+          }while(next_permutation(s.begin(),s.end()));
+          cout<<cnt<<"\n";
+      }
+      ```
+      *Complexity: O(P·n) — unusable for large `n`.*
+
+      **② Optimization — O(n²) block-merge inclusion–exclusion.** For each
+      distinct letter, choose how many blocks its copies break into; fold the
+      per-letter factor into a knapsack DP over the total block count `t`, then
+      multiply by `t!`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+      long long modpow(long long b,long long e){long long r=1;while(e){if(e&1)r=r*b%MOD;b=b*b%MOD;e>>=1;}return r;}
+      int main(){
+          string s; if(!(cin>>s)) return 0;
+          int n=s.size();
+          vector<long long> f(n+1,1), fi(n+1,1);
+          for(int i=1;i<=n;i++) f[i]=f[i-1]*i%MOD;
+          fi[n]=modpow(f[n],MOD-2); for(int i=n;i>0;i--) fi[i-1]=fi[i]*i%MOD;
+          auto C=[&](int a,int b)->long long{ if(b<0||b>a)return 0; return f[a]*fi[b]%MOD*fi[a-b]%MOD; };
+          vector<int> cnt(26,0); for(char ch:s) cnt[ch-'a']++;
+          vector<int> cnts; for(int c:cnt) if(c>0) cnts.push_back(c);
+          vector<long long> dp(n+1,0); dp[0]=1;
+          int used=0;
+          for(int c:cnts){
+              vector<long long> ndp(n+1,0);
+              for(int g=1;g<=c;g++){                     // g blocks for this letter
+                  long long w=C(c-1,g-1)*fi[g]%MOD;      // split c copies into g blocks / g!
+                  if((c-g)&1) w=(MOD-w)%MOD;             // IE sign (-1)^{c-g}
+                  for(int t=0;t<=used;t++) if(dp[t]) ndp[t+g]=(ndp[t+g]+dp[t]*w)%MOD;
+              }
+              dp.swap(ndp); used+=c;
+          }
+          long long ans=0;
+          for(int t=0;t<=n;t++) ans=(ans+dp[t]*f[t])%MOD;   // merge blocks: t! arrangements of t blocks
+          cout<<ans%MOD<<"\n";
+      }
+      ```
+      *Complexity: O(n²) time (≤ 26 letters), O(n) space — instant for `n ≤ 5000`.*
+
+      **④ Alternative / note.** The same answer is reached by a direct
+      "arrange then force-merge" viewpoint, but the block-merge inclusion–exclusion
+      above is already optimal for this constraint; the only remaining idea is
+      the knapsack-by-block-count DP itself. No faster asymptotically exact
+      approach is known for `n ≤ 5000`.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(s)` — the O(n²) block-merge inclusion–exclusion. Key lines:
+
+      1. **`cnt[]` → `cnts`** collects the multiplicities of the letters that
+         appear.
+      2. **Per-letter factor.** For letter count `c` and `g` blocks,
+         `C(c-1,g-1)` = ways to split `c` identical copies into `g` non-empty
+         runs; multiply by the IE sign `(−1)^{c−g}` and divide by `g!` (blocks of
+         the same letter are indistinguishable). `w` carries all of that.
+      3. **Knapsack.** `dp[t]` accumulates the product of all per-letter factors
+         for arrangements whose block counts sum to `t`. Each letter adds its
+         own factor as a bounded convolution.
+      4. **Reassemble.** `Σ_t dp[t]·t!` — the `t!` arranges the `t` distinguishable
+         blocks (different letters → distinguishable; the `1/g_j!` already
+         handled the equal-letter blocks). The alternating signs made the answer
+         the *valid* count, not the over-count.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `aabc`. Distinct letters `a` (count 2), `b` (1), `c` (1).
+      `f[t]=t!`, `fi[g]=1/g!`.
+
+      Process letters:
+
+      - **letter `a`, c=2:** `g=1` → `w = C(1,0)·fi[1]·(−1)^{1} = −1`;
+        `g=2` → `w = C(1,1)·fi[2]·(+1)^{0} = 1/2`. So after `a`:
+        `dp[1]=−1`, `dp[2]=1/2`.
+      - **letter `b`, c=1:** only `g=1`, `w = C(0,0)·fi[1]·(−1)^{0}=1`.
+        `dp'[t+1] += dp[t]` → `dp'[2] = dp[1] = −1`, `dp'[3] = dp[2] = 1/2`.
+      - **letter `c`, c=1:** same shift → `dp[3] = −1`, `dp[4] = 1/2`.
+
+      Reassemble: `Σ dp[t]·t! = dp[3]·3! + dp[4]·4! = (−1)·6 + (1/2)·24 = −6 + 12 = 6`.
+      ✓ matches the sample.
+
+      **Why the tiers agree.** The brute force (①) enumerates the 6 valid
+      reorders `abac, abca, acab, acba, baca, caba`; the O(n²) DP (②) computes
+      the same `6` through the inclusion–exclusion above.
+
+  - type: mcq
+    prompt: "In the block-merge formula, why do we divide by g! for each letter and multiply by t! at the end?"
+    options:
+      - "Because blocks of the same letter are indistinguishable, but blocks of different letters are distinguishable."
+      - "Because every block must be its own letter to be valid."
+      - "Because the alternating sign cancels the factorial."
+      - "Because g! is the number of gaps in the string."
+    answer: 0
+    explanation: "t = Σg is the total number of blocks. The t! counts the ways to sequence all blocks, but it over-counts by treating equal-letter blocks as distinct; dividing each letter's contribution by g_j! corrects for that. Different letters produce distinguishable blocks, which is exactly why outside the per-letter product we only multiply by t!, not by any per-letter factor."
+
+type: content
+---

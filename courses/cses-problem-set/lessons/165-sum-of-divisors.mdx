@@ -1,0 +1,219 @@
+---
+id: sum-of-divisors
+title: "Sum of Divisors"
+type: content
+difficulty: medium
+order: 165
+tags:
+  - floor-division
+  - number-theory
+  - modular-arithmetic
+blocks:
+  - type: markdown
+    content: |
+      # Sum of Divisors — reorder the sum and group equal quotients
+
+      Let `σ(n)` be the sum of divisors of `n` (e.g. `σ(12) = 1+2+3+4+6+12 =
+      28`). We must compute `Σ_{i=1}^{n} σ(i)` modulo `10^9+7`, for `n` up to
+      `10^12`. Iterating over all `i` and factoring each one is out of the
+      question — `n` is a trillion.
+
+      The reordering that saves us: instead of summing *over the numbers that
+      are divided*, sum *over the divisors*. A given divisor `d` divides
+      exactly the numbers `d, 2d, 3d, ..., ⌊n/d⌋*d` — there are `⌊n/d⌋` of
+      them. So `d` contributes a total of `d * ⌊n/d⌋` to `Σ σ(i)`:
+
+      ```
+      Σ_{i=1}^{n} σ(i)  =  Σ_{d=1}^{n}  d * ⌊n/d⌋
+      ```
+
+      This is still a sum of `n` terms — but now notice `⌊n/d⌋` takes only a
+      **few distinct values**. As `d` grows, `⌊n/d⌋` stays constant over long
+      ranges. If `⌊n/d⌋ = q` for all `d` in `[l, r]`, then that whole range
+      contributes `q * (sum of d from l to r)`.
+
+      The ranges are found by `r = ⌊n / ⌊n/l⌋⌋`, and only `O(√n)` of them
+      exist. With `n = 10^12`, `√n = 10^6` ranges — easily computed.
+
+      **Time:** `O(√n)`. **Space:** `O(1)`.
+
+      :::tip
+      **Interview tip:** `Σ d·⌊n/d⌋` and its relatives (`Σ ⌊n/d⌋`, `Σ f(d)·⌊n/d⌋`)
+      all share one trick: `⌊n/d⌋` changes value only `O(√n)` times, and each
+      *block* of constant value can be summed in `O(1)` with the arithmetic
+      series formula. Whenever you see a sum whose inner term has a floor
+      quotient, reach for **divisor-block grouping** to shrink `O(n)` to
+      `O(√n)`.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Let `σ(n)` denote the sum of divisors of an integer `n`. For example,
+      `σ(12)=1+2+3+4+6+12=28`.
+
+      Your task is to calculate the sum `Σ_{i=1}^n σ(i)` modulo `10^9+7`.
+
+      ## Input
+
+      The only input line has an integer `n`.
+
+      **Constraints**
+
+      - `1 <= n <= 10^12`
+
+      ## Output
+
+      Print `Σ_{i=1}^n σ(i)` modulo `10^9+7`.
+
+      ## Example
+
+      Input:
+
+      ```
+      5
+      ```
+
+      Output:
+
+      ```
+      21
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — sum divisor lists per i, O(n √n)**
+
+      For each `i`, trial-divide up to `√i` to collect its divisors, then sum
+      them. With `n = 10^12` this is beyond reach — roughly `n·√n` operations.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll P = 1000000007;
+      int main(){ // reference — infeasible for the real bound
+          ll n; cin>>n; ll ans = 0;
+          for(ll i = 1; i <= n; i++){
+              ll s = 0;
+              for(ll d = 1; d*d <= i; d++) if(i % d == 0) s += d + (d*d==i ? 0 : i/d);
+              ans = (ans + s) % P;
+          }
+          cout << ans << "\n";
+      }
+      ```
+
+      *`O(n √n)` — impossible for `n = 10^12`.*
+
+      **② Optimization — reorder as Σ d·⌊n/d⌋ and group equal quotients, O(√n)**
+
+      Use the divisor-sum reordering, then group the ranges where `⌊n/d⌋` is
+      constant. This is the optimal tier.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll P = 1000000007;
+
+      ll inv2 = 500000004;                // 2^(-1) mod P
+      ll sumRange(ll l, ll r){            // (l + (l+1) + ... + r) mod P
+          return ((l + r) % P) * ((r - l + 1) % P) % P * inv2 % P;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          ll n; cin>>n;
+          ll ans = 0;
+          for(ll l = 1, r; l <= n; l = r + 1){
+              ll q = n / l;               // constant value of floor(n/d) on [l, r]
+              r = n / q;
+              ans = (ans + sumRange(l, r) * (q % P)) % P;
+          }
+          cout << ans << "\n";
+      }
+      ```
+
+      *`O(√n)` — with `n = 10^12`, `√n = 10^6` blocks. `O(1)` space.*
+
+      **③ Further optimization — already optimal**
+
+      `O(√n)` is the standard (and effectively optimal) bound for this family
+      of floor-quotient sums; there is no faster general way to sum `Σ d·⌊n/d⌋`
+      than grouping the constant-quotient blocks.
+
+      **④ Alternative algorithm — none meaningful**
+
+      Every correct solution ultimately relies on the same divisor-block
+      grouping — whether it iterates blocks left-to-right (`l` forward) or
+      right-to-left (`l` starting at `n`), the block structure is inherent to
+      `⌊n/d⌋`. There is no simpler or different technique, so tier ② is simply
+      the canonical answer. (A segment-tree or totient/zeta transform could
+      compute the same sum over many queries at once, but for a single `n` the
+      block loop is the right tool.)
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on **②**:
+
+      - **The reordering.** Every `i` (a number being divided) receives a
+        contribution from each of its divisors `d`. Counting across divisors
+        instead: divisor `d` divides the numbers `d, 2d, ..., ⌊n/d⌋·d`, so it
+        is a divisor of exactly `⌊n/d⌋` numbers in `[1, n]`. Hence
+        `Σ_i σ(i) = Σ_d d·⌊n/d⌋`.
+
+      - **`q = n / l` and `r = n / q`.** For `d` in `[l, r]`, `⌊n/d⌋ = q` stays
+        fixed (`q = ⌊n/l⌋`, and `r` is the largest index where the quotient is
+        still `q`). The chunk contributes `q * Σ_{d=l}^{r} d`.
+
+      - **`sumRange(l, r)`.** The arithmetic series `l + (l+1) + ... + r`
+        computed as `(l+r)(r-l+1)/2` under modular inverse of `2` — so no
+        overflow and no floating point.
+
+      - **Why only `O(√n)` blocks.** `⌊n/d⌋` takes values `1..√n` for the
+        small-quotient range and `√n` distinct large values for
+        `d <= √n` — in total `O(√n)` distinct quotients, hence `O(√n)` blocks.
+
+      - **Modular care.** `ans`, `l`, `r`, `q` are reduced mod `P` at every
+        step; the true answer is far beyond 64 bits, which is exactly why the
+        problem asks for the result modulo `10^9+7`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace **②** on the sample `n = 5`:
+
+      | l | q = 5/l | r = 5/q | block d range | contribution |
+      |---|---------|---------|---------------|--------------|
+      | 1 | 5 | 1 | {1} | `1·5 = 5` |
+      | 2 | 2 | 2 | {2} | `2·2 = 4` |
+      | 3 | 1 | 5 | {3,4,5} | `1·(3+4+5) = 12` |
+
+      Total `5 + 4 + 12 = 21`.
+
+      Checking by definition: `σ(1)=1, σ(2)=3, σ(3)=4, σ(4)=7, σ(5)=6`;
+      sum `1+3+4+7+6 = 21`. ✓
+
+      Expected (sample) — `21`. Actual — `21`. Match.
+  - type: flowchart
+    title: "Sum Σ d·floor(n/d) by grouping blocks"
+    nodes: ["read n; ans = 0", "l = 1", "l > n? (done)", "q = n/l; r = n/q", "add sumRange(l,r)*q to ans (mod P)", "l = r + 1", "print ans"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 6, label: "yes"}
+      - {from: 2, to: 3, label: "no"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 2}
+  - type: mcq
+    prompt: "Why does grouping equal quotients shrink Σ_{d=1}^{n} d·⌊n/d⌋ from O(n) to O(√n)?"
+    options:
+      - "Because every quotient ⌊n/d⌋ is a multiple of d."
+      - "Because ⌊n/d⌋ takes only O(√n) distinct values over d = 1..n, and each constant-value block [l,r] yields its whole contribution (Σ d over the block) in O(1) with the arithmetic-series formula."
+      - "Because n is at most 10^6 here."
+      - "Because the sum only runs over prime divisors."
+    answer: 1
+    explanation: "⌊n/d⌋ is piecewise constant; it can change at most O(√n) times (values 1..√n for large d, then √n distinct values for small d). Each block [l,r] where it equals q contributes q·Σ_{d=l}^{r} d, computable in O(1) via (l+r)(r-l+1)/2. So the whole loop runs O(√n) blocks instead of n terms."
+---

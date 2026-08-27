@@ -1,0 +1,246 @@
+---
+id: maximum-xor-subarray
+title: "Maximum XOR Subarray"
+type: content
+difficulty: medium
+order: 277
+tags:
+  - xor
+  - binary-trie
+  - prefix-xor
+  - greedy
+blocks:
+  - type: markdown
+    content: |
+      # Maximum XOR Subarray — the binary trie of prefix xors
+
+      Given an array, we want the **largest xor value of any contiguous
+      subarray**. Subarray xors obey a beautiful reduction: if `p[i]` is the xor
+      of the first `i` elements (a *prefix*) with `p[0] = 0`, then the xor of any
+      subarray `a[l..r]` is exactly
+
+      ```
+      p[r] ^ p[l-1]        (with l-1 = 0 when the subarray starts at index 1)
+      ```
+
+      Why? XOR is its own inverse (`x ^ x = 0`), so the elements before `l`
+      appear in both `p[r]` and `p[l-1]` and cancel. Therefore
+
+      **max subarray xor = max over every pair of prefixes of (p[i] ^ p[j]).**
+
+      We inserted `p[0] = 0` into the prefix list, so the "single number" case
+      (a subarray of length 1) is naturally included as `p[r] ^ p[0]`.
+
+      ## Finding the best partner with a binary trie
+
+      We want, for each prefix `x = p[i]`, the stored prefix `y` (from an earlier
+      index) that maximizes `x ^ y`. XOR is maximized bit-by-bit starting from the
+      most significant bit: at each bit we *prefer the opposite* of `x`'s bit,
+      because that flips the bit to `1`. A **binary trie** (a 31-deep tree with one
+      child per bit value `0/1`) answers "which stored number gives the max xor
+      with `x`" in `O(31)` by walking the tree greedily — always descending toward
+      the opposite bit when it exists.
+
+      We build the trie incrementally: insert a prefix, then for every later
+      prefix we query — which guarantees the pair is ordered (`l-1 ≤ r`), so every
+      candidate is a genuine non-empty subarray.
+
+      This whole technique is the textbook starting point for "given x, find the
+      element with maximum xor" — it shows up whenever a problem reduces to a
+      range/prefix xor query.
+
+      :::tip
+      **Interview tip:** "maximum xor of a subarray" is the classic tell for
+      **prefix xors + a binary trie**. Say the moment you see it: "subarray xor =
+      prefix xor difference, so this is max pair-xor over prefixes, which a bit
+      trie answers greedily in O(31) per prefix." A common follow-up asks you to
+      *count* subarrays with xor equal to a given value — same prefix idea, but
+      with a HashMap of prefix parities instead of a trie.
+      :::
+
+      Time: `O(31·n)`. Space: `O(31·n)` in the worst case for the trie (shared
+      prefix nodes make it much smaller in practice).
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given an array of `n` integers. Find the **maximum xor** of any
+      contiguous subarray.
+
+      ## Input
+
+      The first line contains an integer `n`: the length of the array. The second
+      line contains `n` integers `a1, a2, …, an`.
+
+      **Constraints:** `2 ≤ n ≤ 2·10^5`, `0 ≤ ai ≤ 10^9`.
+
+      ## Output
+
+      Print one integer: the maximum xor obtainable by some contiguous subarray.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4
+      8 1 2 12
+      ```
+      **Output:**
+      ```
+      15
+      ```
+      The subarray `1 2 12` (indices 2..4) has xor `1 ^ 2 ^ 12 = 15`, the maximum
+      possible.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n² · 31)**
+
+      Enumerate every starting index `l` and extend `r` one cell at a time,
+      maintaining the running xor of `a[l..r]`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin >> n; vector<int>a(n);
+          for (int &x : a) cin >> x;
+          long long ans = 0;
+          for (int l = 0; l < n; ++l){
+              int cur = 0;
+              for (int r = l; r < n; ++r){      // extend the subarray
+                  cur ^= a[r];                   // xor of a[l..r]
+                  ans = max(ans, (long long)cur);
+              }
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      *Correct, but there are `n(n+1)/2 ≈ 2·10^10` subarrays at `n = 2·10^5` —
+      far beyond the time limit.*
+
+      **② Optimization — prefix xors + binary trie, O(31·n) (optimal)**
+
+      Build the trie of prefixes as we scan. For each new prefix, find its
+      max-xor partner already in the trie, update the answer, then insert it.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct Node { int ch[2]; Node(){ ch[0]=ch[1]=-1; } };
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin >> n; vector<int> a(n);
+          for (int &x : a) cin >> x;
+
+          vector<Node> trie(1);
+          auto ins = [&](int x){
+              int cur = 0;
+              for (int b = 30; b >= 0; --b){
+                  int bit = (x >> b) & 1;
+                  if (trie[cur].ch[bit] < 0){
+                      trie[cur].ch[bit] = (int)trie.size();
+                      trie.push_back(Node());
+                  }
+                  cur = trie[cur].ch[bit];
+              }
+          };
+          auto best = [&](int x){
+              int cur = 0, res = 0;
+              for (int b = 30; b >= 0; --b){
+                  int bit = (x >> b) & 1, want = bit ^ 1;   // opposite bit first
+                  if (trie[cur].ch[want] >= 0){
+                      res |= (1 << b);        // this bit of the xor becomes 1
+                      cur = trie[cur].ch[want];
+                  } else {
+                      cur = trie[cur].ch[bit];
+                  }
+              }
+              return res;
+          };
+
+          int ans = 0, pre = 0;
+          ins(0);                        // prefix[0] = 0 lets a[i] form its own subarray
+          for (int i = 0; i < n; ++i){
+              pre ^= a[i];               // prefix xor p[i]
+              ans = max(ans, best(pre));
+              ins(pre);
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(31·n)` time, worst-case `O(31·n)` trie space. This is the tier we
+      compile and verify.*
+
+      **③ and ④ — no meaningful further tier**
+
+      The binary trie is `O(31·n)`; any correct algorithm must read all `n`
+      numbers, so this is optimal up to the fixed 31-bit factor. A persistent
+      trie or an offline segment tree would solve a *versioned* variant but add
+      nothing here. There is no simpler correct alternative that beats the trie,
+      so we stop at tier ②.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`pre` is the running prefix xor.** `pre` starts at `0` and is xored with
+        `a[i]` each step, so before processing index `i` it equals `p[i]`.
+      - **`ins(0)` seeds the empty prefix.** `p[0] = 0` means a single-element
+        subarray `[a[i]]` equals `p[i] ^ p[0]`, so it is always considered.
+      - **`best(pre)` greedily walks 31 levels.** At each level it prefers the
+        child whose bit is `opposite` to `pre`'s bit — that makes the xor bit `1`.
+        `res |= (1 << b)` records each `1` acquired. If the wanted child is absent
+        it takes the same-bit child (xor bit stays `0`).
+      - **Query-then-insert preserves order.** Because we insert `pre` *after*
+        querying it, the trie only ever holds prefixes from earlier indices — so
+        `best(pre)` finds `p[j]` with `j < i`, giving a valid non-empty subarray.
+      - **`ans` tracks the global maximum** across all `i`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 4`, array `8 1 2 12`.
+
+      Prefixes: `p0 = 0`, `p1 = 8`, `p2 = 8^1 = 9`, `p3 = 9^2 = 11`,
+      `p4 = 11^12 = 7`.
+
+      - Start: `trie = {0}`, `ans = 0`.
+      - `i=0`: `pre = 8`. `best(8)` vs `0` → `8`. `ans = 8`. Insert `8`.
+      - `i=1`: `pre = 9`. `best(9)` vs `{0,8}` → best is `9^8 = 1`. `ans` stays 8.
+        Insert `9`.
+      - `i=2`: `pre = 11`. `best(11)` vs `{0, 8, 9}` → `11^8 = 3`, `11^9 = 2`,
+        `11^0 = 11` → best `11`. `ans = 11`. Insert `11`.
+      - `i=3`: `pre = 7`. `best(7)` vs `{0, 8, 9, 11}` → `7^11 = 12`, `7^8 = 15`,
+        `7^9 = 14`, `7^0 = 7` → best `15`. `ans = 15`.
+
+      Final answer `15`, matching the sample. Greedy trie descent reproduces that
+      same `7 ^ 8 = 15` (search descends for opposite bits and finds `8 = 1000₂`
+      against `7 = 0111₂`, flipping every bit to `1`).
+  - type: flowchart
+    title: "Maximum subarray XOR via prefix trie"
+    nodes: ["prefix list p[] with p[0]=0", "subarray xor = p[r] ^ p[l-1]", "problem = max pair-xor over prefixes", "insert prefix 0 into binary trie", "for each next prefix: greedy-query trie", "update ans, insert this prefix", "print ans"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 4, label: "next prefix"}
+      - {from: 5, to: 6}
+  - type: mcq
+    prompt: "Why must we query the trie before inserting the current prefix?"
+    options:
+      - "Inserting first would let the trie return the element itself, always giving xor 0 and making the answer wrong."
+      - "Querying first guarantees the matched prefix comes from an earlier index, so p[i]^p[j] represents a genuine non-empty subarray with j < i."
+      - "The trie requires a sorted insert order to work correctly."
+      - "We have no reason to; order does not matter for the maximum."
+    answer: 1
+    explanation: "A subarray a[l..r] maps to p[r] ^ p[l-1] with l-1 < r. If we inserted the current prefix before querying, the trie could pair p[i] with itself (xor 0) or with a later prefix, which is not a valid subarray (l-1 would sit after r). Inserting after the query forces every candidate partner to come from an earlier index, so all enumerated pairs correspond to real contiguous subarrays."
+---

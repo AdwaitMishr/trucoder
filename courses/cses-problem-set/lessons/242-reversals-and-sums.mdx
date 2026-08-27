@@ -1,0 +1,251 @@
+---
+id: reversals-and-sums
+title: Reversals and Sums
+difficulty: hard
+order: 242
+tags:
+  - implicit-treap
+  - lazy-tag
+  - range-sum
+  - sqrt-decomposition
+blocks:
+  - type: markdown
+    content: |
+      # Reversals and Sums — adding a range aggregate to the implicit treap
+
+      This problem extends Substring Reversals: you now interleave **reversal**
+      operations with **range-sum queries** on the same mutable array. Reverse
+      the slice `[a, b]` *or* ask "what is the sum of values in `[a, b]`?" — up
+      to `m = 10^5` operations on an array of up to `n = 2·10^5`.
+
+      Because a reversal changes *which* element sits at *which* position, a
+      Fenwick tree or a plain segment tree (whose indices are frozen) cannot
+      answer the sum correctly — the array keeps physically reordering
+      underneath them.
+
+      **The core idea — same treap, one new aggregate.** Use the **implicit
+      treap** from the previous lesson. Its nodes already store `sz` (subtree
+      size) to recover implicit positions. We add one more aggregate: **`sum`**
+      = sum of the values in the subtree. Now:
+
+      - **Reverse** `[a, b]` → split + toggle lazy `rev` flag + merge, exactly
+        as before.
+      - **Query** `sum[a, b]` → split out the slice `[a, b]` and read `sum` of
+        that single node, then merge back.
+
+      Both are `O(log n)`. The single most important discipline: **`pull`
+      (recompute `sz` and `sum` from children) must run after every structural
+      change, and `push` (propagate the lazy `rev` flag) must run before every
+      descent.** The order of those two calls is what keeps sizes, sums, and the
+      lazy reversals all consistent at the same time.
+
+      **Complexity.** Each operation is `O(log n)`, so the whole program runs in
+      **O((n + m) log n)** time and **O(n)** space.
+
+      :::tip
+      **Interview tip:** whenever you must support *range reversal or rotation*
+      **plus** a range aggregate (sum, min, or another list), reach for the
+      implicit treap and the pull/push pair: `pull` fixes aggregates after
+      `merge`/`split`, and `push` guarantees lazy flags never leak. Naming those
+      two responsibilities out loud is exactly the signal an interviewer is
+      listening for.
+      :::
+  - type: markdown
+    content: |
+      # Question — Reversals and Sums
+
+      Given an array of `n` integers, you have to process the following
+      operations:
+
+      1. reverse a subarray
+      2. calculate the sum of values in a subarray
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ m ≤ 10^5`
+      - `0 ≤ x_i ≤ 10^9`
+      - `1 ≤ a ≤ b ≤ n`
+
+      **Input.** The first input line has two integers `n` and `m`: the size of
+      the array and the number of operations. The array elements are numbered
+      `1,2,…,n`. The next line has `n` integers `x_1,x_2,…,x_n`: the contents of
+      the array. Finally, there are `m` lines that describe the operations. Each
+      line has three integers `t, a, b`. If `t = 1`, you should reverse a
+      subarray from `a` to `b`. If `t = 2`, you should calculate the sum of
+      values from `a` to `b`.
+
+      **Output.** Print the answer to each operation where `t = 2`.
+
+      Sample input:
+
+      ```
+      8 3
+      2 1 3 4 5 3 4 4
+      2 2 4
+      1 3 6
+      2 2 4
+      ```
+
+      Sample output:
+
+      ```
+      8
+      9
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — direct array simulation, O(m·n)**
+
+      Keep the array in a `std::vector`. A reversal is `std::reverse` on the
+      slice (`O(n)`), and a sum is a `std::accumulate` over the slice (`O(n)`).
+      With `m = 10^5` and `n = 2·10^5` this can cost `2·10^10` element touches:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      int main(){ // too slow: O(m * n)
+          int n, m; cin >> n >> m;
+          vector<ll> a(n);
+          for (auto& v : a) cin >> v;
+          while (m--){ int t, l, r; cin >> t >> l >> r; // 1-indexed
+              if (t == 1) reverse(a.begin() + l - 1, a.begin() + r);
+              else { ll s = 0; for (int i = l - 1; i < r; ++i) s += a[i]; cout << s << "\n"; }
+          }
+      }
+      ```
+
+      **O(m·n)** — correct, far too slow.
+
+      **② Optimization — implicit treap with `sum`, O((n + m) log n)
+      (submission)**
+
+      Each node stores `val`, the subtree `sum`, the subtree `sz`, and a lazy
+      `rev` flag. `sum` is maintained by `pull`. To reverse or query a slice, we
+      split it out, act on it as a single node, and merge back.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      struct Node {
+          ll val, sum; int sz, pr; bool rev;
+          Node *l, *r;
+          Node(ll v) : val(v), sum(v), sz(1), pr(rand()), rev(false), l(nullptr), r(nullptr) {}
+      };
+      int sz(Node* t){ return t ? t->sz : 0; }
+      ll  sum(Node* t){ return t ? t->sum : 0; }
+      void push(Node* t){             // propagate lazy reversal before descending
+          if (!t || !t->rev) return;
+          swap(t->l, t->r);
+          if (t->l) t->l->rev = !t->l->rev;
+          if (t->r) t->r->rev = !t->r->rev;
+          t->rev = false;
+      }
+      void pull(Node* t){             // recompute aggregates after any change
+          if (!t) return;
+          t->sz  = 1 + sz(t->l)  + sz(t->r);
+          t->sum = t->val + sum(t->l) + sum(t->r);
+      }
+      void split(Node* t, int k, Node*& a, Node*& b){
+          if (!t){ a = b = nullptr; return; }
+          push(t);
+          if (sz(t->l) >= k){ split(t->l, k, a, t->l); b = t; }
+          else { split(t->r, k - sz(t->l) - 1, t->r, b); a = t; }
+          pull(t);
+      }
+      Node* merge(Node* a, Node* b){
+          if (!a) return b; if (!b) return a;
+          if (a->pr < b->pr){ push(a); a->r = merge(a->r, b); pull(a); return a; }
+          push(b); b->l = merge(a, b->l); pull(b); return b;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          srand(12345);
+          int n, m; cin >> n >> m;
+          Node* root = nullptr;
+          for (int i = 0; i < n; ++i){ ll v; cin >> v; root = merge(root, new Node(v)); }
+          while (m--){ int t, a, b; cin >> t >> a >> b;  // 1-indexed inclusive
+              Node *A, *B, *C, *D;
+              split(root, a - 1, A, B);
+              split(B, b - a + 1, C, D);                 // C = slice [a, b]
+              if (t == 1){
+                  if (C) C->rev = !C->rev;
+              } else {
+                  cout << sum(C) << "\n";
+              }
+              root = merge(merge(A, C), D);
+          }
+          return 0;
+      }
+      ```
+
+      **O((n + m) log n)** time, **O(n)** space. This is the submission tier.
+
+      **③ Alternative — sqrt decomposition with per-block order and sums**
+
+      Split the array into `O(√n)` blocks, each with its own `sum` and `rev`
+      flag. A reversal toggles the flags on whole blocks and reverses the pieces
+      of the (≤ 2) boundary blocks. A sum query is: sum the boundary pieces
+      position-by-position and add each whole middle block's stored `sum`. Each
+      operation is `O(√n)`, giving **O((n + m)·√n)** overall — a solid
+      no-heap fallback that still fits `n = 2·10^5` in the time limit.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **The aggregate `sum`.** `pull` recomputes `sz` and `sum` from the two
+        children plus `val`. Because `merge` and `split` both end with a `pull`,
+        every node's `sum` is always valid — so reading `sum(C)` after splitting
+        out the slice is exactly "sum of `[a, b]`".
+      - **`push` before descent, `pull` after.** `push` is called at the top of
+        `split` and `merge` (and in `swap`-driven propagation) so lazy reversals
+        are materialised before we look at a node's children. `pull` runs at the
+        end of the same two functions so sizes/sums reflect the newest children.
+        Getting this order wrong silently corrupts results on nested reversals.
+      - **Reversal and query share a skeleton.** Both split into `A|C|D`, act on
+        `C` (toggle flag *or* read `sum`), and merge back. The only difference is
+        what "act on C" means — which is the point: reversal is a *mutation*
+        query and sum is a *read* query over the same slice abstraction.
+      - **`long long` for sums.** Each `x_i` can be `10^9` and a slice can hold
+        `2·10^5` of them, so a slice sum is up to `2·10^14` — well beyond 32-bit.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 8, m = 3`, array `2 1 3 4 5 3 4 4` (indices 1–8).
+
+      **Op 1 — `t=2 2 4` (sum positions 2..4).** Values at indices 2, 3, 4 are
+      `1, 3, 4`. Splitting out `[2,4]` and reading `sum(C)` gives `8`. Print
+      **`8`**.
+
+      **Op 2 — `t=1 3 6` (reverse positions 3..6).** Slice `[3,6]` = `3 4 5 3`;
+      toggle `rev`, merge back. The array becomes `2 1 3 5 4 3 4 4`
+      (`3 4 5 3` reversed to `3 5 4 3`).
+
+      **Op 3 — `t=2 2 4` (sum positions 2..4).** Now indices 2, 3, 4 hold
+      `1, 3, 5`, whose sum is `9`. Print **`9`**.
+
+      | op | action | array | output |
+      |----|--------|-------|--------|
+      | 1 | sum [2,4] | `2 1 3 4 5 3 4 4` | 8 |
+      | 2 | rev [3,6] | `2 1 3 5 4 3 4 4` | — |
+      | 3 | sum [2,4] | `2 1 3 5 4 3 4 4` | 9 |
+
+      **Output:** `8` then `9` — matches the expected sample output.
+  - type: mcq
+    prompt: 'What does the pull() function do in the implicit treap, and why is it essential here?'
+    options:
+      - It reverses the subtree immediately and clears the rev flag
+      - It recomputes each node\x27s sz and sum from its children after a split/merge so range sums stay correct after reversals
+      - It sorts the array into increasing order
+      - It rotates the treap for balancing
+    answer: 1
+    explanation: After any structural change (split or merge) the children of nodes can change, so their sz and sum must be recomputed bottom-up; pull() does that. It is essential because sum(C) on a sliced-out subtree must reflect the true (possibly reversed) arrangement to answer range-sum queries correctly.
+type: content
+---

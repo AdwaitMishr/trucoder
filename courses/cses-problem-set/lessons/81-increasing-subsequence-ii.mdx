@@ -1,0 +1,246 @@
+---
+id: increasing-subsequence-ii
+title: Increasing Subsequence II
+type: content
+difficulty: hard
+order: 81
+tags:
+  - dp
+  - fenwick
+  - coordinate-compression
+blocks:
+  - type: markdown
+    content: |
+      # Increasing Subsequence II — weighted LIS with a Fenwick tree
+
+      Count the number of **increasing subsequences** of an array, modulo
+      `10^9 + 7`. Two subsequences are different if they use different
+      positions — even with identical values. With `n` up to `2 * 10^5`, the
+      classic `O(n^2)` LIS DP is far too slow; the fix is to accelerate the
+      inner "sum over smaller values" with a **Fenwick (BIT) tree**.
+
+      ## The DP, stated carefully
+
+      Let `dp[i]` = number of increasing subsequences that *end at position i*
+      (i is their last element). Every increasing subsequence ending at `i` is
+      either:
+      - the single element `x_i` alone, or
+      - an increasing subsequence that ends at some earlier position `j` with
+        `x_j < x_i` (strict), extended by `x_i`.
+
+      So:
+
+          dp[i] = 1 + sum_{ j < i, x_j < x_i } dp[j]     (mod 10^9+7)
+
+      Every non-empty increasing subsequence has a unique last position, so the
+      answer is the sum of all `dp[i]`.
+
+      ## Why it is "weighted"
+
+      The naive version iterates all `j < i` for each `i` — `O(n^2)`. Notice the
+      sum we need depends on `j` only through the **value `x_j`** (I want all
+      `dp[j]` whose value is strictly less than `x_i`). If we maintain a data
+      structure keyed by *value* that stores these sums, each `dp[i]` becomes a
+      single range-sum query + point update:
+      - query the total `dp` of all values `< x_i`,
+      - set `dp[i] = 1 + that`,
+      - add `dp[i]` into the structure at value `x_i`.
+
+      That is a **Fenwick tree**: `O(log n)` per query and update, so O(n log n)
+      overall. Because values reach `10^9`, first **coordinate-compress** them to
+      ranks `1..k`.
+
+      :::tip
+      **Interview tip:** "Count subsequences satisfying a comparison property"
+      is a recurring pattern — LIS counting, number of sums, distinct
+      subsequences, inversion counting. Whenever the DP recurrence is
+      `dp[i] = f( sum_{condition} dp[j] )` and the condition is a *value*
+      interval, swap the inner loop for a Fenwick or segment tree over compressed
+      values to get O(n log n). Remember the mod: counts blow up, so reduce
+      every sum as you go.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given an array of `n` integers, your task is to calculate the number of
+      increasing subsequences it contains. If two subsequences have the same
+      values but in different positions in the array, they are counted
+      separately.
+
+      ## Input
+
+      The first input line has an integer `n`: the size of the array.
+
+      The second line has `n` integers `x1, x2, ..., xn`: the contents of the
+      array.
+
+      **Constraints:** `1 <= n <= 2*10^5`, `1 <= xi <= 10^9`
+
+      ## Output
+
+      Print one integer: the number of increasing subsequences modulo `10^9 + 7`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      3
+      2 1 3
+      ```
+      **Output:**
+      ```
+      5
+      ```
+
+      Explanation: the increasing subsequences are `[2]`, `[1]`, `[3]`, `[2,3]`
+      and `[1,3]`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n^2) DP**
+
+      Compute `dp[i]` by scanning every earlier position `j < i` that has a
+      strictly smaller value.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+
+      long long solve(int n, const vector<long long>& a) {
+          vector<long long> dp(n, 1), total(1, 0);   // dp[i] = 1 starts each at itself
+          for (int i = 0; i < n; i++) {
+              for (int j = 0; j < i; j++)
+                  if (a[j] < a[i]) dp[i] = (dp[i] + dp[j]) % MOD;
+              total[0] = (total[0] + dp[i]) % MOD;
+          }
+          return total[0];
+      }
+      ```
+
+      *O(n^2) — correct, but with `n = 2*10^5` that is 4×10^10 operations:
+      far too slow.*
+
+      **② Optimization — Fenwick tree, O(n log n)**
+
+      Replace the inner `j` loop with a value-keyed Fenwick that holds, per
+      compressed value rank, the sum of all `dp` already computed with that
+      value. Each `dp[i]` = `1 + BIT.sum(rank(x_i) - 1)` (all strictly smaller
+      ranks), then we add `dp[i]` into the BIT at `rank(x_i)`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+
+      struct BIT {
+          int n; vector<long long> t;
+          BIT(int n) : n(n), t(n + 1, 0) {}
+          void add(int i, long long v) {           // point update
+              for (; i <= n; i += i & -i) t[i] = (t[i] + v) % MOD;
+          }
+          long long sum(int i) {                   // prefix sum
+              long long r = 0;
+              for (; i > 0; i -= i & -i) r = (r + t[i]) % MOD;
+              return r;
+          }
+      };
+
+      long long solve(int n, const vector<long long>& a) {
+          vector<long long> xs = a;
+          sort(xs.begin(), xs.end());
+          xs.erase(unique(xs.begin(), xs.end()), xs.end());   // coordinate compress
+
+          BIT bit(xs.size());
+          long long total = 0;
+          for (int i = 0; i < n; i++) {
+              int rank = lower_bound(xs.begin(), xs.end(), a[i]) - xs.begin() + 1;
+              long long dp = (1 + bit.sum(rank - 1)) % MOD;   // strictly smaller values
+              total = (total + dp) % MOD;
+              bit.add(rank, dp);
+          }
+          return total;
+      }
+      ```
+
+      *O(n log n) time, O(n) space — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      `O(n log n)` is optimal for an arbitrary, unordered array; a segment tree
+      gives the same bound. There is nothing better to reach for here.
+
+      **④ Alternative — segment tree (same cost)**
+
+      A segment tree over compressed values storing sums is equally valid and
+      even more flexible (range *and* point operations). Fenwick is preferred
+      for this pure point-update/prefix-sum shape because it is smaller and
+      faster in practice. Both are `O(n log n)`.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the key lines of the Fenwick solution:
+
+      - **Compression.** `xs = a`, sorted and deduplicated. Each value of the
+        array becomes a rank `1..k` (where `k` = number of distinct values),
+        letting the Fenwick index by value instead of raw `10^9`-sized numbers.
+        `rank = lower_bound(...) - begin + 1` maps `a[i]` to its 1-based rank.
+
+      - **The recurrence line.** `bit.sum(rank - 1)` sums every `dp[j]` whose
+        value is strictly **less** than `a[i]` — the "condition `x_j < x_i`"
+        becomes one prefix query. We add `1` for the single-element
+        subsequence `[x_i]`, and reduce mod `M`.
+
+      - **The update.** `bit.add(rank, dp)` records this position's contribution
+        at its value, so later larger-valued elements can chain onto it.
+
+      - **Counting by last position.** `total` accumulates every `dp[i]`.
+        Because each non-empty increasing subsequence is counted exactly once
+        (at its final element), `total` is the answer. `strict` is guaranteed
+        by querying `rank - 1`, so equal values never chain.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(3, {2, 1, 3})`. `xs = {1, 2, 3}` → ranks `1, 2, 3`. The
+      Fenwick starts all zeros; let `dp_i` be the count for position `i`.
+
+      | step | value | rank | bit.sum(rank-1) | dp_i | add to BIT | total |
+      |------|-------|------|-----------------|------|------------|-------|
+      | i=0  | 2     | 2    | 0               | 1    | +1 at val 2 | 1     |
+      | i=1  | 1     | 1    | 0               | 1    | +1 at val 1 | 2     |
+      | i=2  | 3     | 3    | sum({1,2}) = 2   | 3    | +3 at val 3 | **5** |
+
+      Read the last row: values strictly less than `3` are `2` (contributes
+      `dp_0 = 1`, the subsequence `[2]` → can extend to `[2,3]`) and `1`
+      (contributes `dp_1 = 1`, the subsequence `[1]` → can extend to `[1,3]`).
+      So `dp_2 = 1 + 1 + 1 = 3`: the subsequences ending at position `2` are
+      `[3]`, `[2,3]`, `[1,3]`.
+
+      Summing: `1 + 1 + 3`.
+
+      Expected (sample) — `5`. Actual — `5`. Match. And these are exactly the
+      five listed subsequences: `[2]`, `[1]`, `[3]`, `[2,3]`, `[1,3]`.
+  - type: flowchart
+    title: "Count increasing subsequences with a Fenwick tree"
+    nodes: ["compress values to ranks 1..k", "for each i, rank = rank of x_i", "dp = 1 + bit.sum(rank-1)", "total += dp (mod M)", "bit.add(rank, dp)", "return total (mod M)"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 1}
+      - {from: 1, to: 5, label: "end of array"}
+  - type: mcq
+    prompt: "Why does the Fenwick approach change the time from O(n^2) to O(n log n)?"
+    options:
+      - "Because sorting the array removes the need to sum over smaller values."
+      - "Because each dp[i] needs only dp[j] for adjacent j, not all smaller values."
+      - "Because the 'sum over all previous smaller values' becomes one O(log n) prefix query in a value-keyed Fenwick, repeated n times."
+      - "Because the modulo cancels out all large intermediate values."
+    answer: 2
+    explanation: "The slow part of the naive DP is scanning all j<i with x_j<x_i. Indexing the tree by compressed value turns that whole scan into a single rank-1 prefix sum over the data structure — a O(log n) operation per element instead of an O(n) inner loop."
+---

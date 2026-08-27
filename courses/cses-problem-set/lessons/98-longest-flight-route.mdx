@@ -1,0 +1,239 @@
+---
+id: longest-flight-route
+title: "Longest Flight Route"
+difficulty: medium
+order: 98
+tags:
+  - graph-algorithms
+  - dag
+  - longest-path
+  - dynamic-programming
+  - topological-sort
+blocks:
+  - type: markdown
+    content: |
+      # Longest Flight Route — longest path in a DAG
+
+      In a **directed acyclic graph (DAG)** we must find the route from city `1`
+      to city `n` that visits the **maximum number of cities**, and print that
+      count plus the route. Note the guarantee: *there are no directed cycles in
+      the flight network* — this is what makes the problem tractable.
+
+      ## Longest path is hard in general, easy in a DAG
+
+      Finding the longest path in a general graph is NP-hard (it contains the
+      Hamiltonian-path decision problem). But in a **DAG**, where a topological
+      order exists, we can use dynamic programming: process vertices in
+      topological order and relax edges forward.
+
+      Let `dp[v]` = the **maximum number of cities on a path from `1` to `v`**
+      (including both endpoints). Along a topological order, every predecessor
+      of `v` is processed before `v`, so:
+
+      ```
+      dp[1] = 1
+      for u in topo-order:
+          for each edge u -> v:
+              if dp[u] is reachable: dp[v] = max(dp[v], dp[u] + 1)
+      ```
+
+      We also maintain a `pre[v]` pointer: the predecessor on the *best* path,
+      recorded whenever `dp[v]` improves. At the end, `dp[n]` is the answer, or
+      `IMPOSSIBLE` if `1` cannot reach `n`.
+
+      **Time:** O(n + m) — topological sort + one pass relaxing every edge.
+      **Space:** O(n + m).
+
+      :::tip
+      **Interview tip:** "longest path in a DAG" via topological-order DP is a
+      core pattern that reappears in critical-path scheduling, PERT charts, and
+      dependency-graph distance problems. The knee-jerk reflex to reach for
+      Dijkstra/negated-Bellman-Ford is unnecessary — the moment you can say
+      "this is a DAG", a single topological pass solves longest paths in linear
+      time. Interviewers love watching you spot that.
+      :::
+  - type: markdown
+    content: |
+      # Question — Longest Flight Route
+
+      Uolevi has won a contest, and the prize is a free flight trip that can
+      consist of one or more flights through cities. Of course, Uolevi wants to
+      choose a trip that has **as many cities as possible**. He wants to fly from
+      Syrjälä to Lehmälä so that he visits the maximum number of cities. There
+      are **no directed cycles** in the flight network.
+
+      **Input**
+
+      The first input line has two integers `n` and `m`: the number of cities and
+      flights. The cities are numbered `1, 2, ..., n`. City `1` is Syrjälä, and
+      city `n` is Lehmälä.
+
+      After this, there are `m` lines describing the flights. Each line has two
+      integers `a` and `b`: there is a flight from city `a` to city `b`. Each
+      flight is one-way.
+
+      **Output**
+
+      First print the maximum number of cities on the route. After this, print
+      the cities in the order they will be visited. You can print any valid
+      solution.
+
+      If there are no solutions, print `IMPOSSIBLE`.
+
+      **Constraints**
+
+      - `2 <= n <= 10^5`
+      - `1 <= m <= 2*10^5`
+      - `1 <= a, b <= n`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 5
+      1 2
+      2 5
+      1 3
+      3 4
+      4 5
+      ```
+
+      Output:
+
+      ```
+      4
+      1 3 4 5
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — enumerate all paths, exponential time**
+
+      DFS every path from `1` to `n`, tracking the visited-city count, and keep
+      the maximum. Correct on a DAG (paths are finite), but the number of
+      distinct paths grows exponentially with `n`, so with `n` up to `10^5` this
+      is hopeless.
+
+      ```cpp
+      // Illustration of the naive idea only — exponential, unusable.
+      int best = 0; vector<int> bestPath;
+      void dfs(int u, int len, vector<int>& path, const vector<vector<int>>& g, int n){
+          if (u == n) { if (len > best) { best = len; bestPath = path; } return; }
+          for (int v : g[u]) { path.push_back(v); dfs(v, len + 1, path, g, n); path.pop_back(); }
+      }
+      ```
+
+      **② Optimization — topological DP, O(n + m) time, O(n + m) space**
+
+      Topologically sort, then relax longest-city-counts forward.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<int>> g(n + 1);
+          vector<int> indeg(n + 1, 0);
+          for (int i = 0; i < m; ++i) { int a, b; cin >> a >> b; g[a].push_back(b); indeg[b]++; }
+          // topological order (Kahn)
+          queue<int> q;
+          for (int i = 1; i <= n; ++i) if (indeg[i] == 0) q.push(i);
+          vector<int> topo;
+          while (!q.empty()) {
+              int u = q.front(); q.pop(); topo.push_back(u);
+              for (int v : g[u]) if (--indeg[v] == 0) q.push(v);
+          }
+          // longest path by number of cities from 1
+          const int NEG = -1e9;
+          vector<int> dp(n + 1, NEG), pre(n + 1, -1);
+          dp[1] = 1;
+          for (int u : topo) {
+              if (dp[u] == NEG) continue;              // unreachable from 1
+              for (int v : g[u])
+                  if (dp[u] + 1 > dp[v]) { dp[v] = dp[u] + 1; pre[v] = u; }
+          }
+          if (dp[n] == NEG) { cout << "IMPOSSIBLE\n"; return 0; }
+          cout << dp[n] << "\n";
+          vector<int> path;
+          for (int x = n; x != -1; x = pre[x]) path.push_back(x);
+          reverse(path.begin(), path.end());
+          for (int x : path) cout << x << " ";
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **③ Further optimization** — not needed: O(n + m) is optimal (each edge and
+      vertex must be examined).
+
+      **④ Alternative — memoized DFS (top-down DP)**
+
+      Compute `best(v)` = max cities on a path from `v` to `n` by a recursive
+      DFS with memoisation on the DAG: `best(v) = max over edges v->u of
+      best(u) + 1`. Also O(n + m) (each state computed once), just a top-down
+      framing of the same idea as the iterative topological pass. It works
+      because acyclic graphs cannot re-enter a state-in-progress.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O(n + m) topological DP in **②**:
+
+      - Kahn's pass puts every vertex in `topo` (the graph is guaranteed acyclic,
+        so all `n` vertices appear).
+      - `dp[1] = 1`: the path from city 1 to itself is just 1 city.
+      - Iterating `u` in topological order guarantees all in-edges of `v` come
+        from vertices already processed, so `dp[v]` is fully decided before we
+        move past `v`'s turn; we never need to revisit a state.
+      - `if (dp[u] == NEG) continue;` skips cities not reachable from `1`, so
+        their "infinity-like" values never pollute their successors.
+      - `pre[v] = u` is updated only on a strict improvement, so it records a
+        valid predecessor on some longest path.
+      - Reconstruct backwards from `n` with `pre`, then reverse. If `dp[n]` is
+        still `NEG`, city 1 cannot reach city `n`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, edges `1->2`, `2->5`, `1->3`, `3->4`, `4->5`.
+
+      Kahn produces `topo = [1, 2, 3, 4, 5]`. Initial `dp[1] = 1`, `dp[others] =
+      NEG`. Processing:
+
+      | u | after relaxing u's edges | dp[] |
+      |---|-------------------------|------|
+      | 1 | `dp[2]=2 pre2=1`, `dp[3]=2 pre3=1` | [1,2,2,-, -] |
+      | 2 | edge 2->5: `dp[5]=3 pre5=2` | [1,2,2,-,3] |
+      | 3 | edge 3->4: `dp[4]=3 pre4=3` | [1,2,2,3,3] |
+      | 4 | edge 4->5: `dp[5]=max(3, dp4+1=4)=4 pre5=4` | [1,2,2,3,**4**] |
+      | 5 | no outgoing | — |
+
+      `dp[5] = 4`. Reconstruct via `pre`: `5 <- 4 <- 3 <- 1` → path `1 3 4 5`,
+      matching the sample output `4` and `1 3 4 5`.
+  - type: flowchart
+    title: "Longest path in a DAG"
+    nodes: ["topological sort", "dp[1] = 1", "process u in topo order",
+            "for each edge u->v relax dp[v]=max(dp[v],dp[u]+1), set pre[v]",
+            "dp[n] reachable?", "print dp[n] and path via pre", "print IMPOSSIBLE"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: "next u"}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 2, label: "loop"}
+      - {from: 2, to: 4, label: "after all edges"}
+      - {from: 4, to: 5, label: "yes (dp[n] != NEG)"}
+      - {from: 4, to: 6, label: "no"}
+  - type: mcq
+    prompt: "Why can longest path be solved in O(n+m) on a DAG but is NP-hard on a general graph?"
+    options:
+      - "Because DAGs are always sparse"
+      - "Because a DAG admits a topological order, so every vertex can be finalized exactly once and its dp value can be propagated forward without cycles re-opening it"
+      - "Because DAG edges all have the same weight"
+      - "Because general graphs are always disconnected"
+    answer: 1
+    explanation: "In a DAG there is a linear order of vertices where all predecessors come first, so dp[v] is decided before v is used to relax its successors — each state is visited once and never revisited. In a general graph, cycles let a path loop back to an already-visited vertex, which is what makes the Hamiltonian/longest-path decision problem reducible and hard."
+type: content
+---

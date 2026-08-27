@@ -1,0 +1,259 @@
+---
+id: point-in-polygon
+title: Point in Polygon
+difficulty: medium
+order: 221
+tags:
+  - geometry
+  - ray-casting
+  - winding-number
+  - cross-product
+blocks:
+  - type: markdown
+    content: |
+      # Point in Polygon — is a query point inside a simple polygon?
+
+      Given a simple polygon and a batch of query points, decide for each point
+      whether it is **inside**, **outside**, or **on the boundary**. With
+      `n, m ≤ 1000` the natural approach is a per-point walk over all edges:
+      **O(n·m)**.
+
+      **The even–odd (ray casting) rule.** Cast a horizontal ray from the point
+      to `+∞` and count how many polygon edges it strictly crosses. Odd count →
+      the point is inside; even count → outside. Intuition: every time the ray
+      exits or enters the polygon's boundary, the inside/outside state flips, so
+      an odd number of exits means the point started inside.
+
+      **Three pieces of work.**
+
+      1. **Boundary.** If the point lies on some edge, answer `BOUNDARY` — test
+         each edge with `orient == 0 && within bounding box` (lesson 218/219).
+      2. **Ray crossing, exactly.** For an edge from `a` to `b`, it crosses the
+         horizontal ray `y = p.y` only when its two endpoints strictly straddle
+         that height (one strictly above, one not above). Instead of computing
+         the crossing `x` with floating point (precision risk), we use a
+         **pure-integer orientation trick**: consider `det = cross(p, a, b)` —
+         the sign of this tells whether the edge crosses *to the right* of `p`,
+         with no division at all. The standard formulation counts exactly the
+         crossings that lie to the right of `p`, with a half-open rule that makes
+         points exactly on horizontal edges and at vertices totally consistent.
+      3. **Half-open vertex rule.** We require "strictly above" via
+         `sgn(y − p.y) > 0` for the endpoint-above test, so a ray passing exactly
+         through a vertex counts each such edge once instead of twice — no
+         double counting when the ray grazes a corner.
+
+      **Winding number (alternative).** Sum the signed turn angle accumulated as
+      you walk each edge around the point; a nonzero total means inside. It gives
+      the same answer as even–odd for simple polygons and generalizes to
+      self-intersecting ones, at slightly more code.
+
+      **Complexity.** For each of `m` points we scan all `n` edges:
+      **O(n·m)** time overall, **O(1)** extra space beyond storing the polygon.
+
+      :::tip
+      **Interview tip:** the "check boundary, then count strict crossings with an
+      integer cross product instead of division" template is the full answer to
+      virtually every "point in polygon" question. Make sure your crossing
+      predicate is **strict** in height (`a.y > p.y` vs `b.y > p.y`, not `>=`),
+      or points that accidentally align with a vertex get misclassified.
+      :::
+  - type: markdown
+    content: |
+      # Question — Point in Polygon
+
+      You are given a polygon of `n` vertices and a list of `m` points. Your task
+      is to determine for each point if it is **inside**, **outside** or **on the
+      boundary** of the polygon.
+
+      The polygon consists of `n` vertices `(x1,y1), (x2,y2), …, (xn,yn)`. The
+      vertices `(xi,yi)` and `(x_{i+1},y_{i+1})` are adjacent for
+      `i = 1, 2, …, n-1`, and the vertices `(x1,y1)` and `(xn,yn)` are also
+      adjacent.
+
+      **Input.** The first input line has two integers `n` and `m`: the number of
+      vertices in the polygon and the number of points. After this, there are `n`
+      lines that describe the polygon (the `i`th has two integers `xi` and `yi`).
+      Finally, there are `m` lines that describe the points (each has two
+      integers `x` and `y`).
+
+      You may assume that the polygon is **simple**, i.e., it does not intersect
+      itself.
+
+      **Output.** For each point, print `"INSIDE"`, `"OUTSIDE"` or `"BOUNDARY"`.
+
+      **Constraints**
+
+      - `3 ≤ n, m ≤ 1000`
+      - `-10^9 ≤ xi, yi ≤ 10^9`
+      - `-10^9 ≤ x, y ≤ 10^9`
+
+      Sample input:
+
+      ```
+      4 3
+      1 1
+      4 2
+      3 5
+      1 4
+      2 3
+      3 1
+      1 3
+      ```
+
+      Sample output:
+
+      ```
+      INSIDE
+      OUTSIDE
+      BOUNDARY
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — floating-point ray casting, O(n·m)**
+
+      Count crossings, but compute the crossing point's `x` in `double`. With
+      coordinates up to `10^9`, division can round a crossing that is genuinely
+      at `p.x` into *just* left or right of it, flipping the parity and giving an
+      `INSIDE`/`OUTSIDE` flip near the boundary; and a `>=` endpoint test
+      mis-counts the half-open vertex rule. Conceptually right, numerically
+      fragile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using d = double;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; cin >> n >> m;
+          vector<d> x(n), y(n);
+          for(int i=0;i<n;i++) cin >> x[i] >> y[i];
+          while(m--){
+              d px,py; cin >> px >> py;
+              bool in=false;
+              for(int i=0,j=n-1;i<n;j=i++){
+                  if( (y[i]>py) != (y[j]>py) ){
+                      d xc = x[j] + (x[i]-x[j])*(py-y[j])/(y[i]-y[j]);
+                      if(xc > px) in = !in;
+                  }
+              }
+              cout << (in ? "INSIDE\n" : "OUTSIDE\n"); // no boundary handling!
+          }
+      }
+      ```
+
+      **O(n·m)** time — but division rounding and the missing boundary check make
+      it unreliable on the real constraints.
+
+      **② Optimization — exact integer even–odd, O(n·m) (submission)**
+
+      Replace the division with the integer orientation trick and add an exact
+      `onSegment` boundary test, both in `__int128_t`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      using i128 = __int128_t;
+      struct P { ll x, y; };
+      i128 cross(P a, P b, P c){ return (i128)(b.x-a.x)*(c.y-a.y) - (i128)(b.y-a.y)*(c.x-a.x); }
+      int sgn(i128 v){ return (v>0) - (v<0); }
+      bool onSeg(P a, P b, P p){
+          return cross(a,b,p) == 0
+              && min(a.x,b.x) <= p.x && p.x <= max(a.x,b.x)
+              && min(a.y,b.y) <= p.y && p.y <= max(a.y,b.y);
+      }
+      // even-odd ray cast (horizontal ray to +inf), integer cross products only
+      string classify(const vector<P>& poly, P q){
+          int n = poly.size(), cnt = 0;
+          for(int i=0;i<n;i++){
+              P a = poly[i], b = poly[(i+1)%n];
+              if(onSeg(a,b,q)) return "BOUNDARY";
+              if((sgn(a.y - q.y) > 0) != (sgn(b.y - q.y) > 0)){ // edge strictly straddles ray line
+                  i128 det = cross(q, a, b);                    // sign decides which side of q the crossing is on
+                  if(a.y > b.y && det < 0) cnt++;               // crossing in the right half of the ray
+                  if(b.y > a.y && det > 0) cnt++;
+              }
+          }
+          return (cnt % 2) ? "INSIDE" : "OUTSIDE";
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<P> poly(n);
+          for(int i=0;i<n;i++) cin >> poly[i].x >> poly[i].y;
+          while(m--){
+              P q; cin >> q.x >> q.y;
+              cout << classify(poly, q) << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      **O(n·m)** time (up to `10^6` edge–point pairs), **O(n)** space. This is the
+      submission tier — compile with `g++ -std=c++17 -O2`.
+
+      **③ Alternative — winding number, O(n·m)**
+
+      Walk every edge and accumulate a winding count: each edge crossing the
+      horizontal ray to the right of `q` adds a `+1` or `-1` depending on upward
+      or downward direction; `count != 0` → inside. This is equivalent to even–odd
+      for simple polygons but is also correct for self-intersecting ones, at the
+      cost of a slightly more elaborate crossing discriminator. Same complexity.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **Boundary first.** For each edge, if `onSeg(a,b,q)` is true
+        (`cross == 0` and `q` in the edge's bounding box) the answer is
+        `BOUNDARY` immediately.
+      - **Strict height straddle.** The edge crosses the horizontal line
+        `y = q.y` only when `(a.y - q.y)` and `(b.y - q.y)` have opposite signs.
+        Requiring strictly `> 0` (not `>= 0`) implements the half-open rule at
+        vertices, so a ray through a corner counts that edge exactly once.
+      - **No division.** `det = cross(q, a, b)` = orientation of `(a-b)` around
+        `q`. Combined with whether `a` or `b` is the upper endpoint, its sign tells
+        whether the crossing lies to the **right** of the ray origin `q`. All
+        integer; no floating point, no precision loss.
+      - **Parity.** Toggle `cnt` on each right-side crossing; `cnt % 2` is the
+        inside/outside answer.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** polygon `(1,1) (4,2) (3,5) (1,4)`, then `m = 3` points.
+
+      **Point (2,3):** boundary scan — no edge has `onSeg` true. Crossing scan
+      (horizontal ray to the right):
+
+      | edge | straddles y=3? | det = cross((2,3),a,b) | crossing right of q? | cnt |
+      |------|----------------|------------------------|---------------------|-----|
+      | (1,1)→(4,2) | no (both below) | — | — | 0 |
+      | (4,2)→(3,5) | yes (2<3, 5>3) | (2,3),(4,2),(3,5) = +5, b.y>a.y, det>0 | yes | 1 |
+      | (3,5)→(1,4) | no (both above) | — | — | 1 |
+      | (1,4)→(1,1) | yes (4>3, 1<3) | (2,3),(1,4),(1,1) = +3, a.y> b.y, det>0 | no | 1 |
+
+      `cnt = 1` (odd) → **INSIDE**.
+
+      **Point (3,1):** no boundary; edges straddling `y=1` give `cnt = 0` (even)
+      → **OUTSIDE**.
+
+      **Point (1,3):** `onSeg((1,4),(1,1),(1,3))` is true (collinear, `x=1` inside
+      `[1,1]`, `y=3` inside `[1,4]`) → **BOUNDARY**.
+
+      Output: `INSIDE`, `OUTSIDE`, `BOUNDARY`.
+
+      **Expected `INSIDE / OUTSIDE / BOUNDARY` — Actual `INSIDE / OUTSIDE /
+      BOUNDARY` (from the compiled `g++ -std=c++17 -O2` submission). Match.**
+  - type: mcq
+    prompt: 'What does the parity of the number of strictly-crossed edges tell you in the even–odd ray casting rule?'
+    options:
+      - Zero crossings always means the point is inside
+      - An odd number of crossings means the point is inside, an even number means outside
+      - The parity is meaningless when the polygon is concave
+      - An even number of crossings means the point is inside the polygon
+    answer: 1
+    explanation: The horizontal ray alternates between outside and inside as it crosses each polygon edge, so starting outside, each crossing flips the state. An odd total number of crossings therefore means the ray's origin (the point) is inside; even means outside. Parity works for concave polygons exactly as for convex ones; "zero = inside" is false (a point to the right of the whole polygon has zero crossings and is outside).
+type: content
+---

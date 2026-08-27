@@ -1,0 +1,212 @@
+---
+id: hidden-integer
+title: "Hidden Integer (Interactive)"
+type: content
+difficulty: easy
+order: 270
+tags:
+  - interactive
+  - binary-search
+  - guessing-game
+blocks:
+  - type: markdown
+    content: |
+      # Hidden Integer — find a secret number with yes/no queries
+
+      This is an **interactive** problem: instead of reading all input up front
+      and printing one answer, your program *dialogues* with a judge. The judge
+      secretly picks an integer, you ask questions, it answers, and you keep
+      narrowing down until you can name the number.
+
+      The lesson teaches the **protocol** (how to talk to an interactive judge)
+      and the **optimal strategy** — binary search — which finds any hidden
+      integer in the range `[1, n]` in `ceil(log2 n)` questions.
+
+      ## How an interactive judge works
+
+      1. The judge gives some fixed input (here: the bound `n`).
+      2. Your program prints a **query** line to stdout.
+      3. The judge reads it and prints a one-line **response** to stdin.
+      4. Repeat until your program prints its final **answer** and exits.
+
+      The one rule that people forget: after every query you must **flush**
+      stdout so the judge actually receives it. In C++ we `cout << ... << endl`
+      (`endl` flushes) or call `cout.flush()` explicitly.
+
+      ## The interaction protocol (this problem)
+
+      - The judge chooses a secret integer `s` with `1 <= s <= n`, and hands
+        you `n`.
+      - **Query:** print a line `? k` (`1 <= k <= n`).
+        The judge answers `1` if the secret satisfies `s <= k`, otherwise `0`.
+      - **Answer:** when you know `s`, print `! s` and terminate.
+      - You may make queries as long as you like, but the problem caps them
+        (typically `60` for `n <= 10^9`) — so spend them wisely.
+
+      :::tip
+      **Interview tip:** any yes/no oracle with two possible answers per
+      question can reveal at most `2^q` distinct outcomes in `q` questions, so
+      identifying `n` values needs `q >= ceil(log2 n)` — an information-theory
+      lower bound. Binary search meets it exactly, which is why it's the
+      reference answer for "guess my number" style interactive problems.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      The judge hides an integer `s` in `[1, n]`. Your task is to determine
+      `s` by asking yes/no questions.
+
+      ## Interaction
+
+      - First, your program reads the single integer `n`.
+      - Then it may repeatedly:
+        - send a question `? k`, and read one integer `0` or `1` in response:
+          `1` means `s <= k`, `0` means `s > k`.
+        - or, when it is ready, print the final answer `! s` and exit.
+      - Your program is correct iff the printed `! s` equals the hidden `s`.
+      - **Flush stdout after every printed line** (`endl` / `flush()`).
+
+      ## Constraints
+
+      `1 <= n <= 10^9`. The number of queries is limited (`<= 60` for all
+      possible `s`).
+
+      ## Sample interaction (illustrative — there is no fixed I/O file)
+
+      Judge picks `s = 5`, sends `n = 7`. A valid dialogue:
+
+      ```
+      ? 3          (program: is s <= 3?)
+      0            (judge: no, s > 3)
+      ? 5
+      1            (judge: yes, s <= 5)
+      ? 4
+      0            (judge: no, s > 4)
+      ! 5          (program: s must be 5)
+      ```
+
+      In a real judge the answer is graded by running your program against it;
+      there is no hand-checked input/output file. That is why this lesson is
+      content (strategy + runnable code) rather than a static sample test.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers (strategy, not a runnable harness)
+
+      An interactive solution has two parts: the **query loop** that talks to
+      the judge, and the **algorithm** that turns answers into certainty. Because
+      a live judge is required to run it, we present the code so you can drop it
+      into any interactive sandbox; we cannot compile it against a static harness
+      in a course runtime.
+
+      **① Brute force — probe every number, up to `n` queries**
+
+      Ask `? 1`, `? 2`, …, until the answer flips. Simpler but linear. If the
+      hidden number is `n`, you burn `n` queries — impossible for `n = 10^9`
+      under a `60`-query cap.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin >> n;
+          for (int k = 1; k <= n; k++){
+              cout << "? " << k << endl;
+              int ans; cin >> ans;
+              if (ans) { cout << "! " << k << endl; break; }   // s <= k and s > k-1
+          }
+          return 0;
+      }
+      ```
+
+      *Up to `n` queries, O(n) — too many.*
+
+      **② Binary search — `ceil(log2 n)` queries (optimal)**
+
+      Maintain the invariant that the secret satisfies `s > lo` and `s <= hi`
+      (`lo = 0`, `hi = n`). Ask about the middle; each answer halves the range.
+      When `hi - lo == 1`, the secret is `hi`. Correct and meets the lower
+      bound, so it is optimal. This is the strategy to submit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin >> n;
+          int lo = 0, hi = n;          // invariant: s > lo and s <= hi
+          while (hi - lo > 1) {        // more than one candidate remains
+              int mid = (lo + hi) / 2;
+              cout << "? " << mid << endl;   // is s <= mid ?  (endl flushes)
+              int ans; cin >> ans;
+              if (ans) hi = mid;             // s <= mid
+              else     lo = mid;             // s > mid
+          }
+          cout << "! " << hi << endl;   // exactly one candidate left
+          return 0;
+      }
+      ```
+
+      *`ceil(log2 n)` queries, O(log n) time. For `n = 10^9` that's `30` —
+      well under a `60`-query cap.*
+
+      **③ Why it is optimal** — no algorithm asking only `0/1` questions can
+      distinguish `n` possibilities in fewer than `ceil(log2 n)` questions
+      (each question separates at most the current candidate set into two
+      parts; after `q` questions there are at most `2^q` candidates). Binary
+      search reaches this bound, so a fourth tier cannot meaningfully improve
+      it.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Invariant `s > lo` and `s <= hi`.** Initially `s >= 1 > 0 = lo` and
+        `s <= n = hi` are both true. A query `? mid` returns `1` iff `s <= mid`,
+        so setting `hi = mid` preserves `s <= hi`, and a `0` sets `lo = mid`
+        preserving `s > lo`. The invariant is never broken.
+      - **Halving the search space.** Regardless of the answer, the candidate
+        interval `[lo+1, hi]` shrinks to about half: `hi - lo` is roughly halved
+        after each query. After `q` queries the interval holds at most `n/2^q`
+        candidates.
+      - **Termination.** When `hi - lo == 1`, the only integer `t` satisfying
+        `t > lo` and `t <= hi` is `hi` — so the secret is `hi`. We print `! hi`.
+      - **Flushing.** `endl` both emits a newline and flushes, so the judge
+        receives each question before blocking on our `cin`. Forgetting to
+        flush in interactive problems is the classic cause of a hang/timeout.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Judge picks `s = 5`, sends `n = 7`. We run the binary-search strategy.
+
+      | query | lo | hi | mid | answer | meaning       | new lo/hi |
+      |-------|----|----|-----|--------|---------------|-----------|
+      | start | 0  | 7  |     |        |               |           |
+      | `? 3` |    |    | 3   | 0      | `s > 3`       | lo = 3    |
+      | `? 5` | 3  | 7  | 5   | 1      | `s <= 5`      | hi = 5    |
+      | `? 4` | 3  | 5  | 4   | 0      | `s > 4`       | lo = 4    |
+      | `! 5` | 4  | 5  |     |        | hi-lo==1 → s=5|           |
+
+      After `? 4`, `hi - lo = 5 - 4 = 1`, so we immediately print `! 5`. `s = 5`
+      is the only integer with `s > 4` and `s <= 5`. Three queries, and
+      `ceil(log2 7) = 3` — exactly optimal. (For comparison, the brute force
+      would have asked `? 1`, `? 2`, `? 3`, `? 4`, `? 5` — five queries.)
+  - type: flowchart
+    title: "Interactive binary search for the hidden integer"
+    nodes: ["read n; lo=0, hi=n", "hi - lo > 1 ?", "query ? (lo+hi)/2", "answer 1 -> hi=mid, else lo=mid", "print ! hi", "judge checks it equals s"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "yes"}
+      - {from: 2, to: 3}
+      - {from: 3, to: 1}
+      - {from: 1, to: 4, label: "no"}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "Which statement explains why binary search is the optimal guessing strategy here?"
+    options:
+      - "Using arithmetic mean picks the median faster than any other rule."
+      - "Each 0/1 answer halves the set of remaining candidates, and ceil(log2 n) questions is an information-theoretic lower bound that it achieves."
+      - "Asking the highest remaining number always finds s in one query."
+      - "Queries never help — you must guess s blind."
+    answer: 1
+    explanation: "Every yes/no question can split the candidate set into at most two parts, so q questions distinguish at most 2^q secrets — a lower bound of ceil(log2 n). Binary search's midpoint rule is exactly the strategy that halves the candidate interval at each step, meeting the bound; the mean, random probing, or linear scanning cannot beat it."
+---

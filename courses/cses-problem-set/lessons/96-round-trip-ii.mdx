@@ -1,0 +1,244 @@
+---
+id: round-trip-ii
+title: "Round Trip II"
+difficulty: medium
+order: 96
+tags:
+  - graph-algorithms
+  - directed-cycles
+  - dfs
+  - cycle-detection
+blocks:
+  - type: markdown
+    content: |
+      # Round Trip II — find a directed cycle
+
+      In a **directed** graph we must decide whether a cycle exists and, if so,
+      output one explicitly: the number of cities on the route followed by the
+      route itself. This is the directed version of cycle finding — the harder
+      sibling because edge direction now matters.
+
+      ## Three-colour DFS
+
+      The cleanest tool is a DFS that tracks the *recursion stack* with three
+      colours per vertex:
+
+      - **0 (white/untouched):** vertex not visited yet.
+      - **1 (grey/on-stack):** current DFS is still exploring from this vertex.
+      - **2 (black/done):** all neighbours fully processed.
+
+      A directed cycle exists **if and only if**, while exploring a vertex `u`,
+      we follow an edge `u -> v` to a vertex `v` that is currently *grey*
+      (colour 1). Because `v` is on the current stack, `v` is an ancestor of `u`
+      in the DFS tree, so the tree edges from `v` down to `u` together with the
+      edge `u -> v` close a cycle `v -> ... -> u -> v`.
+
+      ## Reconstructing the cycle
+
+      Keep a `parent[]` pointer set when we first enter a vertex's child. When a
+      back edge `u -> v` is hit, walk `cur = u` up via `parent` until we return
+      to `v`; that yields the cycle `v -> ... -> u`, and the edge `u -> v`
+      closes it back to `v`. We then add one returning element so the printed
+      route visibly ends where it began.
+
+      **Time:** O(n + m) — every vertex is coloured once, every edge inspected
+      once. **Space:** O(n + m) (graph + colour + parent).
+
+      :::tip
+      **Interview tip:** detecting a cycle in a *directed* graph with the
+      white/grey/black DFS stack is one of the most-asked graph questions —
+      it is the core of topological-sort impossibility ("no valid order exists")
+      and appears in scheduling / prerequisite problems. Mention that a cycle in
+      a directed graph requires following edge direction, unlike the undirected
+      case, and that the colour-1 (on-stack) check is what does the work.
+      :::
+  - type: markdown
+    content: |
+      # Question — Round Trip II
+
+      Byteland has `n` cities and `m` flight connections. Your task is to design
+      a **round trip** that begins in a city, goes through one or more other
+      cities, and finally returns to the starting city. Every intermediate city
+      on the route has to be distinct. All connections are one-way flights.
+
+      **Input**
+
+      The first input line has two integers `n` and `m`: the number of cities and
+      flights. The cities are numbered `1, 2, ..., n`.
+
+      Then there are `m` lines describing the flights. Each line has two integers
+      `a` and `b`: there is a flight connection from city `a` to city `b`.
+
+      **Output**
+
+      First print an integer `k`: the number of cities on the route. Then print
+      `k` cities in the order they will be visited, with the route returning to
+      the starting city as its last element. You can print any valid solution.
+
+      If there are no solutions, print `IMPOSSIBLE`.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `1 <= m <= 2*10^5`
+      - `1 <= a, b <= n`
+
+      **Example**
+
+      Input:
+
+      ```
+      4 5
+      1 3
+      2 1
+      2 4
+      3 2
+      3 4
+      ```
+
+      Output:
+
+      ```
+      4
+      2 1 3 2
+      ```
+
+      (Any rotation of a valid cycle, e.g. `1 3 2 1`, is equally accepted.)
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — try each start city, O(n·(n + m)) time**
+
+      For every possible starting city `s`, run a DFS that explores out of `s`
+      and checks whether any outgoing edge returns to `s` (or to a node on the
+      current path from `s`). If it does, extract the cycle. Doing this from
+      scratch for every `s` is correct but wasteful — up to `n` starts each
+      scanning edges — and with `n` up to `10^5` it is too slow.
+
+      ```cpp
+      // Illustration of the naive idea only — O(n·(n+m)), too slow.
+      // For each start s: DFS from s, tracking nodes on the path; if an edge
+      // goes back to the path, output the cycle. Repeats all work per start.
+      ```
+
+      **② Optimization — one three-colour DFS, O(n + m) time, O(n + m) space**
+
+      A single traversal with an on-stack check finds any directed cycle and the
+      parent pointers let us reconstruct it.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<int>> g(n + 1);
+          for (int i = 0; i < m; ++i) { int a, b; cin >> a >> b; g[a].push_back(b); }
+          vector<int> col(n + 1, 0), par(n + 1, -1);
+          vector<int> cyc;
+          bool found = false;
+          function<void(int)> dfs = [&](int u){
+              col[u] = 1;                       // grey: on the recursion stack
+              for (int v : g[u]) {
+                  if (found) return;
+                  if (col[v] == 0) { par[v] = u; dfs(v); }
+                  else if (col[v] == 1) {        // back edge u -> v, v is an ancestor
+                      int cur = u;
+                      while (cur != v) { cyc.push_back(cur); cur = par[cur]; }
+                      cyc.push_back(v);
+                      reverse(cyc.begin(), cyc.end());   // forward: v -> ... -> u
+                      found = true; return;
+                  }
+              }
+              col[u] = 2;                       // black: finished
+          };
+          for (int i = 1; i <= n && !found; ++i) if (col[i] == 0) dfs(i);
+          if (!found) { cout << "IMPOSSIBLE\n"; return 0; }
+          cout << cyc.size() + 1 << "\n";       // +1 for the return to the start
+          for (int x : cyc) cout << x << " ";
+          cout << cyc[0] << "\n";               // close the loop
+          return 0;
+      }
+      ```
+
+      **③ Further optimization** — not needed: O(n + m) is optimal. A cycle can
+      force every edge to be examined, so we cannot beat linear time.
+
+      **④ Alternative — strongly connected components (Tarjan / Kosaraju)**
+
+      Tarjan's algorithm finds SCCs in O(n + m). Any vertex whose SCC has more
+      than one vertex (or that has a self-loop) lies on a directed cycle; you can
+      then walk within the component to print it. This is a heavier hammer — a
+      full SCC decomposition just to find one cycle — but it is a legitimate
+      alternative and introduces a very reusable idea.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O(n + m) DFS solution in **②**:
+
+      - `col[u] = 1` marks a vertex *grey* the moment DFS enters it; `col[u] = 2`
+        marks it *black* only after all its neighbours are done.
+      - When exploring `u` we meet neighbour `v`:
+        - `col[v] == 0` → not visited; descend (`par[v] = u` records the tree
+          edge for reconstruction).
+        - `col[v] == 1` → `v` is still on the current stack, i.e. `v` is an
+          ancestor of `u`; the edge `u -> v` is a **back edge** and closes a
+          cycle.
+        - `col[v] == 2` → fully processed elsewhere; ignore (does not form a
+          cycle through `u`).
+      - On a back edge to `v`, we walk `cur = u` up via `par` until `v`,
+        building the intermediate vertices, then prepend `v` and reverse to get
+        `v -> ... -> u`. Finally we print `cyc` and append `cyc[0]` so the route
+        explicitly returns to its start; the problem accepts *any* valid
+        rotation of a cycle.
+      - We launch DFS from every unvisited vertex, so even disconnected graphs
+        are fully covered.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 4`, edges `1->3`, `2->1`, `2->4`, `3->2`, `3->4`.
+
+      DFS from vertex 1:
+
+      | step | action | colours on stack |
+      |------|--------|------------------|
+      | enter 1 | col[1] = 1 | {1} |
+      | edge 1->3 | descend, par[3] = 1 | {1, 3} |
+      | edge 3->2 | descend, par[2] = 3 | {1, 3, 2} |
+      | edge 2->1 | col[1] == 1 (on-stack!) → **cycle** | — |
+
+      Back edge `2 -> 1`: walk `cur = 2` via parent → `3`, then `1`. Build
+      `cyc = [2, 3]`, prepend `1`, reverse → `cyc = [1, 3, 2]` (the cycle
+      `1 -> 3 -> 2 -> 1`). Output `4` then `1 3 2 1`.
+
+      The official sample shows `2 1 3 2` — the same cycle rotated to start at
+      `2`. Both are valid solutions, as the problem allows any rotation. The
+      returned route has `k = 4` entries, counting the return to the start city.
+  - type: flowchart
+    title: "Three-colour DFS cycle detection"
+    nodes: ["mark u grey, push par edge", "pick neighbour v", "col[v] == 0?",
+            "descend into v", "col[v] == 1?", "cycle: backtrack via parent",
+            "col[u] = black, backtrack"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: "yes (white)"}
+      - {from: 3, to: 1, label: "recurse"}
+      - {from: 2, to: 4, label: "no"}
+      - {from: 4, to: 5, label: "yes (grey)"}
+      - {from: 4, to: 6, label: "no → done (black)"}
+      - {from: 6, to: 1, label: "try next neighbour"}
+  - type: mcq
+    prompt: "While exploring vertex u you reach a neighbour v whose colour is 1 (grey). Why does that immediately prove a directed cycle exists?"
+    options:
+      - "Because grey vertices always point to each other"
+      - "Because colour 1 means v is on the current recursion stack — an ancestor of u — so the tree path v..u plus the edge u->v closes a cycle"
+      - "Because a grey vertex has an odd number of edges"
+      - "Because colour 1 marks vertices that were visited twice"
+    answer: 1
+    explanation: "Grey means v is still on the stack, i.e. v is an ancestor of u in the DFS tree (v was reached and is being explored). Therefore the tree edges from v down to u, followed by the back edge u->v, form a directed cycle. Colour 0 (white) just means 'descend'; colour 2 (black) means v is finished elsewhere and cannot form a cycle through u."
+type: content
+---

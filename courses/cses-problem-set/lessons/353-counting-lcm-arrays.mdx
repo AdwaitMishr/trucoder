@@ -1,0 +1,238 @@
+---
+id: counting-lcm-arrays
+title: "Counting LCM Arrays"
+type: content
+difficulty: medium
+order: 353
+tags:
+  - mathematics
+  - combinatorics
+  - number-theory
+  - matrix-exponentiation
+blocks:
+  - type: markdown
+    content: |
+      # Counting LCM Arrays — count arrays where every adjacent LCM equals k
+
+      ## Theory
+
+      For a single prime `p`, write an integer as `p^b · (other primes)`. The LCM of
+      two numbers takes, for that prime, the **maximum exponent**. So for a whole
+      array, the LCM of two adjacent entries equals `k` exactly when — for every
+      prime `p^e ∥ k` — the *maximum* of the two exponent-columns is `e`, for every
+      adjacent pair.
+
+      **Key idea: prime independence.** Prime factorize `k = p₁^e₁ · p₂^e₂ · … · p_m^e_m`.
+      Each element `a_i` must be built only from these primes (any other prime would
+      blow up the LCM). So each `a_i` is determined by choosing, for each prime, an
+      exponent `b_i ∈ {0,…,e}`. Because the primes are multiplicative and
+      independent, the total number of valid arrays is the **product over primes** of
+      the number of valid exponent-sequences for that prime.
+
+      **Counting one prime** (`e`, `n`). We need the number of sequences
+      `b₁,…,bₙ` with `0 ≤ b_i ≤ e` and `max(b_i, b_{i+1}) = e` for all `i`. Define a
+      two-state DP by the *last* exponent:
+
+      - `g_i` = # sequences of length `i` where `b_i = e`
+      - `f_i` = # sequences of length `i` where `b_i < e`
+
+      Transitions (the adjacency condition): if `b_i = e`, the previous value is free
+      (`g_i = f_{i-1} + g_{i-1}`); if `b_i < e` (there are `e` such values) then the
+      previous must be `e` (`f_i = e·g_{i-1}`). Base: `f₁ = e`, `g₁ = 1`. The valid
+      count is `f_n + g_n`.
+
+      This is a **linear recurrence**, which we write as a `2×2` matrix
+      `M = [[0, e], [1, 1]]` acting on `[f, g]ᵀ`. Applied `n-1` times from `[e, 1]ᵀ`,
+      we get `[fₙ, gₙ]ᵀ`. Since `n` can be `10⁹`, use **fast matrix exponentiation**
+      (`O(log n)` per prime).
+
+      **Time:** `O(sqrt(k))` to factor + `O(m·log n)` per test (m = # distinct primes
+      of `k`, at most ~9). **Space:** `O(1)`.
+
+      :::tip
+      **Interview tip:** Whenever a counting problem factors into independent
+      contributions per prime exponent (LCM → take exponents, GCD → take exponents,
+      multiplicative functions, etc.), "count per prime, then multiply" is the play.
+      And any linear DP with `n` up to `10⁹` should immediately make you reach for
+      **matrix exponentiation**. Combining the two is exactly this problem.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Question
+
+      Given two integers `n` and `k`, count the number of arrays `a₁,a₂,…,aₙ` of
+      **positive integers** where `lcm(aᵢ, aᵢ₊₁) = k` for all `1 ≤ i < n`.
+
+      **Input.** The first line has an integer `t` — the number of test cases. The
+      next `t` lines have two integers `n` and `k`: the array length and the value of
+      the LCM.
+
+      **Output.** Print `t` integers: the answer for each test case modulo `10⁹+7`.
+
+      **Constraints.**
+      - `1 ≤ t ≤ 1000`
+      - `2 ≤ n ≤ 10⁹`
+      - `1 ≤ k ≤ 10⁹`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      3
+      3 4
+      4 6
+      1337 42
+      ```
+
+      **Output:**
+      ```
+      11
+      64
+      602746233
+      ```
+
+      *Explanation:* For `n = 3, k = 4`, the arrays are `[1,4,1],[1,4,2],[1,4,4],
+      [2,4,1],[2,4,2],[2,4,4],[4,1,4],[4,2,4],[4,4,1],[4,4,2],[4,4,4]` — 11 of them.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O((k+1)ⁿ·n).** Enumerate every array with values in
+      `[1, k]` and check `lcm(aᵢ,aᵢ₊₁) == k` on every adjacent pair. Correct, but
+      utterly unusable as `n` grows.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n,k,ans; vector<int> a;
+      long long lcm(long long x,long long y){ return x/__gcd(x,y)*y; }
+      void rec(int i){
+          if(i==n){ if(lcm(a[i-2],a[i-1])==k) ans++; return; }
+          for(int v=1;v<=k;v++){ a[i-1]=v; rec(i+1); }
+      }
+      int main(){ cin>>n>>k; a.assign(n,0); rec(1); cout<<ans<<"\n"; }
+      ```
+      *Complexity: O((k+1)ⁿ·n) — tiny inputs only.*
+
+      **② Optimization — per-prime DP, O(n·ω(k)).** Factor `k`; for each prime power
+      `p^e` run the two-state DP `f,g` over `n` steps explicitly:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD=1000000007LL;
+      // count exponent-sequences for one prime with max adjacent exponent == e
+      ll dpE(ll e,ll n){
+          ll f=e%MOD, g=1;            // f_1=#(b1<e)=e, g_1=#(b1==e)=1
+          for(ll i=2;i<=n;i++){
+              ll nf=e%MOD*g%MOD, ng=(f+g)%MOD;   // f_i=e*g_{i-1}; g_i=f_{i-1}+g_{i-1}
+              f=nf; g=ng;
+          }
+          return (f+g)%MOD;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int t; cin>>t;
+          while(t--){
+              ll n,k; cin>>n>>k; ll ans=1;
+              for(ll p=2;p*p<=k;p++) if(k%p==0){ ll e=0; while(k%p==0){k/=p;e++;}
+                  ans=ans*dpE(e,n)%MOD; }
+              if(k>1) ans=ans*dpE(1,n)%MOD;
+              cout<<ans<<"\n";
+          }
+      }
+      ```
+      *Complexity: O(n·ω(k)) — fine for `n` up to ~`10⁶`, too slow for `n = 10⁹`.*
+
+      **③ Further optimization — matrix exponentiation, O(ω(k)·log n).** The
+      transition is linear: `[f;g]ᵢ = M [f;g]ᵢ₋₁` with `M = [[0,e],[1,1]]`. Raise
+      `M^(n-1)` fast and read `[fₙ,gₙ]ᵀ` off `[e,1]ᵀ`:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD=1000000007LL;
+      struct M{ ll a,b,c,d; };
+      M mul(M X,M Y){
+          return { (X.a*Y.a+X.b*Y.c)%MOD,(X.a*Y.b+X.b*Y.d)%MOD,
+                   (X.c*Y.a+X.d*Y.c)%MOD,(X.c*Y.b+X.d*Y.d)%MOD };
+      }
+      M mpow(M X,ll p){ M R{1,0,0,1}; while(p){ if(p&1)R=mul(R,X); X=mul(X,X); p>>=1; } return R; }
+      ll dpE(ll e,ll n){                 // n>=2
+          M P=mpow({0,e%MOD,1,1}, n-1);  // M^{n-1}
+          ll f1=e%MOD, g1=1;             // [f_1;g_1]=[e;1]
+          ll g_n=(P.c*f1+P.d*g1)%MOD;
+          ll f_n=(P.a*f1+P.b*g1)%MOD;
+          return (f_n+g_n)%MOD;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int t; cin>>t;
+          while(t--){
+              ll n,k; cin>>n>>k; ll ans=1;
+              for(ll p=2;p*p<=k;p++) if(k%p==0){ ll e=0; while(k%p==0){k/=p;e++;}
+                  ans=ans*dpE(e,n)%MOD; }
+              if(k>1) ans=ans*dpE(1,n)%MOD;
+              cout<<ans<<"\n";
+          }
+      }
+      ```
+      *Complexity: O(sqrt(k) + ω(k)·log n) per test — solves the full constraints.*
+
+      **④ Alternative — closed-form recurrence.** Eliminate `f`: since
+      `f_n = e·g_{n-1}` and `g_n = g_{n-1} + f_{n-1} = g_{n-1} + e·g_{n-2}`, the
+      `g`-sequence obeys the second-order recurrence `g_n = g_{n-1} + e·g_{n-2}` with
+      `g₁ = 1`, `g₂ = e + 1`. The answer `f_n + g_n = e·g_{n-1} + g_n` can then be
+      computed with the same matrix / fast-doubling machinery on a `2×2` Fibonacci-like
+      matrix — a nice way to see that this is just a generalized Fibonacci count.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      Walking through the optimal `O(ω(k)·log n)` solution:
+
+      1. **Factor `k`.** Trial division up to `sqrt(k)` collects each prime `p` and its
+         exponent `e`; a leftover prime greater than `sqrt(k)` means one more prime with
+         exponent `1` (`dpE(1,n)`).
+      2. **`dpE(e,n)`** builds the matrix `M = [[0, e], [1, 1]]` and raises it to
+         `n-1`. `M` encodes exactly the two transitions: new-`f = e·old-g` and
+         new-`g = old-f + old-g`.
+      3. **Base `[f₁, g₁] = [e, 1]`** (fewer-than-`e` values: `e` choices; equal to
+         `e`: one choice). Reading `M^(n-1)·[e,1]ᵀ` gives `[fₙ, gₙ]`; the answer for
+         that prime is `fₙ + gₙ`.
+      4. **Multiply** the per-prime answers modulo `10⁹+7` — primes are independent,
+         so valid arrays product together.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Test 1: `n=3, k=4`.** Factor `4 = 2²`, so one prime with `e=2`. Run the DP:
+      `f₁=2, g₁=1`; `i=2`: `f₂ = 2·1 = 2`, `g₂ = 2+1 = 3`; `i=3`:
+      `f₃ = 2·3 = 6`, `g₃ = 2+3 = 5`. Answer = `5+6 = 11`. ✓
+
+      The 11 arrays (exponents `{0,1,2}` = values `{1,2,4}`) are exactly those listed
+      in the statement: every adjacent pair shares a `4`, matching `max(b,b')=2`.
+
+      **Test 2: `n=4, k=6`.** `6 = 2·3` → two primes, each `e=1`. For `e=1`:
+      `g₁=1, f₁=1`; `g₂=2, f₂=1`; `g₃=3, f₃=2`; `g₄=5, f₄=3` → `8` sequences for one
+      prime. Two independent primes: `8·8 = 64`. ✓
+
+      **Test 3: `n=1337, k=42 = 2·3·7`.** Three primes with `e=1`; matrix
+      exponentiation computes `count(1, 1337)` once and cubes it,
+      `≡ 602746233 (mod 10⁹+7)`. ✓ matches the sample.
+
+  - type: mcq
+    prompt: "Why can we count each prime factor of k independently and then multiply the results?"
+    options:
+      - "Because lcm takes the maximum exponent independently per prime, so valid exponent-choices for different primes never interact."
+      - "Because all elements of the array must be equal to k itself."
+      - "Because the LCM of two numbers only ever has one prime factor."
+      - "Because n is always a multiple of the number of primes."
+    answer: 0
+    explanation: "The LCM of a set of numbers is p raised to the maximum exponent of p, computed separately for every prime p. Thus the condition max(b_i,b_{i+1})=e factors prime-by-prime, the counts for each prime are independent, and the grand total is the product over primes. This is exactly why the problem reduces to a per-prime exponent DP."

@@ -1,0 +1,295 @@
+---
+id: josephus-queries
+title: "Josephus Queries"
+type: content
+difficulty: hard
+order: 160
+tags:
+  - josephus
+  - recursion
+  - closed-form
+  - parity
+blocks:
+  - type: markdown
+    content: |
+      # Josephus Queries — the k-th removed child, by closed-form recursion
+
+      `n` children numbered `1..n` stand in a circle. We repeatedly remove
+      **every second child**, always resuming the count from the child after
+      the one just removed. We want to know, for a given `n` and `k`, *which
+      child* is removed at step `k`.
+
+      For example, with `n = 7` the removal order is `2 4 6 1 5 3 7` (the 1st
+      removed is child 2, the 4th removed is child 1, and so on).
+
+      A key observation splits the problem in two. Look at the **first sweep**
+      around the initial circle: it removes the even children `2, 4, 6, ...`.
+      So if `k` is small, the answer is just `2k`. Only when we run out of
+      even children do we need to think harder — and then the survivors form a
+      *smaller* instance of the exact same game, so we can recurse.
+
+      ## Parity of `n` decides how the survivors renumber
+
+      After the first sweep (`floor(n/2)` removals at positions `2, 4, ...`),
+      only the odd children remain:
+
+      - **`n` even:** survivors are `1, 3, 5, ..., n-1`. The count resumes at
+        `1`, so this is exactly a fresh Josephus game of `n/2` children where
+        subgame child `j` stands for real child `2j - 1`.
+      - **`n` odd:** survivors are `1, 3, ..., n`. The count resumes at `n`,
+        so subgame child `1` maps to real child `n`, and subgame child `j >= 2`
+        maps to real child `2j - 3`.
+
+      Because each recursive call halves (roughly) `n`, we descend in
+      `O(log n)` — fast enough for `n` up to `10^9`.
+
+      **Time:** `O(log n)` per query. **Space:** `O(log n)` recursion stack
+      (or `O(1)` if rolled into a loop).
+
+      :::tip
+      **Interview tip:** "Josephus" problems test whether you can spot that a
+      removal process collapses into a *smaller identical subproblem* — a
+      recursion. The two skills interviewers probe are (1) noticing the even
+      children go first, and (2) correctly renumbering the survivors by parity
+      of `n`. Master the parity mapping and you can solve every
+      "every-second-removal" variant on the spot.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Consider a game where there are `n` children (numbered `1,2,\dots,n`) in
+      a circle. During the game, every second child is removed from the circle,
+      until there are no children left.
+
+      Your task is to process `q` queries of the form: "when there are `n`
+      children, who is the `k`-th child that will be removed?"
+
+      ## Input
+
+      The first input line has an integer `q`: the number of queries.
+
+      After this, there are `q` lines that describe the queries. Each line has
+      two integers `n` and `k`: the number of children and the position of the
+      child.
+
+      **Constraints**
+
+      - `1 <= q <= 10^5`
+      - `1 <= k <= n <= 10^9`
+
+      ## Output
+
+      Print `q` integers: the answer for each query.
+
+      ## Example
+
+      Input:
+
+      ```
+      4
+      7 1
+      7 3
+      2 2
+      1337 1313
+      ```
+
+      Output:
+
+      ```
+      2
+      6
+      1
+      1107
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — simulate with an ordered set, O(n log n) per query**
+
+      Rebuild the circle `1..n`, then literally remove every second child `k`
+      times, tracking how many remain. Each removal in a balanced
+      `std::set` is `O(log n)`, so one query is `O(k log n) = O(n log n)`.
+
+      Too slow, and worse: with `n` up to `10^9` we cannot even *allocate* the
+      circle (the `set` would hold `10^9` nodes).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      ll brute(ll n, ll k){
+          set<int> s;
+          for(int i=1;i<=n;i++) s.insert(i);
+          auto it = s.begin();
+          for(ll step=0; step<k; step++){
+              it++; if(it==s.end()) it=s.begin();   // 1st counted child (safe)
+              int killed = *it;                     // 2nd counted child (removed)
+              if(step+1==k) return killed;
+              it = s.erase(it);                     // resume counting after removed
+              if(it==s.end()) it=s.begin();
+          }
+          return *s.begin();
+      }
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          int q; cin>>q; while(q--){ ll n,k; cin>>n>>k; cout<<brute(n,k)<<"\n"; } }
+      ```
+
+      *`O(n log n)` per query, and the `O(n)` memory is unreachable for
+      `n = 10^9`. Reject.*
+
+      **② Optimization — parity/position closed-form recursion, O(log n) per query**
+
+      Let `f(n,k)` be the answer. First sweep removes the even children
+      `2,4,...,2*floor(n/2)`, so if `k <= floor(n/2)` then `f(n,k) = 2k`.
+      Otherwise reduce to a subgame of the survivors and renumber by parity.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      ll f(ll n, ll k){
+          if(n == 1) return 1;
+          ll m = n / 2;                 // evens removed in the first sweep
+          if(k <= m) return 2 * k;      // still in the first sweep
+          ll kk = k - m;                // step number inside the subgame
+          if(n % 2 == 0){
+              // survivors 1,3,..,n-1 renumber as j -> 2j-1
+              return 2 * f(m, kk) - 1;
+          } else {
+              // survivors n,1,3,..,n-2 : subgame child 1 is n, j>=2 is 2j-3
+              ll sub = f(m + 1, kk);
+              return (sub == 1) ? n : 2 * sub - 3;
+          }
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int q; cin>>q;
+          while(q--){ ll n,k; cin>>n>>k; cout<<f(n,k)<<"\n"; }
+      }
+      ```
+
+      *`O(log n)` per query, `O(log n)` stack. `n` halves each call (≤ ~60
+      levels for `n = 10^9`). This is the optimal tier.*
+
+      **③ Further optimization — already optimal**
+
+      The recursion is already `O(log n)`: every call drops `n` to about `n/2`,
+      and *only one* recursive branch is taken (there are no overlapping
+      subproblems to memoize, and no way to do better than `O(log n)` since the
+      answer genuinely depends on `k` at every level of `n`). The only
+      cosmetic change is to rewrite it as a loop (see ④).
+
+      **④ Alternative algorithm — iterative back-substitution, O(log n)**
+
+      The recursion never forks, so we can unroll it: first descend from the
+      original `(n,k)` to the base while recording, per level, whether it was
+      an even-`n` mapping or an odd-`n` mapping; then reassemble the answer by
+      walking the record in reverse. Same complexity, no function-call stack
+      — the usual choice when the recursion depth feels uncomfortable.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      ll fIter(ll n, ll k){
+          vector<pair<char,ll>> ops;               // recorded mappings, bottom-up
+          while(n > 1 && k > n/2){
+              ll m = n / 2, kk = k - m;
+              ops.push_back({ (n % 2 == 0) ? 'E' : 'O', n });
+              k = kk;
+              n = (n % 2 == 0) ? m : m + 1;
+          }
+          ll ans = (n == 1) ? 1 : 2 * k;           // base value
+          for(int i=(int)ops.size()-1; i>=0; i--){
+              if(ops[i].first == 'E') ans = 2 * ans - 1;      // undo j -> 2j-1
+              else{ ll N = ops[i].second; ans = (ans == 1) ? N : 2 * ans - 3; }
+          }
+          return ans;
+      }
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          int q; cin>>q; while(q--){ ll n,k; cin>>n>>k; cout<<fIter(n,k)<<"\n"; } }
+      ```
+
+      *`O(log n)` per query, `O(log n)` space for the record — effectively
+      identical to ②, just iterative.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      Trace **②**:
+
+      - **First sweep short-circuit.** `m = n/2` evens are removed before the
+        count ever wraps. If `k <= m` the answer is literally `2k` — the
+        `k`-th even child. No recursion needed.
+
+      - **Even `n` → renumber `1,3,...,n-1`.** After removing `2,4,...,n` the
+        count resumes at `1`, and the survivors in count order are exactly
+        `1,3,5,...,n-1`. That is a *new* Josephus game of `m = n/2` children;
+        if its `kk`-th removal is subgame child `s`, the real child is
+        `2s - 1`. Hence `2*f(m,kk) - 1`.
+
+      - **Odd `n` → renumber `n,1,3,...,n-2`.** The last removed is `n-1`, so
+        counting resumes at `n`. Subgame child `1` is real `n`; every later
+        subgame child `j` is real `2j - 3` (child `2` is real `1`, child `3`
+        is real `3`, ...). Hence `f(n,kk)` returns `sub`; map it back with
+        `sub == 1 ? n : 2*sub - 3`.
+
+      - **Termination.** Each call sets `n` to `m` (`n` even) or `m+1`
+        (`n` odd) — strictly smaller, eventually `n == 1`, where the only
+        child is the answer.
+
+      The same parity-reasoning is exactly what makes ④'s reverse loop correct.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample query `n = 7, k = 4` (the 4.th removed child); the full
+      order for `n = 7` is `2 4 6 1 5 3 7`.
+
+      `f(7,4)`:
+
+      - `m = 3`, and `k = 4 > m`, so we reduce. `kk = 4 - 3 = 1`.
+      - `n = 7` is odd → subgame has `m+1 = 4` children: `f(4, 1)`.
+        - `f(4,1)`: `m = 2`, `k = 1 <= 2` → returns `2*1 = 2` (subgame child 2).
+      - Map back (odd, `sub = 2 != 1`): real child `2*2 - 3 = 1`.
+      - So `f(7,4) = 1`. ✓ (4.th removed)
+
+      The remaining sample queries:
+
+      | query | reduction | result |
+      |-------|-----------|--------|
+      | `7 1` | `k=1 <= 3`, first sweep | `2*1 = 2` |
+      | `7 3` | `k=3 <= 3`, first sweep | `2*3 = 6` |
+      | `7 4` | odd map, `f(4,1)=2 -> 2*2-3` | `1` |
+      | `2 2` | even: `f(1,1)=1 -> 2*1-1` | `1` |
+
+      Expected (sample) — `2 6 1 1107`. Actual — `2 6 1 1107` (the last query
+      `1337 1313` reduces through `O(log 1337)` levels; the recursion yields
+      `1107`). Match.
+  - type: flowchart
+    title: "Answer the k-th Josephus removal"
+    nodes: ["read (n, k)", "k <= n/2 ?", "answer 2k", "n even?", "reduce: n->n/2, k->k-n/2, remember j->2j-1", "reduce: n->n/2+1, k->k-n/2, remember mapping", "recurse / loop to base", "map subgame answer back to real child", "done"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "yes"}
+      - {from: 1, to: 3, label: "no"}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 3, to: 5, label: "no"}
+      - {from: 4, to: 6}
+      - {from: 5, to: 6}
+      - {from: 6, to: 7}
+      - {from: 7, to: 8}
+      - {from: 2, to: 8}
+  - type: mcq
+    prompt: "When n is odd (n = 2m+1), after the first sweep removes the evens, which child does the survivor game start counting from?"
+    options:
+      - "child 1"
+      - "child n (the last one before the wrap)"
+      - "child 2"
+      - "child n-1"
+    answer: 1
+    explanation: "The last even child removed is n-1, so counting resumes at the very next child in the circle, which is n. In the survivor subgame that starting point becomes 'subgame child 1', which is why the odd-n mapping returns n when the subgame answer is 1, and 2j-3 for j>=2. Getting this parity-specific renumbering right is the heart of the Josephus recursion."
+---

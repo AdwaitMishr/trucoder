@@ -1,0 +1,212 @@
+---
+id: coin-combinations-i
+title: Coin Combinations I
+difficulty: easy
+order: 62
+tags:
+  - dynamic-programming
+  - counting
+  - ordered
+  - dp
+blocks:
+  - type: markdown
+    content: |
+      # Coin Combinations I — counting the *ordered* ways to build a sum
+
+      You have `n` coin denominations (unlimited supply of each) and a target sum
+      `x`. Count how many **sequences** of coins sum to `x`, where **order
+      matters**: `2 + 3 + 5` and `3 + 2 + 5` are two *different* ways. This is
+      the counting analogue of lesson 61 and the direct generalisation of lesson
+      60's die throws (a die is just coins `{1..6}`).
+
+      ## The recurrence (sum outer)
+
+      Look at the **last coin** in the sequence. A sequence summing to `s` ends
+      with some coin `c`, and before it summed to `s − c`. Every choice of `c`
+      and every sequence to `s − c` gives a distinct sequence to `s`, so:
+
+      ```
+      dp[0] = 1
+      dp[s] = sum over all coins c of dp[s − c]     (s ≥ 1)
+      ```
+
+      This is exactly the dice recurrence, only the allowed "steps" are the coin
+      values instead of `1..6`.
+
+      **Why does this count ordered ways?** The recurrence decides the *next /
+      last* coin to append, and it ranges over **all** coins for **every** sum
+      `s`. That freedom means two coins can appear in either order — so the DP
+      enumerates *arrangements* (permutations), not *sets*. That is precisely
+      what "ordered" means.
+
+      **Loop order matters.** Keep sums on the **outside** and coins on the
+      inside: `for s: for c: dp[s] += dp[s-c]`. (Lesson 63 shows flipping the
+      loops — coins outer — changes the answer to the *unordered* count.)
+
+      **Worked mini-example.** Coins `{2, 3, 5}`, target `9`. Sums build up:
+      `dp[2]=1`, `dp[3]=1`, `dp[4]=1`, `dp[5]=3`, `dp[6]=2`, `dp[7]=5`, `dp[8]=6`
+      and finally `dp[9]=8` — the sample answer.
+
+      **Complexity.** Time `O(n · x)`, space `O(x)`. Mod `10^9+7` throughout.
+
+      :::tip
+      **Interview tip:** *Combination Sum IV* on LeetCode is this exact problem.
+      The giveaway phrase is **"different orderings count as different"** — at
+      that point you write the sum-outer recurrence above and mod every add. If
+      the phrase is missing, you likely want Coin Combinations II (lesson 63)
+      instead. Distinguishing "ordered vs unordered" from the problem text is a
+      core interview skill.
+      :::
+  - type: markdown
+    content: |
+      # Question — Coin Combinations I
+
+      Consider a money system consisting of `n` coins. Each coin has a positive
+      integer value. Your task is to calculate the number of **distinct ordered
+      ways** you can produce a money sum `x` using the available coins. You may
+      use each coin any number of times.
+
+      For example, if the coins are `{2, 3, 5}` and the desired sum is `9`, there
+      are `8` ways:
+
+      ```
+      2+2+5   2+5+2   5+2+2
+      2+2+2+3 2+2+3+2 2+3+2+2 3+2+2+2
+      3+3+3
+      ```
+
+      **Input:** The first input line has two integers `n` and `x`: the number of
+      coins and the desired sum of money. The second line has `n` distinct
+      integers `c_1, c_2, …, c_n`: the value of each coin.
+
+      **Output:** Print the number of ways **modulo `10^9+7`**.
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 100`
+      - `1 ≤ x ≤ 10^6`
+      - `1 ≤ c_i ≤ 10^6`
+
+      **Example**
+
+      Input:
+
+      ```
+      3 9
+      2 3 5
+      ```
+
+      Output:
+
+      ```
+      8
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — recursion, exponential**
+
+      Enumerate every coin sequence, branching on the next coin, and count those
+      that sum to `x`. The number of sequences is exponential in `x`, so this
+      dies on `x = 10^6`.
+
+      ```cpp
+      long long brute(int x, const vector<int>& c, const long long MOD = 1000000007LL) {
+          if (x == 0) return 1;
+          long long tot = 0;
+          for (int v : c)
+              if (v <= x) tot = (tot + brute(x - v, c)) % MOD;
+          return tot;
+      }
+      ```
+
+      Time `O((#coins)^depth)` — exponential. Unusable here.
+
+      **② Optimization — bottom-up DP, sum-outer, O(n · x) time, O(x) space**
+
+      ```cpp
+      long long solve(int n, int x, const vector<int>& c) {
+          const long long MOD = 1000000007LL;
+          vector<long long> dp(x + 1, 0);
+          dp[0] = 1;
+          for (int s = 1; s <= x; ++s)
+              for (int v : c)
+                  if (s >= v) dp[s] = (dp[s] + dp[s - v]) % MOD;
+          return dp[x];
+      }
+      ```
+
+      Time `O(n · x)`, space `O(x)` — the intended solution.
+
+      **③ Further optimization — none needed**
+
+      Every sum up to `x` must be considered against every coin to count all
+      sequences, so `Ω(n · x)` is the natural floor. The `②` solution is optimal
+      for these constraints (`~10^8` inner iterations).
+
+      **④ Alternative — same count via top-down recursion + memo**
+
+      One can write the same recurrence recursively with caching. It computes
+      identical values; bottom-up is preferred here because it avoids call-stack
+      overhead and is simpler to bound.
+
+      ```cpp
+      long long go(int s, const vector<int>& c, vector<long long>& memo,
+                   const long long MOD = 1000000007LL) {
+          if (s == 0) return 1;
+          if (memo[s] != -1) return memo[s];
+          long long tot = 0;
+          for (int v : c)
+              if (s >= v) tot = (tot + go(s - v, c, memo)) % MOD;
+          return memo[s] = tot;
+      }
+      ```
+
+      Time `O(n · x)`, space `O(x)` — same as `②`, different order of filling.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the `②` solution:
+
+      - `dp[0] = 1` counts the single "empty sequence" that sums to `0`.
+      - Outer loop over `s` ascending guarantees `dp[s-v]` is finalised before
+        it is read — the bottom-up invariant from lesson 60.
+      - Inner loop over coins `v` adds `dp[s-v]`: each way to make `s-v`, plus
+        one coin `v` at the **end**, is a distinct sequence summing to `s`.
+        Summing over all `v` (and ranging all coins at every `s`) is what makes
+        the ordering matter — `v` can be appended after anything, so `a`-then-`b`
+        and `b`-then-`a` both survive.
+      - `% MOD` after each addition keeps `dp[s]` in 64-bit range.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(3, 9, [2, 3, 5])` on the sample. `dp[0]=1`, fill ascending:
+
+      | s | contributions (coin) | dp[s] |
+      |---|----------------------|-------|
+      | 1 | — | 0 |
+      | 2 | dp[0] via 2 | 1 |
+      | 3 | dp[0] via 3 | 1 |
+      | 4 | dp[2] via 2 | 1 |
+      | 5 | dp[3](2) + dp[2](3) + dp[0](5) = 1+1+1 | 3 |
+      | 6 | dp[4](2) + dp[3](3) = 1+1 | 2 |
+      | 7 | dp[5](2) + dp[4](3) + dp[2](5) = 3+1+1 | 5 |
+      | 8 | dp[6](2) + dp[5](3) + dp[3](5) = 2+3+1 | 6 |
+      | 9 | dp[7](2) + dp[6](3) + dp[4](5) = 5+2+1 | **8** |
+
+      `dp[9] = 8`, matching the sample output. The listed 8 sequences in the
+      problem statement are exactly the sequences the DP counted.
+  - type: mcq
+    prompt: 'In Coin Combinations I the loops are sum-outer, coins-inner (for s: for c: dp[s]+=dp[s-c]). Why does calling it different from Coin Combinations II, where the loop order is flipped?'
+    options:
+      - 'Sum-outer decides the "last coin" independently at every sum, letting every coin be appended after anything, which is exactly counting ordered arrangements; flipping to coins-outer restricts order and counts unordered sets instead.'
+      - 'The two loop orders always give the identical answer, so the distinction is irrelevant.'
+      - 'Sum-outer counts subsets and coins-outer counts sequences.'
+      - 'The outer loop only affects the modulo value, not the count.'
+    answer: 0
+    explanation: 'Sum-outer lets every coin be the last element of any sequence to s that can reach it, so all orderings are enumerated (ordered). Coins-outer fixes coins one at a time, so a smaller coin can only ever precede a later coin — collapsing permutations of the same multiset into one — which is why lesson 63 (unordered) needs that flip.'
+type: content
+---

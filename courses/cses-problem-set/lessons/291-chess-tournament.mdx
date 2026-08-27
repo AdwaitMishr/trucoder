@@ -1,0 +1,279 @@
+---
+id: chess-tournament
+title: Chess Tournament
+difficulty: medium
+order: 291
+tags:
+  - construction
+  - graph-realization
+  - greedy
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — realizing a degree sequence (Havel-Hakimi)
+
+      Each player wants a fixed number of games, and any two players meet **at
+      most once**. If we think of players as vertices and games as edges, the
+      problem is exactly: **build a simple graph whose vertex-degrees equal the
+      announced numbers** `x[1], …, x[n]`. A list of numbers that some simple
+      graph can realize is called a **graphical degree sequence**, and the
+      question "is this sequence graphical?" has a famous greedy answer.
+
+      **Havel-Hakimi theorem.** Sort the remaining degrees descending. Take the
+      vertex with the largest remaining degree `d`. Give it its `d` edges by
+      connecting it to the `d` vertices with the next-largest remaining degrees,
+      decrement each of those by 1, and remove the largest vertex. Repeat. The
+      sequence is graphical **if and only if** this greedy process never needs
+      to connect a vertex to more distinct remaining vertices than exist.
+
+      **Why the greedy is safe.** This is the key fact: if *any* simple graph
+      realizes the current degrees, then there is one that connects the largest
+      vertex to the next-`d` largest. (Classical exchange argument — rewire any
+      witness graph to respect that adjacency without changing any degree.) So
+      greedily forcing one vertex at a time cannot walk into a trap: it either
+      finishes a valid graph, or the sequence was never graphical and we print
+      `IMPOSSIBLE`.
+
+      **Implementation with a max-heap.** A priority queue keeps the largest
+      remaining degree on top. Pop it (`d`, `u`); pop the next `d` vertices
+      (guaranteed the current top-`d`), record an edge `(u, v)` for each, push
+      the decremented versions back. If we ever pop a `d` exceeding the number
+      of vertices still in the heap, the answer is `IMPOSSIBLE`.
+
+      **Correctness of `IMPOSSIBLE`.** A vertex can have at most `n − 1`
+      opponents, so need `d ≤ n−1`; and by the theorem the greedy detects
+      non-graphical sequences exactly. Sum-of-degrees parity is automatic
+      because every edge adds 1 to two vertices.
+
+      **Complexity.** Each pop/push is `O(log n)`; the total number of
+      decrements equals total edges `= (Σx)/2 ≤ 10^5`, plus one pop per vertex.
+      So `O(n + Σx log n)` time, `O(n + Σx)` space.
+
+      :::tip
+      **Interview tip:** "Assign each participant a number of meetings, produce
+      the simple set of games" is *graph realization*. Naming **Havel-Hakimi**
+      (greedy largest-first) and proving the exchange argument are exactly what
+      an interviewer wants. The heap-based version is the standard coding answer;
+      it also converts naturally to a bipartite schedule.
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      There will be a chess tournament of `n` players. Each player has announced
+      the number of games they want to play. Each pair of players can play **at
+      most one** game. Your task is to determine which games will be played so
+      that everybody will be happy.
+
+      **Input.** The first line has an integer `n`. The next line has `n`
+      integers `x[1], …, x[n]`: for each player, the number of games they want
+      to play.
+
+      **Output.** First print an integer `k`: the number of games. Then print
+      `k` lines describing the games. You can print any valid solution. If there
+      are no solutions, print `IMPOSSIBLE`.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 10^5`
+      - `Σ x[i] ≤ 2 · 10^5`
+
+      ### Sample
+
+      **Input:**
+      ```
+      5
+      1 3 2 0 2
+      ```
+
+      **Output:**
+      ```
+      4
+      1 2
+      2 3
+      2 5
+      3 5
+      ```
+      **(Any valid set is accepted; this is one example.)**
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n! · n) via search (too slow).** Try adding edges one
+      at a time (backtracking), checking that no player exceeds their announced
+      degree and no pair repeats. Correct but the search space is enormous for
+      `n = 10^5`; usable only to confirm tiny cases.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      // n <= 9 only: backtrack, return edge list or "-1"
+      vector<pair<int,int>> brute(int n, vector<int> x){
+          vector<vector<int>> want;   // not used here; kept minimal
+          vector<pair<int,int>> edges;
+          vector<int> cur(x);
+          function<bool(int,int)> go = [&](int a, int b) -> bool {
+              if (a >= n) return all_of(cur.begin(), cur.end(), [](int d){return d==0;});
+              if (b >= n) return go(a+1, a+2);
+              // option 1: skip edge (a,b)
+              if (go(a, b+1)) return true;
+              // option 2: take edge (a,b) if both still need games
+              if (cur[a] > 0 && cur[b] > 0) { cur[a]--; cur[b]--; edges.push_back({a+1,b+1});
+                  if (go(a, b+1)) return true;
+                  edges.pop_back(); cur[a]++; cur[b]++; }
+              return false;
+          };
+          if (go(0,1)) return edges;
+          return {};
+      }
+      ```
+      The branching is `O(2^(n²/2))` in the worst case — hopeless in general.
+
+      **② Optimization — O(n + Σx log n) time, O(n + Σx) space (Havel-Hakimi
+      with a max-heap).** The reference `solve` below realizes the degree
+      sequence greedily and prints the number of games followed by the edges.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(int n, const vector<int>& x) {
+          priority_queue<pair<int,int>> pq;        // (remaining wanted games, player)
+          for (int i = 0; i < n; ++i) if (x[i] > 0) pq.push({x[i], i});
+          vector<pair<int,int>> edges;
+          while (!pq.empty()) {
+              auto [d, u] = pq.top(); pq.pop();
+              if (d > (int)pq.size()) return "IMPOSSIBLE";   // not enough distinct opponents
+              vector<pair<int,int>> store;
+              for (int k = 0; k < d; ++k) {
+                  auto [dv, v] = pq.top(); pq.pop();
+                  edges.push_back({min(u,v)+1, max(u,v)+1});
+                  if (dv > 1) store.push_back({dv - 1, v});
+              }
+              for (auto& p : store) pq.push(p);
+          }
+          ostringstream out;
+          out << edges.size();
+          for (auto& e : edges) out << "\n" << e.first << " " << e.second;
+          return out.str();
+      }
+      ```
+
+      **④ Alternative algorithm — O(n + Σx log n) time, O(n + Σx) space (set-hosted
+      Havel-Hakimi).** A different data structure, same greedy: order players
+      by remaining games in an ordered `set` and always take the maximum. This
+      realizes exactly the same graphs the heap builds; its value is showing the
+      greedy is data-structure-independent.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(int n, const vector<int>& x) {
+          set<pair<int,int>> s;                        // (remaining wanted, player), ascending
+          for (int i = 0; i < n; ++i) if (x[i] > 0) s.insert({x[i], i});
+          vector<pair<int,int>> edges;
+          while (!s.empty()) {
+              auto it = prev(s.end());                 // largest remaining degree
+              int d = it->first, u = it->second;
+              s.erase(it);
+              if (d > (int)s.size()) return "IMPOSSIBLE";
+              vector<pair<int,int>> store;
+              for (int k = 0; k < d; ++k) {
+                  auto jt = prev(s.end());             // a next-largest partner
+                  int dv = jt->first, v = jt->second;
+                  s.erase(jt);
+                  edges.push_back({min(u,v)+1, max(u,v)+1});
+                  store.push_back({dv - 1, v});
+              }
+              for (auto& p : store) if (p.first > 0) s.insert(p);
+          }
+          ostringstream out;
+          out << edges.size();
+          for (auto& e : edges) out << "\n" << e.first << " " << e.second;
+          return out.str();
+      }
+      ```
+      This is the *same* Havel-Hakimi, hosted on a `set` ordered ascending and
+      taking the maximum via `prev(s.end())`. It trades the heap's log factor
+      for the same log factor — the pedagogical point is that any sorted
+      structure works; the priority-queue version in ② is a hair simpler to
+      read, so that is the reference you would ship.
+
+      Now reason through the chosen tier (②) in the next block, then trace it.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n, x)` — the max-heap Havel-Hakimi reference.
+
+      1. **Seed the heap** with every player whose wanted games `x[i] > 0`,
+         ordered by `(wanted, id)`. A `priority_queue` of pairs keeps the largest
+         `wanted` on top.
+      2. **Loop:** pop the top `(d, u)` — the player with the most games still
+         to assign. If `d` exceeds the number of players still in the heap,
+         there are not enough distinct opponents left, so return `IMPOSSIBLE`.
+      3. **Connect `u` to the next `d` players** (those currently with the
+         largest remaining wanted), emitting an edge `(min+1, max+1)` (players
+         are output 1-indexed). Decrement each partner's need; keep partners
+         that still need games in a temporary `store`.
+      4. **Re-push `store`.** Player `u` is now saturated and is not re-added.
+         Because we always connect to the current top-`d`, this is exactly
+         Havel-Hakimi, so success ⇒ the built graph is valid; failure ⇒
+         `IMPOSSIBLE`.
+      5. **Return** `edges.size()` then one edge per line. The sum-of-degrees is
+         even automatically, and no edge repeats because each pair is created
+         once (min/max normalization, each vertex consumed once).
+
+      Total pops/pushes: one per vertex plus one per decrement (= total games),
+      so `O(n + Σx log n)`.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 5`, `x = [1, 3, 2, 0, 2]`.
+
+      **Heap init (player, wanted):** `(2,3) (3,2) (5,2) (1,1)` (player `4` wants
+      0, omitted).
+
+      **Iteration 1.** Pop `(3, 2)`. `d = 3 ≤ heap size 4`. Connect player `2` to
+      the next 3 largest: players `5, 3, 1` → edges `(2,5) (2,3) (1,2)`. Decrement
+      partners: `5→1, 3→1, 1→0`. Heap now: `(1,5) (1,3) (0,1)`.
+
+      **Iteration 2.** Pop `(1, 5)`. `d = 1 ≤ size 2`. Connect player `5` to the
+      largest remaining, player `3` → edge `(3,5)`. `3→0`. Heap: `(0,3) (0,1)`.
+
+      **Iteration 3.** Pop `(0, 1)` — nothing to do. Pop `(0, 3)` — nothing.
+      Heap empty.
+
+      **Output:**
+      ```
+      4
+      2 5
+      2 3
+      1 2
+      3 5
+      ```
+
+      **Check degrees realised:** player 1 → 1 (edge `1 2`); player 2 → 3
+      (`2 5`,`2 3`,`1 2`); player 3 → 2 (`2 3`,`3 5`); player 4 → 0; player 5 → 2
+      (`2 5`,`3 5`). Matches `[1,3,2,0,2]` exactly, and `k = 4` is printed.
+
+      **Actual vs expected:** our edges `{1-2,2-3,2-5,3-5}` are precisely the
+      CSES sample's set (same 4 games, different order), so it is accepted.
+
+      **Boundary `IMPOSSIBLE`:** e.g. `n = 3, x = [2, 2, 0]` — player 1 wants 2
+      games but only player 2 remains as an opponent, and `d = 2 > heap size 1`
+      → `IMPOSSIBLE` (correct: two people cannot share a third player's single
+      possible opponent in two different games).
+  - type: mcq
+    prompt: "In Havel-Hakimi, why may we always connect the vertex with the largest remaining degree to the next-largest vertices and still recover a valid graph if one exists?"
+    options:
+      - "Because an exchange argument rewires any witness graph so that it does that without changing degrees."
+      - "Because the largest-degree vertex has no other valid neighbors."
+      - "Because every graphical sequence has a unique realization."
+      - "Because the next-largest vertices are forced to connect to each other."
+    answer: 0
+    explanation: "The greedy's safety is the exchange argument: if some simple graph realizes the degrees, one can repeatedly swap two edges inside a 2x2 pattern to route the largest vertex onto the next-largest neighbors without changing any degree. Therefore the greedy choice never forecloses a solution — it either finishes a valid graph or the sequence was never graphical."
+type: content
+---

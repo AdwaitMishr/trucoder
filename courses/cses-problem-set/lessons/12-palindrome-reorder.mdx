@@ -1,0 +1,233 @@
+---
+id: palindrome-reorder
+title: Palindrome Reorder
+difficulty: medium
+order: 12
+tags:
+  - intro
+  - strings
+  - char-counting
+blocks:
+  - type: markdown
+    content: |
+      ## Reordering by character frequency
+
+      A palindrome reads the same forwards and backwards, so every character
+      must pair symmetrically about the centre. Counting each character tells
+      us the *only* constraint:
+
+      - A character that appears an **even** number of times can be split
+        evenly between the left and right halves (half on each side).
+      - A character with an **odd** count leaves one unpaired copy — and that
+        can only go in the **single middle** position.
+
+      Therefore a palindrome is possible **iff at most one character has an
+      odd frequency**. If two or more do, print `"NO SOLUTION"`.
+
+      When it is possible, build the answer as:
+
+      ```
+      left-half (half of each char, in sorted order)
+      + (optional single middle char)
+      + reverse(left-half)
+      ```
+
+      *Worked mini-example, "AABB":* counts `A = 2, B = 2`, no odd counts.
+      Left half = one `A` + one `B` = `"AB"`, no middle, right = `reverse("AB")`
+      = `"BA"` → `"ABBA"`, a valid palindrome.
+
+      **Time complexity:** `O(n)` (one pass to count + one pass to build).
+      **Space:** `O(n)` for the output string; the counts table is fixed at
+      26 entries.
+
+      :::tip
+      **Interview tip:** Character-frequency reasoning is the backbone of many
+      string problems — checking anagrams, "can this be rearranged into a
+      palindrome?", or longest-substring counts. The rule "for a palindrome,
+      at most one character may have odd frequency" is asked directly in
+      interviews and is the core idea behind problems built on top of
+      anagram/palindrome checks.
+      :::
+  - type: markdown
+    content: |
+      ## Question
+
+      Given a string, your task is to reorder its letters. You can write any
+      resulting words you like. You are also allowed to do nothing.
+
+      Find a palindrome consisting of the characters of the original string.
+      You may print any valid solution. If there are no solutions, print
+      `"NO SOLUTION"`.
+
+      **Input**
+
+      The only input line has a string of length `n`.
+
+      **Output**
+
+      Print a palindrome consisting of the characters of the original string,
+      or `"NO SOLUTION"` if no palindrome is possible.
+
+      **Constraints**
+
+      - `1 <= n <= 10^6`
+      - The string consists of uppercase letters `A`–`Z`.
+
+      **Example**
+
+      Input:
+
+      ```
+      AAAACACBA
+      ```
+
+      Output:
+
+      ```
+      AACABACAA
+      ```
+
+      (Any valid palindrome is accepted.)
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n! · n) time, O(n) space (try every rearrangement).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(string s) {
+          sort(s.begin(), s.end());
+          do {
+              string t = s;
+              reverse(t.begin(), t.end());
+              if (s == t) return s;                 // found a palindromic rearrangement
+          } while (next_permutation(s.begin(), s.end()));
+          return "NO SOLUTION";
+      }
+      ```
+
+      Generate every distinct permutation of the input and return the first one that
+      reads the same backwards. Exactly correct, but there are up to `n!` permutations,
+      each an `O(n)` palindrome check — utterly impossible for `n = 10^6`. Only the tiny
+      sample finishes.
+
+      **② Optimization — O(n) time, O(n) space (count frequencies, build halves).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(const string& s) {
+          vector<int> cnt(26, 0);
+          for (char c : s) cnt[c - 'A']++;
+
+          int odd = 0;
+          char oddChar = 0;
+          for (int i = 0; i < 26; i++) {
+              if (cnt[i] % 2 == 1) { odd++; oddChar = (char)('A' + i); }
+          }
+          if (odd > 1) return "NO SOLUTION";
+
+          string left;
+          for (int i = 0; i < 26; i++)
+              left += string(cnt[i] / 2, (char)('A' + i));
+
+          string mid;
+          if (odd == 1) mid += oddChar;
+
+          string right = left;
+          reverse(right.begin(), right.end());
+          return left + mid + right;
+      }
+      ```
+
+      Count the 26 letters in one pass. A palindrome needs every character paired about
+      the centre, so it exists iff at most one letter has an odd count; that lone letter
+      goes in the middle, and the halves are built from `cnt/2` of each letter in sorted
+      order. One count pass + one build pass → `O(n)`. This is the intended solution.
+
+      **④ Alternative algorithm — O(n) time, O(n) space (fill from both ends).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(const string& s) {
+          vector<int> cnt(26, 0);
+          for (char c : s) cnt[c - 'A']++;
+
+          int odd = 0;
+          char oddChar = 0;
+          for (int i = 0; i < 26; i++) {
+              if (cnt[i] % 2 == 1) { odd++; oddChar = (char)('A' + i); }
+          }
+          if (odd > 1) return "NO SOLUTION";
+
+          string res(s.size(), ' ');
+          int L = 0, R = (int)s.size() - 1;
+          for (int i = 0; i < 26; i++) {
+              for (char c = (char)('A' + i); cnt[i] >= 2; cnt[i] -= 2)
+                  res[L++] = c, res[R--] = c;       // drop a symmetric pair at both ends
+          }
+          if (odd == 1) res[L] = oddChar;           // lone odd letter occupies the centre
+          return res;
+      }
+      ```
+
+      A different (and often simpler to write) construction: instead of building a left
+      half and mirroring it, allocate the result up front and write each character's
+      pairs directly into the *two ends*, moving two pointers `L`/`R` inward. Whatever
+      single odd letter remains lands on the middle cell. Same `O(n)` complexity, but it
+      avoids building and reversing a second string.
+
+      Reason through the code above with the next block — then trace it on the sample input below.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The solution counts the 26 letters into an array, then walks the array
+      to find how many characters have an odd frequency. If more than one is
+      odd, the string cannot form a palindrome and we return `"NO SOLUTION"`
+      immediately.
+
+      Otherwise we build the palindrome in three parts using the fixed 26
+      slots in sorted order (guaranteeing a deterministic output):
+
+      - `left` accumulates `cnt[i] / 2` copies of each letter — the left half;
+      - `mid` holds the single odd char (if there is one);
+      - `right` is `reverse(left)`.
+
+      The whole construction is one pass over 26 buckets plus a pass over the
+      input to count, so it runs in `O(n)` and stores `O(n)` — well within
+      the `n <= 10^6` bound.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      Trace the CSES sample `"AAAACACBA"` (length 9). Counts:
+
+      | A | B | C |
+      |---|---|-----|
+      | 6 | 1 | 2   |
+
+      Odd counts: only `B` (A and C are even), so `odd = 1` → possible, and
+      the middle char is `B`.
+
+      - Left half: `A` appears 6 → 3 copies, `C` appears 2 → 1 copy →
+        `"AAA" + "C" = "AAAC"`.
+      - Middle: `"B"`.
+      - Right: `reverse("AAAC") = "CAAA"`.
+
+      Result: `"AAAC" + "B" + "CAAA" = "AAACBCAAA"`. Check it reads the same
+      backwards — it does, and reusing the input's letters shows the counts
+      match (6 A, 1 B, 2 C). This differs from the sample's equally-valid
+      `"AACABACAA"` but is accepted, since any correct palindrome works.
+
+      For an impossible case like `"ABCA"`, counts are A=2, B=1, C=1 — two
+      odd characters (B and C) — so the function returns `"NO SOLUTION"`.
+type: content
+---
+

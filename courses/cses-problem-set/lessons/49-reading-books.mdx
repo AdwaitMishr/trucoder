@@ -1,0 +1,227 @@
+---
+id: reading-books
+title: Reading Books
+difficulty: medium
+order: 49
+tags:
+  - sorting-and-searching
+  - greedy
+  - math
+blocks:
+  - type: markdown
+    content: |
+      # Reading Books — max(sum, 2·max)
+
+      There are `n` books; book `i` takes `t[i]` minutes to read. Two friends,
+      Kotivalo and Justiina, want to read them all. **Each book can be read by
+      only one of them**, but the two can read *different* books simultaneously.
+      Both start at time `0`. What is the earliest moment **both** have finished?
+
+      This looks like a scheduling puzzle, but there is a beautiful closed
+      form. Let
+
+      ```
+      sum = t[1] + t[2] + ... + t[n]
+      max = largest t[i]
+      ```
+
+      The answer is simply `max(sum, 2·max)`.
+
+      **Intuition.** Two deadlines pull in opposite directions.
+      - **Lower bound `sum`:** the two readers together must perform `sum`
+        units of reading. Even split perfectly across two parallel people, the
+        wall-clock time is `>= sum/2`, but the real constraint ends up making
+        the answer `>= sum` (see the schedule below).
+      - **Lower bound `2·max`:** there is at most one copy of the *longest*
+        book. Consider the reader who reads it first; the *other* reader must
+        then also handle it later (to read every book? no — only one reader per
+        book). Actually: the longest book cannot be overlapped with itself, and
+        when one person reads it, the other cannot be idle in a way that keeps
+        the makespan under `2·max` if `max > sum − max`.
+
+      **Why it works (schedule).** Sort ascending, `t[1] <= ... <= t[n]`.
+      - Kotivalo reads books `t[n], t[1], t[2], ..., t[n-1]`.
+      - Justiina reads books `t[1], t[2], ..., t[n-1], t[n]`.
+
+      Each book totals once across the two readers (Kotivalo takes `t[n]`, then
+      Justiina takes `t[n]` at the end; all the middle books are split). The
+      two sequences are scheduled so they never collide on the same book:
+      - If `sum − t[n] >= t[n]` (the longest book fits "inside" the rest),
+        Justiina finishes `t[1..n-1]` while Kotivalo handles `t[n]`, then both
+        finish around `sum`.
+      - If `sum − t[n] < t[n]`, Justiina would finish the shorter books then
+        wait for Kotivalo's `t[n]`, then Justiina reads `t[n]` — total
+        `2·t[n]`.
+
+      **Complexity:** `O(n)` time, `O(1)` extra space — find `sum` and `max`.
+
+      :::tip
+      **Interview tip:** watch for problems whose answer is a **closed-form
+      `max`** of two lower bounds. The habit of asking "what must the answer be
+      *at least* — (a) total work, (b) biggest indivisible unit?" turns many
+      tricky scheduling/makespan questions into a two-line formula.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` books, and book `i` takes `t[i]` minutes to read. Two
+      friends, Kotivalo and Justiina, want to read all the books together. Each
+      book can be read by only one of them, and they can read two books
+      simultaneously (in parallel). Both start reading at time `0`.
+
+      **What is the earliest moment when they have both finished reading all the
+      books?**
+
+      **Constraints:** `1 <= n <= 2*10^5`, `1 <= t[i] <= 10^9`
+
+      ## Input
+
+      The first input line has an integer `n`. The next line has `n` integers
+      `t[1], ..., t[n]`: the reading time of each book.
+
+      ## Output
+
+      One integer: the earliest time they both finish.
+
+      ## Sample
+
+      **Input:**
+      ```
+      3
+      2 2 2
+      ```
+      **Output:**
+      ```
+      6
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — enumerate every split, O(2^n · n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(int n, const std::vector<long long>& t) {
+          long long best = LLONG_MAX;
+          for (int mask = 0; mask < (1 << n); mask++) {
+              long long a = 0, b = 0;           // reading load of each friend
+              for (int i = 0; i < n; i++)
+                  (mask >> i & 1) ? (a += t[i]) : (b += t[i]);
+              best = min(best, max(a, b));      // both finish when the later one does
+          }
+          return best;
+      }
+      ```
+      For every way to partition the books into the two readers (`2^n`
+      subsets), compute each reader's total load and record the larger (the
+      makespan). Correct for tiny `n` (< 20), but `2^n` explodes — hopeless for
+      `n = 2·10^5`.
+
+      **② Optimization — closed form max(sum, 2·max), O(n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(int n, const std::vector<long long>& t) {
+          long long sum = 0, mx = 0;
+          for (long long x : t) { sum += x; mx = max(mx, x); }
+          return max(sum, 2 * mx);
+      }
+      ```
+      One pass over the array computes `sum` and `max`; return `max(sum, 2·max)`.
+      `O(n)` time, `O(1)` space — this is the intended, optimal solution.
+
+      **③ Further optimization — none needed.**
+      `O(n)` already just reads the input once. There is no sub-linear approach
+      since we must see every book.
+
+      **④ Alternative — none meaningful.**
+      The closed form is both the simplest and the intended solution, so there
+      is no distinct faster algorithm worth presenting. A direct "event
+      simulation" that schedules each next book onto the reader who is free
+      earlier reconstructs the same `max(sum, 2·max)` outcome but is strictly
+      more work (`O(n log n)` with a heap and no insight gain), so we skip it.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - The whole solution is **two running sums**: `sum` totals all reading
+        time, `mx` tracks the single longest book.
+      - `max(sum, 2·mx)` combines the two lower bounds:
+        - `sum`: total work; even fully parallel, both readers together cannot
+          finish before all `sum` minutes of reading are done (the two readers
+          only partly overlap — the longest book forces `>= sum` wall time in
+          the knife-edge case, and this formula's `max` captures that).
+        - `2·mx`: the longest book has no copy to overlap with, so the pair
+          needs at least `2·mx` wall time whenever `mx` exceeds the sum of all
+          the other books together.
+      - The `long long` return type is essential: `n = 2·10^5` books of up to
+        `10^9` minutes can make `sum ≈ 2·10^14`, far beyond 32-bit range.
+
+      There is no array to keep: `sum` and `mx` are computed in one pass.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 3`, `t = [2, 2, 2]`.
+
+      **Expected output:** `6`.
+
+      **Actual run.** `sum = 2 + 2 + 2 = 6`; `mx = 2`; `sum − mx = 4`.
+      Since `sum − mx = 4 >= mx = 2`, we are in the "longest fits inside the
+      rest" case, so the answer is `sum =` **6** ✓. (Equivalently
+      `max(6, 2·2) = max(6, 4) = 6`.)
+
+      **A knife-edge case.** `t = [8, 1, 1, 1, 1]`: `sum = 12`, `mx = 8`,
+      `sum − mx = 4 < 8`, so the answer is `2·mx = 16`. Both readers can't
+      overlap book of length 8 with anything that would keep them under `2·8`:
+      one reads `8`, the other covers the four `1`s, then they swap the `8`
+      book — `16` total.
+
+      | input | sum | mx | answer = max(sum, 2·mx) |
+      |-------|-----|----|---------------------------|
+      | [2,2,2] | 6 | 2 | 6 |
+      | [8,1,1,1,1] | 12 | 8 | 16 |
+      | [1,1,1,1,1] | 5 | 1 | 5 |
+  - type: flowchart
+    title: Two-bounds makespan
+    nodes:
+      - Read books
+      - Compute sum and max
+      - is max > sum - max?
+      - 'Answer = 2 * max'
+      - 'Answer = sum'
+      - Output answer
+    edges:
+      - from: 0
+        to: 1
+        label: ''
+      - from: 1
+        to: 2
+        label: ''
+      - from: 2
+        to: 3
+        label: yes
+      - from: 2
+        to: 4
+        label: no
+      - from: 3
+        to: 5
+        label: ''
+      - from: 4
+        to: 5
+        label: ''
+  - type: mcq
+    prompt: When does the reading pair need 2·max minutes instead of just sum?
+    options:
+      - When there are exactly two books
+      - 'When the longest book takes longer than all the other books combined (max > sum - max), so the two readers cannot overlap it and effectively read it twice'
+      - When all books take the same time
+      - When n is odd
+    answer: 1
+    explanation: 'If the longest book is bigger than everything else combined, one reader handles it while the other covers all shorter books; then they must reuse the longest book, costing 2×max. Otherwise the longest book fits inside the total and the answer is simply sum.'
+type: content
+---

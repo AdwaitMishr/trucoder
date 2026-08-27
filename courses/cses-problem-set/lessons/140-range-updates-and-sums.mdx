@@ -1,0 +1,397 @@
+---
+id: range-updates-and-sums
+title: "Range Updates and Sums"
+type: content
+difficulty: hard
+order: 140
+tags:
+  - range-queries
+  - segment-tree
+  - lazy-propagation
+  - range-add
+  - range-set
+blocks:
+  - type: markdown
+    content: |
+      # Range Updates and Sums — lazy segment tree with two tags
+
+      We maintain an array and must support three bulk operations:
+      1. add `x` to every value in `[a,b]`;
+      2. **set** every value in `[a,b]` to `x`;
+      3. sum the values in `[a,b]`.
+
+      Doing any of them by walking the range is `O(n)` per query, which cannot
+      survive `n, q = 2·10^5`. This is the classic **"range update + range
+      query"** problem and the standard tool is a **segment tree with lazy
+      propagation**.
+
+      ## The lazy idea
+
+      A segment tree stores answers (here: subtree sums) for disjoint intervals,
+      one per node. When an update covers a whole node, we are allowed to update
+      *only that node* and remember the operation in a **lazy tag** instead of
+      touching every leaf underneath. The tag is "pushed down" (applied to the
+      children) only later, when a deeper query or update actually needs it. This
+      turns a range update into `O(log n)` work: split `[a,b]` into the `O(log n)`
+      canonical nodes that cover it and tag each one.
+
+      ## Why two tags, and their ordering
+
+      A node can accumulate a **set** and an **add** simultaneously. The order
+      matters:
+
+      - **Set beats add.** If we set a whole node to `5` and then add `3`, the
+        node's children should become `8`, but the pending set alone (value `5`)
+        must be applied *before* the pending add (`+3`). So a set clears any
+        pending add tag.
+      - **Add piles on add.** Two consecutive range-adds just combine into one
+        bigger `lazyAdd`.
+      - **Set after set** just overwrites the pending set value.
+
+      So each node carries `lazySet` + a `hasSet` flag, and `lazyAdd`. When
+      pushing a node we always emit the pending set first, then the pending add.
+
+      :::tip
+      **Interview tip:** any problem with *two different range updates on a
+      range-sum tree* — especially "assign" vs "add" — is testing whether you
+      understand tag ordering. The tell is on how the two updates compose. If an
+      update ever "clobbers" the other (a set makes previous adds irrelevant),
+      decide a priority and encode it in `push`. Getting the order wrong silently
+      breaks queries, so it is a favourite place to probe candidates.
+      :::
+
+      **Complexities:** build `O(n)`, each update/query `O(log n)`, space `O(n)`.
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to maintain an array of `n` values and efficiently process the
+      following types of queries:
+
+      - **Increase each value in range `[a,b]` by `x`.**
+      - **Set each value in range `[a,b]` to `x`.**
+      - **Calculate the sum of values in range `[a,b]`.**
+
+      ## Input
+
+      The first input line has two integers `n` and `q`: the array size and the
+      number of queries.
+
+      The next line has `n` values `t_1, t_2, ..., t_n`: the initial contents of
+      the array.
+
+      Finally, there are `q` lines describing the queries. The format of each
+      line is one of the following: `1 a b x`, `2 a b x`, or `3 a b`.
+
+      **Constraints:**
+
+      ```
+      1 ≤ n, q ≤ 2·10^5
+      1 ≤ t_i, x ≤ 10^6
+      1 ≤ a ≤ b ≤ n
+      ```
+
+      ## Output
+
+      Print the answer to each sum query.
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      6 5
+      2 3 1 1 5 3
+      3 3 5
+      1 2 4 2
+      3 3 5
+      2 2 4 5
+      3 3 5
+      ```
+
+      **Output:**
+
+      ```
+      7
+      11
+      15
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n) per query**
+
+      Apply each update by iterating the range and answer each sum query by
+      summing the range directly. `O(n)` per operation means up to `2·10^5 ·
+      2·10^5 = 4·10^10` steps — far beyond the limit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<ll> a(n + 1);
+          for (int i = 1; i <= n; i++) cin >> a[i];
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) { int l, r; ll x; cin >> l >> r >> x;
+                  for (int i = l; i <= r; i++) a[i] += x;
+              } else if (t == 2) { int l, r; ll x; cin >> l >> r >> x;
+                  for (int i = l; i <= r; i++) a[i] = x;
+              } else { int l, r; cin >> l >> r;
+                  ll s = 0; for (int i = l; i <= r; i++) s += a[i];
+                  cout << s << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *O(n) per query — correct but far too slow.*
+
+      **② Optimization — lazy segment tree with set + add, O(log n) per query**
+
+      A segment tree with two lazy tags (`lazySet` + `hasSet`, and `lazyAdd`)
+      reduces every operation to `O(log n)`. This is the optimal tier we compile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int n, q;
+      vector<ll> sumv, lazyAdd;
+      vector<ll> lazySet;
+      vector<char> hasSet;
+
+      void applySet(int v, int l, int r, ll val) {
+          sumv[v] = val * (ll)(r - l + 1);
+          lazySet[v] = val;
+          hasSet[v] = 1;
+          lazyAdd[v] = 0;                 // a set overrides any pending adds
+      }
+      void applyAdd(int v, int l, int r, ll val) {
+          sumv[v] += val * (ll)(r - l + 1);
+          lazyAdd[v] += val;              // an add piles on top of set/add
+      }
+      void push(int v, int l, int r) {
+          if (l == r) { lazyAdd[v] = 0; lazySet[v] = 0; hasSet[v] = 0; return; }
+          int m = (l + r) / 2;
+          if (hasSet[v]) {                // set first, then add
+              applySet(2*v, l, m, lazySet[v]);
+              applySet(2*v+1, m+1, r, lazySet[v]);
+              hasSet[v] = 0;
+          }
+          if (lazyAdd[v]) {
+              applyAdd(2*v, l, m, lazyAdd[v]);
+              applyAdd(2*v+1, m+1, r, lazyAdd[v]);
+              lazyAdd[v] = 0;
+          }
+      }
+      void build(int v, int l, int r, const vector<ll>& a) {
+          if (l == r) { sumv[v] = a[l]; return; }
+          int m = (l + r) / 2;
+          build(2*v, l, m, a);
+          build(2*v+1, m+1, r, a);
+          sumv[v] = sumv[2*v] + sumv[2*v+1];
+      }
+      void updateSet(int v, int l, int r, int ql, int qr, ll val) {
+          if (ql > r || qr < l) return;
+          if (ql <= l && r <= qr) { applySet(v, l, r, val); return; }
+          push(v, l, r);
+          int m = (l + r) / 2;
+          updateSet(2*v, l, m, ql, qr, val);
+          updateSet(2*v+1, m+1, r, ql, qr, val);
+          sumv[v] = sumv[2*v] + sumv[2*v+1];
+      }
+      void updateAdd(int v, int l, int r, int ql, int qr, ll val) {
+          if (ql > r || qr < l) return;
+          if (ql <= l && r <= qr) { applyAdd(v, l, r, val); return; }
+          push(v, l, r);
+          int m = (l + r) / 2;
+          updateAdd(2*v, l, m, ql, qr, val);
+          updateAdd(2*v+1, m+1, r, ql, qr, val);
+          sumv[v] = sumv[2*v] + sumv[2*v+1];
+      }
+      ll query(int v, int l, int r, int ql, int qr) {
+          if (ql > r || qr < l) return 0;
+          if (ql <= l && r <= qr) return sumv[v];
+          push(v, l, r);
+          int m = (l + r) / 2;
+          return query(2*v, l, m, ql, qr) + query(2*v+1, m+1, r, ql, qr);
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(0);
+          cin >> n >> q;
+          vector<ll> a(n + 1);
+          for (int i = 1; i <= n; i++) cin >> a[i];
+          sumv.assign(4*n + 5, 0);
+          lazyAdd.assign(4*n + 5, 0);
+          lazySet.assign(4*n + 5, 0);
+          hasSet.assign(4*n + 5, 0);
+          build(1, 1, n, a);
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) { int l, b; ll x; cin >> l >> b >> x; updateAdd(1, 1, n, l, b, x); }
+              else if (t == 2) { int l, b; ll x; cin >> l >> b >> x; updateSet(1, 1, n, l, b, x); }
+              else { int l, b; cin >> l >> b; cout << query(1, 1, n, l, b) << "\n"; }
+          }
+          return 0;
+      }
+      ```
+
+      *`O(log n)` per operation, `O(n)` space — meets the constraints.*
+
+      **③ Alternative — sqrt decomposition, O(√n) per query**
+
+      Split the array into ~`√n` blocks; store each block's sum plus lazy
+      `set`/`add` tags at the block level. Full blocks update in `O(1)` via tags;
+      only the two partial edge blocks materialise lazily (`push` + `O(√n)`
+      elementwise). Simpler to reason about than lazy tags, slightly slower.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std; typedef long long ll;
+      int n, q, BS;
+      vector<ll> val, bsum, badd, bset;
+      vector<char> bsetf;
+      int bid(int i){ return (i-1)/BS; }
+      int blo(int b){ return b*BS+1; } int bhi(int b){ return min(n,(b+1)*BS); }
+      void rebuild(int b){ bsum[b]=0; for(int i=blo(b);i<=bhi(b);i++) bsum[b]+=val[i]; }
+      void push(int b){
+          for(int i=blo(b);i<=bhi(b);i++){
+              if(bsetf[b]) val[i]=bset[b];
+              if(badd[b])  val[i]+=badd[b];
+          }
+          bsetf[b]=0; badd[b]=0; rebuild(b);
+      }
+      void setR(int l,int r,ll x){
+          int bl=bid(l),br=bid(r);
+          if(bl==br){ push(bl); for(int i=l;i<=r;i++)val[i]=x; rebuild(bl); return; }
+          push(bl); for(int i=l;i<=bhi(bl);i++)val[i]=x; rebuild(bl);
+          push(br); for(int i=blo(br);i<=r;i++)val[i]=x; rebuild(br);
+          for(int b=bl+1;b<br;b++){ bset[b]=x; bsetf[b]=1; badd[b]=0;
+              bsum[b]=x*(ll)(bhi(b)-blo(b)+1); }
+      }
+      void addR(int l,int r,ll x){
+          int bl=bid(l),br=bid(r);
+          if(bl==br){ push(bl); for(int i=l;i<=r;i++)val[i]+=x; rebuild(bl); return; }
+          push(bl); for(int i=l;i<=bhi(bl);i++)val[i]+=x; rebuild(bl);
+          push(br); for(int i=blo(br);i<=r;i++)val[i]+=x; rebuild(br);
+          for(int b=bl+1;b<br;b++){ badd[b]+=x; bsum[b]+=x*(ll)(bhi(b)-blo(b)+1); }
+      }
+      ll sumR(int l,int r){
+          int bl=bid(l),br=bid(r); ll s=0;
+          if(bl==br){ push(bl); for(int i=l;i<=r;i++) s+=val[i]; return s; }
+          push(bl); for(int i=l;i<=bhi(bl);i++) s+=val[i];
+          push(br); for(int i=blo(br);i<=r;i++) s+=val[i];
+          for(int b=bl+1;b<br;b++) s+=bsum[b];
+          return s;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          cin>>n>>q; BS=450;
+          val.assign(n+1,0); bsum.assign(n/BS+5,0); badd.assign(n/BS+5,0);
+          bset.assign(n/BS+5,0); bsetf.assign(n/BS+5,0);
+          for(int i=1;i<=n;i++){ cin>>val[i]; bsum[bid(i)]+=val[i]; }
+          while(q--){
+              int t; cin>>t;
+              if(t==1){ int a2,b; ll x; cin>>a2>>b>>x; addR(a2,b,x); }
+              else if(t==2){ int a2,b; ll x; cin>>a2>>b>>x; setR(a2,b,x); }
+              else { int a2,b; cin>>a2>>b; cout<<sumR(a2,b)<<"\n"; }
+          }
+      }
+      ```
+
+      *`O(√n)` per query — a valid correct solution, just worse asymptotically.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      The subtle part is **the order in which the two lazy tags are pushed**:
+
+      - **`applySet` on a full node** sets the subtree sum to `val * length` and
+        records `hasSet = 1`. Critically it also clears `lazyAdd` — a set makes
+        earlier pending adds of this node irrelevant because the whole
+        interval is overwritten.
+      - **`applyAdd` on a full node** just adds `val * length` to the sum and
+        accumulates into `lazyAdd`. It runs after a set, so the resulting value
+        `set + add` is correct.
+      - **`push`** emits the pending **set first, then the add** to both
+        children, then clears the parent's tags. Because hasSet is applied to
+        children before lazyAdd, a child that had its own pending add gets the
+        parent's set applied to its sum, and then both adds combine — exactly
+        the `(set, then add)` order the semantics require.
+
+      - **Partial coverage.** If a node is only partly inside `[a,b]`, we `push`
+        its tags down first, recurse into the two children, then recompute the
+        node's sum as `left + right`. Every full node we stop at contributes
+        `O(1)`, and a range decomposes into `O(log n)` full nodes, so the total is
+        `O(log n)`.
+
+      All values and sums use `long long`: even with `t_i, x ≤ 10^6` and length
+      `n ≤ 2·10^5`, a node sum can reach ~`2·10^11`, and `int` would overflow.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `n = 6`, array `[2, 3, 1, 1, 5, 3]`, `q = 5`.
+
+      **Query `3 3 5`** (sum of `[3,5]`): `1 + 1 + 5 = 7`.
+
+      ```
+      Output 7
+      ```
+
+      **Query `1 2 4 2`** (add `2` to `[2,4]`): array becomes
+      `[2, 5, 3, 3, 5, 3]`.
+
+      **Query `3 3 5`**: sum of indices 3..5 = `3 + 3 + 5 = 11`.
+
+      ```
+      Output 11
+      ```
+
+      **Query `2 2 4 5`** (set `[2,4]` to `5`): array becomes
+      `[2, 5, 5, 5, 5, 3]`. Note the preceding add to index 2 was overridden by
+      the set — this is exactly why `applySet` clears `lazyAdd`.
+
+      **Query `3 3 5`**: indices 3..5 = `5 + 5 + 5 = 15`.
+
+      ```
+      Output 15
+      ```
+
+      Printed output (in order): `7`, `11`, `15`. Expected (sample) — `7, 11,
+      15`. Actual — identical. Match.
+  - type: flowchart
+    title: "Lazy segment tree with set + add"
+    nodes: ["build sums array", "query type?", "1: range add x", "2: range set x", "3: range sum", "split range into O(log n) full nodes", "full node? apply tag (set clears add)", "else push tags, recurse both children", "print node sum"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "type 1"}
+      - {from: 1, to: 3, label: "type 2"}
+      - {from: 1, to: 8, label: "type 3"}
+      - {from: 2, to: 5}
+      - {from: 3, to: 5}
+      - {from: 5, to: 6, label: "covered"}
+      - {from: 6, to: 8}
+      - {from: 5, to: 7, label: "partial"}
+      - {from: 7, to: 8}
+  - type: mcq
+    prompt: "A pending `set` tag must be pushed before a pending `add` tag because…"
+    options:
+      - "…otherwise the add would be overwritten by the set, so the result would be just the set value."
+      - "…segment tree children have no lazy tags of their own."
+      - "…a set only affects the root node."
+      - "…addition is not associative over a range."
+    answer: 0
+    explanation: "Semantics say apply the set to the whole subarray first, then add to the result. Pushing set before add reproduces that (child value = setBase then +add), so e.g. after set(5) then add(3) a leaf correctly becomes 8. Doing it the other way would apply add to the pre-set value and then overwrite it by the set, dropping the add."
+---

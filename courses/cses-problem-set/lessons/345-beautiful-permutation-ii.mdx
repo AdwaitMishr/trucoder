@@ -1,0 +1,181 @@
+---
+id: beautiful-permutation-ii
+title: "Beautiful Permutation II"
+difficulty: medium
+order: 345
+tags:
+  - construction
+  - permutation
+  - constructive
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — building a permutation with exactly `k` distinct adjacent gaps
+
+      We must construct a permutation of `1..n` whose **set of absolute
+      differences** between adjacent elements has exactly `k` distinct values.
+      Because elements are `1..n`, the possible gaps are `1,2,…,n-1`, so `k`
+      always satisfies `1 ≤ k ≤ n-1`.
+
+      The constructive idea is to **create the full spread of large gaps
+      first**, then "settle" the remaining numbers using gaps that already
+      exist.
+
+      **The weave sub-sequence.** If we interleave the two extremes — the small
+      values going upward from `1` and the large values coming downward from
+      `k+1` — the adjacent gaps take the values `k, k-1, …, 1`:
+
+      ```
+      1, k+1, 2, k, 3, k-1, …
+      ```
+
+      - between `1` and `k+1` → gap `k`
+      - between `k+1` and `2` → gap `k-1`
+      - between `2` and `k` → gap `k-2`
+      - … down to gap `1`.
+
+      **Finish with already-seen gaps.** The numbers `k+2, k+3, …, n` are then
+      appended in increasing order; their adjacent difference is `1`, which is
+      already in the gap set (since `k ≥ 1`). So the total number of distinct
+      gaps stays exactly `k`.
+
+      **Time:** `O(n)` to emit the array. **Space:** `O(n)`.
+
+      :::tip
+      **Interview tip:** This is a classic *construction* question. The skill is
+      separating the requirement into "make the interesting differences here"
+      and "don't introduce new differences there" — build the `k` distinct gaps
+      in a short alternating prefix, then extend with gaps that are guaranteed
+      to repeat an old one. Always verify the construction on small `n` first.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Construct a **permutation** of the numbers `1,2,…,n` such that the **set**
+      of absolute differences `|a[1]−a[2]|, |a[2]−a[3]|, …, |a[n-1]−a[n]|` has
+      exactly `k` distinct values. Print any valid permutation.
+
+      **Input.** A single line with two integers `n` and `k`.
+
+      **Output.** Print the `n` numbers of one such permutation, separated by
+      spaces.
+
+      **Constraints.**
+      - `2 ≤ n ≤ 10^6`
+      - `1 ≤ k ≤ n-1`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      6 3
+      ```
+
+      **Output:**
+      ```
+      1 2 3 6 4 5
+      ```
+
+      *(The differences are `1,1,3,2,1` → distinct set `{1,2,3}`.)*
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n! · n).** Generate every permutation of `1..n` with
+      `next_permutation`, compute its distinct-difference count, and return the
+      first one that matches `k`. Correct, hopeless for `n > 8`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n,k; cin>>n>>k;
+          vector<int> a(n); iota(a.begin(),a.end(),1);
+          do{ set<int> d; for(int i=0;i<n-1;i++) d.insert(abs(a[i]-a[i+1]));
+              if((int)d.size()==k){ for(int i=0;i<n;i++) cout<<(i?" ":"")<<a[i]; cout<<"\n"; return 0; }
+          } while(next_permutation(a.begin(),a.end()));
+          return 0;
+      }
+      ```
+      *Complexity: `O(n!·n)` — only a sanity check for tiny `n`.*
+
+      **② Optimization — O(n) construction (`n ≤ 10^6`).** Emit the small
+      numbers `1..n-k-1` in order (their gaps are all `1`), then interleave the
+      high end to create gaps `k, k-1, …, 1`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,k; cin >> n >> k;
+          vector<int> arr;
+          for(int i=1;i<n-k;i++) arr.push_back(i);        // small filler, gaps of 1
+          for(int i=0;i<=k;i++){                          // create gaps k..1
+              if(i%2==0) arr.push_back(n-k+i/2);
+              else       arr.push_back(n-i/2);
+          }
+          for(int i=0;i<n;i++) cout << (i?" ":"")<<arr[i];
+          cout<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: `O(n)` time, `O(n)` space — instant for `n = 10^6`.*
+
+      **④ Alternative — symmetric extreme-weave view.** The same result can be
+      read as "weave the largest `k+1` values between the smallest ones": place
+      `1, n-k+1, 2, n-k, 3, n-k-1, …` to manufacture the distinct gaps, then the
+      low leftover numbers in order. This twin construction is a good mental
+      cross-check — both produce exactly `k` distinct gaps.
+
+      - For `k = n-1`, the weave already contains all of `1..n` and yields
+        differences `{1,2,…,n-1}` — the maximum case.
+      - For `k = 1`, the whole permutation is just `1,2,…,n`, differences
+        `{1}` — the minimum case.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `build(n, k)` — O(n). Key lines:
+
+      1. **Small filler loop** — pushes `1,2,…,n-k-1`. Consecutive copies differ
+         by `1`, a gap already in the set.
+      2. **The interleave loop** (`i = 0..k`) — alternately pushes values from
+         `n-k` upward (`i` even) and from `n` downward (`i` odd). Adjacent pairs
+         here take the gaps `k, k-1, …, 1`, introducing exactly `k` distinct
+         values.
+      3. **Total size** stays `n` — `(n-k-1)` filler plus `(k+1)` weave values.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 6, k = 3`.
+
+      - Filler: `i = 1..n-k-1 = 1..2` → `1, 2`.
+      - Weave (`i = 0..3`):
+        - `i=0` (even) → `n-k + 0 = 3`
+        - `i=1` (odd)  → `n - 0 = 6`
+        - `i=2` (even) → `n-k + 1 = 4`
+        - `i=3` (odd)  → `n - 1 = 5`
+      - Result: `1 2 3 6 4 5`.
+
+      Differences: `|1-2|=1, |2-3|=1, |3-6|=3, |6-4|=2, |4-5|=1` → set `{1,2,3}`.
+      Exactly `k = 3` distinct values. ✓ matches the sample.
+
+  - type: mcq
+    prompt: "Why does appending the leftover numbers `k+2, k+3, …, n` (in order) not add any new distinct gap to the set?"
+    options:
+      - "Because each such consecutive pair differs by 1, and gap 1 is already present in the set (since k ≥ 1)."
+      - "Because those numbers are all larger than n."
+      - "Because they are appended before the weave, so no gaps are created."
+      - "Because the gap between consecutive leftover numbers is always k."
+    answer: 0
+    explanation: "Consecutive leftover values differ by exactly 1, so every gap they introduce is `1`. Since the weave already produced gap `1` (it produces all gaps from `k` down to `1`), no *new* distinct value enters the set, keeping the total at exactly `k`."
+
+type: content
+---

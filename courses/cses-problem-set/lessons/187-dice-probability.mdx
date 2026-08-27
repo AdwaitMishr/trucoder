@@ -1,0 +1,195 @@
+---
+id: dice-probability
+title: "Dice Probability"
+difficulty: easy
+order: 187
+tags:
+  - mathematics
+  - probability
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      # Dice Probability — DP over sums of independent rolls
+
+      You throw a fair 6-sided die `n` times and add the outcomes. You want the
+      probability that the total lies in `[a, b]`. With `n ≤ 100` the total can
+      reach `6n = 600`, so the natural home for the answer is a **probability
+      DP**: a table indexed by "how many dice rolled so far" and "current sum".
+
+      ## The recurrence
+
+      Let `dp[i][s]` = probability that after `i` rolls the sum is exactly `s`.
+      The `(i+1)`-th roll is an independent uniform draw from `{1…6}`, so:
+      ```
+      dp[i+1][s+face] += dp[i][s] * (1/6)   for face in 1..6
+      ```
+      Each previous sum spreads its probability over six next sums, each with
+      weight `1/6`. This is exactly the *probability* (not the *count*) version
+      of the classic "Dice Combinations" DP you saw earlier — sums add up, and
+      independent draws multiply probabilities.
+
+      ## The answer
+
+      After processing all `n` dice the distribution over sums is `dp[n][·]`. The
+      probability that the total is in `[a,b]` is the sum of `dp[n][s]` over
+      `s = a..b`. Only sums in that window matter, so we can even trim the table
+      to the relevant range.
+
+      **Complexity.** `O(n · 6n · 6) = O(36n²)` time, `O(6n)` space for a two-row
+      rolling DP. With `n = 100` this is a few hundred thousand operations.
+
+      :::tip
+      **Interview tip:** "sum of independent random draws → distribution" is the
+      signature of a *convolution-style probability DP*. The transferable pattern:
+      treat the running total as a state, and for each new independent term spread
+      every state's probability over the outcomes. This is the discrete cousin of
+      summing random variables and underlies many stock/portfolio/traffic-style
+      interview questions.
+      :::
+  - type: markdown
+    content: |
+      # Question — Dice Probability
+
+      You throw a dice `n` times, and every throw produces an outcome between
+      `1` and `6`. What is the **probability that the sum of outcomes is between
+      `a` and `b`**?
+
+      **Input:** The only input line contains three integers `n`, `a` and `b`.
+
+      **Output:** Print the probability rounded to six decimal places (rounding
+      half to even).
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 100`
+      - `1 ≤ a ≤ b ≤ 6n`
+
+      **Example**
+
+      Input:
+
+      ```
+      2 9 10
+      ```
+
+      Output:
+
+      ```
+      0.194444
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate all 6^n outcomes, O(6^n)**
+
+      For each of the `6^n` roll sequences, sum the faces and tally whether the
+      total falls in `[a,b]`. Correct but `6^100` is astronomically large.
+
+      ```cpp
+      long double brute(int n, int a, int b){
+          long double tot = 0, good = 0;   // (conceptual) enumerate all outcomes
+          // for (each of 6^n sequences) { if (a <= sum <= b) good++; tot++; }
+          return good / tot;
+      }
+      ```
+
+      **② Optimization — probability DP over sums, O(n²)**
+
+      Build the distribution over sums incrementally, one die at a time.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          int n, a, b; cin>>n>>a>>b;
+          vector<long double> dp(n*6+1, 0.0);
+          dp[0]=1.0;                                  // 0 dice -> sum 0 with prob 1
+          for(int i=0;i<n;i++){
+              vector<long double> nd(n*6+1,0.0);
+              for(int s=0;s<=6*i;s++){                // reachable sums so far
+                  if(dp[s]==0) continue;
+                  for(int face=1;face<=6;face++)
+                      nd[s+face] += dp[s]/6.0;        // each outcome has prob 1/6
+              }
+              dp=nd;
+          }
+          long double prob=0;
+          for(int s=a;s<=b;s++) prob += dp[s];
+          cout<<fixed<<setprecision(6)<<(double)prob<<"\n";
+          return 0;
+      }
+      ```
+
+      Time `O(36n²)`, space `O(6n)` (two rows). Instantly fast for `n = 100`.
+
+      **③ Further optimization — trim to the window / rolling frame.**
+
+      Only sums in `[a,b]` affect the answer, and a sum `s` can only be reached
+      from previous sums in `[s−6, s−1]`. We can restrict both loops to the
+      relevant slice `[max(0,a−6(n−i)), min(6i,b)]`, keeping the same complexity
+      but a smaller constant. The `②` version already passes comfortably.
+
+      **④ Alternative — counts instead of probabilities.**
+
+      Run the same DP on integer *counts* (`cnt[0][0]=1`, add `cnt[i−1][s]` to
+      `cnt[i][s+face]`), then `prob = Σ_{s=a..b} cnt[n][s] / 6^n`. This avoids
+      any floating division during the DP. The counts grow like `6^n`, so use
+      `long double` or take care with overflow — the probability version in `②`
+      is cleaner because quantities stay bounded in `[0,1]`.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`dp[0] = 1`** is the base case: with `0` dice rolled the sum is `0`
+        with probability `1`.
+      - The outer `i` loop adds one die per iteration; `nd` is the distribution
+        after `i+1` dice.
+      - For each reachable sum `s` (only sums `≤ 6i` exist after `i` dice), each
+        of the six faces `+face` receives `dp[s] / 6` of the probability mass —
+        independence means we multiply the probability of reaching `s` by the
+        `1/6` chance of rolling that face.
+      - The inner loop takes `O(6n)` per die, so total `O(36n²)` — tiny for
+        `n = 100` (the full distribution has at most `601` sums).
+      - The answer is the sum of `dp[n][s]` over the window `s ∈ [a,b]`. Because
+        `a ≤ s ≤ b ≤ 6n`, summing probabilities gives exactly
+        `P(a ≤ sum ≤ b)`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 2, a = 9, b = 10` (two dice, total in `[9,10]`).
+
+      We track the distribution after each die:
+
+      | dice | reachable sums and probabilities |
+      |------|----------------------------------|
+      | 0 | `dp[0]=1` |
+      | 1 | `dp[1..6] = 1/6` each |
+      | 2 | two-die sum `s` has `dp[s] = (#(pairs summing to s))/36` |
+
+      For the window `[9,10]`:
+      - `sum = 9`: pairs `(3,6),(4,5),(5,4),(6,3)` → `4/36`
+      - `sum = 10`: pairs `(4,6),(5,5),(6,4)` → `3/36`
+
+      Probability `= 4/36 + 3/36 = 7/36 = 0.1944…`
+
+      ```
+      => 0.194444
+      ```
+
+      This matches the sample output exactly. The same DP, no matter how large
+      `n`, never branches per outcome — it just folds the `1/6` weights in.
+  - type: mcq
+    prompt: Why is it correct to add probabilities instead of multiplying them when building dp over sums?
+    options:
+      - 'Because reaching a sum s and then rolling a face are independent events, so their joint probability is the product dp[s]·(1/6); distinct (s, face) routes are disjoint, so we sum their probabilities into nd[s+face]'
+      - 'Because all sums are equally likely, so we average instead'
+      - 'Because probability always adds when talking about different dice'
+      - 'Because we only need integer counts, never decimals'
+    answer: 0
+    explanation: 'Each path to s+face goes through exactly one prior state s and one face. The events "sum is s after i dice" and "roll face" are independent, giving product probabilities; different routes to the same total are mutually exclusive events, so their probabilities add. That is the additive-convolution structure of the DP.'
+type: content
+---

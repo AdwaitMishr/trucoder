@@ -1,0 +1,250 @@
+---
+id: mex-grid-queries
+title: "MEX Grid Queries"
+type: content
+difficulty: medium
+order: 395
+tags:
+  - range-queries
+  - mex
+  - frequency-array
+  - data-structures
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — the MEX and point-update maintenance
+
+      The **MEX** ("minimum excludant") of a multiset is the *smallest non-negative
+      integer that does not appear* in it. For `{0,2,0,1}` the MEX is `3`; for
+      `{0,0,0}` it is `1`; for `{}` it is `0`. MEX problems are a favourite of
+      interviews because they reward a tiny but precise structural idea: keep a
+      count per value and remember which values are currently *missing*.
+
+      We need MEX of a whole grid while a single cell keeps being overwritten by a
+      query. The grid is just `n²` cells, so this is the classic
+      **MEX under point updates** problem in disguise. Two ingredients matter:
+
+      1. **Frequency array** `freq[v]` = how many cells currently hold value `v`.
+         A value `v` is present exactly when `freq[v] > 0`, so it is *missing*
+         exactly when `freq[v] == 0`.
+      2. **The MEX is the smallest missing value.** If we can answer "what is the
+         smallest `v` with `freq[v] == 0`?" fast, we are done.
+
+      Because an update touches only **one** cell, only two frequencies change
+      (`freq[old]--` and `freq[new]++`). Sliding the answer one step at a time is
+      cheap *when values only ever appear* — that is the famous "incremental MEX
+      pointer". But our updates **overwrite**, so a value can disappear too, and a
+      naive one-way pointer then gives the wrong answer (see tier ③). The robust
+      tool is a balanced structure of the currently-missing values.
+
+      :::tip
+      **Interview tip:** "Find the smallest element missing from a structure under
+      updates" is the MEX pattern, and it shows up in many disguises (mex of a
+      subarray range query, mex of a whole collection after updates, game
+      Grundy-number computations). The lens to memorize is: *MEX = first value with
+      frequency zero*, and updating a single cell only perturbs two frequencies.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      :::note
+      **Concrete formulation.** "MEX Grid Queries" (CSES Additional Problems II)
+      is stated ambiguously in the set. We adopt this coherent, well-specified
+      version: the grid is modified by point writes, and after every write we ask
+      for the MEX of the whole grid.
+      :::
+
+      You have an `n × n` grid whose `n²` cells all initially contain the value `0`.
+      There are `q` queries, each of the form:
+
+      > Set the cell at row `r`, column `c` to the value `v`, then report the MEX
+      > of all `n²` values currently in the grid.
+
+      **Input.** The first line has two integers `n` and `q`. Then there are `q`
+      lines, each with three integers `r`, `c` and `v`
+      (`1 ≤ r,c ≤ n`, `0 ≤ v ≤ n²`).
+
+      **Output.** After each query, print the MEX of the grid at that moment.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 500`  (so `n² ≤ 250 000` cells)
+      - `1 ≤ q ≤ 200 000`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      2 4
+      1 1 2
+      1 2 0
+      2 1 1
+      1 1 0
+      ```
+
+      **Output:**
+      ```
+      1
+      1
+      3
+      2
+      ```
+
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      Let `N = n²`.
+
+      **① Brute force — O(N) per query.** After each update, scan all `N` cells,
+      mark which values appear, then walk up from `0` until the first value that is
+      absent.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n,q; cin>>n>>q; int N=n*n;
+          vector<int> cell(N+1,0);
+          while(q--){
+              int r,c,v; cin>>r>>c>>v;
+              cell[(r-1)*n+c]=v;
+              vector<char> seen(N+2,0);
+              for(int k=1;k<=N;k++) seen[cell[k]]=1;
+              int mex=0; while(seen[mex]) mex++;
+              cout<<mex<<"\n";
+          }
+      }
+      ```
+      *Complexity: O(N) per query = O(q·N) total — with `N=250000`, `q=200000` that
+      is ~10¹¹ cell-scans: far too slow.*
+
+      **② Optimization — O(log n) per query (the solution).** Keep `freq[v]` and a
+      `std::set` of currently-missing values `1..N` (value `0` is present initially
+      because every cell starts as `0`). Each update changes only two frequencies;
+      when a value's count hits `0` we insert it into the missing-set, and when a
+      previously-missing value becomes present we erase it. The MEX is always
+      `*missing.begin()`, the smallest missing value.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n,q; cin>>n>>q; int N=n*n;
+          vector<int> freq(N+2,0), cell(N+1,0);
+          freq[0]=N;                 // every cell starts at value 0
+          set<int> missing;
+          for(int v=1; v<=N; ++v) missing.insert(v);
+          while(q--){
+              int r,c,v; cin>>r>>c>>v;
+              int idx=(r-1)*n+c;
+              int old=cell[idx];
+              if(--freq[old]==0) missing.insert(old);   // value disappeared
+              cell[idx]=v;
+              if(freq[v]==0) missing.erase(v);          // value appeared
+              ++freq[v];
+              cout<<*missing.begin()<<"\n";             // smallest missing = MEX
+          }
+      }
+      ```
+      *Complexity: O(log N) = O(log n) per query, O(N) setup and memory. Handles
+      `q=200000` instantly.*
+
+      **③ A tempting but WRONG "further optimization" — the one-way pointer.**
+      A common shortcut is: walk `mex` upward only while `freq[mex] > 0`. That is
+      `O(1)` amortized — but it is **incorrect** here, because overwriting can make
+      a small value *disappear*, and then MEX must *drop* below the pointer. In the
+      sample, `freq[2]` goes `1 → 0` on the last query and the MEX falls from `3` to
+      `2`: a one-way pointer stuck at `3` would answer wrongly. Use the ordered
+      missing-set of tier ② instead; it is only `O(log n)`.
+
+      **④ Alternative — sqrt decomposition over the value range.** Choose a block
+      size `B ≈ √N`. Keep `freq[v]` plus, per block of values, the count
+      `cnt[b]` of values in that block that are present. An update adjusts two
+      values' `cnt` in `O(1)`; a MEX query scans the ~`√N` blocks from `0` for the
+      first block that is not full (some value missing), then scans inside that
+      block.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n,q; cin>>n>>q; int N=n*n, M=N+1;   // values 0..N
+          int B=(int)sqrt(M); if(B<1)B=1;
+          int nb=(M+B-1)/B;
+          vector<int> freq(M,0), cnt(nb,0);
+          auto change=[&](int v,int d){
+              bool was=freq[v]>0; freq[v]+=d; bool now=freq[v]>0;
+              int b=v/B; if(now&&!was)cnt[b]++; if(was&&!now)cnt[b]--;
+          };
+          freq[0]=N; cnt[0]=1;                     // value 0 present
+          vector<int> cell(N+1,0);
+          while(q--){
+              int r,c,v; cin>>r>>c>>v;
+              int idx=(r-1)*n+c;
+              change(cell[idx],-1); change(v,1); cell[idx]=v;
+              int b=0; while(b<nb && cnt[b]==min(M,(b+1)*B)-b*B) b++;
+              int m=b*B; while(m<M && freq[m]>0) m++;
+              cout<<m<<"\n";
+          }
+      }
+      ```
+      *Complexity: O(√N) = O(n) per query, O(1) per update. Slower per MEX query
+      than the balanced-set version, but the update stays constant-time — useful
+      when queries are dominated by writes. All three non-brute tiers return
+      identical answers.*
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n² + q log n). Key lines of tier ②:
+
+      1. **`freq[0]=N; missing = {1..N}`** — the invariant that the MEX is
+         `*missing.begin()` depends on `missing` containing exactly the values with
+         `freq == 0`. Initially every cell is `0`, so value `0` is present and all
+         `1..N` are absent.
+      2. **`if(--freq[old]==0) missing.insert(old)`** — when the last copy of the
+         old value is overwritten, that value goes missing; no other value's count
+         changed, so no other set entry moves.
+      3. **`if(freq[v]==0) missing.erase(v)`** — `v` was missing (it wasn't in any
+         cell) and now appears in exactly one, so we must remove it from `missing`.
+      4. **`cout << *missing.begin()`** — by construction the smallest missing value
+         is the MEX.
+
+      The whole trick is that a single overwrite touches exactly the old and the new
+      value, so the missing-set is never more than two elements out of date — never a
+      full recomputation.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 2` (cells `N = 4`, initially all `0`), `q = 4`.
+
+      Track `freq[]` and the missing set after each query (only entries that change
+      are shown):
+
+      - **Start:** cells `0,0,0,0`. `freq[0]=4`, missing `{1,2,3,4}` → MEX `1`.
+      - **Q1** set `(1,1)=2`: cells `2,0,0,0`. `freq[0]=3`, `freq[2]=1`; missing
+        `{1,3,4}` → **`1`**.
+      - **Q2** set `(1,2)=0`: cells `2,0,0,0` (already `0`). No change → **`1`**.
+      - **Q3** set `(2,1)=1`: cells `2,0,1,0`. Values `0,1,2` present; missing
+        `{3,4}` → **`3`**.
+      - **Q4** set `(1,1)=0`: cells `0,0,1,0`. Now `freq[2]: 1→0`, so `2` goes
+        *back into* the missing set; missing `{2,3,4}` → **`2`**.
+
+      ✓ Output `1 1 3 2` matches the sample, and Q4 shows exactly why MEX can
+      *drop* — the reason tier ③'s one-way pointer is unsafe.
+
+  - type: mcq
+    prompt: "Why must a naive one-way 'incremental mex pointer' be avoided for this problem even though it is O(1) amortized?"
+    options:
+      - "Because a point write can remove a value, making its frequency hit 0 and forcing the MEX to drop below the pointer."
+      - "Because n² cells are too many to scan."
+      - "Because the MEX must be recomputed from scratch after every query."
+      - "Because std::set is always faster than a pointer."
+    answer: 0
+    explanation: "The incremental pointer only ever walks MEX upward, which is valid when values only appear. Here an overwrite can erase the last copy of a small value, so the MEX must decrease — a one-way pointer would return a value that is still present. The ordered set of missing values from tier ② (O(log n) per query) handles both directions correctly."
+---

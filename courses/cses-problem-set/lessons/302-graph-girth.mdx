@@ -1,0 +1,225 @@
+---
+id: graph-girth
+title: Graph Girth
+difficulty: medium
+order: 302
+tags:
+  - advanced-graph
+  - girth
+  - bfs
+  - shortest-cycle
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — girth via BFS from every vertex
+
+      The **girth** of an undirected graph is the length of its **shortest cycle**. We want one
+      small integer; if the graph is a forest (no cycle at all) the answer is `-1`.
+
+      **How BFS finds a cycle.** Run a BFS from a fixed source `s`. BFS assigns every node a distance
+      and builds a shortest-path tree. If, while scanning, we look at an **edge `(u, v)`** whose two
+      endpoints are both already visited and where neither is the other's **tree parent**, then that
+      edge closes a path:
+
+      ```
+      cycle_length = dist[u] + dist[v] + 1
+      ```
+
+      (`dist[u] + dist[v]` walks from `s` up to `u` and from `v` back to `s` inside the tree, and the
+      `+1` is the edge `(u, v)` itself.) The **parent check** is essential: the edge to `v = parent(u)`
+      is just the tree edge we came up on and would "close" a non-cycle `s → u → parent(u) → s` that
+      retraces itself.
+
+      **Why run it from every vertex.** A single BFS only finds cycles reachable from `s` in an
+      obvious way; the shortest cycle may sit far from that root. Since the real constraints are small
+      (`n ≤ 2500`, `m ≤ 5000`), we simply run a full BFS **from each vertex as its own source** and keep
+      the global minimum of all candidate cycle lengths.
+
+      **Why taking `min` is safe even though a candidate can be a "closed walk" that revisits a
+      vertex.** The genuine shortest cycle is always reported at its own vertices, and every candidate
+      we record is at least as long as the true cycle we will eventually also detect — so the minimum
+      is exact.
+
+      **Complexity.** One BFS is `O(n + m)`; repeating for all `n` sources gives
+      **O(n·(n + m))** time. For `n = 2500, m = 5000` that is ≈ `2·10^7` cheap steps — comfortably
+      under the 1-second limit. Space is **O(n + m)**.
+
+      :::tip
+      **Interview tip:** "shortest cycle" in an *unweighted undirected* graph is a signature
+      **BFS-from-every-vertex** problem. Remember the two invariants that make it exact: (a) the
+      candidate length is `dist[u] + dist[v] + 1` over a non-tree edge, and (b) you must exclude the
+      `parent` edge or you count fake two-step tails. The identical trick shows up when finding the
+      smallest odd/even cycle, or the closest pair of vertices with an edge between their branches.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an undirected graph, determine its **girth** — the length of its shortest cycle.
+
+      **Input.** The first input line has two integers `n` and `m`: the number of nodes and edges.
+      The nodes are numbered `1, 2, …, n`. After this, there are `m` lines describing the edges, each
+      with two integers `a` and `b`: there is an edge between nodes `a` and `b`. There is at most one
+      edge between any two nodes.
+
+      **Output.** Print one integer: the girth of the graph. If there are no cycles, print `-1`.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 2500`
+      - `1 ≤ m ≤ 5000`
+      - `1 ≤ a, b ≤ n`
+
+      ### Sample
+
+      **Input:**
+      ```
+      5 6
+      1 2
+      1 3
+      2 4
+      2 5
+      3 4
+      4 5
+      ```
+
+      **Output:**
+      ```
+      3
+      ```
+
+      (The triangle `2-4-5-2` has length 3, which is as small as any cycle can be.)
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — remove each edge and re-BFS, O(m·(n + m)).** For every edge `(u,v)`, compute
+      the shortest `u→v` path in the graph *without* that edge via BFS; if such a path exists, the
+      edge plus the path forms a cycle of length `path + 1`. The minimum over all edges is the girth.
+      Correct and explicit, but `m` BFS runs make it `≈ 5·10^7` steps at the limit, which is
+      unnecessarily heavy.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n,m; cin>>n>>m;
+          vector<pair<int,int>> e(m);
+          vector<vector<int>> adj(n);
+          for(int i=0;i<m;i++){int a,b;cin>>a>>b;--a;--b;e[i]={a,b};adj[a].push_back(b);adj[b].push_back(a);}
+          int best=n+1;
+          for(int i=0;i<m;i++){
+              int su=e[i].first, sv=e[i].second;
+              vector<int> dist(n,-1);
+              queue<int> q; dist[su]=0; q.push(su);
+              while(!q.empty()){
+                  int u=q.front(); q.pop();
+                  for(int v:adj[u]){
+                      if(u==su&&v==sv || u==sv&&v==su) continue;   // skip the removed edge
+                      if(dist[v]==-1){ dist[v]=dist[u]+1; q.push(v); }
+                  }
+              }
+              if(dist[sv]!=-1) best=min(best, dist[sv]+1);          // cycle = path + 1
+          }
+          cout<<(best<=n?best:-1)<<'\n';
+      }
+      ```
+      **O(m·(n + m))** — correct, but runs one BFS per edge.
+
+      **② Optimization — BFS from every vertex, O(n·(n + m)) (submission).** One BFS per *source*
+      (rather than per edge), and inside each BFS we collect every `dist[u]+dist[v]+1` candidate over
+      non-tree edges. Much less constant work per run, so it passes comfortably:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; cin>>n>>m;
+          vector<vector<int>> adj(n);
+          for(int i=0;i<m;i++){int a,b;cin>>a>>b;--a;--b;adj[a].push_back(b);adj[b].push_back(a);}
+          int best = n+1;
+          for(int src=0; src<n; ++src){
+              vector<int> dist(n,-1), par(n,-1);
+              queue<int> q;
+              dist[src]=0; q.push(src);
+              while(!q.empty()){
+                  int u=q.front(); q.pop();
+                  for(int v: adj[u]){
+                      if(dist[v]==-1){ dist[v]=dist[u]+1; par[v]=u; q.push(v); }
+                      else if(par[u]!=v && par[v]!=u){          // non-tree edge -> closes a cycle
+                          best = min(best, dist[u]+dist[v]+1);
+                      }
+                  }
+              }
+          }
+          cout << (best<=n ? best : -1) << '\n';
+          return 0;
+      }
+      ```
+      **O(n·(n + m))** time, **O(n + m)** space — the submission tier.
+
+      **③ A faster-but-approximate variant — not safe to submit.** Some solutions "break early" the
+      moment a BFS re-visits an already-seen vertex, which can cut the runtime toward `O(n²)`. That
+      shortcut is only guaranteed to return the shortest cycle **plus one**, not the exact girth, so
+      it can fail the strict `1 s`/exact-answer judge. We therefore keep the exact `O(n·(n+m))` version.
+
+      **④ Alternative — the same idea, any root order.** There is no simpler exact algorithm for
+      unweighted undirected girth under these limits; BFS-from-every-vertex is the canonical, accepted
+      solution. (Weighted shortest cycles would need a Dijkstra-from-every-vertex variant of the same
+      shape, so the pattern generalises.)
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      - `dist[]`, `par[]` are recomputed per `src`: `dist` is the BFS distance, `par` the BFS-tree
+        parent, both used to tell "tree edge" from "closing edge."
+      - For every edge `(u,v)` examined while `u` is being popped: if `v` is **unvisited**, we extend
+        the tree (`dist[v]=dist[u]+1`, `par[v]=u`). If `v` is **already visited** and is **not** the
+        tree parent of `u` (and `u` is not the parent of `v`), we have a candidate cycle
+        `dist[u]+dist[v]+1`.
+      - We take the `min` over all sources and all such edges. `best` is initialised to `n+1`
+        (larger than any real cycle, since the longest simple cycle on `n` nodes is `n`); if it never
+        shrinks, the graph is acyclic and we print `-1`.
+      - The parent check `par[u]!=v && par[v]!=u` is what stops us from counting the two-step
+        "go up then come back down" tail as a cycle.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n=5`, `m=6`; edges `1-2, 1-3, 2-4, 2-5, 3-4, 4-5`.
+
+      **Run BFS from node 2.** `dist[2]=0`. Then `2`'s neighbours `1,4,5` get distance `1`
+      (`par[1]=par[4]=par[5]=2`). Pop `1` → `3` gets `dist[3]=2`, `par[3]=1`. Pop `4`: neighbours `2`
+      (parent), `3` (already `dist 2`), `5` (already `dist 1`). Non-parent edge `(4,5)` gives
+      candidate `dist[4]+dist[5]+1 = 1+1+1 = 3`.
+
+      **All contenders found this way** include the triangle `2-5-4-2` (length 3) and larger cycles
+      like `1-2-4-3-1` (length 4). The minimum is `3`.
+
+      | source | non-tree closing edge | dist[u]+dist[v]+1 |
+      |--------|------------------------|-------------------|
+      | 2      | (4,5)                  | 1+1+1 = 3 |
+      | 1      | (3,4) or (4,5)         | ≥ 4 |
+      | others | various                | ≥ 3 |
+
+      **Result:** `best = 3`.
+
+      **Actual vs expected:** the sample expects `3` — matched. A tree (e.g. `n=4`, edges
+      `1-2, 2-3, 3-4`) has no closing edge in any BFS, so `best` stays `5 = n+1 > n` and the program
+      prints `-1`.
+
+  - type: mcq
+    prompt: "In the BFS-for-girth algorithm, why must we require v != parent[u] when u sees an already-visited neighbor v?"
+    options:
+      - "Because then the two paths from s merge outside the tree and the edge (u,v) closes a genuine cycle of length dist[u]+dist[v]+1."
+      - "Because parent[u] must never be visited more than once by BFS."
+      - "Because the parent edge has weight two and would inflate the count."
+      - "Because only unvisited neighbors can ever close a cycle."
+    answer: 0
+    explanation: "The edge to your own tree-parent is the one you just climbed, so 'u - parent[u]' is a single tree edge, not a cycle. A real candidate needs both endpoints already in the tree through different branches, so that dist[u]+dist[v]+1 combines two disjoint shortest prefixes plus the closing edge."
+type: content
+---

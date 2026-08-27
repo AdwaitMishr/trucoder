@@ -1,0 +1,217 @@
+---
+id: nim-game-i
+title: "Nim Game I"
+difficulty: easy
+order: 192
+tags:
+  - mathematics
+  - game-theory
+  - nim
+  - xor
+blocks:
+  - type: markdown
+    content: |
+      # Nim Game I — the XOR nim-sum
+
+      There are `n` heaps of sticks. Players alternate; on a turn you pick one
+      non-empty heap and remove **any** number of sticks from it. Whoever takes
+      the last stick wins. With both playing optimally, who wins?
+
+      This is the classic game of *Nim*, and its answer is famous and elegant:
+      compute the bitwise XOR of all heap sizes — the **nim-sum** — and the
+      first player wins exactly when that XOR is **non-zero**.
+
+      ## Why XOR?
+
+      The Sprague-Grundy theorem decomposes a Nim position into a sum of
+      independent games (the heaps). A single heap of size `x` has Grundy value
+      `x`, because from it you may move to any smaller size `0..x-1`, so the set
+      of reachable Grundy values is `{0, 1, ..., x-1}` and `mex{0..x-1} = x`.
+      The combined game's Grundy value is the XOR of the heap Grundy values, and
+      a position is losing for the player to move iff that XOR is `0`.
+
+      Concretely, two facts make it work:
+
+      - **If XOR ≠ 0**, there is always a legal move that makes the XOR `0`,
+        and there is a known construction: find the heap with the highest set
+        bit of `X`, reduce that heap so the new XOR becomes `0`.
+      - **If XOR = 0**, every legal move (decreasing one heap) necessarily
+        makes the XOR non-zero.
+
+      So `XOR = 0` means the opponent can always hand you back a `0`; you are
+      forced to break it, and eventually run out. `XOR ≠ 0` means you move to
+      `0` and keep the opponent stuck forever.
+
+      **Time:** O(n) per test, **Space:** O(1). Reading and XOR-ing `n` numbers
+      is trivially fast even for `n = 2·10^5` and `t = 2·10^5` tests.
+
+      :::tip
+      **Interview tip:** Nim is the canonical "reduce the game to an XOR-sum"
+      problem, and its proof (move a non-zero sum to zero; a zero sum can only
+      be broken) is the single most-reused argument in combinatorial game
+      interviews. Recognise Nim by three signals: *several independent piles*,
+      *each move touches exactly one pile*, and *last move wins*.
+      :::
+  - type: markdown
+    content: |
+      # Question — Nim Game I
+
+      There are `n` heaps of sticks and two players who move alternately. On
+      each move, a player chooses a non-empty heap and removes any number of
+      sticks. The player who removes the last stick wins the game.
+
+      Your task is to find out who wins if both players play optimally.
+
+      **Input**
+
+      The first input line contains an integer `t`: the number of tests. After
+      this, `t` test cases are described:
+
+      The first line contains an integer `n`: the number of heaps.
+
+      The next line has `n` integers `x_1, x_2, ..., x_n`: the number of sticks
+      in each heap.
+
+      **Output**
+
+      For each test case, print "first" if the first player wins the game and
+      "second" if the second player wins the game.
+
+      **Constraints**
+
+      - `1 <= t <= 2·10^5`
+      - `1 <= n <= 2·10^5`
+      - `1 <= x_i <= 10^9`
+      - the sum of all `n` is at most `2·10^5`
+
+      **Example**
+
+      Input:
+
+      ```
+      3
+      4
+      5 7 2 5
+      2
+      4 1
+      3
+      3 5 6
+      ```
+
+      Output:
+
+      ```
+      first
+      first
+      second
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — minimax over the state space, O(∏ x_i) time, O(n) space**
+
+      The "obvious but hopeless" way is to model every configuration of heap
+      sizes as a node and search for a winning move recursively. Even for a
+      single test the number of reachable states grows like the product of the
+      heap sizes (`∏ x_i`), which is astronomical once `x_i` reaches `10^9`:
+
+      ```cpp
+      // win(v) = true if the position representation v is winning for the mover
+      // explores every (heap, remove-amount) choice recursively — exponential
+      bool win(vector<long long> v) {
+          for (int i = 0; i < (int)v.size(); i++)
+              for (long long take = 1; take <= v[i]; take++) {
+                  auto u = v; u[i] -= take;
+                  if (!win(u)) return true;   // hand the opponent a losing state
+              }
+          return false;                        // every move loses
+      }
+      ```
+
+      It is correct but explores the whole game tree. The XOR theorem collapses
+      this exponential search into a single pass.
+
+      **② Optimization — XOR nim-sum, O(n) time, O(1) space**
+
+      XOR all heap sizes. Print "first" if the result is non-zero, "second"
+      otherwise:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+
+          int t;
+          cin >> t;
+          while (t--) {
+              int n;
+              cin >> n;
+              long long xr = 0;
+              for (int i = 0; i < n; i++) {
+                  long long x;
+                  cin >> x;
+                  xr ^= x;
+              }
+              cout << (xr ? "first" : "second") << "\n";
+          }
+      }
+      ```
+
+      **③ Further optimisation** — none needed: an `O(n)` pass that must read
+      each heap is already optimal; you cannot answer the XOR without seeing
+      every size.
+
+      **④ Alternative algorithm** — Grundy labelling re-derives the same rule:
+      give each heap `x_i` the Grundy value `x_i`, XOR them, and call the
+      position losing when the XOR is `0`. This *is* Nim Game II's approach, so
+      the XOR theorem you learn here carries straight over to the next lesson.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walk through the `O(n)` solution:
+
+      - `xr` starts at `0` (the identity of XOR — `0 ^ x = x`).
+      - Each `x_i` is XOR-ed in with `xr ^= x`. Order does not matter; XOR is
+        commutative and associative.
+      - After the loop, `xr` is the nim-sum `x_1 ⊕ x_2 ⊕ ... ⊕ x_n`.
+      - If `xr != 0` the position is N-position (next, i.e. first, player
+        wins); if `xr == 0` it is a P-position (previous, i.e. second player
+        wins). `xr ? "first" : "second"` expresses that directly.
+      - `long long` is used because heap sizes reach `10^9`; bitwise XOR works
+        on the full 64-bit value, which is more than enough.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Run the XOR on the sample's three tests.
+
+      | test | heaps | XOR | result |
+      |------|-------|-----|--------|
+      | 1 | 5 7 2 5 | 5⊕7=2, 2⊕2=0, 0⊕5=5 | 5 ≠ 0 → **first** |
+      | 2 | 4 1 | 4⊕1=5 | 5 ≠ 0 → **first** |
+      | 3 | 3 5 6 | 3⊕5=6, 6⊕6=0 | 0 → **second** |
+
+      - Test 1: XOR becomes `5`, non-zero → first player moves to a zero-sum
+        position and wins.
+      - Test 2: `4 ⊕ 1 = 5 ≠ 0` → first wins.
+      - Test 3: `3 ⊕ 5 ⊕ 6 = 0` → the position is already a P-position, so
+        whatever the first player does, the second can mirror to a zero-XOR
+        state and eventually take the last stick → **second**.
+
+      All three match the expected output.
+  - type: mcq
+    prompt: 'Why is a position with zero nim-sum (XOR of all heaps = 0) losing for the player about to move?'
+    options:
+      - 'Because from a zero XOR every legal move changes one heap and therefore makes the XOR non-zero, letting the opponent always restore a zero XOR and eventually win.'
+      - 'Because a zero XOR means every heap has size zero already.'
+      - 'Because the XOR identity 0 makes the first player unable to compute their move.'
+      - 'Because XOR is commutative, so the order of the heaps is irrelevant.'
+    answer: 0
+    explanation: 'In a zero-XOR position, decreasing a single heap always flips the XOR to non-zero; the opponent then has the guaranteed move back to a zero-XOR state, so the mover is perpetually the one breaking parity and ultimately the one stuck without a last move.'
+type: content
+---

@@ -1,0 +1,316 @@
+---
+id: labyrinth
+title: Labyrinth
+type: content
+difficulty: easy
+order: 84
+tags:
+  - graph-algorithms
+  - bfs
+  - shortest-path
+  - path-reconstruction
+blocks:
+  - type: markdown
+    content: |
+      # Labyrinth — shortest path on a grid with BFS + path reconstruction
+
+      You have an `n × m` map of a labyrinth: walls (`#`), floor (`.`), a start
+      (`A`) and an end (`B`). You take exactly **one step per move** (up, down,
+      left, right) on floor squares. The task: find the *shortest* route from
+      `A` to `B` and print its length plus the move sequence (`U/D/L/R`).
+
+      This is the classic *shortest path on an unweighted graph* — and because
+      every edge has the same cost (1), the right tool is **BFS**, not Dijkstra.
+
+      ## Why BFS gives the shortest path
+
+      BFS explores nodes in **layers by distance** from the source:
+
+      - layer 0: the start,
+      - layer 1: everything one step away,
+      - layer 2: everything two steps away, ...
+
+      Because the queue is FIFO, you finish all of layer `k` before touching
+      layer `k+1`. So the **first time** BFS discovers a cell, it has arrived by
+      a shortest route; any later arrival is equal or worse. That property is
+      what turns "find a path" into "find a shortest path" for free.
+
+      ## Reconstructing the route
+
+      Knowing the distance is only half — the problem wants the actual moves.
+      Two complementary bookkeeping styles:
+
+      - **Distance table + backtrack.** Store `dist[cell]`. After the search
+        reaches `B`, walk *backward* from `B` to `A` by repeatedly moving to any
+        neighbour whose `dist` is one less. This needs the inverse direction at
+        each step, which is error-prone.
+      - **Parent-direction table (preferred).** When you push a cell, remember
+        the direction that was used to *enter* it. At the end, walk from `B`
+        back to `A` following these recorded directions, then **reverse** the
+        collected string. Cleaner, no inverse logic.
+
+      ## Complexity
+
+      Every cell is discovered once and each has ≤ 4 neighbours: `O(n·m)` time
+      and `O(n·m)` space.
+
+      :::tip
+      **Interview tip:** Any "fewest steps / shortest path on a grid or an
+      unweighted graph" question is BFS plus parent pointers. Reconstructing
+      the path is a standard sub-task many people fumble — practice storing the
+      parent/arrival-direction and reversing at the end. Note the output here
+      is a *route string*, not coordinates, which is how maze questions are
+      often asked.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given a map of a labyrinth, and your task is to find a path from
+      start to end. You can walk left, right, up and down.
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the height and width
+      of the map.
+
+      Then there are `n` lines of `m` characters describing the labyrinth. Each
+      character is `.` (floor), `#` (wall), `A` (start), or `B` (end). There is
+      exactly one `A` and one `B` in the input.
+
+      **Constraints:** `1 ≤ n, m ≤ 1000`
+
+      ## Output
+
+      First print `YES`, if there is a path, and `NO` otherwise.
+
+      If there is a path, print the length of the shortest such path and its
+      description as a string consisting of characters `L` (left), `R` (right),
+      `U` (up), and `D` (down). You can print any valid solution.
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      5 8
+      ########
+      #.A#...#
+      #.##.#B#
+      #......#
+      ########
+      ```
+
+      **Output:**
+
+      ```
+      YES
+      9
+      LDDRRRRRU
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — distance BFS + backtrack, O(n·m)**
+
+      BFS fills a full `dist[][]` table, then a second phase walks from `B`
+      back to `A`, each time stepping to any neighbour with `dist-1`. Correct,
+      but the backward step must invert directions (coming *up* from below ⇒
+      the move char is `'D'`), which is exactly the kind of off-by-one-inverse
+      that breeds bugs.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n, m;
+      int dr[4] = {-1, 1, 0, 0}, dc[4] = {0, 0, -1, 1};
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n >> m;
+          vector<string> g(n);
+          int sr=-1,sc=-1,er=-1,ec=-1;
+          for (int i = 0; i < n; i++) { cin >> g[i];
+              for (int j = 0; j < m; j++) {
+                  if (g[i][j]=='A'){sr=i;sc=j;} if (g[i][j]=='B'){er=i;ec=j;} } }
+          vector<vector<int>> dist(n, vector<int>(m, -1));
+          queue<pair<int,int>> q; q.push({sr,sc}); dist[sr][sc]=0;
+          while (!q.empty()) {
+              auto [r,c] = q.front(); q.pop();
+              for (int k = 0; k < 4; k++) {
+                  int nr=r+dr[k], nc=c+dc[k];
+                  if (nr<0||nr>=n||nc<0||nc>=m||g[nr][nc]=='#') continue;
+                  if (dist[nr][nc] == -1) { dist[nr][nc]=dist[r][c]+1; q.push({nr,nc}); }
+              }
+          }
+          if (dist[er][ec] == -1) { cout << "NO\n"; return 0; }
+          string path; int r=er, c=ec;
+          while (r != sr || c != sc) {
+              for (int k = 0; k < 4; k++) {
+                  int nr=r+dr[k], nc=c+dc[k];
+                  if (nr>=0&&nr<n&&nc>=0&&nc<m&&dist[nr][nc]==dist[r][c]-1) {
+                      // we arrived at (r,c) FROM (nr,nc): the step is the inverse
+                      char ch = (dr[k]==-1?'D' : dr[k]==1?'U' : dc[k]==-1?'R' : 'L');
+                      path.push_back(ch); r=nr; c=nc; break;
+                  }
+              }
+          }
+          reverse(path.begin(), path.end());
+          cout << "YES\n" << path.size() << '\n' << path << '\n';
+          return 0;
+      }
+      ```
+
+      *O(n·m) time, O(n·m) space — correct, but the inverse-direction logic is
+      a classic bug source.*
+
+      **② Optimization — BFS storing arrival direction, O(n·m)**
+
+      Instead of storing distances, store, for each reached cell, the direction
+      used to **enter** it (`prev[r][c]`). Reconstruct by unrolling parents
+      from `B` to `A` and reversing. No inverse logic, one pass, each cell
+      visited once.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n, m;
+      vector<string> g;
+      int dr[4] = {-1, 1, 0, 0}, dc[4] = {0, 0, -1, 1};
+      char dirCh[4] = {'U', 'D', 'L', 'R'};
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n >> m;
+          g.resize(n);
+          int sr=-1,sc=-1,er=-1,ec=-1;
+          for (int i = 0; i < n; i++) { cin >> g[i];
+              for (int j = 0; j < m; j++) {
+                  if (g[i][j]=='A'){sr=i;sc=j;} if (g[i][j]=='B'){er=i;ec=j;} } }
+          // prev[r][c] = direction used to enter (r,c); '\0' = not reached yet
+          vector<vector<char>> prev(n, vector<char>(m, 0));
+          deque<pair<int,int>> q;
+          q.push_back({sr, sc}); prev[sr][sc] = 'S';
+          while (!q.empty()) {
+              auto [r, c] = q.front(); q.pop_front();
+              if (r == er && c == ec) break;
+              for (int k = 0; k < 4; k++) {
+                  int nr = r + dr[k], nc = c + dc[k];
+                  if (nr < 0 || nr >= n || nc < 0 || nc >= m) continue;
+                  if (g[nr][nc] == '#' || prev[nr][nc] != 0) continue;
+                  prev[nr][nc] = dirCh[k];
+                  q.push_back({nr, nc});
+              }
+          }
+          if (prev[er][ec] == 0) { cout << "NO\n"; return 0; }
+          string path;
+          int r = er, c = ec;
+          while (!(r == sr && c == sc)) {
+              char d = prev[r][c];
+              path.push_back(d);
+              if (d=='U') r++; else if (d=='D') r--;
+              else if (d=='L') c++; else c--;
+          }
+          reverse(path.begin(), path.end());
+          cout << "YES\n" << path.size() << '\n' << path << '\n';
+          return 0;
+      }
+      ```
+
+      *O(n·m) time, O(n·m) space — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      To know whether `B` is reachable you must, in the worst case, explore all
+      `n·m` cells. `O(n·m)` is optimal; there is nothing faster asymptotically.
+      (Bidirectional BFS below explores less *in practice* but keeps the same
+      bound.)
+
+      **④ Alternative — bidirectional BFS, O(n·m) but a smaller frontier**
+
+      Run two BFS at once — one from `A`, one from `B` — and stop when the two
+      frontiers meet. The same asymptotic cost, but the explored region is
+      roughly halved in practice, which matters on huge real mazes. The
+      reconstruction joins the two half-paths at the meeting cell.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Key lines of the arrival-direction BFS:
+
+      - **`prev[sr][sc] = 'S'`.** The start is given a non-zero sentinel so it
+        is treated as "already reached" and never re-enqueued.
+      - **`prev[nr][nc] = dirCh[k]`.** The moment a cell is discovered, record
+        *which move brought us here*. Because BFS discovers cells in distance
+        order, this is always a shortest-edge arrival.
+      - **No distance array needed.** The path length is simply the number of
+        recorded moves — `path.size()` after reconstruction.
+      - **Backtrack.** From `B`, `prev[r][c]` tells how to undo the last move:
+        e.g. if it is `'U'`, we came here from the cell below, so `r++`. Each
+        undo is one recorded move; reversing them gives `A → B`.
+      - **`dist` v.s. `prev`:** tier ① reconstructs by searching for neighbours
+        and inverting; tier ② records the answer at discovery time, which is
+        simpler and cannot get the direction wrong.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample (0-based rows/cols):
+
+      ```
+      5 8
+      ########
+      #.A#...#
+      #.##.#B#
+      #......#
+      ########
+      ```
+
+      `A = (1,2)`, `B = (2,6)`. The BFS discovers cells layer by layer:
+
+      | layer | cells reached (first time) |
+      |-------|----------------------------|
+      | 0     | (1,2)                      |
+      | 1     | (1,1)                      |
+      | 2     | (2,1)                      |
+      | 3     | (3,1)                      |
+      | 4     | (3,2)                      |
+      | 5     | (3,3)                      |
+      | 6     | (3,4)                      |
+      | 7     | (3,5)                      |
+      | 8     | (3,6)                      |
+      | 9     | (2,6) = B  → stop          |
+
+      Backtrack from `B` using recorded arrival directions:
+      (2,6)←`U`←(3,6)←`R`←(3,5)←`R`←(3,4)←`R`←(3,3)←`R`←(3,2)←`D`←(2,1)←`D`←(1,1)←`L`←A.
+      Collected (B→A): `U R R R R D D L`. Reversed:
+      `L D D R R R R R U` = **`LDDRRRRRU`**, length **9**.
+
+      Expected (sample) — `YES`, `9`, `LDDRRRRRU`. Actual — identical. Match.
+  - type: flowchart
+    title: "BFS shortest path with reconstruction"
+    nodes:
+      - "locate A and B; push A to queue, mark entered"
+      - "pop a cell from the queue (FIFO)"
+      - "popped cell is B?"
+      - "push unvisited floor neighbours, recording each arrival direction"
+      - "queue drained without reaching B?"
+      - "unroll paths from B back to A, reverse, print route and length"
+      - "print NO (unreachable)"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 3}
+      - {from: 3, to: 2}
+      - {from: 2, to: 4, label: "no"}
+      - {from: 4, to: 1, label: "not empty"}
+      - {from: 4, to: 6, label: "empty"}
+      - {from: 2, to: 5, label: "yes"}
+  - type: mcq
+    prompt: "Why must we use BFS rather than DFS to guarantee the shortest path?"
+    options:
+      - "Because DFS explores depth-first, so it always needs fewer steps than BFS."
+      - "Because BFS visits cells in order of distance from the start, so the first arrival at B comes via a shortest route."
+      - "Because DFS cannot visit the whole grid on a labyrinth."
+      - "Because only BFS can print the moves; DFS cannot backtrack."
+    answer: 1
+    explanation: "All edges have weight 1, and BFS processes nodes by layer (distance). The very first time B reaches the queue front it was discovered along a shortest path. DFS, by contrast, commits to deep paths and can return a much longer route first, so it does not guarantee shortest."
+---

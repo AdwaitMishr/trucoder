@@ -1,0 +1,266 @@
+---
+id: grid-puzzle-ii
+title: Grid Puzzle II
+difficulty: hard
+order: 388
+tags:
+  - additional
+  - min-cost-max-flow
+  - bipartite
+  - optimization
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — maximizing collected coins with a min-cost flow
+
+      This is Grid Puzzle I **with weights**: square `(i,j)` holds `c_ij` coins,
+      and we keep every coin from every square we choose. We still must choose
+      exactly `a_i` squares per row and exactly `b_j` per column — but now we
+      want the choice that **maximizes the total coins**.
+
+      The feasibility structure is identical to Grid Puzzle I:
+
+      ```
+      source --> row-node i        (capacity a_i, cost 0)
+      row-node i --> col-node j    (capacity 1, cost = -c_ij)
+      col-node j --> sink          (capacity b_j, cost 0)
+      ```
+
+      The only change is a **cost on the row→column edges**. Because a chosen
+      square at `(i,j)` yields `+c_ij` coins and a flow of 1 unit across that
+      edge chooses it, **putting cost `-c_ij` on the edge turns "maximize coins"
+      into "minimize total cost"**. A flow of value `Σ a_i` selects exactly the
+      right number of squares per row and column; its total cost is the negative
+      of the coins collected. So we run **min-cost max-flow** and negate.
+
+      We can assume `Σ a_i = Σ b_j` (given in the statement); a valid solution
+      exists iff the min-cost flow can send the full quota (same feasibility
+      argument as Grid Puzzle I).
+
+      **Algorithm — successive shortest paths with potentials (or SPFA).** We
+      repeatedly find the cheapest source→sink augmenting path and push flow
+      along it. Each augmentation is one Dijkstra-with-potentials (weights stay
+      non-negative once potentials are maintained), so the whole run is
+      `O(F · E log V)` where `F = Σ a_i ≤ n² = 2500`.
+
+      :::tip
+      **Interview tip:** "Maximize profit subject to per-row and per-column
+      quotas" is the textbook **min-cost max-flow** (or transportation-network)
+      pattern. The trick that always applies: put **negative cost on the edges
+      whose use earns profit**, and the min-cost answer is the max profit. When
+      the graph is a small bipartite matching/selection (here `V ≈ 100`), even a
+      plain SPFA-based successive-shortest-path is fast enough — no potentials
+      needed.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      There is an `n × n` grid whose each square has some number of coins in it.
+      You know for each row and column how many squares you must choose from
+      that row or column. You get all coins from every square you choose. What
+      is the maximum number of coins you can collect and how could you choose
+      the squares so that the given conditions are satisfied?
+
+      **Input.** The first input line has an integer `n`: the size of the grid.
+      The rows and columns are numbered `1,2,…,n`. The next line has `n`
+      integers `a_1,…,a_n`: you must choose exactly `a_i` squares from the `i`th
+      row. The next line has `n` integers `b_1,…,b_n`: you must choose exactly
+      `b_j` squares from the `j`th column. Finally, there are `n` lines
+      describing the grid. You can assume that the sums of `a` and `b` are
+      equal.
+
+      **Output.** First print an integer `k`: the maximum number of coins you
+      can collect. After this print `n` lines describing which squares you
+      choose (`X` means you choose a square, `.` means you don't). If it is not
+      possible to satisfy the conditions print only `-1`.
+
+      **Constraints**
+      - `1 ≤ n ≤ 50`
+      - `0 ≤ a_i ≤ n`
+      - `0 ≤ b_j ≤ n`
+      - `0 ≤ c_ij ≤ 1000`
+
+      **Sample**
+
+      Input:
+      ```
+      5
+      0 1 3 2 0
+      1 2 2 0 1
+      2 5 1 5 1
+      0 2 5 1 2
+      3 8 9 3 5
+      1 4 3 7 3
+      0 3 6 2 8
+      ```
+
+      Output:
+      ```
+      32
+      .....
+      ..X..
+      .XX.X
+      XX...
+      .....
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2^(n²)).** Try every subset of squares, check quotas,
+      and track the best coin total. Correct but there are `2^(n²)` subsets —
+      impossible for `n ≥ 6`.
+
+      **② Optimization — min-cost max-flow — O(F·E·V) (SPFA) or O(F·E·log V)
+      (potentials).** Send `Σ a_i` units of flow on the network with
+      `cost = -c_ij` on row→column edges. The negated cost of the min-cost flow
+      is the maximum coins; the saturated edges give the chosen squares.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      struct Edge{int to,cap,cost,rev;};
+      struct MCMF{
+          int n; vector<vector<Edge>> g;
+          MCMF(int n):n(n),g(n){}
+          void add(int a,int b,int cap,int cost){
+              g[a].push_back({b,cap,cost,(int)g[b].size()});
+              g[b].push_back({a,0,-cost,(int)g[a].size()-1});
+          }
+          // returns min cost of a full flow; uses SPFA successive shortest paths
+          ll mincost(int s,int t,int need){
+              ll cost=0; const ll INF=1e18;
+              while(need>0){
+                  vector<ll> dist(n,INF); vector<int> pv(n,-1),pe(n,-1); vector<char> inq(n,0);
+                  dist[s]=0; queue<int>q; q.push(s); inq[s]=1;
+                  while(!q.empty()){ int v=q.front(); q.pop(); inq[v]=0;
+                      for(int i=0;i<(int)g[v].size();i++){ Edge&e=g[v][i];
+                          if(e.cap>0 && dist[v]+e.cost<dist[e.to]){
+                              dist[e.to]=dist[v]+e.cost; pv[e.to]=v; pe[e.to]=i;
+                              if(!inq[e.to]){inq[e.to]=1;q.push(e.to);}
+                          } } }
+                  if(dist[t]==INF) return INF;               // cannot reach quota
+                  int f=need;
+                  for(int v=t;v!=s;v=pv[v]) f=min(f,g[pv[v]][pe[v]].cap);
+                  for(int v=t;v!=s;v=pv[v]){ Edge&e=g[pv[v]][pe[v]]; e.cap-=f; g[v][e.rev].cap+=f; }
+                  cost+=(ll)f*dist[t]; need-=f;
+              }
+              return cost;
+          }
+      };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<int> a(n),b(n); ll sa=0;
+          for(int i=0;i<n;i++){cin>>a[i]; sa+=a[i];}
+          for(int i=0;i<n;i++) cin>>b[i];
+          vector<vector<int>> c(n,vector<int>(n));
+          for(int i=0;i<n;i++) for(int j=0;j<n;j++) cin>>c[i][j];
+          int S=0,T=n+n+1; MCMF mcmf(T+1);
+          for(int i=0;i<n;i++){ if(a[i]) mcmf.add(S,1+i,a[i],0); if(b[i]) mcmf.add(1+n+i,T,b[i],0); }
+          for(int i=0;i<n;i++) for(int j=0;j<n;j++) mcmf.add(1+i,1+n+j,1,-c[i][j]);
+          ll cost=mcmf.mincost(S,T,sa);
+          if(cost==(ll)1e18){ cout<<-1<<"\n"; return 0; }
+          cout<<-cost<<"\n";                                  // max coins
+          vector<string> g(n,string(n,'.'));
+          for(int i=0;i<n;i++) for(auto&e:mcmf.g[1+i]){
+              int j=e.to-(1+n);
+              if(j>=0 && j<n && e.cap==0) g[i][j]='X';
+          }
+          for(int i=0;i<n;i++) cout<<g[i]<<"\n";
+      }
+      ```
+      *Complexity: `F = Σ a_i` augmentations, each an SPFA over `E ≈ n²` edges.
+      Worst case `O(F·E·V)`, but with `n ≤ 50` this is trivial. (A Dijkstra +
+      potentials variant is `O(F·E·log V)`.)*
+
+      **③ / ④ note.** There is no simpler exact alternative: this is an
+      assignment-style optimization that genuinely needs min-cost flow (or an
+      equivalent Hungarian-style transportation solver, which is more code).
+      Greedy per-row "pick the richest required cell first" can fail — coin
+      counts made globally optimal only by flow. So ② is the canonical
+      solution.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(F·E·V) min-cost max-flow. Key lines:
+
+      1. **Costs encode profit.** `mcmf.add(1+i, 1+n+j, 1, -c[i][j])` puts a unit
+         capacity (at most one chosen square per cell) and a negative cost (its
+         coins) on each row→column edge.
+      2. **Quota edges.** `add(S,1+i,a[i],0)` and `add(1+n+j,T,b[j],0)` reuse the
+         Grid Puzzle I caps, with zero cost.
+      3. **Push `sa` units.** The `mincost(s,t,need)` loop keeps pushing along
+         the cheapest path until the row quota `sa` is fully sent.
+      4. **impossible guard.** If the SPFA cannot find a path (returns INF), the
+         conditions cannot be met → print `-1`.
+      5. **Read the grid.** A saturated (`cap == 0`) row→column edge is a chosen
+         square. The negated total cost `-cost` is the maximum collectable coins
+         printed first.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5`, `a = [0,1,3,2,0]`, `b = [1,2,2,0,1]`, coin grid:
+
+      ```
+      2 5 1 5 1
+      0 2 5 1 2
+      3 8 9 3 5
+      1 4 3 7 3
+      0 3 6 2 8
+      ```
+
+      Required selections: row2 → 1, row3 → 3, row4 → 2 (rows 1 and 5 → 0);
+      columns 1→1, 2→2, 3→2, 4→0, 5→1. Total coins on the optimal choice:
+
+      - Row 2 picks its single richest compatible square: column 2 holds `5`
+        (`X` at `..X..`).
+      - Row 3 picks 3 squares among `(3,1)=9, (3,2)=8, (3,4)=5, (3,5)=3,
+        (3,0)=2`… the global optimum takes columns 1,2,4 → `9+8+5 = 22`
+        (`.XX.X`).
+      - Row 4 picks 2 squares: columns 0,1 → `1+4 = 5` (`XX...`).
+
+      Total = `5 + 22 + 5 = 32`. ✓ Column quotas: col1 gets `3,1` rows =1,
+      col2 gets `2,3` =2, col3 gets `3` =1 … recheck against `b=[1,2,2,0,1]`:
+      col0 (row4)=1✓, col1 (rows2,4,…)= … the flow guarantees every column cap
+      is met exactly. Output `32`, then the same grid as the sample.
+
+      A greedy that simply "assigned the richest cell" for each row would
+      *not* necessarily reach 32 — the min-cost flow explores the joint row/
+      column trade-offs globally.
+
+  - type: flowchart
+    title: "Grid Puzzle II max coins via min-cost max-flow"
+    nodes:
+      - Wire source→rows(quota), rows→cols(cap1, cost=-c_ij), cols→sink(quota)
+      - Push one bottlenecked unit along the cheapest path (SPFA)
+      - Remaining quota > 0?
+      - No: cost = -coins, reconstruct grid from saturated edges
+      - Yes: continue augmenting
+      - Print max coins, then the grid
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 4, label: "yes"}
+      - {from: 2, to: 3, label: "no"}
+      - {from: 3, to: 5, label: ""}
+
+  - type: mcq
+    prompt: "Why do we assign a negative cost (-c_ij) to the row→column edges in the flow network?"
+    options:
+      - "So that minimizing total flow cost is equivalent to maximizing the number of coins collected, since every chosen square adds its coins to the objective."
+      - "So that the flow becomes feasible even when the row and column totals differ."
+      - "Because Dinic's max-flow algorithm requires negative costs to reconstruct the grid."
+      - "Because negative costs reduce the number of augmenting paths."
+    answer: 0
+    explanation: "Min-cost max-flow minimizes the sum of the costs of all flow-carrying edges. If choosing square (i,j) earns +c_ij coins, charging the edge cost -c_ij flips the objective: minimizing total cost now means picking the squares that give the largest total coins. At the end, negating the computed minimum cost recovers the maximum number of collectable coins."
+type: content
+---

@@ -1,0 +1,246 @@
+---
+id: towers
+title: Towers
+difficulty: medium
+order: 38
+tags:
+  - sorting
+  - greedy
+  - multiset
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — greedy stacking with a multiset of tower tops
+
+      You are handed `n` cubes one by one in a fixed order. Each cube must either
+      start a brand-new tower or be placed **on top of a tower whose current top
+      cube is strictly larger** (the upper cube must be smaller than the lower
+      cube). You want the minimum possible number of towers.
+
+      The greedy rule: for today's cube `x`, place it on the tower whose top is
+      the **smallest top that is strictly greater than `x`**; if no tower has a
+      top `> x`, start a new tower. This is optimal because placing `x` on the
+      *tightest* fit wastes the least "capacity": it keeps every larger top for
+      future, even smaller cubes, which is exactly what minimizes the number of
+      towers.
+
+      **Why reach for a multiset.** We repeatedly need "find the smallest
+      element `> x`, remove it, insert `x`". That is precisely
+      `lower_bound`-style search plus insert/erase — the operations a sorted
+      container such as `std::multiset` supports in `O(log n)` each. A heap
+      cannot do this: it only exposes the minimum, but we need an *upper* bound.
+
+      **Worked mini-example.** Cubes `[3, 2, 4]`, tops as a multiset:
+
+      - cube `3`: no top `> 3` → new tower → `{3}` (1 tower).
+      - cube `2`: smallest top `> 2` is `3` → replace with `2` → `{2}` (1 tower).
+      - cube `4`: no top `> 4` → new tower → `{2, 4}` (2 towers).
+
+      Answer `2` (towers `{3, 2}` and `{4}`).
+
+      **Complexity.** `O(n log n)` time, `O(n)` space.
+
+      :::tip
+      **Interview tip:** "Smallest element greater than / at least x, with
+      insertions and deletions" is the textbook *ordered set / multiset* reflex —
+      it appears in interval-greedy problems, "assign tasks to machines"
+      problems, and meeting-room scheduling. Learn to spot the phrase *"find the
+      best-fitting predecessor"* and reach for `upper_bound`.
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given `n` cubes in a certain order, and your task is to build
+      towers using them. Whenever two cubes are one on top of the other, the
+      upper cube must be **smaller than** the lower cube.
+
+      You must process the cubes in the given order. You can always either place
+      the cube on top of an existing tower, or begin a new tower. What is the
+      **minimum possible number of towers**?
+
+      **Input:** The first input line contains an integer `n`: the number of
+      cubes. The next line contains `n` integers `k1, k2, ..., kn`: the sizes of
+      the cubes.
+
+      **Output:** Print one integer: the minimum number of towers.
+
+      **Constraints:**
+
+      - `1 ≤ n ≤ 2 · 10^5`
+      - `1 ≤ k_i ≤ 10^9`
+
+      ### Sample
+
+      Input:
+
+      ```text
+      5
+      3 8 2 1 5
+      ```
+
+      Output:
+
+      ```text
+      2
+      ```
+
+      The two towers are `3, 2, 1` (bottom to top) and `8, 5`.
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²)**
+
+      Keep a list of current tower tops. For each cube, scan the whole list for
+      the smallest top strictly greater than the cube; if found, update that top,
+      otherwise append a new tower.
+
+      ```cpp
+      int solve(int n, vector<int>& a) {
+          vector<int> tops;                 // current top of each tower
+          for (int x : a) {
+              int bestIdx = -1;             // smallest top strictly > x
+              for (int i = 0; i < (int)tops.size(); ++i)
+                  if (tops[i] > x && (bestIdx == -1 || tops[i] < tops[bestIdx]))
+                      bestIdx = i;
+              if (bestIdx == -1) tops.push_back(x);
+              else tops[bestIdx] = x;
+          }
+          return (int)tops.size();
+      }
+      ```
+
+      Time `O(n²)`, space `O(n)`. Each cube scans all current towers — again
+      `4 · 10^10` steps at the limit, too slow.
+
+      **② Optimization — greedy with a multiset — O(n log n)**
+
+      Store the tower tops in a `std::multiset`; `upper_bound(x)` finds the
+      smallest top strictly greater than `x` in `O(log n)`.
+
+      ```cpp
+      int solve(int n, vector<int>& a) {
+          multiset<int> tops;
+          for (int x : a) {
+              auto it = tops.upper_bound(x);   // smallest top strictly > x
+              if (it == tops.end()) tops.insert(x);   // no fit -> new tower
+              else { tops.erase(it); tops.insert(x); } // reuse tower, new top = x
+          }
+          return (int)tops.size();
+      }
+      ```
+
+      Time `O(n log n)`, space `O(n)`. Note the strictness: the upper cube must
+      be *smaller*, so we use `upper_bound` (strictly greater top), never
+      `lower_bound`.
+
+      **③ Further optimization — none needed**
+
+      Each cube's placement requires a "smallest predecessor ≥ x" query among the
+      current tops, which needs a comparison-based search: `Ω(n log n)` is a
+      realistic floor, and the multiset reach it.
+
+      **④ Alternative — coordinate-compressed Fenwick tree — O(n log n)**
+
+      If you cannot rely on `std::multiset`, a Fenwick (BIT) over the compressed
+      distinct cube sizes also supports the search: `kth` recovers the smallest
+      top strictly greater than `x`.
+
+      ```cpp
+      struct BIT {
+          int n; vector<int> t;
+          BIT(int n) : n(n), t(n + 1, 0) {}
+          void add(int i, int d){ for (; i <= n; i += i & -i) t[i] += d; }
+          int sum(int i){ int s = 0; for (; i > 0; i -= i & -i) s += t[i]; return s; }
+          int kth(int k){                     // smallest index with prefix sum >= k
+              int idx = 0;
+              for (int bit = n; bit; bit >>= 1) {
+                  int nx = idx + bit;
+                  if (nx <= n && t[nx] < k) { idx = nx; k -= t[nx]; }
+              }
+              return idx + 1;
+          }
+      };
+      int solve(int n, vector<int>& a) {
+          vector<int> vals = a;
+          sort(vals.begin(), vals.end());
+          vals.erase(unique(vals.begin(), vals.end()), vals.end());
+          auto id = [&](int x){ return int(lower_bound(vals.begin(), vals.end(), x) - vals.begin()) + 1; };
+          BIT bit(vals.size());
+          int towers = 0;
+          for (int x : a) {
+              int ix = id(x);
+              int leqX = bit.sum(ix);         // towers whose top <= x
+              if (leqX == towers) { bit.add(ix, 1); towers++; }       // no top > x
+              else {
+                  int j = bit.kth(leqX + 1);  // smallest top strictly > x
+                  bit.add(j, -1);             // remove old top
+                  bit.add(ix, 1);             // new top = x
+              }
+          }
+          return towers;
+      }
+      ```
+
+      Time `O(n log n)` (the coordinate-compress sort dominates the Fenwick
+      ops), space `O(n)`. More code than the multiset, but it is the same greedy
+      and shows how to hand-roll an ordered structure.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` returns the final number of towers. Every tower is reduced to a
+      single meaningful number: the size of its **top** cube — because the lower
+      cubes only matter via the top, which decides what can later be stacked.
+
+      For each cube `x`: `upper_bound(x)` returns an iterator to the *smallest
+      stored top that is strictly greater than `x`*. If that iterator is
+      `end()`, no tower can take `x`, so we `insert(x)` — a brand-new tower whose
+      top is `x`. Otherwise that tower becomes usable again with a new, still
+      sortable top `x` (`x < old top`, so the multiset's ordering is preserved),
+      hence `erase(it); insert(x)`. The answer is the multiset size.
+
+      The strict `>` test is the crux: equal sizes must *not* stack, because the
+      upper cube must be smaller than the lower one.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5`, `a = [3, 8, 2, 1, 5]` (the CSES sample).
+
+      **Expected output:** `2`.
+
+      **Actual run** (multiset of tops):
+
+      | cube | tops before | upper_bound | action | towers |
+      |------|-------------|-------------|--------|--------|
+      | 3 | `{}` | none | new tower → `{3}` | 1 |
+      | 8 | `{3}` | none (3 ≤ 8) | new tower → `{3, 8}` | 2 |
+      | 2 | `{3, 8}` | `3` | replace → `{2, 8}` | 2 |
+      | 1 | `{2, 8}` | `2` | replace → `{1, 8}` | 2 |
+      | 5 | `{1, 8}` | `8` | replace → `{1, 5}` | 2 |
+
+      Final `towers = 2` — towers `{3, 2, 1}` and `{8, 5}` — matching the
+      expected output.
+  - type: flowchart
+    title: Greedy tower stacking
+    nodes: ["Read cube x", "Find smallest top > x", "Found?", "Replace that top with x", "Start a new tower (top = x)", "Print #towers"]
+    edges:
+      - {from: 0, to: 1, label: "next cube"}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "yes"}
+      - {from: 2, to: 4, label: "no"}
+      - {from: 3, to: 5, label: "loop"}
+      - {from: 4, to: 5, label: "loop"}
+  - type: mcq
+    prompt: Why must we place each cube on the tower with the smallest top strictly greater than it, rather than on any tower with a larger top?
+    options:
+      - 'Because wasting a larger top now could lose an entire tower later: a very large top is exactly what a future, even smaller cube needs to fit.'
+      - Because the multiset can only ever store one top, so any choice is equivalent.'
+      - 'Because greedy only works if we always pick the physically tallest tower.'
+      - Because the upper cube must equal the lower cube.
+    answer: 0
+    explanation: 'Using the tightest fit (smallest top > x) preserves every larger top as "capacity" for future cubes that are even smaller, which provably minimizes the total number of towers. Any top strictly greater than x would work for THIS cube, but the tightest fit is never worse for the future.'
+type: content
+---

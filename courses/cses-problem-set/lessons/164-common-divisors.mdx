@@ -1,0 +1,253 @@
+---
+id: common-divisors
+title: "Common Divisors"
+type: content
+difficulty: medium
+order: 164
+tags:
+  - sieve
+  - gcd
+  - frequency
+  - multiples
+blocks:
+  - type: markdown
+    content: |
+      # Common Divisors — the biggest integer dividing at least two numbers
+
+      Given `n` integers in `[1, 10^6]`, we must find two of them whose gcd is
+      as large as possible. Equivalently: the **largest integer `d` that
+      divides at least two of the input numbers**.
+
+      The pairwise brute force is `O(n^2)` gcd calls — unusable for
+      `n = 2*10^5`. The key is to stop thinking per-pair and instead think
+      **per candidate divisor**, with a frequency array and a multiples-like
+      sieve (the same harmonic-sum idea as **Counting Divisors**, lesson 163).
+
+      For each candidate `d` from `1` to the maximum value `M`, count how many
+      input numbers are **divisible by `d`**. That count is exactly the number
+      of array elements that share `d` as a divisor. If it is at least `2`,
+      then `d` is a common divisor of some pair — so the answer is the largest
+      such `d`.
+
+      Counting the divisible-numbers per `d` uses the symmetry that a divisor
+      `d` divides exactly the multiples `d, 2d, 3d, ...`:
+
+      ```
+      freq[x]++         for every input value x
+      for d in 1..M:
+          for j in multiples of d (d, 2d, 3d, ... up to M):
+              mult[d] += freq[j]
+      ```
+
+      Then scan `d` from `M` **down** to `1` and print the first `d` with
+      `mult[d] >= 2`.
+
+      **Time:** `O(M log M)` for the sieve + `O(M)` scan. **Space:** `O(M)`.
+
+      :::tip
+      **Interview tip:** "maximum gcd among pairs / largest integer dividing
+      two of them" is asking for the **largest divisor with multiplicity ≥ 2
+      in the frequency array**. Frame it as counting, sieve the *divisors*
+      instead of testing *pairs*, and scan the answer downward from the max
+      value. This divisor-frequency pattern is a frequent interview favorite
+      because it hides an `O(n^2)` gcd brute force behind an `O(M log M)` sieve.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given an array of `n` positive integers. Your task is to find two
+      integers such that their greatest common divisor is as large as possible.
+
+      ## Input
+
+      The first input line has an integer `n`: the size of the array.
+
+      The second line has `n` integers `x_1,x_2,\dots,x_n`: the contents of the
+      array.
+
+      **Constraints**
+
+      - `2 <= n <= 2 * 10^5`
+      - `1 <= x_i <= 10^6`
+
+      ## Output
+
+      Print the maximum greatest common divisor.
+
+      ## Example
+
+      Input:
+
+      ```
+      5
+      3 14 15 7 9
+      ```
+
+      Output:
+
+      ```
+      7
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — test every pair, O(n^2)**
+
+      Compute `gcd(x_i, x_j)` for every pair and keep the maximum. Simple and
+      clearly correct, but `n = 2*10^5` means ~`2*10^10` pairs — impossible.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n; vector<int> a(n);
+          for(auto &x : a) cin >> x;
+          int best = 1;
+          for(int i = 0; i < n; i++)
+              for(int j = i + 1; j < n; j++)
+                  best = max(best, __gcd(a[i], a[j]));
+          cout << best << "\n";
+      }
+      ```
+
+      *`O(n^2)` gcd calls (`~2*10^10`). Too slow.*
+
+      **② Optimization — frequency + multiples sieve, O(M log M)**
+
+      Count, for every divisor `d`, how many input numbers are divisible by
+      `d`; print the largest `d` with a count at least `2`. This is the
+      optimal tier.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int M = 1000000;
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          vector<int> freq(M + 1, 0), mult(M + 1, 0);
+          int n; cin>>n;
+          for(int i = 0; i < n; i++){ int x; cin>>x; freq[x]++; }
+
+          for(int d = 1; d <= M; d++)          // d divides j if j is a multiple of d
+              for(int j = d; j <= M; j += d)
+                  mult[d] += freq[j];          // count array elements divisible by d
+
+          for(int d = M; d >= 1; d--)
+              if(mult[d] >= 2){ cout << d << "\n"; break; }
+      }
+      ```
+
+      *`O(M log M)` sieve + `O(M)` scan. Correct for `n = 2*10^5`.*
+
+      **③ Further optimization — already optimal**
+
+      The `O(M log M)` harmonic-sum sweep is the standard bound; the only
+      tweak that changes constants (not the big-O) is starting `d` from the
+      largest actual value instead of `M`.
+
+      **④ Alternative algorithm — SPF divisor enumeration, O(M + total divisors)**
+
+      Build a smallest-prime-factor sieve, then enumerate the divisors of each
+      *distinct* value and add its multiplicity to a per-divisor counter. Same
+      answer, and reuses an `spf` table that many other problems share.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int M = 1000000;
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          vector<int> spf(M + 1, 0), f(M + 1, 0), mult(M + 1, 0);
+          for(int i = 2; i <= M; i++) if(spf[i] == 0){
+              spf[i] = i;
+              if(1LL*i*i <= M) for(long long j = 1LL*i*i; j <= M; j += i) if(spf[j]==0) spf[j]=i;
+          }
+          int n; cin>>n;
+          for(int i = 0; i < n; i++){ int x; cin>>x; f[x]++; }
+          for(int x = 1; x <= M; x++) if(f[x] > 0){
+              vector<int> divs = {1};
+              long long t = x;
+              while(t > 1){                        // factor x with spf
+                  int p = spf[t], e = 0;
+                  while(t % p == 0){ t /= p; e++; }
+                  int sz = divs.size(); long long pw = 1;
+                  for(int i = 1; i <= e; i++){ pw *= p; for(int j = 0; j < sz; j++) divs.push_back(divs[j]*(int)pw); }
+              }
+              for(int d : divs) mult[d] += f[x];  // every copy of x is divisible by d
+          }
+          for(int d = M; d >= 1; d--) if(mult[d] >= 2){ cout << d << "\n"; break; }
+      }
+      ```
+
+      *`O(M log log M)` sieve + total number of distinct divisors enumerated;
+      same correct answer, reusing `spf`.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on **②**:
+
+      - **`freq[x]`.** Records how many copies of each value `x` occur. This
+        is what makes a value that appears twice a valid answer by itself
+        (`gcd(x, x) = x`).
+
+      - **`mult[d]`.** The inner loop steps `j` by `d`, so it visits exactly
+        the multiples of `d`. Adding `freq[j]` makes `mult[d]` count every
+        array element that is divisible by `d`.
+
+      - **Answer scan.** Iterating `d` from `M` down to `1`, the first `d`
+        with `mult[d] >= 2` is the largest integer that divides at least two
+        input numbers — exactly the requested maximum gcd.
+
+      - **Cost reuse.** The `d, j`-in-multiples double loop costs the same
+        harmonic sum `M log M` as the divisor-counting sieve in Lesson 163 —
+        the two problems share one technique: *count how often each divisor
+        appears*, counting multiples instead of scanning pairs.
+
+      In **④**, divisor enumeration via `spf` produces, for a value `x`, all
+      of its divisors; `f[x]` copies of `x` each contribute to `mult[d]`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace **②** on the sample `[3, 14, 15, 7, 9]`. `freq`:
+      `3→1, 14→1, 15→1, 7→1, 9→1`.
+
+      Key `mult` counts of divisors:
+
+      | d | multiples present | mult[d] |
+      |---|-------------------|---------|
+      | 3 | 3, 9, 15 | 3 |
+      | 5 | 15 | 1 |
+      | 7 | 7, 14 | 2 |
+      | 9 | 9 | 1 |
+      | 14 | 14 | 1 |
+      | 15 | 15 | 1 |
+
+      Scanning `d` from `1000000` down: the first `d` with `mult[d] >= 2` is
+      `d = 7` (`7` divides both `7` and `14`, so `gcd(7,14) = 7`). Note `3`
+      divides three numbers, but `7 > 3`, and `7` is the maximum gcd.
+
+      Expected (sample) — `7`. Actual — `7`. Match.
+  - type: flowchart
+    title: "Find the largest integer dividing two numbers"
+    nodes: ["count inputs: freq[x]++", "sieve mult[d] from multiples of d", "start d = M", "mult[d] >= 2?", "print d, stop", "d = d - 1, retry"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 3, to: 5, label: "no"}
+      - {from: 5, to: 3, label: "loop, smaller d"}
+  - type: mcq
+    prompt: "Why can this problem be reduced to 'largest divisor d with mult[d] >= 2'?"
+    options:
+      - "Because gcd(a,b) is the largest d dividing both a and b, and mult[d] counts exactly how many array elements are divisible by d — at least two elements sharing d means a pair whose gcd is at least d."
+      - "Because every pair's gcd is 1 in this problem."
+      - "Because the answer is always the maximum array element."
+      - "Because divisors are all odd numbers."
+    answer: 0
+    explanation: "The maximum gcd of any pair is the largest integer d that divides at least two distinct array elements (counting multiplicities, since gcd(x,x)=x). mult[d] sums freq[j] over all multiples j of d, so mult[d]>=2 means d divides two or more inputs, which is exactly 'd is a common divisor of some pair'. Scanning downward gives the largest such d."
+---

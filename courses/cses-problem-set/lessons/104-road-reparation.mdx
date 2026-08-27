@@ -1,0 +1,230 @@
+---
+id: road-reparation
+title: "Road Reparation"
+type: content
+difficulty: medium
+order: 104
+tags:
+  - graph-algorithms
+  - minimum-spanning-tree
+  - kruskal
+  - union-find
+blocks:
+  - type: markdown
+    content: |
+      # Road Reparation — the minimum spanning tree
+
+      Cities, roads, and a reparation cost per road. We must repair enough
+      roads that every pair of cities is connected, at minimum total cost. That
+      is exactly the **minimum spanning tree (MST)** of an undirected,
+      weighted graph — and we additionally must detect when the graph is
+      *disconnected*, in which case no solution exists.
+
+      ## When and why Kruskal's algorithm
+
+      Kruskal's algorithm builds the MST greedily:
+
+      1. sort all edges by weight ascending;
+      2. take an edge if — and only if — it connects two different components
+         (using a **disjoint-set / union-find** structure);
+      3. stop after `n - 1` accepted edges (a spanning tree uses exactly
+         `n - 1` edges).
+
+      Why this greedy works (exchange argument): consider the moment we accept
+      edge `e` with weight `w`. In any other spanning tree, the two components
+      joined by `e` must be connected by some path of edges; that path contains
+      an edge crossing the cut that is `>= w` (all cheaper edges were already
+      processed), so swapping `e` in never increases cost. The result is
+      optimal.
+
+      If after processing every edge fewer than `n - 1` have been accepted, the
+      graph is disconnected and the answer is `IMPOSSIBLE`.
+
+      **Time:** `O(m log m)` for the sort + `O(m * α(n))` for union-find
+      (`α` is the almost-constant inverse-Ackermann). **Space:** `O(n + m)`.
+
+      :::tip
+      **Interview tip:** MST problems are a rite of passage. Spot the trigger
+      — *"connect everything at minimum cost / connect all N nodes cheapest
+      way"* — then immediately say "minimum spanning tree". Kruskal (sort +
+      union-find) is the first choice for sparse graphs; Prim with a heap is
+      its peer. Remember to mind the total: with `c <= 10^9` and up to
+      `2*10^5` edges, the answer can exceed 32 bits, so work in `long long`.
+      Disconnectedness (`IMPOSSIBLE`) is the classic edge case to check.
+      :::
+  - type: markdown
+    content: |
+      # Question
+
+      There are `n` cities and `m` roads between them. Unfortunately, the
+      condition of the roads is so poor that they cannot be used. Your task is
+      to repair some of the roads so that there will be a decent route between
+      any two cities. For each road, you know its reparation cost, and you
+      should find a solution where the total cost is as small as possible.
+
+      **Input**
+
+      The first input line has two integers `n` and `m`: the number of cities
+      and roads. The cities are numbered `1, 2, ..., n`.
+
+      Then, there are `m` lines describing the roads. Each line has three
+      integers `a`, `b` and `c`: there is a road between cities `a` and `b`,
+      and its reparation cost is `c`. All roads are two-way roads. Every road
+      is between two different cities, and there is at most one road between
+      two cities.
+
+      **Output**
+
+      Print one integer: the minimum total reparation cost. However, if there
+      are no solutions, print `IMPOSSIBLE`.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `1 <= m <= 2*10^5`
+      - `1 <= c <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 6
+      1 2 3
+      2 3 5
+      2 4 2
+      3 4 8
+      5 1 7
+      5 4 4
+      ```
+
+      Output:
+
+      ```
+      14
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — try every subset of edges, exponential**
+
+      Enumerate all `2^m` subsets of roads, keep those that connect every city,
+      and take the minimum total cost. Correct but utterly infeasible for
+      `m <= 2*10^5`.
+
+      **② Optimization — Kruskal's algorithm, O(m log m)**
+
+      Sort edges by cost; add each cheap edge that merges two components until
+      the graph is connected (`n - 1` edges); otherwise `IMPOSSIBLE`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      struct DSU {
+          vector<int> p, sz;
+          DSU(int n) : p(n + 1), sz(n + 1, 1) { iota(p.begin(), p.end(), 0); }
+          int find(int x){ return p[x] == x ? x : p[x] = find(p[x]); }
+      };
+      struct Edge { int a, b; ll w; };
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<Edge> e(m);
+          for (int i = 0; i < m; ++i) cin >> e[i].a >> e[i].b >> e[i].w;
+          sort(e.begin(), e.end(), [](const Edge& x, const Edge& y){ return x.w < y.w; });
+
+          DSU dsu(n);
+          ll cost = 0; int used = 0;
+          for (auto& ed : e){
+              int ra = dsu.find(ed.a), rb = dsu.find(ed.b);
+              if (ra != rb){              // accept: merges two components
+                  if (dsu.sz[ra] < dsu.sz[rb]) swap(ra, rb);
+                  dsu.p[rb] = ra; dsu.sz[ra] += dsu.sz[rb];
+                  cost += ed.w; used++;
+                  if (used == n - 1) break;   // spanning tree complete
+              }
+          }
+          if (used < n - 1) cout << "IMPOSSIBLE\n";
+          else cout << cost << '\n';
+          return 0;
+      }
+      ```
+
+      *O(m log m) time, O(n + m) space — the intended solution.*
+
+      **③ Further optimization** — the sort dominates; there is nothing below
+      sorting for general MST without sacrificing correctness.
+
+      **④ Alternative algorithm — Prim's algorithm, O(m log n)**
+
+      Grow a single tree from city 1 using a min-heap by edge weight (or a
+      dense-graph variant in `O(n^2)` when `m` is close to `n^2`). Same MST
+      value, same `IMPOSSIBLE` rule (if the heap exhausts with unvisited
+      cities). Kruskal is preferred here for simplicity and sparse graphs.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the Kruskal solution:
+
+      - **`sort(edges, by w)`** — the greedy order; we always consider the
+        cheapest remaining edge first.
+      - **Union-find** with `find` (path-halving on the way) and union by size
+        keeps `find` near `O(1)`; `ra != rb` means the edge joins two separate
+        components so it is *safe* to include (adding it cannot create a cycle
+        that cheapens anything).
+      - **`cost` is `long long`** — required, since `m * c` can reach
+        `2*10^5 * 10^9 = 2*10^14`.
+      - **Early break at `used == n - 1`** — once a spanning tree is formed
+        we are done; later edges are necessarily more expensive.
+      - **`used < n - 1` → `IMPOSSIBLE`** — if we run out of edges before
+        connecting everything, the graph is disconnected and no route can join
+        all cities.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, roads sorted by cost:
+
+      `(2,4,2)`, `(1,2,3)`, `(5,4,4)`, `(2,3,5)`, `(5,1,7)`, `(3,4,8)`.
+
+      | edge | components before | action | cost | used |
+      |------|-------------------|--------|------|------|
+      | (2,4,2) | 2 and 4 separate | merge | 2 | 1 |
+      | (1,2,3) | 1 separate | merge | +3 = 5 | 2 |
+      | (5,4,4) | 5 separate from {2,4} | merge | +4 = 9 | 3 |
+      | (2,3,5) | 3 separate from {1,2,4,5} | merge | +5 = 14 | 4 |
+      | (5,1,7) | 1 and 5 already together | skip (cycle) | 14 | 4 |
+      | (3,4,8) | 3 and 4 already together | skip (cycle) | 14 | 4 |
+
+      After 4 accepted edges `used == n - 1 == 4`, so we stop with total `14`
+      and all five cities connected.
+
+      Expected (sample) — `14`. Actual — `14`. Match.
+  - type: flowchart
+    title: "Kruskal's minimum spanning tree"
+    nodes: ["sort edges by weight", "init union-find, used = 0, cost = 0", "take next cheapest edge (a, b, w)", "a and b in different components?", "merge, cost += w, used++", "used == n-1?", "print cost", "print IMPOSSIBLE"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "loop over sorted edges"}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 3, to: 2, label: "no → skip"}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6, label: "yes → done"}
+      - {from: 5, to: 2, label: "no → next edge"}
+      - {from: 2, to: 7, label: "edges exhausted, used < n-1"}
+  - type: mcq
+    prompt: "Why does accepting each cheap edge that joins two different components always produce the globally minimum spanning tree?"
+    options:
+      - "Because any two components can be connected by some path in any spanning tree, and the cheapest edge crossing that cut is no more expensive than the first such path edge, so swapping it in never increases total cost."
+      - "Because sorting the edges guarantees the accepted set forms a tree regardless of connectivity."
+      - "Because cheaper edges always connect the highest-degree cities first."
+      - "Because union-by-size keeps every component at exactly one node until the final edges are added."
+    answer: 0
+    explanation: "This is the exchange/cut argument: when edge e (weight w) is accepted, the components it joins must be linked in any other MST by a path whose cut-crossing edge has weight >= w (all cheaper edges were already considered). Replacing that edge with e keeps a spanning tree with cost <= before, so a greedy run is never worse than optimum."
+---

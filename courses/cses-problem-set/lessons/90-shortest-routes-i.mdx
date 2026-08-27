@@ -1,0 +1,218 @@
+---
+id: shortest-routes-i
+title: Shortest Routes I
+type: content
+difficulty: medium
+order: 90
+tags:
+  - graph-algorithms
+  - dijkstra
+  - shortest-path
+  - priority-queue
+blocks:
+  - type: markdown
+    content: |
+      # Shortest Routes I — Dijkstra on non-negative weights
+
+      We are given a **directed** graph with `n` cities and `m` one-way flights, each
+      with a positive length. We want the shortest path from city `1` (Syrjälä) to
+      *every* city. This is the single-source shortest paths (SSSP) problem — the work
+      of the rest of this graph chapter is almost entirely built on this lesson.
+
+      ## Why BFS is not enough
+
+      BFS gives shortest paths only when every edge has the same cost (then "fewest
+      edges" = "cheapest"). Here flights have arbitrary positive lengths, so a route
+      with more hops can still be cheaper than a direct one. We need an algorithm that
+      respects *weights*.
+
+      ## Dijkstra's algorithm
+
+      Dijkstra grows a set of correctly-settled vertices. Maintain for each vertex a
+      `dist[v]` = the best path cost found so far; repeatedly **extract the unsettled
+      vertex with the smallest `dist`**, *settle* it (its distance is now final), and
+      **relax** its outgoing edges: if `dist[u] + w < dist[v]`, lower `dist[v]` and
+      remember it.
+
+      It works because all weights are non-negative: when a vertex `u` is the cheapest
+      unsettled one, no later-found route can be cheaper than what `u` already has, so
+      `dist[u]` is final. The min-extraction is served by a **min-heap (priority
+      queue)** of `(dist, vertex)`, giving `O((n + m) log n)`.
+
+      **Worked mini-example.** Graph `1→2 (6)`, `1→3 (2)`, `3→2 (3)`. Start `dist =
+      {1:0, 2:∞, 3:∞}`. Extract `1`; relax → `dist[2]=6`, `dist[3]=2`. Extract `3`
+      (cheapest); relax `3→2`: `dist[2] = 2+3 = 5 < 6 → 5`. Extract `2`. Result: `1:
+      0`, `2: 5`, `3: 2`. Dijkstra deliberately prefers the cheaper 2-step route over
+      the direct one.
+
+      **Complexity.** `O((n + m) log n)` for the heap version — the intended solution.
+
+      :::tip
+      **Interview tip:** Dijkstra is the single most common graph algorithm in
+      interviews. The tell is "non-negative weights" + "shortest/cheapest path" from a
+      single source. Remember the `priority_queue` returns the *largest* by default, so
+      use `greater<>` (a min-heap) or store negated distances. Always `continue` on
+      stale heap entries (`if (d > dist[u]) continue`) to skip outdated pushes.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` cities and `m` flight connections between them. Your task is to
+      determine the length of the shortest route from Syrjälä to every city. The cities
+      are numbered `1, 2, ..., n`, and city `1` is Syrjälä. Each flight is one-way.
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the number of cities and
+      flight connections.
+
+      After this, there are `m` lines describing the connections. Each line has three
+      integers `a`, `b` and `c`: a flight begins at city `a`, ends at city `b`, and has
+      length `c`.
+
+      It is guaranteed that it is possible to travel from Syrjälä to all other cities.
+
+      **Constraints:** `1 <= n <= 10^5`, `1 <= m <= 2*10^5`, `1 <= a,b <= n`, `1 <= c <=
+      10^9`
+
+      ## Output
+
+      Print `n` integers: the shortest route lengths from Syrjälä to cities
+      `1, 2, ..., n`. Use `long long` — a shortest path can be `10^5 × 10^9 = 10^14`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      3 4
+      1 2 6
+      1 3 2
+      3 2 3
+      1 3 4
+      ```
+      **Output:**
+      ```
+      0 5 2
+      ```
+      Explanation: to city 1 the distance is 0; to city 2 the cheapest is via city 3
+      (`2 + 3 = 5`) rather than the direct flight (`6`); to city 3 it is `2`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — repeated relaxation (Bellman-Ford), O(n·m)**
+
+      Relax every edge in a loop; after `n-1` passes the distances are correct (each
+      shortest path uses at most `n-1` edges). Correct, but with `n=10^5`, `m=2·10^5`,
+      that is up to `2·10^10` relaxations — too slow.
+
+      ```cpp
+      void collect(int n, vector<array<int,3>>& e, vector<long long>& dist) {
+          dist.assign(n + 1, 4e18); dist[1] = 0;
+          for (int it = 0; it < n - 1; it++)
+              for (auto& [a, b, c] : e)
+                  if (dist[a] < 4e18 && dist[b] > dist[a] + c) dist[b] = dist[a] + c;
+      }
+      ```
+      *O(n·m) — correct, far too slow for the limits.*
+
+      **② Optimization — Dijkstra with a min-heap, O((n+m) log n)**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          int n, m; cin >> n >> m;
+          vector<vector<pair<int,long long>>> adj(n + 1);
+          for (int i = 0; i < m; i++) {
+              int a, b; long long c; cin >> a >> b >> c;
+              adj[a].push_back({b, c});
+          }
+          const long long INF = 4e18;
+          vector<long long> dist(n + 1, INF);
+          using P = pair<long long,int>;
+          priority_queue<P, vector<P>, greater<P>> pq;   // min-heap on (dist, v)
+          dist[1] = 0; pq.push({0, 1});
+          while (!pq.empty()) {
+              auto [d, u] = pq.top(); pq.pop();
+              if (d > dist[u]) continue;                 // stale entry, skip
+              for (auto [v, w] : adj[u])
+                  if (dist[v] > d + w) { dist[v] = d + w; pq.push({dist[v], v}); }
+          }
+          for (int i = 1; i <= n; i++) cout << dist[i] << (i == n ? "\n" : " ");
+          return 0;
+      }
+      ```
+
+      *O((n+m) log n) time, O(n+m) memory — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      For general non-negative graphs no faster comparison-based algorithm is known;
+      the heap Dijkstra is already the reference implementation.
+
+      **④ Alternative — Bellman-Ford/SPFA (not needed here)**
+
+      Bellman-Ford (`O(n·m)`) also solves non-negative SSSP but is slower; SPFA (a
+      queue-based variant) is often faster in practice on sparse graphs but has a
+      worst case of `O(n·m)`. Dijkstra is preferred because it is worst-case optimal
+      for this setting.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the Dijkstra solution:
+
+      - **Representation.** `adj[u]` holds `(v, c)` pairs. We use an `int` target and
+        a `long long` cost because `dist` may exceed `10^9`.
+      - **The heap.** `priority_queue<P, vector<P>, greater<P>>` orders by
+        `(dist, vertex)` with the smallest first — that is the *min-extract* Dijkstra
+        needs. Every improvement pushes a fresh `(dist, v)` pair, so there can be
+        several entries for the same vertex.
+      - **Stale-entry skip.** `if (d > dist[u]) continue;` discards old entries whose
+        distance was improved after they were pushed. Without it the algorithm still
+        works but revisits nodes needlessly.
+      - **Relaxation.** For each edge `u→v` of cost `w`, `dist[u] + w` is a candidate
+        cheaper route to `v`; only take it when strictly smaller.
+      - **Correctness from non-negativity.** Because every `w >= 0`, the smallest
+        unsettled distance is final — no future path can beat it. That invariant is
+        exactly why Dijkstra cannot handle negative edges.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n=3`, edges `1→2 (6)`, `1→3 (2)`, `3→2 (3)`, `1→3 (4)`.
+      `dist` starts `[0, ∞, ∞]`. The heap holds `(0,1)`.
+
+      | pop | settled | relax | dist after |
+      |-----|---------|-------|------------|
+      | `(0,1)` | 1:0 | `1→2`: 0+6 → dist2=6; `1→3`: 0+2 → dist3=2; `1→3(4)` ignored | `[0,6,2]` |
+      | `(2,3)` | 3:2 | `3→2`: 2+3=5 < 6 → dist2=5 | `[0,5,2]` |
+      | `(5,2)` | 2:5 | no outgoing | `[0,5,2]` |
+
+      Heap order matters: `(2,3)` is the cheapest unsettled, so city 3 is settled
+      before city 2, and its relaxation is what rewrites the direct 6 down to 5.
+
+      Result — `0 5 2`. Expected (sample) — `0 5 2`. Match.
+  - type: flowchart
+    title: "Dijkstra single-source shortest paths"
+    nodes: ["dist[1]=0, dist[others]=INF", "push (0,1) in a min-heap", "pop smallest (d,u)", "d > dist[u]? skip stale", "relax each edge (u,v,w)", "improved? update dist[v], push (dist[v],v)", "heap empty? output all dists"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "fresh"}
+      - {from: 3, to: 2, label: "stale, discard"}
+      - {from: 4, to: 5}
+      - {from: 5, to: 2}
+      - {from: 2, to: 6, label: "heap empty"}
+  - type: mcq
+    prompt: "Why can Dijkstra settle a vertex the moment it is popped with the smallest dist, but only when edge weights are non-negative?"
+    options:
+      - "Because the priority queue always picks integer distances, and BFS works on any integer-weight graph."
+      - "Because with non-negative weights, any future route to u must add non-negative cost to some path, so it can never become cheaper than the already-smallest current dist; with a negative edge that guarantee collapses."
+      - "Because negative edges are removed by sorting the graph first."
+      - "Because every vertex is directly connected to the source, so all distances are known immediately."
+    answer: 1
+    explanation: "The heart of Dijkstra is: when u is popped, it has the smallest unsettled dist. Any other route to u later is dist[x] + ... for some unsettled x (>= dist[u]) plus non-negative edges, hence >= dist[u]. So dist[u] is final at pop time. A negative edge would let a path through a later-to-be-found vertex undercut it, so Dijkstra breaks."

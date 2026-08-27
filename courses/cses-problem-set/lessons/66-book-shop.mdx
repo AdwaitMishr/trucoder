@@ -1,0 +1,306 @@
+---
+id: book-shop
+title: Book Shop
+difficulty: medium
+order: 66
+tags:
+  - dynamic-programming
+  - knapsack
+  - 0/1-knapsack
+  - 1d-dp
+blocks:
+  - type: markdown
+    content: |
+      # Book Shop
+
+      **The technique: 0/1 knapsack with a one-dimensional DP table.** You have `n`
+      items, each with a *weight* and a *value*, and a capacity `x`; choose a subset
+      so that the total weight is at most `x` and the total value is maximal. It is
+      called *0/1* because each item is taken **once or not at all** (no repeats, no
+      fractions).
+
+      Define `dp[w]` = the maximum total value you can collect with a budget (total
+      price) of *at most* `w`. Process one item at a time. For item `i` with price
+      `h[i]` and pages `s[i]`, we either **skip** it (carry over `dp[w]`) or **take**
+      it (spend `h[i]` and add its value to the best for the remaining budget):
+
+      ```
+      dp[w] = max(dp[w], dp[w - h[i]] + s[i])     for w from x down to h[i]
+      ```
+
+      **The crucial ordering detail.** The inner loop must run `w` **descending**.
+      If it ran ascending, `dp[w - h[i]]` might already include item `i` (just placed
+      in the same outer iteration), letting the item be used many times — which would
+      turn it into a *unbounded* knapsack. Descending order guarantees each book is
+      used at most once, because `dp[w - h[i]]` is still the value from the *previous*
+      book's iteration.
+
+      **Why "at most" works with one dimension.** After the whole loop, `dp[w]`
+      already means "best value with total price ≤ `w`": the leftover budget simply
+      isn't spent, and the value doesn't depend on it. So `dp[x]` is the final answer.
+
+      **Worked mini-example.** Budget `x = 5`, two books: book A `(price 3, pages 4)`,
+      book B `(price 4, pages 5)`. Going descending over `w = 5..0` per book:
+
+      | step | w | dp[w] after book A | dp[w] after book B |
+      |------|---|--------------------|--------------------|
+      | 5 | 5 | max(0, dp[2]+4) = 4 | max(4, dp[1]+5) = 5 |
+      | 4 | 4 | max(0, dp[1]+4) = 4 | max(4, dp[0]+5) = **5** |
+      | 3 | 3 | max(0, dp[0]+4) = 4 | 4 |
+      | 2 | 2 | 0 | 0 |
+      | 1 | 1 | 0 | 0 |
+
+      Best is `5` pages (buy only book B, price 4 ≤ 5). ✓
+
+      **Complexity.** Filling `n` books × `x` budget slots: **O(n·x)** time and
+      **O(x)** space (one array). With `n ≤ 1000` and `x ≤ 10^5` that is 10^8 simple
+      max+add operations — comfortable in C++ under the 1 s limit.
+
+      **When you reach for it:** subset-selection problems with a capacity that must
+      not be exceeded — packing, scheduling with a deadline budget, budgeted resource
+      allocation, and "which subset maximizes something" where greedy fails because an
+      expensive item may still be worth it.
+
+      :::tip
+      **Interview tip:** 0/1 knapsack is a top interview pairing question (LeetCode
+      #416 *Partition Equal Subset Sum* and #494 *Target Sum* are both knapsacks in
+      disguise). Interviewers specifically probe whether you know the **descending**
+      loop — it is the #1 trick they check. They also love the follow-up "what if you
+      may reuse items?" (answer: flip the inner loop to ascending → unbounded
+      knapsack). Mentioning the O(x) space optimization and explaining *why*
+      descending is correct shows real command.
+      :::
+  - type: markdown
+    content: |
+      # Question — Book Shop
+
+      You are in a book shop that sells `n` different books. You know the **price**
+      and the **number of pages** of each book. You have decided the total price of
+      your purchases will be **at most `x`**. What is the maximum number of pages you
+      can buy? You can buy each book at most once.
+
+      **Constraints:**
+      - `1 ≤ n ≤ 1000`
+      - `1 ≤ x ≤ 10^5`
+      - `1 ≤ h[i], s[i] ≤ 1000` (price and pages of each book)
+
+      **Input:** the first line has two integers `n` and `x`. The next line has `n`
+      integers `h[1], ..., h[n]` — the price of each book. The last line has `n`
+      integers `s[1], ..., s[n]` — the number of pages of each book.
+
+      **Output:** one integer — the maximum number of pages you can buy.
+
+      Sample input:
+
+      ```
+      4 10
+      4 8 5 3
+      5 12 8 1
+      ```
+
+      Sample output:
+
+      ```
+      13
+      ```
+
+      Explanation: buy books 1 and 3. Their total price is `4 + 5 = 9 ≤ 10` and the
+      number of pages is `5 + 8 = 13`.
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2^n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int n, x, best = 0;
+      vector<int> h, s;
+
+      void rec(int i, int price, int pages) {
+          if (i == n) { best = max(best, pages); return; }
+          rec(i + 1, price, pages);                 // skip book i
+          if (price + h[i] <= x)                    // take book i (if it fits)
+              rec(i + 1, price + h[i], pages + s[i]);
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          cin >> n >> x;
+          h.resize(n); s.resize(n);
+          for (int i = 0; i < n; ++i) cin >> h[i];
+          for (int i = 0; i < n; ++i) cin >> s[i];
+          rec(0, 0, 0);
+          cout << best << "\n";
+          return 0;
+      }
+      ```
+      O(2^n) — for `n = 1000` this is far beyond reach. Correct but only usable for
+      tiny `n`.
+
+      **② Optimization — full 2D DP, O(n·x) time, O(n·x) memory**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, x; cin >> n >> x;
+          vector<int> h(n), s(n);
+          for (int i = 0; i < n; ++i) cin >> h[i];
+          for (int i = 0; i < n; ++i) cin >> s[i];
+
+          // dp[i][w]: max pages using the first i books with budget <= w
+          vector<vector<int>> dp(n + 1, vector<int>(x + 1, 0));
+          for (int i = 1; i <= n; ++i) {
+              for (int w = 0; w <= x; ++w) {
+                  dp[i][w] = dp[i - 1][w];                       // skip book i-1
+                  if (w >= h[i - 1])
+                      dp[i][w] = max(dp[i][w], dp[i - 1][w - h[i - 1]] + s[i - 1]);
+              }
+          }
+          cout << dp[n][x] << "\n";
+          return 0;
+      }
+      ```
+      O(n·x) time, O(n·x) space. Readable but wastes memory — row `i` only ever reads
+      row `i − 1`.
+
+      **③ Further optimization — rolling 1D DP, O(n·x) time, O(x) space** *(the chosen
+      solution)*
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, x; cin >> n >> x;
+          vector<int> h(n), s(n);
+          for (int i = 0; i < n; ++i) cin >> h[i];
+          for (int i = 0; i < n; ++i) cin >> s[i];
+
+          vector<int> dp(x + 1, 0);
+          for (int i = 0; i < n; ++i) {
+              for (int w = x; w >= h[i]; --w) {   // DESCENDING: each book used once
+                  dp[w] = max(dp[w], dp[w - h[i]] + s[i]);
+              }
+          }
+          cout << dp[x] << "\n";
+          return 0;
+      }
+      ```
+      O(n·x) time, O(x) memory. This is the optimal practical form — a single row is
+      enough because each book only touches `w` values from below.
+
+      **④ Alternative algorithm — meet-in-the-middle, O(2^(n/2)) time.** Split the
+      books into two halves, enumerate all price/pages sums of each half (2^(n/2) per
+      half), then, for every sum from the left half, binary-search the best compatible
+      sum from the right half. It beats O(n·x) only when `n` is small; with `n = 1000`
+      both halves are impossible, so the knapsack remains the practical choice. Not
+      needed here but worth knowing for huge-budget, tiny-`n` variants.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **③ the rolling 1D knapsack.** Read the price line and the
+      pages line into `h` and `s`, then fill `dp`.
+
+      - **`dp[w]` invariant.** After processing book `i`, `dp[w]` is the maximum
+        number of pages obtainable from the first `i` books with a total price
+        *≤ `w`*. Leftover budget is allowed, so the final answer is simply `dp[x]`.
+      - **Skip vs take.** `dp[w]` (unmodified) is the *skip* branch. `dp[w - h[i]] +
+        s[i]` is the *take* branch: spend `h[i]` on this book and add its pages to the
+        best pages for the reduced budget `w - h[i]`. `max` keeps the better outcome.
+      - **Descending `w` loop.** Critical for 0/1 semantics. Reading `w` from `x` down
+        to `h[i]` means `dp[w - h[i]]` still holds the value from the *previous* book
+        iteration, so book `i` cannot be selected more than once. Reversing it would
+        silently upgrade the problem to unbounded knapsack.
+      - **`w >= h[i]` as the loop bound.** Budgets smaller than the book's price
+        can never take it, so the loop simply starts there; smaller `w` stay untouched
+        (skip only).
+      - **Zero-init.** `dp` starts all `0` because buying nothing costs nothing; this
+        is also why "at most `x`" is handled — an unfilled budget just keeps its
+        current best.
+
+      With `n = 1000` and `x = 10^5` the inner loop runs about 10^8 iterations, each a
+      compare and max — well within the 1 s limit.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      4 10
+      4 8 5 3
+      5 12 8 1
+      ```
+      Books: (price, pages) = (4,5), (8,12), (5,8), (3,1). Budget `x = 10`. We process
+      each book with the descending loop; show `dp` for the interesting budgets:
+
+      **After book 1 (p=4, s=5):**
+      | w | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+      |---|----|----|----|----|----|----|----|----|----|----|----|
+      | dp | 0 | 0 | 0 | 0 | 5 | 5 | 5 | 5 | 5 | 5 | 5 |
+
+      **After book 2 (p=8, s=12):**
+      | w | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+      |---|----|----|----|----|----|----|----|----|----|----|----|
+      | dp | 0 | 0 | 0 | 0 | 5 | 5 | 5 | 5 | 12 | 12 | 12 |
+
+      **After book 3 (p=5, s=8):**
+      | w | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+      |---|----|----|----|----|----|----|----|----|----|----|----|
+      | dp | 0 | 0 | 0 | 0 | 5 | 8 | 8 | 8 | 12 | 13 | **13** |
+
+      **After book 4 (p=3, s=1):**
+      | w | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+      |---|----|----|----|----|----|----|----|----|----|----|----|
+      | dp | 0 | 0 | 0 | 0 | 5 | 8 | 8 | 8 | 12 | 13 | **13** |
+
+      The winning `dp[9] = 13` comes from book 3 on top of `dp[4] = 5` — i.e. books
+      1 (price 4, pages 5) + 3 (price 5, pages 8) = price `9 ≤ 10`, pages **13**. Book
+      4 (price 3, pages 1) adds nothing better, so the answer stays **13**. ✓ (matches
+      the sample).
+
+      **Edge cases:**
+      - One budget that buys the single best book but the cheapest combined wins:
+        e.g. books `(6, 100)` and `(5,90),(5,90)` on budget `10` → two cheap books =
+        `180` beats the expensive one's `100`. The `max` over `dp[w-h]+s` finds it.
+      - A book too expensive to ever fit: its `w` loop never runs, `dp` unchanged.
+      - `x = 1`, all books priced ≥ 1: only (price 1) books can be taken, `dp[1]` picks
+        the best single page count.
+  - type: flowchart
+    title: "0/1 knapsack decision per book"
+    nodes:
+      - "Read book i (price h, pages s)"
+      - "w from x down to h[i]"
+      - "dp[w] = max(dp[w], dp[w-h[i]] + s[i])"
+      - "Skip branch: leave dp[w] unchanged"
+      - "Take branch: added pages from reduced budget"
+      - "All books processed?"
+      - "Print dp[x]"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "per w"}
+      - {from: 2, to: 4, label: "take"}
+      - {from: 2, to: 3, label: "skip"}
+      - {from: 3, to: 1}
+      - {from: 4, to: 1}
+      - {from: 1, to: 5, label: "w loop done"}
+      - {from: 5, to: 0, label: "yes"}
+      - {from: 5, to: 6, label: "done"}
+  - type: mcq
+    prompt: Why must the knapsack inner loop over budget w run in DESCENDING order?
+    options:
+      - To speed up the loop by starting at the largest budget
+      - So dp[w - h[i]] still holds the value from the previous book's iteration, which prevents the same book from being selected more than once (0/1 semantics instead of unbounded)
+      - Because ascending order causes integer overflow on large budgets
+      - To skip books whose price exceeds the budget without checking
+    answer: 1
+    explanation: 'With an ascending loop, dp[w - h[i]] may already have been updated with book i in the same iteration, letting the book be used repeatedly — that is the unbounded knapsack. Descending order guarantees every write reads a stale value from the prior book, so each item is used at most once. This ordering is the key 0/1 vs unbounded difference.'
+type: content
+---

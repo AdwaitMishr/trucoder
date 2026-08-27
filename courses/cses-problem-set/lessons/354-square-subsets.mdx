@@ -1,0 +1,233 @@
+---
+id: square-subsets
+title: "Square Subsets"
+type: content
+difficulty: hard
+order: 354
+tags:
+  - mathematics
+  - combinatorics
+  - linear-algebra
+  - gaussian-elimination
+  - bitset
+blocks:
+  - type: markdown
+    content: |
+      # Square Subsets — count subsets whose product is a perfect square
+
+      ## Theory
+
+      A product `∏ xᵢ` is a perfect square iff **every prime appears an even number of
+      times** in its factorization. So for each array value we only care about the
+      *parity* of each prime exponent — a `0/1` vector over all primes up to `5000`.
+      Choosing a subset is a `0/1` choice per element, and the product is a square iff
+      the **XOR (sum mod 2)** of the chosen parity vectors is the **zero vector**.
+
+      **Linear algebra over GF(2).** Let the choice vector `c ∈ {0,1}^n` select a
+      subset, and let `A` be the `P × n` matrix (`P` = number of primes; column `j` is
+      the parity vector of element `j`). The product is a square iff `A·c = 0` (over
+      GF(2)). The set of `c` solving `A·c = 0` is the **null space** of `A`, whose
+      dimension is `n − rank(A)`. Therefore
+
+      `answer = 2^(n − rank(A)) mod 10⁹+7`,
+
+      and the empty subset (choice vector `0`) is automatically included — its
+      product is `1`, a square.
+
+      **Computing the rank** is Gaussian elimination over `GF(2)`: maintain a *basis* of
+      pivot vectors and reduce each column against it. Because `P ≤ 669` and
+      `n ≤ 5000`, we pack each vector into a `std::bitset<700>` — the whole
+      elimination is trivially fast.
+
+      **Time:** `O(n·P/64)` to `O(n·P)` depending on implementation (bitset → fast).
+      **Space:** `O(P)` for the basis.
+
+      :::tip
+      **Interview tip:** The phrase *"product/parity is a square / don't-care bits"*
+      should trigger the **GF(2) / XOR basis reflex**. Whenever you count things whose
+      XOR must be zero, the answer is `2^(#elements − rank)` — no DP over subsets
+      needed. This is the same technique as "number of subsets with given XOR" and Xor‑
+      pyramid problems, and a long-time interview favourite for `mod 1e9+7` counting.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Question
+
+      Given an array of `n` integers, count the number of subsets whose element
+      product is a **square number**. Also count the empty subset (product `1`).
+
+      **Input.** The first line has an integer `n`. The next line has `n` integers
+      `x₁,x₂,…,xₙ`.
+
+      **Output.** Print one integer: the answer modulo `10⁹+7`.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 5000`
+      - `1 ≤ xᵢ ≤ 5000`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      4
+      2 2 3 6
+      ```
+
+      **Output:**
+      ```
+      4
+      ```
+
+      *Explanation:* the four subsets are `{}`, `{2,2}`, `{2,6}` and `{2,3,6}` (their
+      products `1, 4, 12, 36` are all squares).
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2ⁿ·P/64).** Enumerate every subset; a subset is a square
+      iff the XOR of its members' parity vectors is zero. Correct and overflow-free,
+      but exponential in `n` (only `n ≤ ~25`).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int MX=5000; vector<int> pr; int ptr[5001];
+      bitset<700> pv(int v){ bitset<700> b; int idx=0;
+          for(int p:pr){ if(p*p>v) break; int c=0; while(v%p==0){v/=p;c^=1;}
+              if(c) b.set(idx); idx++; }
+          if(v>1) b.set(ptr[v]); return b; }
+      int main(){
+          vector<char> isp(MX+1,1); isp[0]=isp[1]=0;
+          for(int i=2;i*i<=MX;i++) if(isp[i]) for(int j=i*i;j<=MX;j+=i) isp[j]=0;
+          for(int i=2;i<=MX;i++) if(isp[i]){ ptr[i]=pr.size(); pr.push_back(i); }
+          int n; cin>>n; vector<bitset<700>> v(n); int m;
+          for(int i=0;i<n;i++){ cin>>m; v[i]=pv(m); }
+          long long ans=0;
+          for(long long mask=0; mask<(1LL<<n); mask++){
+              bitset<700> x;
+              for(int i=0;i<n;i++) if(mask>>i&1) x^=v[i];
+              if(x.none()) ans++;
+          }
+          cout<<ans%1000000007LL<<"\n";
+      }
+      ```
+      *Complexity: O(2ⁿ·P/64) — tiny `n` only.*
+
+      **② Optimization — meet in the middle, O(2^(n/2)).** Split the array in half;
+      enumerate all subset parity-vectors of each half; a full subset is a square iff
+      the two half-XORs are equal. Count equal pairs with a hash map. Correct but still
+      exponential (fine to ~`n = 40`).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const int MX=5000; vector<int> pr; int ptr[5001];
+      ll pv(ll v){ ll m=0; int idx=0;
+          for(int p:pr){ if(p*p>v) break; int c=0; while(v%p==0){v/=p;c^=1;}
+              if(c) m|=(1LL<<idx); idx++; }
+          if(v>1) m|=(1LL<<ptr[v]); return m; }
+      int main(){
+          vector<char> isp(MX+1,1); isp[0]=isp[1]=0;
+          for(int i=2;i*i<=MX;i++) if(isp[i]) for(int j=i*i;j<=MX;j+=i) isp[j]=0;
+          for(int i=2;i<=MX;i++) if(isp[i]){ ptr[i]=pr.size(); pr.push_back(i); }
+          int n; cin>>n; vector<ll> x(n); for(auto&v:x) cin>>v;
+          int h=n/2; unordered_map<ll,ll> mp;
+          for(ll m=0;m<(1LL<<h);m++){ ll k=0; for(int i=0;i<h;i++) if(m>>i&1) k^=pv(x[i]); mp[k]++; }
+          ll ans=0;
+          for(ll m=0;m<(1LL<<(n-h));m++){ ll k=0; for(int i=0;i<n-h;i++) if(m>>i&1) k^=pv(x[h+i]); ans+=mp[k]; }
+          cout<<ans%1000000007LL<<"\n";
+      }
+      ```
+      *Complexity: O(2^(n/2)) — still exponential.*
+
+      **③ Further optimization — GF(2) rank, O(n·P/64) (intended).** The product is a
+      square iff the chosen parity vectors XOR to zero, whose count is
+      `2^(n − rank(A))`. Never enumerate subsets — just reduce the columns to get the
+      rank:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD=1000000007LL; const int MX=5000;
+      ll modpow(ll b,ll e){ ll r=1;b%=MOD; while(e){ if(e&1)r=r*b%MOD;b=b*b%MOD;e>>=1;}return r; }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n; vector<int> x(n); for(int i=0;i<n;i++) cin>>x[i];
+          vector<char> isp(MX+1,1); isp[0]=isp[1]=0;
+          for(int i=2;i*i<=MX;i++) if(isp[i]) for(int j=i*i;j<=MX;j+=i) isp[j]=0;
+          vector<int> primes; for(int i=2;i<=MX;i++) if(isp[i]) primes.push_back(i);
+          int P=primes.size(); array<int,5001> pidx{}; for(int i=0;i<P;i++) pidx[primes[i]]=i;
+          vector<bitset<700>> vec(MX+1);
+          for(int v=1;v<=MX;v++){
+              bitset<700> b; int t=v;
+              for(int pi=0;pi<P;pi++){ int p=primes[pi]; if((ll)p*p>t) break;
+                  int c=0; while(t%p==0){t/=p;c^=1;} if(c) b.set(pi); }
+              if(t>1) b.set(pidx[t]); vec[v]=b;
+          }
+          vector<bitset<700>> basis(P); int rank=0;
+          for(int i=0;i<n;i++){
+              bitset<700> b=vec[x[i]];
+              for(int pi=P-1;pi>=0;pi--){
+                  if(b.test(pi)){ if(basis[pi].any()) b^=basis[pi]; else { basis[pi]=b; rank++; break; } }
+              }
+          }
+          cout<<modpow(2,n-rank)<<"\n";
+      }
+      ```
+      *Complexity: O(n·P/64) with bitsets (P ≤ 669) — instant for `n ≤ 5000`.*
+
+      **④ Alternative — subset-sum DP over squarefree kernels.** If the values were
+      bounded by `70` (the classic Codeforces 895C variant, `16` primes), a frequency
+      DP over the `2^16` parity masks would work. That is a valid alternative *for small
+      maximum values*; here `xᵢ ≤ 5000` makes the rank/GF(2) view the practical route.
+      No further meaningful optimisation exists beyond `O(n·P/64)`.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      1. **Parity vectors.** For each distinct value `v ≤ 5000`, factor it and set bit
+         `pi` for each prime with an odd exponent. A square's vector is all zeros, so
+         `xᵢ = 1` contributes a zero column (it can be chosen freely — handled naturally
+         by `n − rank`).
+      2. **Gaussian elimination over GF(2).** `basis[pi]` holds the pivot vector whose
+         highest set bit is prime `pi`. Reducing a column `b` against the basis (XOR)
+         either collapses it to zero (dependent — does not raise rank) or installs it as
+         a new pivot.
+      3. **The count.** `rank` = number of linearly independent columns. The null-space
+         size `n − rank` is the number of choice-vectors whose XOR is zero, i.e. the
+         number of square-product subsets. Return `2^(n−rank) mod 10⁹+7`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 4`, array `[2, 2, 3, 6]`.
+
+      Parity vectors (primes `2`, `3`):
+      - `2 → [1, 0]`, `2 → [1, 0]`, `3 → [0, 1]`, `6 = 2·3 → [1, 1]`.
+
+      Gaussian elimination: columns `[1,0],[1,0],[0,1],[1,1]`. First column gives a
+      pivot on prime `2`; second `[1,0]` reduces to `0` (dependent); `[0,1]` gives a
+      pivot on prime `3`; `[1,1]` reduces via pivot-2 to `[0,1]`, then via pivot-3 to
+      `0`. **rank = 2**.
+
+      `answer = 2^(4 − 2) = 4`. ✓
+
+      The 4 subsets: `{}` (product 1), `{2,2}` (4), `{2,6}` (12), `{2,3,6}` (36) — all
+      perfect squares, matching the sample. Note `{3,6}` (18) and `{2,2,3}` (12) are
+      not squares, as their XORs are nonzero.
+
+  - type: mcq
+    prompt: "Why is the number of subsets whose XOR of parity vectors is zero equal to 2^(n − rank)?"
+    options:
+      - "Because the valid choice-vectors form the null space of the GF(2) matrix, whose dimension is n − rank."
+      - "Because every single-element subset is always a square."
+      - "Because rank always equals the number of distinct values in the array."
+      - "Because 2^(n − rank) equals the number of prime factors."
+    answer: 0
+    explanation: "Writing choices as c ∈ {0,1}^n and parity vectors as a matrix A over GF(2), a subset is a square iff A·c = 0. The solutions c form a linear subspace (the null space), which over GF(2) has exactly 2^(dimension) elements, and the dimension of the null space is n − rank(A). Hence the count is 2^(n − rank). The empty subset is included because c = 0 is always a solution."

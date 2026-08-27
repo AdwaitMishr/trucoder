@@ -1,0 +1,263 @@
+---
+id: apple-division
+title: Apple Division
+difficulty: medium
+order: 16
+tags:
+  - intro
+  - bitmask
+  - subset-sum
+blocks:
+  - type: markdown
+    content: |
+      # Apple Division — partitioning with a bitmask
+
+      We have `n` apple weights and must split them into **two groups** so the
+      groups' weight sums are as close as possible. The answer is the smallest
+      possible absolute difference between the two sums.
+
+      Intuitively: choose a subset `A` for group 1; group 2 automatically gets
+      everything else. If the total weight is `T`, then group 2 sums to
+      `T - sum(A)`, and the difference is `|T - 2·sum(A)|`. So the problem
+      becomes *find a subset whose sum is as close to `T/2` as possible*.
+
+      ## Bitmask enumeration
+
+      With `n <= 20` there are `2^n <= 1,048,576` subsets — far too many to
+      recurse over cleverly but perfectly fine to **brute force**. The idiomatic
+      way is a bitmask: an integer `mask` in `[0, 2^n)` where bit `i` is `1` if
+      apple `i` goes to group 1.
+
+      ```text
+      for mask in 0 .. 2^n - 1:
+          sumA = sum of p[i] where bit i of mask is set
+          best = min(best, |T - 2*sumA|)
+      ```
+
+      Summing the group-1 mask from scratch for every `mask` costs O(2^n · n).
+      That is ~20 million operations for `n = 20` — comfortably inside any time
+      limit.
+
+      **Complexity:** O(2^n · n) time, O(1) extra space. Weight sums can reach
+      `20 · 10^9 = 2·10^10`, so use `long long`.
+
+      :::tip
+      **Interview tip:** "Partition into two groups minimizing the difference"
+      (a.k.a. the *partition problem*, the simplest NP-complete problem) is a
+      classic. For small `n`, brute-force bitmask enumeration is the expected
+      interview answer; for large `n` you'd reach for **meet-in-the-middle** or
+      an approximate greedy. Knowing the tiny-`n` enumeration first is the right
+      instinct.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` apples with known weights. Your task is to divide the apples
+      into two groups so that the difference between the group weights is as
+      small as possible.
+
+      ## Input
+
+      The first input line has an integer `n`: the number of apples. The next
+      line has `n` integers `p1, p2, ..., pn`: the weight of each apple.
+
+      **Constraints:** `1 <= n <= 20`, `1 <= pi <= 10^9`
+
+      ## Output
+
+      Print the minimum possible difference.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5
+      3 2 7 4 1
+      ```
+      **Output:**
+      ```
+      1
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — four tiers
+
+      The core identity behind every tier: with total weight `T`, a chosen
+      subset of weight `a` leaves the other group at `T - a`, giving difference
+      `|T - 2a|`. We minimize over all subsets.
+
+      **① Brute force — O(2ⁿ · n).** Recursively branch "apple in group 1 or
+      group 2", and at every leaf rebuild group 1's sum from scratch by scanning
+      the array. Simple and obviously correct, but each of the `2^n` leaves
+      rescans all `n` weights.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long total, best;
+      std::vector<long long> p;
+
+      void rec(int idx, long long mask) {
+          if (idx == (int)p.size()) {
+              long long a = 0;
+              for (int i = 0; i < (int)p.size(); i++)     // rebuild sum from scratch
+                  if (mask & (1LL << i)) a += p[i];
+              best = std::min(best, std::llabs(total - 2 * a));
+              return;
+          }
+          rec(idx + 1, mask);                  // apple idx -> group 2
+          rec(idx + 1, mask | (1LL << idx));   // apple idx -> group 1
+      }
+
+      long long solve(int n, const std::vector<long long>& pp) {
+          p = pp;
+          best = LLONG_MAX; total = 0;
+          for (long long x : p) total += x;
+          rec(0, 0);
+          return best;
+      }
+      ```
+      Complexity: O(2^n · n) — the `2^n` leaves each re-sum the array.
+
+      **② Optimization — O(2ⁿ · n) (bitmask enumeration).** Enumerate every mask
+      in `[0, 2^n)`, sum the group-1 apples selected by its bits, and update
+      `best`. Constant-space, no recursion depth, trivially fast for `n ≤ 20`.
+      This is the standard CSES solution.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(int n, const std::vector<long long>& p) {
+          long long total = 0;
+          for (long long x : p) total += x;
+
+          long long best = LLONG_MAX;
+          for (int mask = 0; mask < (1 << n); mask++) {
+              long long a = 0;
+              for (int i = 0; i < n; i++)
+                  if (mask & (1 << i)) a += p[i];
+              best = std::min(best, std::llabs(total - 2 * a));
+          }
+          return best;
+      }
+      ```
+      Complexity: O(2^n · n) time, O(1) extra space.
+
+      **③ Further optimization — O(n · 2^(n/2)) (meet-in-the-middle).** For
+      larger `n`, split the apples into two halves. Enumerate all subset sums of
+      each half, then, for every sum `x` from the left half, binary-search the
+      right half for the partner `y` that makes `x + y` closest to `T/2`. This
+      is the real speedup when the bitmask sum re-scan becomes too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(int n, const std::vector<long long>& p) {
+          long long total = 0;
+          for (long long x : p) total += x;
+
+          auto subsets = [&](int lo, int hi) {
+              std::vector<long long> sums;
+              int cnt = hi - lo;
+              for (int mask = 0; mask < (1 << cnt); mask++) {
+                  long long s = 0;
+                  for (int i = 0; i < cnt; i++)
+                      if (mask & (1 << i)) s += p[lo + i];
+                  sums.push_back(s);
+              }
+              return sums;
+          };
+
+          std::vector<long long> L = subsets(0, n / 2);
+          std::vector<long long> R = subsets(n / 2, n);
+          std::sort(R.begin(), R.end());
+
+          long long best = LLONG_MAX;
+          for (long long x : L) {
+              // want x + y as close to total/2 as possible
+              auto it = std::lower_bound(R.begin(), R.end(), total / 2 - x);
+              if (it != R.end())
+                  best = std::min(best, std::llabs(total - 2 * (x + *it)));
+              if (it != R.begin())
+                  best = std::min(best, std::llabs(total - 2 * (x + *(it - 1))));
+          }
+          return best;
+      }
+      ```
+      Complexity: O(2^(n/2) · log 2^(n/2)) time, O(2^(n/2)) space. Handles `n`
+      up to ~40.
+
+      **④ Alternative algorithm — O(2ⁿ) (Gray-code incremental sums).** A
+      distinct way to avoid re-summing `n` bits per mask: iterate masks so that
+      consecutive masks differ in **one bit**, and update group 1's sum by
+      adding or removing exactly that apple. This is the same answer in optimal
+      O(2^n) work — an alternative that also shows a neat bit-slicing trick.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(int n, const std::vector<long long>& p) {
+          long long total = 0;
+          for (long long x : p) total += x;
+
+          long long best = LLONG_MAX, a = 0;
+          int prev = 0;
+          for (int i = 1; i < (1 << n); i++) {
+              int g = i ^ (i >> 1);            // next reflected Gray code mask
+              int diff = g ^ prev;             // which single bit changed
+              int bit = __builtin_ctz(diff);
+              if (g & diff) a += p[bit];       // bit turned on  -> add apple
+              else          a -= p[bit];       // bit turned off -> remove apple
+              prev = g;
+              best = std::min(best, std::llabs(total - 2 * a));
+          }
+          // also evaluate the all-off mask (not visited since i starts at 1)
+          best = std::min(best, std::llabs(total - 2 * 0));
+          return best;
+      }
+      ```
+      Complexity: O(2^n) time (each mask is O(1)), O(1) extra space.
+
+      Now walk through the chosen tier (②) in the next block — then trace it on
+      the sample input.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Sum all weights once into `total`. Then iterate every `mask` from `0` to
+      `2^n - 1`:
+
+      - Bit `i` of the mask selects apple `i` for **group 1**, whose sum we
+        accumulate as `a`. Group 2 implicitly holds the remaining weight
+        `total - a`.
+      - The difference between the groups is `|(total - a) - a|`, which
+        simplifies to `|total - 2*a|` — no separate group-2 computation needed.
+      - `best` holds the minimum difference seen so far.
+
+      The `3 2 7 4 1` sample has `total = 17`. The subset `{3,2,4}` sums to `9`,
+      so group 2 sums to `8`, giving `|17 - 2·9| = 1` — and no subset sums to
+      `8.5` (impossible since weights are integers), so `1` is the minimum.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(5, {3,2,7,4,1})` — `total = 17`. Inspecting a few masks
+      (bit `i` from the right = apple `i`):
+
+      | mask (bits)        | group-1 apples | sumA | \|total - 2·sumA\| |
+      |--------------------|----------------|------|---------------------|
+      | `00000`            | none           | 0    | 17                  |
+      | `00110` (1,2)      | 2,7            | 9    | 1                   |
+      | `01101` (0,2,3)    | 3,7,4          | 14   | 11                  |
+      | `11111`            | all            | 17   | 17                  |
+      | … (all 32 masks)   | …              | …    | min → **1**         |
+
+      Expected (sample) — `1`. Actual — `1`. Match. The `00110` mask (apples
+      `2,7` vs `3,4,1`) realizes the optimum difference of `1`, and our loop
+      records it as the minimum across every subset.
+type: content

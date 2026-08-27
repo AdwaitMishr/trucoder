@@ -1,0 +1,259 @@
+---
+id: raab-game
+title: Raab Game I
+difficulty: easy
+order: 21
+tags:
+  - intro
+  - game
+  - math
+blocks:
+  - type: markdown
+    content: |
+      # Raab Game I
+
+      **The technique: identify the losing positions.** In any impartial
+      two-player game where every move reduces the state and the last-mover
+      wins, the winning strategy is driven by a small set of **P-positions**
+      (previous-player wins) — positions from which the player about to move
+      *cannot* force a win. Every other position is an **N-position**
+      (next-player wins): the mover can always hand the opponent a P-position.
+
+      The clean way to find P-positions: work backward from the smallest
+      states. A state is a P-position iff **every** legal move from it leads to
+      an N-position; it is an N-position iff **some** legal move reaches a
+      P-position. Simulate this from `n = 0` upward and watch the pattern.
+
+      **When you reach for it:** stone / stick / Marble-game problems with a
+      fixed set of take amounts ("take 1 to k"), Nim variants, and any
+      "determine the winner under optimal play" question. The invariant
+      (residue modulo a fixed pattern) is usually what they're probing.
+
+      **Worked mini-example (take 1, 2, or 3; last mover wins).** Let the pile
+      size be the state.
+
+      - `n = 0`: no move → previous player took the last stone → **losing** (P).
+      - `n = 1, 2, 3`: the mover takes all stones and wins → **winning** (N).
+      - `n = 4`: the mover can take 1, 2, or 3, leaving 3, 2, or 1 — all N —
+        so every option hands the opponent a win → **losing** (P).
+      - `n = 5, 6, 7`: mover takes to leave 4 (a P) and wins → **winning**.
+
+      The pattern: multiples of **4** are losing. A single move can change the
+      pile by 1–3, so the mover can always step *onto* a multiple of 4 and keep
+      the opponent there. Therefore the first player wins if and only if `n` is
+      **not** a multiple of 4 (`n mod 4 ≠ 0`).
+
+      **Complexity.** One modulo operation → **O(1)** time and O(1) space.
+
+      :::tip
+      **Interview tip:** game-theory problems in interviews are almost always
+      about finding the invariant/losing pattern, not minimax by brute force.
+      Say the words *"losing position"* and *"P-position"*, then show the
+      modulo pattern. For take-`1..k` games the losing positions are exactly the
+      multiples of `k+1`. Extending to take-set games (e.g. take 1, 3, or 4) is
+      the natural follow-up — compute it with a small DP over the first few
+      states, then look for the eventual periodic pattern.
+      :::
+  - type: markdown
+    content: |
+      # Question — Raab Game I
+
+      There is a pile of `n` stones. Two players, Raab and his opponent, take
+      turns. On each turn a player removes **1, 2, or 3** stones from the pile.
+      The player who takes the **last stone** wins the game. Both players play
+      optimally.
+
+      Determine the winner: output `1` if the player who moves **first**
+      (Raab) can force a win, otherwise output `2` (meaning the second player
+      wins).
+
+      **Constraints:** `1 ≤ n ≤ 10^9`.
+
+      **Input:** one line containing the integer `n`.
+      **Output:** a single integer — `1` (first player wins) or `2` (second
+      player wins).
+
+      Sample input:
+
+      ```
+      4
+      ```
+
+      Sample output:
+
+      ```
+      2
+      ```
+
+      Second sample:
+
+      ```
+      5
+      ```
+
+      Output:
+
+      ```
+      1
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — DP, O(n)**
+
+      Work backward from the base: `win[0] = 0` (no stones, the mover loses),
+      and from pile `i` the mover wins if *any* legal take `t ∈ {1,2,3}` leaves
+      a losing pile for the opponent.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int solve(long long n) {                       // n up to 1e9 → too big in practice
+          vector<char> win(n + 1, 0);
+          win[0] = 0;                                // no move: mover loses
+          for (int i = 1; i <= (int)n; ++i) {
+              win[i] = 0;
+              for (int t = 1; t <= 3 && t <= i; ++t)
+                  if (!win[i - t]) { win[i] = 1; break; }   // hand opponent a losing pile
+          }
+          return win[n] ? 1 : 2;
+      }
+      ```
+
+      **O(n)** time, O(n) space. Correct, but `n` reaches `10^9` — an array that
+      large is neither fast nor even feasible.
+
+      **② Optimization — small DP + detect the cycle, O(K)**
+
+      The `win[i]` sequence repeats with a fixed period. Compute the first `K`
+      states, clamp `n` to `n mod 4` (the observed period), and read off the
+      answer. This is the "pattern discovery" approach and needs only a tiny
+      array.
+
+      ```cpp
+      int solve(long long n) {
+          int K = 8;                                 // K far enough to expose the period 4
+          vector<char> win(K, 0);
+          for (int i = 1; i < K; ++i) {
+              win[i] = 0;
+              for (int t = 1; t <= 3 && t <= i; ++t)
+                  if (!win[i - t]) { win[i] = 1; break; }
+          }
+          // observed period: win[i + 4] == win[i], so answer depends only on n % 4
+          return (n % 4 == 0) ? 2 : 1;
+      }
+      ```
+
+      **O(1)** time, O(1) space (a constant-size DP to confirm the cycle, then a
+      modulo).
+
+      **③ Further optimization — closed form, O(1) (submission)**
+
+      The losing positions are exactly the multiples of `4 = (max take) + 1`.
+      No DP at all — one comparison.
+
+      ```cpp
+      long long solve(long long n) {
+          return (n % 4 == 0) ? 2 : 1;               // 4 | n → second player wins
+      }
+      ```
+
+      **O(1)** time, O(1) space. This is the tier you'd submit to CSES.
+
+      **④ Alternative — Sprague–Grundy**
+
+      A different, general framework: assign each pile size a *Grundy number*
+      `g(i) = mex{ g(i−1), g(i−2), g(i−3) }`. A position is winning for the
+      mover iff its Grundy number is nonzero. For a single pile this must agree
+      with the modulo rule, and it generalizes to sums of independent games.
+
+      ```cpp
+      int solve(long long n) {
+          // g(i) = mex{ g(i-1), g(i-2), g(i-3) }; for take 1..3 this equals i % 4
+          int rem = (int)(n % 4);
+          return rem == 0 ? 2 : 1;                   // winning iff Grundy != 0
+      }
+      ```
+
+      **O(1)** time, O(1) space — conceptually a different algorithm (game DP /
+      Grundy) that reduces to the same `mod 4` answer here, but applies to
+      arbitrary take-sets.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The whole game collapses to one modulus: `(n % 4 == 0) ? 2 : 1`.
+
+      - **Why `mod 4`?** The mover removes 1, 2, or 3 stones. From any pile
+        that is a multiple of 4, whatever the mover takes (1–3) the pile stops
+        being a multiple of 4, and the opponent can respond by taking exactly
+        `4 − taken` stones to hand back a multiple of 4. This is a full round
+        of 4 stones that the second player always controls.
+      - **Endgame.** Piles wind down through the multiples of 4: `… → 12 → 8 →
+        4 → 0`. When it is the mover's turn on 4 and they take `t`, the pile
+        becomes `4 − t ∈ {1, 2, 3}`, and the opponent simply takes it all and
+        wins with the last stone. So *all* multiples of 4 are losing for the
+        mover → the second player wins.
+      - **Everything else.** If `n` is not a multiple of 4, the first player
+        takes `n mod 4` stones, leaving a multiple of 4 for the opponent, and
+        thereafter mirrors the opponent's play to keep a multiple of 4 — a
+        forced win, `1`.
+      - **Tier relation.** Tier ① is the generic backward DP; tier ② shows the
+        DP output repeating every 4 (the *discovery* step); tier ③ is the
+        closed form it suggests; tier ④ is the Grundy generalization. All four
+        return identical answers.
+
+      `long long` handles `n` up to `10^9` comfortably — especially important
+      for tier ②/③/④ which never allocate an array of size `n`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 4`. `4 % 4 == 0` → it is a losing position for the mover,
+      so the first player (Raab) loses → return **2** ✓ (sample output).
+
+      Trace of the forced line: Raab takes `1` → pile `3`, opponent takes `3`
+      (last stone) and wins. Raab takes `2` → pile `2`, opponent takes `2` and
+      wins. Raab takes `3` → pile `1`, opponent takes `1` and wins. No matter
+      the first move, the opponent wins → output `2`.
+
+      **Tier ① DP trace for the first states:**
+
+      | i | piles reachable | any loser? | win[i] | class |
+      |---|-----------------|------------|--------|-------|
+      | 0 | –               | –          | 0      | P     |
+      | 1 | 0               | yes (0)    | 1      | N     |
+      | 2 | 1, 0            | yes (0)    | 1      | N     |
+      | 3 | 2, 1, 0         | yes (0)    | 1      | N     |
+      | 4 | 3, 2, 1         | none (all N) | 0    | P     |
+
+      The `win[i]` column reads `0,1,1,1,0,1,1,1,…` — period 4, with `0` exactly
+      on multiples of 4. Tier ② exploits this repetition; tier ③ turns it into
+      one modulo.
+
+      **Input:** `n = 5`. `5 % 4 = 1 ≠ 0` → first player wins → return **1** ✓.
+
+      Trace: Raab takes `1` stone, leaving `4` (a multiple of 4) to the
+      opponent. Whatever the opponent now takes (`1, 2, 3`), Raab restores a
+      multiple of 4 by taking `4 − t`. The pile descends `4 → … → 4 → 0` under
+      Raab's control, and Raab takes the last stone → `1`.
+
+      | n | n mod 4 | first player outcome | output |
+      |---|---------|----------------------|--------|
+      | 1 | 1 | win (take all) | 1 |
+      | 4 | 0 | lose (mover stuck on a multiple of 4) | 2 |
+      | 5 | 1 | win (leave a multiple of 4) | 1 |
+      | 100 | 0 | lose | 2 |
+  - type: mcq
+    prompt: 'In Raab Game I (take 1, 2, or 3; last stone wins), why is a pile of size 8 a losing position for the player to move?'
+    options:
+      - Because 8 is a power of two and therefore unlucky
+      - 'Because whatever the mover removes (1-3), the opponent can restore a multiple of 4 by taking 4 minus that amount, eventually handing the last stone back and winning'
+      - 'Because from 8 the mover is forced to take exactly 4 stones, which is illegal'
+      - Because the second player can always take 8 stones immediately
+    answer: 1
+    explanation: 'From any multiple of 4 the mover leaves 4-t stones (a non-multiple), and the opponent replies with 4-t to hand back a multiple of 4, shrinking the pile by 4 each round until the mover is stuck with a losing position. The same argument, done in O(1) via n % 4 == 0.'
+type: content
+---

@@ -1,0 +1,380 @@
+---
+id: monster-game-ii
+title: "Monster Game II"
+type: content
+difficulty: hard
+order: 247
+tags:
+  - advanced-techniques
+  - convex-hull-trick
+  - li-chao
+  - dp
+blocks:
+  - type: markdown
+    content: |
+      # Monster Game II — minimize time with a changing skill factor
+
+      You play `n` levels in order. Each level has a monster with strength `s_i`.
+      Your **skill factor** `f` starts at `x`, and every time you kill a monster
+      your factor becomes the monster's own `f_i` (lower is better). In levels
+      `1..n-1` you may choose to **kill** or **escape** a monster; on the final
+      level `n` you *must* kill it to win.
+
+      Killing a monster whose strength is `s` while your factor is `f` costs
+      `s * f` time. The question: what is the minimum total time to finish?
+
+      ## The core observation
+
+      The only thing that matters about the past is your **current factor** —
+      exactly the `f_i` of the last monster you killed (or your initial `x`).
+      Escaping a monster leaves your factor unchanged and costs nothing. So an
+      optimal strategy is: pick an *increasing* sequence of levels to kill, the
+      last one must be level `n`, and pay
+
+      ```
+      total = Σ over killed monsters j  of  s_j · (factor just before killing j)
+      ```
+
+      where the factor just before killing `j` is the `f` of the previous killed
+      monster (or `x`).
+
+      ## DP formulation
+
+      Let `dp[j]` be the minimum time such that monster `j` is the **last one
+      killed so far** (so your factor is now `f_j`). To make `j` the last killed,
+      it must come after some previously killed monster `i < j`, so
+
+      ```
+      dp[j] = min over i < j of  dp[i] + s_j · f_i
+      ```
+
+      with the convention that the "initial state" has factor `x` and cost `0`.
+      The answer is `dp[n]` (the last monster must be killed).
+
+      ## Why the convex hull trick
+
+      Rewrite the transition for a fixed `j` (so `s_j` is a constant):
+
+      ```
+      dp[j] = min over i < j of  (f_i · s_j + dp[i])
+      ```
+
+      Every previous state `i` is a **line** `y = f_i · s + dp[i]` in the
+      variable `s`, and we evaluate *all* lines at the point `s = s_j`, taking
+      the minimum. That is exactly the **convex hull trick (CHT)** — maintain a
+      set of lines and answer "min over lines at coordinate x" queries.
+
+      Here the slopes `f_i` are *not* guaranteed monotonic, so we use a **Li Chao
+      tree**: a segment tree over the coordinate domain `[1, 10^6]` (monster
+      strengths fit there) that supports adding a line and querying the minimum
+      at a point, both in `O(log C)`.
+
+      **Complexity:** `O(n)` lines, each add/query is `O(log 10^6)`, so
+      `O(n log C)` time, `O(C)` space (with coordinate compression, `O(n)`).
+
+      :::tip
+      **Interview tip:** "each action has a linear cost parameterised by your
+      current state, and the state is the last chosen item" is the signature of a
+      CHT/Li Chao DP. Spot it when a transition looks like `dp[j] = min_i(a_i +
+      b_i · x_j)` — gather `a_i` and `b_i` from the previous states, treat them as
+      line parameters, and evaluate at `x_j`. When slopes aren't sorted, reach
+      for a Li Chao tree.
+      :::
+  - type: markdown
+    content: |
+      # Question — Monster Game II
+
+      You are playing a game that consists of `n` levels. Each level has a
+      monster. On levels `1, 2, ..., n-1` you can either **kill** or **escape**
+      the monster. However, on level `n` you must kill the final monster to win
+      the game.
+
+      Killing a monster takes `s·f` time, where `s` is the monster's strength and
+      `f` is your **skill factor**. After killing a monster, you get a **new**
+      skill factor (lower is better).
+
+      What is the **minimum total time** in which you can win the game?
+
+      **Input**
+
+      The first input line has two integers `n` and `x`: the number of levels and
+      your initial skill factor.
+      The second line has `n` integers `s_1, s_2, ..., s_n`: each monster's
+      strength.
+      The third line has `n` integers `f_1, f_2, ..., f_n`: your new skill factor
+      after killing each monster.
+
+      **Output**
+
+      Print one integer: the minimum total time to win the game.
+
+      **Constraints**
+
+      - `1 <= n <= 2·10^5`
+      - `1 <= x <= 10^6`
+      - `1 <= s_i, f_i <= 10^6`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 100
+      50 20 30 90 30
+      60 20 20 10 90
+      ```
+
+      Output:
+
+      ```
+      2600
+      ```
+
+      Explanation: the best way to play is to kill the second and the fifth
+      monster (kill level 2: `20·100 = 2000`, factor becomes 20; kill level 5:
+      `30·20 = 600`). Total `2000 + 600 = 2600`.
+  - type: markdown
+    content: |
+      ### Solution — Monster Game II
+
+      **① Brute force — O(n²) time, O(n) space**
+
+      For each level `j`, scan every earlier killed level `i < j`:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll INF = (1LL << 62);
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; ll x; cin >> n >> x;
+          vector<ll> s(n), f(n);
+          for (auto &v : s) cin >> v;
+          for (auto &v : f) cin >> v;
+
+          vector<ll> dp(n, INF);
+          ll prevF = x, prevDp = 0;      // state "nothing killed" : factor x, cost 0
+          for (int j = 0; j < n; ++j) {
+              // min over all i<j of dp[i] + f_i*s_j  (plus the start state prevDp)
+              ll best = prevDp + prevF * s[j];
+              for (int i = 0; i < j; ++i)
+                  best = min(best, dp[i] + f[i] * s[j]);
+              dp[j] = best;
+          }
+          cout << dp[n - 1] << "\n";
+      }
+      ```
+
+      Correct, but the inner loop is `O(n)` per `j`, giving `O(n²)`. At
+      `n = 2·10^5` that is `4·10^10` operations — far too slow.
+
+      **② Optimisation — Li Chao convex hull trick, O(n log C) time, O(C) space**
+
+      Each previous state `i` contributes a line `y = f_i·s + dp[i]`. Keep all
+      lines in a Li Chao tree over the integer strengths `s in [1, 10^6]` and
+      query at `s_j`:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll INF = (1LL << 62);
+
+      struct Line {
+          ll m, b;                 // y = m*x + b
+          Line(ll _m = 0, ll _b = INF) : m(_m), b(_b) {}
+          ll eval(ll x) const { return m * x + b; }
+      };
+
+      struct LiChao {              // min-CHT over integer domain [lo, hi]
+          int lo, hi; vector<Line> t;
+          LiChao(int l, int h) : lo(l), hi(h) { t.assign(4 * (h - l + 1), Line()); }
+          void add(Line nw, int node, int l, int r) {
+              int mid = (l + r) >> 1;
+              Line cur = t[node];
+              bool left  = nw.eval(l)   < cur.eval(l);
+              bool midv  = nw.eval(mid) < cur.eval(mid);
+              if (midv) swap(nw, t[node]);
+              if (l == r) return;
+              if (left != midv) add(nw, node << 1, l, mid);
+              else              add(nw, node << 1 | 1, mid + 1, r);
+          }
+          void add(Line nw) { add(nw, 1, lo, hi); }
+          ll query(int x, int node, int l, int r) {
+              ll res = t[node].eval(x);
+              if (l == r) return res;
+              int mid = (l + r) >> 1;
+              if (x <= mid) return min(res, query(x, node << 1, l, mid));
+              return min(res, query(x, node << 1 | 1, mid + 1, r));
+          }
+          ll query(int x) { return query(x, 1, lo, hi); }
+      };
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; ll x; cin >> n >> x;
+          vector<ll> s(n), f(n);
+          for (auto &v : s) cin >> v;
+          for (auto &v : f) cin >> v;
+
+          LiChao cht(1, 1000000);
+          cht.add(Line(x, 0));                 // start state: factor x, cost 0
+          ll ans = 0;
+          for (int i = 0; i < n; ++i) {
+              ll dp = cht.query(s[i]);         // min over previous killed j
+              ans = dp;                        // keep last: monster n must be killed
+              cht.add(Line(f[i], dp));         // this monster can be a future "previous"
+          }
+          cout << ans << "\n";
+      }
+      ```
+
+      **③ Further optimisation** — not needed: `O(n log C)` with `C = 10^6` is
+      already comfortably under the 1 s limit (≈ `2·10^5 · 20` line operations).
+
+      **④ Alternative — compressed-domain Li Chao tree, O(n log n) time, O(n) space**
+
+      The same online CHT, but instead of a fixed domain `[1, 10^6]` we compress
+      the query coordinates to the distinct monster strengths. This variant is
+      robust if the strength range were large or unbounded:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll INF = (1LL << 62);
+
+      struct Line { ll m, b;
+          Line(ll _m = 0, ll _b = INF) : m(_m), b(_b) {}
+          ll eval(ll x) const { return m * x + b; } };
+      struct LiChao {              // coordinate-compressed Li Chao over xs[]
+          int n; vector<ll> xs; vector<Line> t;
+          LiChao(vector<ll> _xs) : xs(_xs) { n = xs.size(); t.assign(4 * n, Line()); }
+          void add(Line nw, int node, int l, int r) {
+              int mid = (l + r) >> 1; Line cur = t[node];
+              bool lef = nw.eval(xs[l]) < cur.eval(xs[l]);
+              bool midv = nw.eval(xs[mid]) < cur.eval(xs[mid]);
+              if (midv) swap(nw, t[node]);
+              if (l == r) return;
+              if (lef != midv) add(nw, node << 1, l, mid); else add(nw, node << 1 | 1, mid + 1, r);
+          }
+          void add(Line nw) { add(nw, 1, 0, n - 1); }
+          ll query(int x, int node, int l, int r) {
+              ll res = t[node].eval(x);
+              if (l == r) return res;
+              int mid = (l + r) >> 1;
+              if (lower_bound(xs.begin(), xs.end(), x) - xs.begin() <= mid)
+                  return min(res, query(x, node << 1, l, mid));
+              return min(res, query(x, node << 1 | 1, mid + 1, r));
+          }
+          ll query(int x) { return query(x, 1, 0, n - 1); }
+      };
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; ll x; cin >> n >> x;
+          vector<ll> s(n), f(n);
+          for (auto &v : s) cin >> v;
+          for (auto &v : f) cin >> v;
+          vector<ll> xs = s; sort(xs.begin(), xs.end());
+          xs.erase(unique(xs.begin(), xs.end()), xs.end());
+          LiChao cht(xs);
+          cht.add(Line(x, 0));
+          ll ans = 0;
+          for (int i = 0; i < n; ++i) {
+              ll dp = cht.query(s[i]); ans = dp;
+              cht.add(Line(f[i], dp));
+          }
+          cout << ans << "\n";
+      }
+      ```
+
+      Note: a plain monotone-deque hull would also work *iff* the slopes `f_i`
+      happened to be sorted — they are arbitrary here, so the Li Chao tree
+      (fixed-domain in ② or compressed here) is the correct, general choice.
+  - type: markdown
+    content: |
+      # Code logic — Monster Game II
+
+      Focus on the Li Chao solution in **②**:
+
+      - `Line` stores a linear function `y = m·x + b`. For monster `i` killed
+        with cost `dp[i]` and factor `f[i]`, the "previous state" it offers to
+        any later monster is the line `m = f[i]`, `b = dp[i]`: a future monster
+        with strength `s` pays `f[i]·s + dp[i]`.
+      - We begin by inserting the virtual start state `Line(x, 0)` — with your
+        initial factor `x` and a cost of `0`, no monster killed yet.
+      - For each level `i` (0-indexed), `cht.query(s[i])` returns the minimum
+        over all lines already inserted, i.e. `min over i'<i of dp[i'] + f[i']·s_i`
+        — exactly `dp[i]`. We then insert `Line(f[i], dp[i])` so monster `i`
+        becomes a candidate "previous kill" for everything after it.
+      - Because monsters appear in increasing level order, every line is inserted
+        before it is needed, preserving the `i < j` constraint for free.
+      - The final monster must be killed, so the answer is the last computed
+        `dp[n-1]`, which we keep in `ans` (the last `query` in the loop).
+      - `add` (insertion) keeps in each tree node the line best at that node's
+        midpoint and pushes the loser down one side, so a downward path always
+        contains the minimum. `query` walks one root-to-leaf path, taking the min
+        of the lines stored along it. Both are `O(log 10^6)`.
+
+      :::tip
+      **Interview question:** If all `f_i` (skill factors) were guaranteed sorted
+      ascending, could you drop the Li Chao tree? — Yes: with sorted slopes you get
+      a monotone convex hull and answer online queries with a deque in amortised
+      `O(1)` each. The Li Chao tree is the general fallback that needs no sorting
+      guarantee; interviewers often test whether you know when the cheaper deque
+      is valid.
+      :::
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the Li Chao DP on the sample.
+
+      `n = 5, x = 100`. Strengths `s = [50, 20, 30, 90, 30]`, factors
+      `f = [60, 20, 20, 10, 90]`.
+
+      We start by inserting the virtual line `y = 100·s + 0` (factor 100, cost 0).
+
+      | Level | s_j | candidates (i'<j)                                 | dp[j] (min)  | insert line           |
+      |-------|-----|--------------------------------------------------|--------------|-----------------------|
+      | 1     | 50  | start: `100·50`                                  | `5000`       | `y = 60·s + 5000`     |
+      | 2     | 20  | start: `100·20=2000`; L1: `60·20+5000=6200`      | `2000`       | `y = 20·s + 2000`     |
+      | 3     | 30  | start: `3000`; L1: `6800`; L2: `20·30+2000=2600` | `2600`       | `y = 20·s + 2600`     |
+      | 4     | 90  | L2: `20·90+2000=3800` (best)                      | `3800`       | `y = 10·s + 3800`     |
+      | 5     | 30  | L2: `20·30+2000=2600` (best)                      | `2600`       | —                     |
+
+      The final answer is `dp[5] = 2600`.
+
+      Reading off the optimal strategy: level 5's `2600` came from the line of
+      level 2 (`y = 20·s + 2000`), meaning we killed level 2 *then* level 5.
+      Kill level 2: `20·100 = 2000`, factor becomes `20`. Kill level 5:
+      `30·20 = 600`. Total `2000 + 600 = 2600`, which matches the sample and its
+      explanation.
+  - type: flowchart
+    title: "Monster Game II — CHT decision flow"
+    nodes:
+      - "Level j reached"
+      - "query all previous lines at s_j -> dp[j]"
+      - "is j the final level n?"
+      - "insert line (m=f_j, b=dp[j])"
+      - "output dp[j]"
+      - "continue to j+1"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 4, label: "yes"}
+      - {from: 2, to: 3, label: "no"}
+      - {from: 3, to: 5}
+      - {from: 5, to: 0, label: "loop"}
+  - type: mcq
+    prompt: "Why does the dp[j] = min over i<j of (dp[i] + s_j*f_i) transition fit the convex hull trick?"
+    options:
+      - "Because f_i and s_j are bounded by 10^6, so we can precompute every product."
+      - "Because for a fixed j, s_j is a constant, and each prior state i is a line y = f_i*s + dp[i] evaluated at s = s_j; taking the min over lines at a point is exactly what CHT/Li Chao answers."
+      - "Because the monster strengths are equal to their factors, making the answer a simple product."
+      - "Because the DP has only one dimension and needs no optimization."
+    answer: 1
+    explanation: "Rewrite dp[j] = min_i (f_i·s_j + dp[i]): with s_j fixed, each previous state i is the line y = f_i·s + dp[i]. 'Minimum value among inserted lines at coordinate x' is precisely the CHT/Li Chao primitive. Since slopes f_i are not monotonic, a Li Chao tree handles the online adds and arbitrary query points."
+---

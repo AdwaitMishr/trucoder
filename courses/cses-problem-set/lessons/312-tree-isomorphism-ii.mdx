@@ -1,0 +1,241 @@
+---
+id: tree-isomorphism-ii
+title: "Tree Isomorphism II"
+type: content
+difficulty: medium
+order: 312
+tags:
+  - advanced-graph
+  - tree
+  - canonical-form
+  - center
+  - ahu
+blocks:
+  - type: markdown
+    content: |
+      # Tree Isomorphism II — are two *unrooted* trees the same shape?
+
+      Now there is no specified root: two trees are isomorphic if one can be relabelled
+      into the other at all. The plan is to turn the unrooted case into the rooted one by
+      rooting each tree at its **center**.
+
+      ## Centers of a tree
+
+      The **center** is the middle of the tree; it can be found by repeatedly peeling off
+      all current leaves until at most two nodes remain. A tree has either:
+
+      - **one** center (odd-diameter trees), or
+      - **two** centers joined by an edge (even-diameter trees).
+
+      Two unrooted trees are isomorphic **iff they have the same kind of center and the
+      associated rootings are isomorphic**:
+
+      - One center each ⇒ root both at that center and compare rooted isomorphism.
+      - Two centers each ⇒ the multisets `{canon(center1), canon(center2)}` of the two
+        trees must agree (the two centers are interchangeable within a tree).
+
+      Rooted isomorphism itself uses the AHU canonical ranks from *Tree Isomorphism I*.
+
+      :::tip
+      **Interview tip:** "find the center, then root there and compare canonical forms" is
+      the canonical way to solve unrooted tree-shape comparison (it also powers center-based
+      DP). A common alternative is the **Prüfer sequence**: two unrooted trees are
+      isomorphic iff their Prüfer codes are equal — elegant, but only applicable to
+      labelled trees and less flexible than canonical forms.
+      :::
+  - type: markdown
+    content: |
+      # Question — Tree Isomorphism II
+
+      Given two (**not rooted**) trees, find out if they are isomorphic, i.e. it is
+      possible to draw them so that they look the same.
+
+      **Input**
+
+      The first input line has an integer `t`: the number of tests. Then, there are `t`
+      tests described as follows:
+
+      The first line has an integer `n`: the number of nodes in both trees. The nodes are
+      numbered `1, 2, ..., n`.
+
+      Then, there are `n-1` lines describing the edges of the first tree, and finally
+      `n-1` lines describing the edges of the second tree.
+
+      **Output**
+
+      For each test, print `"YES"` if the trees are isomorphic, and `"NO"` otherwise.
+
+      **Constraints**
+
+      - `1 <= t <= 1000`
+      - `2 <= n <= 10^5`
+      - the sum of all values of `n` is at most `10^5`
+
+      **Example**
+
+      Input:
+
+      ```
+      2
+      3
+      1 2
+      2 3
+      1 2
+      1 3
+      3
+      1 2
+      2 3
+      1 3
+      3 2
+      ```
+
+      Output:
+
+      ```
+      YES
+      YES
+      ```
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      **① Brute force — try every pair of roots, exponential per test**
+
+      For each candidate root in both trees test rooted isomorphism (via brute relabelling)
+      — far too slow for `n = 10^5`.
+
+      ```cpp
+      // illustration of the naive idea only.
+      ```
+
+      **② Optimization — centers + AHU ranks, O(n log n) per test**
+
+      Peel leaves to find the center(s), root there, and compare AHU canonical ranks —
+      handling one-center and two-center trees as described.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      map<vector<int>,int> dict;
+
+      vector<vector<int>> readTree(int n){
+        vector<vector<int>> g(n+1);
+        for(int i=0;i<n-1;i++){ int a,b;cin>>a>>b; g[a].push_back(b); g[b].push_back(a); }
+        return g;
+      }
+
+      vector<int> centers(int n, const vector<vector<int>>& g){
+        vector<int> deg(n+1); queue<int> q;
+        for(int u=1;u<=n;u++){ deg[u]=g[u].size(); if(deg[u]<=1) q.push(u); }
+        int left=n;
+        while(left>2){
+          int sz=q.size();
+          for(int k=0;k<sz;k++){ int u=q.front(); q.pop(); left--;
+            for(int v:g[u]) if(--deg[v]==1) q.push(v); }
+        }
+        vector<int> res;
+        while(!q.empty()){ res.push_back(q.front()); q.pop(); }
+        return res;
+      }
+
+      int encode(int n, const vector<vector<int>>& g, int root){
+        vector<int> par(n+1,0), order; order.reserve(n);
+        vector<char> vis(n+1,0); vis[root]=1; vector<int> stk{root};
+        while(!stk.empty()){ int u=stk.back(); stk.pop_back(); order.push_back(u);
+          for(int v:g[u]) if(!vis[v]){ vis[v]=1; par[v]=u; stk.push_back(v); } }
+        vector<int> rank(n+1,0);
+        for(int i=order.size()-1;i>=0;i--){ int u=order[i], r;
+          vector<int> kids;
+          for(int v:g[u]) if(v!=par[u]) kids.push_back(rank[v]);
+          sort(kids.begin(), kids.end());
+          auto it=dict.find(kids);
+          if(it==dict.end()){ r=dict.size(); dict.emplace(kids,r); } else r=it->second;
+          rank[u]=r; }
+        return rank[root];
+      }
+
+      int main(){
+        ios::sync_with_stdio(false); cin.tie(nullptr);
+        int t; cin>>t;
+        while(t--){
+          int n; cin>>n;
+          auto t1=readTree(n), t2=readTree(n);
+          auto c1=centers(n,t1), c2=centers(n,t2);
+          int ok = (c1.size()==c2.size());
+          if(ok){
+            int a1=encode(n,t1,c1[0]), a2=encode(n,t2,c2[0]);
+            if(c1.size()==1) ok = (a1==a2);
+            else { // two centers: compare the two multisets
+              int b1=encode(n,t1,c1[1]), b2=encode(n,t2,c2[1]);
+              ok = (a1==a2 && b1==b2) || (a1==b2 && b1==a2);
+            }
+          }
+          cout << (ok? "YES":"NO") << "\n";
+        }
+        return 0;
+      }
+      ```
+
+      Leaf peeling is `O(n)`; each `encode` pass is `O(n log n)`. All four encodings share
+      one dictionary, so ranks are comparable across both trees.
+
+      **③ Further optimization** — not needed.
+
+      **④ Alternative — Prüfer sequences**
+
+      Compute the Prüfer sequence of each labelled tree; the trees are isomorphic iff the
+      sequences are equal (they encode the unrooted topology uniquely). Simple, but it is
+      an `O(n log n)` sort of the multiset anyway and does not generalise to isomorphisms
+      with weights or extra vertex data; canonical forms are the more flexible tool.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Follow the optimal **②** solution:
+
+      - `readTree` reads both trees.
+      - `centers` peels leaves: every node of degree `≤ 1` starts in a queue; while more
+        than two nodes remain, remove a whole layer at a time (decrement neighbours'
+        degrees, enqueue new leaves). The survivors are the 1–2 centers.
+      - `encode(root)` runs the AHU pass rooted at the chosen center and returns that
+        root's canonical rank (children before parent, sorted tuples, shared `dict`).
+      - Compare: one center each → compare single ranks; two centers each → compare the
+        sorted multisets `{a1,b1}` vs `{a2,b2}`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample test 1: `n = 3`.
+      Tree 1: path `1-2-3`. Tree 2: star `2`-`1`,`3` (edges `1-2, 1-3`).
+      Each is a 3-node unrooted tree (a central node with two leaves). Both have **one**
+      center: tree 1's center is `2`, tree 2's is `1`.
+
+      Ranked canonical forms (shared dictionary): a center with two leaf children gives
+      tuple `[0,0]` — the same rank for both trees. Single centers compare equal → **YES**.
+
+      Sample test 2: Tree 1 path `1-2-3`; Tree 2 edges `1-3, 3-2` → also a path. Both
+      centers map to identical canonical ranks → **YES**. Output `YES` / `YES`.
+  - type: flowchart
+    title: "Unrooted isomorphism"
+    nodes: ["peel leaves -> centers (1 or 2)", "tree 1: canon(center(s))",
+            "tree 2: canon(center(s))", "same center count?",
+            "one center: ranks equal? | two centers: multisets equal?", "print YES / NO"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 0, to: 2, label: ""}
+      - {from: 1, to: 3, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 4, to: 5, label: ""}
+      - {from: 3, to: 5, label: "no -> NO"}
+  - type: mcq
+    prompt: "Why is it valid to root each tree only at its center(s), rather than trying every possible root, when testing unrooted tree isomorphism?"
+    options:
+      - "Because any isomorphism sends the center of one tree to the center of the other; the center is an intrinsic, root-invariant feature of an unrooted tree, so rooting at the center(s) converts the unrooted comparison into exactly one (or, for two centers, a tiny multi-set) rooted comparison"
+      - "Because the center is always the node with the largest label"
+      - "Because unrooted trees are always rooted at node 1 by definition"
+      - "Because every tree has exactly one center that must map to itself"
+    answer: 0
+    explanation: "The center of an unrooted tree is defined purely by distances (the midpoint of a diameter) and is therefore preserved by any isomorphism. So an isomorphism exists iff, after rooting each tree at its center — which is unique up to the two centers of an odd-length diameter — the corresponding rooted trees are isomorphic. With two centers you simply confirm the multiset of the two center-rootings matches, covering both possible alignment orders."
+---

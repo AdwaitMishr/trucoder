@@ -1,0 +1,216 @@
+---
+id: transfer-speeds-sum
+title: Transfer Speeds Sum
+difficulty: medium
+order: 304
+tags:
+  - advanced-graph
+  - trees
+  - minimum-edge-on-path
+  - dsu
+  - max-flow-min-cut
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — summing the bottleneck edge of every tree path
+
+      The network is a **tree** on `n` computers with `n-1` weighted connections. Define
+      `d(a,b)` as the speed of the **slowest** connection on the unique route between `a` and `b` —
+      i.e. the **minimum edge weight** on the path. We must add up `d(a,b)` over **every unordered pair**
+      of computers.
+
+      **Why this is a "flow" quantity.** On a tree the route between `a` and `b` is unique, so the
+      maximum data stream you can push from `a` to `b` is exactly that bottleneck (the edge that,
+      removed, cuts `a` from `b` is the min-cut, and by **max-flow/min-cut** it equals the flow).
+      So `d(a,b) = maxflow(a,b)`, and the task is the sum of max-flow over all pairs.
+
+      **The classic counting trick — sort descending and merge components.** If we knew every pair's
+      `d(a,b)`, summing would be `O(n²)`. Instead we count *for each edge* how many pairs use it as
+      their minimum. Process edges from **largest weight down to smallest**, maintaining a DSU:
+
+      - When we add an edge `e` of weight `w` joining two components of sizes `s₁` and `s₂`, every
+        pair with one endpoint in each component is *connected for the first time right now*.
+      - Crucially, since we go **descending**, any edges already inside those two components are
+        **heavier** than `w`. The path between such a pair uses `e` plus only heavier edges, so its
+        minimum edge is exactly `w`.
+      - Therefore those `s₁·s₂` pairs all have `d = w`, contributing `w · s₁ · s₂` to the answer.
+
+      > **Sum of minimum-edge-on-path over all pairs = Σ over edges e of w(e) · size₁ · size₂,
+      > merging components in descending weight order.**
+
+      Going the other way (ascending) would report pairs whose minimum is *smaller* than the current
+      edge — the wrong quantity — so the ordering is the whole insight.
+
+      **Complexity.** Sorting the `n-1` edges plus `n-1` DSU unions: **O(n log n)** time, **O(n)** space.
+
+      :::tip
+      **Interview tip:** "sum over all pairs of some path-quantity in a tree" almost always collapses
+      to processing sorted edges and charging each pair to a **single decisive edge**. Process
+      **ascending** when the quantity is the *maximum* edge on the path, **descending** when it is the
+      *minimum* (as here). Merge components with a **size-tracking DSU** and add `weight × size·size`.
+      The same skeleton answers "how many pairs are within distance threshold", "sum of longest-edge",
+      and the classic 'road repair' problems.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      A computer network has `n` computers and `n-1` connections between two computers. Information
+      can be exchanged between every pair of computers using the connections. Each connection has a
+      certain transfer speed. Let `d(a,b)` denote the transfer speed between computers `a` and `b`,
+      which is the speed of the slowest connection on the route between `a` and `b`. Compute the sum
+      of transfer speeds between all pairs of computers.
+
+      **Input.** The first line contains the integer `n`: the number of computers. The computers are
+      numbered `1, 2, …, n`. After this, there are `n-1` lines describing the connections, each with
+      three integers `a`, `b` and `x`: there is a connection between computers `a` and `b` with
+      transfer speed `x`.
+
+      **Output.** Print one integer: the sum of transfer speeds.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ x ≤ 10^6`
+
+      ### Sample
+
+      **Input:**
+      ```
+      4
+      1 2 5
+      2 3 1
+      2 4 2
+      ```
+
+      **Output:**
+      ```
+      12
+      ```
+
+      Here `d(1,2)=5, d(1,3)=1, d(1,4)=2, d(2,3)=1, d(2,4)=2, d(3,4)=1`, which sums to `12`.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — all pairs, walk each path, O(n³).** For every unordered pair, do a DFS/BFS in
+      the tree and track the minimum edge weight along the unique route; sum them. Correct but
+      `O(n²)` pairs with `O(n)` path each — hopeless for `n = 2·10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin>>n;
+          vector<vector<pair<int,int>>> adj(n);
+          for(int i=0;i<n-1;i++){int a,b,x;cin>>a>>b>>x;--a;--b;adj[a].push_back({b,x});adj[b].push_back({a,x});}
+          long long ans=0;
+          for(int s=0;s<n;s++){
+              vector<int> dist(n,-1), mn(n,1e9);
+              queue<int> q; dist[s]=0; mn[s]=1e9; q.push(s);
+              while(!q.empty()){
+                  int u=q.front(); q.pop();
+                  for(auto[v,w]:adj[u]) if(dist[v]==-1){ dist[v]=dist[u]+1; mn[v]=min(mn[u],w);
+                      if(v>s) ans+=mn[v];                         // unordered pair (s,v), s<v
+                      q.push(v); }
+              }
+          }
+          cout<<ans<<"\n";
+      }
+      ```
+      **O(n² · path)** ≈ **O(n³)** — correct but far too slow.
+
+      **② Optimization — descending DSU merge, O(n log n) (submission).** Sort edges by weight
+      descending; merge components with a size-tracking DSU, adding `w · size·size` for each merge:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      struct DSU {
+          vector<int> p, sz;
+          DSU(int n): p(n), sz(n,1){ iota(p.begin(),p.end(),0); }
+          int f(int x){ return p[x]==x ? x : p[x]=f(p[x]); }
+          ll unite(int a,int b){            // merges, returns the number of new pairs
+              a=f(a); b=f(b);
+              if(a==b) return 0;
+              if(sz[a]<sz[b]) swap(a,b);
+              ll prod = (ll)sz[a]*sz[b];
+              p[b]=a; sz[a]+=sz[b];
+              return prod;
+          }
+      };
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin>>n;
+          struct E{int w,a,b;};
+          vector<E> e(n-1);
+          for(int i=0;i<n-1;i++){ int a,b,x; cin>>a>>b>>x; --a; --b; e[i]={x,a,b}; }
+          sort(e.begin(), e.end(), [](const E&x,const E&y){ return x.w>y.w; });   // DESCENDING
+          DSU d(n);
+          ll ans=0;
+          for(auto&[w,a,b]: e){
+              ll pairs = d.unite(a,b);
+              ans += (ll)w * pairs;
+          }
+          cout << ans << '\n';
+          return 0;
+      }
+      ```
+      **O(n log n)** time, **O(n)** space — the submission tier.
+
+      **④ Alternative — per-edge contribution via weighted union.** Some solutions formulate the same
+      idea as "every pair contributes the weight of the *last processed* edge that connects them",
+      which is precisely the descending-DSU merge above; there is no meaningfully different algorithm
+      — the sorted-merge is the canonical linear-ish answer.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      - `DSU` stores a component `size`; `unite(a,b)` returns the product `sz·sz` of the two merged
+        sizes — the number of newest pairs whose route now goes through the current edge.
+      - Edges are processed in **descending** order of weight. When edge `(a,b)` merges components
+        `A` and `B`, every cross pair's path uses this edge plus only **already-merged heavier** edges,
+        so the minimum edge on that path is exactly `w`.
+      - `ans += w · pairs` charges each of the `pairs` connections its correct `d` value. Because every
+        pair is merged exactly once (at the edge that first connects its two components), every pair is
+        counted exactly once.
+      - The result can be large, so `ll` (`long long`) is used throughout: up to `n = 2·10^5`, the sum
+        can reach `≈ 10^6 · (n²/2) ≈ 2·10^16`, beyond 32-bit integers.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n=4`, edges `(1,2,5), (2,3,1), (2,4,2)`.
+
+      **Sort descending:** `(1,2,5)`, `(2,4,2)`, `(2,3,1)`.
+
+      | step | edge | merge sizes | new pairs | contribution | running ans |
+      |------|------|-------------|-----------|--------------|-------------|
+      | 1 | 1-2 (5) | {1}×{2} = 1 | (1,2) | 5·1 = 5 | 5 |
+      | 2 | 2-4 (2) | {1,2}×{4} = 2 | (1,4),(2,4) | 2·2 = 4 | 9 |
+      | 3 | 2-3 (1) | {1,2,4}×{3} = 3 | (1,3),(2,3),(4,3) | 1·3 = 3 | 12 |
+
+      **Result:** `ans = 12`.
+
+      **Verify against the definition:** `d(1,2)=5` (step 1), `d(1,4)=2` and `d(2,4)=2` (step 2),
+      `d(1,3)=d(2,3)=d(4,3)=1` (step 3). Sum `= 5 + 2+2 + 1+1+1 = 12`. Matches the sample — and the
+      equal-weight edge order between steps 2 and 3 does not change the total because each merge's
+      contribution depends only on the sizes involved.
+
+  - type: mcq
+    prompt: "Why do we process the edges in descending order of weight instead of ascending?"
+    options:
+      - "So that every pair merged at an edge of weight w has a path whose other edges are heavier, making w their minimum on the path."
+      - "Because ascending order would overflow the accumulator."
+      - "Because the tree's largest edge always carries the most pairs."
+      - "Because connectivity requires examining heavy edges first."
+    answer: 0
+    explanation: "When we merge by descending weight, the components being joined were built only from heavier edges, so for any cross pair the separating edge is the lightest thing on its path — exactly the d(a,b) we must charge. Ascending would instead make that edge the maximum, which is the wrong path quantity."
+type: content
+---

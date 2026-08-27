@@ -1,0 +1,204 @@
+---
+id: dice-combinations
+title: Dice Combinations
+difficulty: easy
+order: 60
+tags:
+  - dynamic-programming
+  - counting
+  - dp
+  - modulo
+blocks:
+  - type: markdown
+    content: |
+      # Dice Combinations — counting the ordered ways a sum can be built
+
+      You repeatedly throw a 6-sided die (outcomes `1..6`) and add the results.
+      Throw as many times as you like. The question: **how many different
+      sequences of throws produce a given total `n`?** The order of the throws
+      matters, so `1+2` and `2+1` are two different ways.
+
+      This is the *first and most canonical* "count the ordered sums" problem —
+      the seed idea of the whole DP chapter.
+
+      ## The one-line recurrence
+
+      Think from the *end* of a sequence. Every valid sequence that sums to `n`
+      must end with some throw `j ∈ {1..6}`, and before that final throw it
+      summed to `n − j`. So, writing `ways[i]` = the number of sequences summing
+      to `i`:
+
+      ```
+      ways[i] = ways[i-1] + ways[i-2] + ways[i-3]
+              + ways[i-4] + ways[i-5] + ways[i-6]
+      ```
+
+      with base case `ways[0] = 1` (the empty sequence). Adding outcomes that are
+      independent of each other builds *sequences*, which is why the recurrence
+      is a **sum over the previous six states** (an ordered partition).
+
+      **Worked mini-example.** `ways[3]`:
+      `ways[0]=1`, `ways[1]=ways[0]=1`, `ways[2]=ways[1]+ways[0]=2` and
+      `ways[3]=ways[2]+ways[1]+ways[0]=2+1+1=4`. Four sequences — `1+1+1`,
+      `1+2`, `2+1`, `3` — matching the problem statement.
+
+      **Why mod `10^9+7`?** These counts grow like `≈1.99^n` (roughly `2^n`),
+      so for `n = 10^6` the true value has ~300,000 digits. The judge asks for
+      the answer **modulo `10^9 + 7`** so it always fits in a machine integer;
+      the DP is otherwise unchanged — we just `% MOD` on every addition.
+
+      **Complexity.** Time `O(n)`, space `O(n)` (or `O(1)` with a sliding
+      window of the last six values).
+
+      :::tip
+      **Interview tip:** "In how many ways can a target be formed as a sum, when
+      order matters?" comes up constantly (LeetCode *Climbing Stairs*,
+      *Combination Sum IV*, decode/encode variants). Recognising the
+      recurrence-over-previous-states shape — and remembering to mod — is the
+      transferable skill. Always scan for *"order matters" vs "order
+      doesn't"* before writing the loop.
+      :::
+  - type: markdown
+    content: |
+      # Question — Dice Combinations
+
+      Your task is to count the number of ways to construct sum `n` by throwing
+      a dice one or more times. Each throw produces an outcome between `1` and
+      `6`. Two ways are different if the sequence of throws differs.
+
+      **Input:** The only input line has an integer `n`.
+
+      **Output:** Print the number of ways **modulo `10^9+7`**.
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 10^6`
+
+      **Example**
+
+      Input:
+
+      ```
+      3
+      ```
+
+      Output:
+
+      ```
+      4
+      ```
+
+      (The four ways are `1+1+1`, `1+2`, `2+1`, `3`.)
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — recursion, exp. O(6ⁿ)**
+
+      Enumerate every sequence by branching on the first throw and recursing on
+      the remainder. Counting all sequences that sum to `n` visits ≈ `6ⁿ` of
+      them (in fact around `~2ⁿ`). `n = 10^6` makes this hopeless.
+
+      ```cpp
+      long long brute(int n, const long long MOD = 1000000007LL) {
+          if (n == 0) return 1;
+          long long tot = 0;
+          for (int j = 1; j <= 6 && j <= n; ++j)
+              tot = (tot + brute(n - j)) % MOD;   // every sequence starts with some j
+          return tot;
+      }
+      ```
+
+      Time `O(6ⁿ)`, space `O(n)` call stack. Unusable for `n = 10^6`.
+
+      **② Optimization — bottom-up DP, O(n) time, O(n) space**
+
+      Compute `ways` from small to large, each entry a sum of the previous six.
+
+      ```cpp
+      long long solve(int n) {
+          const long long MOD = 1000000007LL;
+          vector<long long> ways(n + 1, 0);
+          ways[0] = 1;
+          for (int i = 1; i <= n; ++i)
+              for (int j = 1; j <= 6; ++j)
+                  if (i - j >= 0) ways[i] = (ways[i] + ways[i - j]) % MOD;
+          return ways[n];
+      }
+      ```
+
+      Time `O(n)` (six additions per entry), space `O(n)`.
+
+      **③ Further optimization — rolling window, O(n) time, O(1) space**
+
+      We only ever need the last six entries, so keep them in a small array and
+      overwrite in a ring. Same answer, constant memory.
+
+      ```cpp
+      long long solve(int n) {
+          const long long MOD = 1000000007LL, W = 6;
+          vector<long long> w(W + 1, 0);
+          w[0] = 1;                                 // sum of the last six, held in w[6]
+          long long sum = 1;
+          for (int i = 1; i <= n; ++i) {
+              long long cur = sum % MOD;            // = ways[i-1]+..+ways[i-6]
+              sum = (sum + cur - w[i % (W + 1)] + MOD) % MOD;   // slide the window
+              w[i % (W + 1)] = cur;
+              if (i == n) return cur;
+          }
+          return 0;
+      }
+      ```
+
+      (The `③` loop maintains *sum of the last six* directly. It is the sliding
+      window that the `②` recurrence encodes; both run in `O(n)`.)
+
+      **④ Further depth — matrix exponentiation, O(log n)**
+
+      The recurrence `ways[i] = ways[i-1] + … + ways[i-6]` is *linear* with
+      constant coefficients, so it can be computed in `O(log n)` time by
+      raising a fixed `6×6` transition matrix to the `n-th` power. This is real
+      depth but total overkill for `n = 10^6`, where plain `O(n)` is instant.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the `②` bottom-up solution:
+
+      - `ways[0] = 1` seeds the empty sequence (the only way to sum to `0`).
+      - The outer loop computes every `ways[i]` **in increasing order**, so by
+        the time we compute `ways[i]` all six predecessors `ways[i-1] … ways[i-6]`
+        are already known — that is the whole magic of bottom-up DP.
+      - The inner loop adds `ways[i-j]` for every die value `j`: a sequence
+        summing to `i` that ends with a `j` is any sequence summing to `i-j`
+        followed by that `j`. Different endings `j` give disjoint sets, so
+        summing over `j` counts each sequence exactly once.
+      - Taking `% MOD` on every addition keeps every value below `10^9+7`, which
+        fits comfortably in a 64-bit integer.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(3)` on the sample. We build `ways` from `0` up:
+
+      | i | computation | ways[i] |
+      |---|-------------|---------|
+      | 0 | base case | 1 |
+      | 1 | ways[0] | 1 |
+      | 2 | ways[1]+ways[0] = 1+1 | 2 |
+      | 3 | ways[2]+ways[1]+ways[0] = 2+1+1 | **4** |
+
+      Return `ways[3] = 4`, which matches the sample output. As a cross-check on
+      a slightly bigger input, the answer for `n = 6` is `32` (`2^5` — every
+      sequence of 1s, or any composition of 6 into parts ≤ 6).
+  - type: mcq
+    prompt: 'Why does the recurrence sum the previous six DP values instead of, say, multiplying or taking a max?'
+    options:
+      - 'Because sequences are ordered sums, so each valid sequence is counted as (any sequence to i-j) followed by a final throw j; adding over the six possible endings counts each sequence exactly once.'
+      - 'Because we want the largest sum, and the max of the previous six is the answer.'
+      - 'Because throwing a die is random, so we average the six outcomes.'
+      - 'Because the modulo operation requires a sum rather than a product.'
+    answer: 0
+    explanation: 'Counting ordered sequences is an additive (sum) DP: to reach sum i, pick any sequence reaching i-j and append the final throw j. Disjoint endings → their counts add. A max (optimisation) would apply to a "best sum" problem, not a counting one.'
+type: content
+---

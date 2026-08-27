@@ -1,0 +1,265 @@
+---
+id: grid-completion
+title: Grid Completion
+difficulty: hard
+order: 336
+tags:
+  - counting
+  - combinatorics
+  - inclusion-exclusion
+  - permutations
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — two permutations that only touch at pre-placed cells
+
+      Create an `n×n` grid so that **each row and column has exactly one `A` and
+      one `B`**. Think of the `A`s as a *permutation* `p` (row `i` has its `A` in
+      column `p[i]`) and the `B`s as a permutation `q` (row `i` has its `B` in
+      column `q[i]`). Because a cell holds one character, every row needs
+      `p[i] ≠ q[i]` — and this single condition also guarantees every column's
+      `A`-row differs from its `B`-row (if two rows collided in a column both
+      for `A` and `B`, they would collide pointwise too).
+
+      So the problem is: **count pairs of permutations `(p, q)` that differ
+      pointwise and agree with the pre-placed characters.** A pre-placed `A` at
+      `(r,c)` fixes `p[r]=c`; a pre-placed `B` fixes `q[r]=c`.
+
+      **The only hard part is the coupling.** `p` and `q` are independent except
+      for `p[r]≠q[r]` on every row. The clean tool is inclusion–exclusion over
+      the set of rows where we **force** `p[r]=q[r]` (a "violation" we later
+      subtract away):
+
+      ```
+      answer = Σ_{T ⊆ rows} (−1)^{|T|} · f(T)
+      ```
+      where `f(T)` = number of pairs `(p,q)` consistent with the pre-placed
+      cells in which `p[r]=q[r]` for every `r ∈ T` (the other rows are free to
+      agree or not).
+
+      **Classify the rows & columns.** Count, once:
+      - `c0` = rows with *neither* `A` nor `B` pre-placed;
+      - `c1` = rows with only a `B` pre-placed at column `b`, where `b` is not
+        used by any pre-placed `A`;
+      - `c2` = rows with only an `A` pre-placed at column `a`, where `a` is not
+        used by any pre-placed `B`;
+      - `c3` = columns used by **neither** any pre-placed `A` nor `B`;
+      - `pn` = number of rows whose `A`-column is still free;
+      - `qn` = number of rows whose `B`-column is still free.
+
+      **Closed form.** The inclusion–exclusion collapses to a triple sum:
+
+      ```
+      answer = Σ_i Σ_j Σ_k  C(c0,i)·C(c1,j)·C(c2,k)·C(c3,i)
+                            · i! · (pn−i−j)! · (qn−i−k)! · (−1)^{i+j+k}
+      ```
+      with `i ≤ min(c0,c3)`. Intuition: `i` rows that need *both* letters pick
+      `i` genuinely free columns (`C(c3,i)·i!`); `j` rows fix their shared `B`
+      column and consume `j` free-`A` slots; `k` rows fix their shared `A`
+      column and consume `k` free-`B` slots; the survivors are assigned as two
+      unconstrained permutations.
+
+      :::tip
+      **Interview tip:** Whenever a grid is "one of each symbol per row/column",
+      model each symbol as a *permutation* and count *pairs of disjoint
+      permutations*. The pointwise-distinct coupling is exactly what
+      inclusion–exclusion is for, and the answer always factors into
+      `(survivors)!` pieces times a small selection term. This appears in
+      interview discussions of "two rooks of different colours that never share
+      a square".
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Your task is to create an `n×n` grid whose each row and column has exactly
+      one `A` and `B`. Some of the characters have already been placed. In how
+      many ways can you complete the grid?
+
+      **Input.** The first input line has an integer `n`. After this, there are
+      `n` lines that describe the grid. Each line has `n` characters: `.` means
+      an empty square, and `A` and `B` show the characters already placed. You
+      can assume that every row and column has at most one `A` and `B`.
+
+      **Output.** Print one integer: the number of ways modulo `10^9+7`.
+
+      **Constraints.**
+      - `2 ≤ n ≤ 500`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      5
+      .....
+      ..AB.
+      .....
+      B....
+      ...A.
+      ```
+
+      **Output:**
+      ```
+      16
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(3^k) over empty cells.** There are `k` empty cells; try
+      every way to fill each with `.`, `A`, or `B` (`3^k` candidates), then check
+      that every row and column has exactly one `A` and one `B`. Exponential —
+      hopeless for `n` up to `500` (up to `250000` squares).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin>>n; vector<string> g(n); for(auto&r:g) cin>>r;
+          vector<pair<int,int>> free;
+          for(int r=0;r<n;r++)for(int c=0;c<n;c++)if(g[r][c]=='.')free.push_back({r,c});
+          int m=free.size(); long long cnt=0;
+          long long total=1; for(int i=0;i<m;i++) total*=3;
+          for(long long mask=0;mask<total;mask++){
+              long long mm=mask; vector<string> gr=g;
+              for(int i=0;i<m;i++){int d=mm%3; gr[free[i].first][free[i].second]=(d==0?'.':(d==1?'A':'B')); mm/=3;}
+              bool ok=true;
+              for(int r=0;r<n;r++) if(count(gr[r].begin(),gr[r].end(),'A')!=1||count(gr[r].begin(),gr[r].end(),'B')!=1) ok=false;
+              if(ok){for(int c=0;c<n;c++){int ca=0,cb=0;for(int r=0;r<n;r++){if(gr[r][c]=='A')ca++;if(gr[r][c]=='B')cb++;} if(ca!=1||cb!=1) ok=false;} }
+              if(ok) cnt++;
+          }
+          cout<<cnt<<"\n";
+      }
+      ```
+      *Complexity: O(3^k · n·n) — exponential.*
+
+      **② Optimization — O(c0·c1·c2) inclusion–exclusion (`≤ n³`, `n ≤ 500`).**
+      Extract `c0,c1,c2,c3,pn,qn` from the pre-placed characters, then evaluate
+      the triple-inclusion-exclusion sum with precomputed binomials and
+      factorials. This is the intended, optimal solution.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+      long long modpow(long long b,long long e){long long r=1;while(e){if(e&1)r=r*b%MOD;b=b*b%MOD;e>>=1;}return r;}
+      int main(){
+          int n; if(!(cin>>n)) return 0;
+          vector<string> g(n); for(int i=0;i<n;i++) cin>>g[i];
+          vector<int> p(n,-1), q(n,-1);              // A-col and B-col per row
+          for(int r=0;r<n;r++)for(int c=0;c<n;c++){
+              if(g[r][c]=='A') p[r]=c; else if(g[r][c]=='B') q[r]=c;
+          }
+          int pn=0, qn=0; vector<int> usedP, usedQ;
+          for(int r=0;r<n;r++){ if(p[r]==-1) pn++; else usedP.push_back(p[r]);
+                                if(q[r]==-1) qn++; else usedQ.push_back(q[r]); }
+          vector<char> inP(n,0), inQ(n,0);
+          for(int c:usedP) inP[c]=1;  for(int c:usedQ) inQ[c]=1;
+          int c0=0,c1=0,c2=0;
+          for(int r=0;r<n;r++){
+              if(p[r]==-1 && q[r]==-1) c0++;
+              else if(p[r]==-1 && q[r]!=-1 && !inP[q[r]]) c1++;   // B fixed, A free, B-col free for A
+              else if(p[r]!=-1 && q[r]==-1 && !inQ[p[r]]) c2++;   // A fixed, B free, A-col free for B
+          }
+          int c3=0; for(int c=0;c<n;c++) if(!inP[c]&&!inQ[c]) c3++; // columns used by neither
+          vector<long long> f(n+1,1), fi(n+1,1);
+          for(int i=1;i<=n;i++) f[i]=f[i-1]*i%MOD;
+          fi[n]=modpow(f[n],MOD-2); for(int i=n;i>0;i--) fi[i-1]=fi[i]*i%MOD;
+          auto C=[&](int a,int b)->long long{ if(b<0||b>a)return 0; return f[a]*fi[b]%MOD*fi[a-b]%MOD; };
+          long long ans=0;
+          for(int i=0;i<=min(c0,c3);i++){
+              for(int j=0;j<=c1;j++){
+                  if(pn-i-j<0) continue;
+                  for(int k=0;k<=c2;k++){
+                      if(qn-i-k<0) continue;
+                      long long t=C(c0,i)*C(c1,j)%MOD*C(c2,k)%MOD*C(c3,i)%MOD;
+                      t=t*f[i]%MOD*f[pn-i-j]%MOD*f[qn-i-k]%MOD;
+                      if((i+j+k)&1) t=(MOD-t)%MOD;
+                      ans=(ans+t)%MOD;
+                  }
+              }
+          }
+          cout<<ans%MOD<<"\n";
+      }
+      ```
+      *Complexity: O(min(c0,c3)·c1·c2) time (worst ~`n³/64`), O(n) space —
+      comfortably within `n ≤ 500`.*
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n, grid)` — map the grid to two permutations and apply the triple IE.
+
+      1. **`p` / `q`** store, per row, the column of a pre-placed `A` / `B`
+         (`-1` = free). `pn`/`qn` count free-`A`/free-`B` rows.
+      2. **`usedP`/`usedQ`** = columns already occupied by a pre-placed `A`/`B`;
+         `inP`/`inQ` are their membership bitsets.
+      3. **Classify rows** into `c0` (both letters free), `c1` (free `A`, fixed
+         `B` whose column is not anyone's `A`), `c2` (fixed `A` whose column is
+         not anyone's `B`, free `B`) — these are exactly the rows that *could*
+         be forced to coincide in the inclusion–exclusion. Rows with both
+         letters fixed always have `p[r]≠q[r]`, so they can never be forced.
+      4. **`c3`** = columns untouched by any pre-placed letter — the pool of
+         shared columns available to the `c0` rows.
+      5. **The triple sum**: choose `i` of the `c0` rows (and `i` of the `c3`
+         columns) to be the fully-shared ones — `C(c0,i)·C(c3,i)·i!` assigns
+         distinct shared columns; `j` of the `c1` rows consume one free-`A` slot
+         each; `k` of the `c2` rows consume one free-`B` slot each. The leftover
+         `A`s and `B`s fill their remaining rows/columns freely:
+         `f[pn-i-j]!` and `f[qn-i-k]!`. The alternating sign
+         `(−1)^{i+j+k}` is the inclusion–exclusion.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample).**
+      ```
+      .....
+      ..AB.
+      .....
+      B....
+      ...A.
+      ```
+      Extract: row1 has `A`@col2 and `B`@col3; row3 has `B`@col0; row4 has
+      `A`@col3.
+
+      - `usedP = {2,3}`, `usedQ = {3,0}`, so `pn = 3` (rows 0,2,3 need an `A`),
+        `qn = 3` (rows 0,2,4 need a `B`).
+      - `c0 = 2` (rows 0 and 2 are fully free); `c1 = 1` (row 3: `B`@0, and `0` is
+        not anyone's `A`); `c2 = 0` (row 4's `A`@3 equals row 1's `B` column, so
+        it can *not* be forced); `c3 = 2` (columns 1 and 4 are used by neither
+        letter).
+
+      Evaluate the sum `Σ (−1)^{i+j+k} C(c0,i)C(c1,j)C(c2,k)C(c3,i) i! (pn−i−j)! (qn−i−k)!`:
+
+      | (i,j,k) | term | signed |
+      |---------|------|--------|
+      | (0,0,0) | 1·1·1·1·0!·3!·3! = 36 | **+36** |
+      | (0,1,0) | 1·1·1·1·1!·2!·3! = 12 | **−12** |
+      | (1,0,0) | 2·1·1·2·1!·2!·2! = 16 | **−16** |
+      | (1,1,0) | 2·1·1·2·1!·1!·2! = 8 | **+8** |
+      | (2,0,0) | 1·1·1·1·2!·1!·1! = 2 | **+2** |
+      | (2,1,0) | 1·1·1·1·2!·0!·1! = 2 | **−2** |
+
+      Sum: `36 − 12 − 16 + 8 + 2 − 2 = 16` ✓ matches the sample output.
+
+      The brute-force tier (①) reproduces the same `16` by literally trying all
+      completions of the 12 empty cells — a strong sanity check that the IE sum
+      is equivalent.
+
+  - type: mcq
+    prompt: "Why is p[i] ≠ q[i] for every row enough to guarantee that no column receives two A's or two B's?"
+    options:
+      - "Because p and q are both permutations, so a column gets exactly one A and one B; the inequality only separates them within each row."
+      - "Because rows are processed independently and never share columns."
+      - "Because inclusion-exclusion removes duplicate columns automatically."
+      - "Because a column can hold many A's as long as they are in different rows."
+    answer: 0
+    explanation: "p is a bijection from rows to columns, so each column receives exactly one A (from p^{-1}(c)); q likewise gives each column exactly one B. The inequality p[r]≠q[r] only forbids a single row from carrying both letters in the same column, which also implies the A-row and B-row of any column differ. The two conditions together are exactly 'each row/column has one A and one B'."
+
+type: content
+---

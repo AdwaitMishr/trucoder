@@ -1,0 +1,305 @@
+---
+id: sliding-window-mode
+title: Sliding Window Mode
+type: content
+difficulty: hard
+order: 264
+tags:
+  - sliding-window
+  - mode
+  - frequency
+  - ordered-structure
+blocks:
+  - type: markdown
+    content: |
+      # Sliding Window Mode — the most frequent value in each window
+
+      Given `n` numbers and a window length `k`, report the **mode** — the most
+      frequent value — of each contiguous window of length `k`. To make the
+      answer unambiguous we adopt a fixed tie-break: **ties go to the smallest
+      value** (a "labeled" answer, deterministic for grading).
+
+      Mode is the *heavyweight* of the sliding-window family, and it is worth
+      saying plainly why: **there is no cheap inverse and no composable
+      associative value.** `sum` subtracts, `xor` re-XORs, `or` bit-counts, and
+      distinct-count watches `0→1 / 1→0`. But the *identity* of the most common
+      value can change when any element slides, and knowing every frequency does
+      not directly tell you which value reaches the top.
+
+      So the honest, correct approach is to **maintain all frequencies and track
+      the maximum frequency bucket** with ordered structures that let us read
+      off the smallest value at that top frequency in O(log n).
+
+      ## The data structure: frequency buckets + a running max count
+
+      Keep three pieces of state:
+
+      1. `cnt[value]` — the frequency of each value in the current window.
+      2. `bucket[f]` — a `std::set` of all values whose frequency is exactly `f`.
+      3. `maxCount` — the largest frequency currently present.
+
+      Because `bucket` is keyed by frequency, the mode's candidates are exactly
+      the values in `bucket[maxCount]`, and — thanks to our tie-break — the
+      answer is simply the **smallest** one, i.e. `*bucket[maxCount].begin()`.
+
+      Updating when an element `x` slides in/out moves it between two frequency
+      buckets:
+
+      ```
+      add(x):  cnt[x] c--; move x from bucket[c] to bucket[c+1];
+               if c+1 > maxCount: maxCount = c+1
+      rem(x):  cnt[x] c--; move x from bucket[c] to bucket[c-1];
+               while bucket[maxCount] is empty: maxCount--
+      ```
+
+      The `while` on decrease is safe because each element's add raises
+      `maxCount` by at most 1, so the total number of decrements is linear; the
+      whole scan is `O(n log n)`.
+
+      ## Worked mini-example
+
+      `a = [1, 2, 2, 1, 3, 3, 3, 2]`, `k = 4`.
+
+      - `[1,2,2,1]`: 1 and 2 both appear twice → smallest is **1**.
+      - `[2,2,1,3]`: 2 twice → **2**.
+      - `[2,1,3,3]`: 3 twice → **3**.
+      - `[1,3,3,3]`: 3 three times → **3**.
+      - `[3,3,3,2]`: 3 three times → **3**.
+
+      Result: `1 2 3 3 3`.
+
+      :::tip
+      **Interview tip:** dynamic mode is a known-hard-online problem, so the
+      expected interview answer is the **frequency-bucket + running max-count**
+      trick above — O(log n) per slide, tie-break to smallest via the top
+      bucket's `set`. Do *not* reach for Boyer–Moore majority voting here: it
+      finds a value that appears > 50% and returns *no* tie-break, so it is not a
+      valid mode-algorithm. Say: "keep cnt per value plus a count→set bucket and
+      a running maxCount; the mode is the min value in the top bucket." If the
+      interviewer drops the tie-break requirement, the answer is still the
+      smallest value in the top bucket — the fix is irrelevant to algorithm
+      choice.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given an array of `n` integers and a window length `k`, print the mode of
+      each contiguous window of length `k`, from the window starting at position
+      `1` to the window starting at position `n - k + 1`. The mode of a window
+      is the value with the greatest frequency; **if several values tie, print
+      the smallest** of them.
+
+      ## Input
+
+      The first line has two integers `n` and `k`. The second line has `n`
+      integers `a_1, a_2, …, a_n` (each `-10^9 <= a_i <= 10^9`).
+
+      **Constraints:** `1 <= k <= n <= 2 * 10^5`
+
+      ## Output
+
+      Print `n - k + 1` integers separated by spaces: the mode (with the
+      smallest-value tie-break) of each window, left to right.
+
+      ## Sample
+
+      **Input:**
+      ```
+      8 4
+      1 2 2 1 3 3 3 2
+      ```
+      **Output:**
+      ```
+      1 2 3 3 3
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·k) time, O(k) space**
+
+      For each window, count frequencies in a map, then scan the map for the
+      maximum frequency, breaking ties toward the smallest value.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          for(int i=0;i<n-k+1;i++){
+              unordered_map<ll,int> cnt;
+              for(int j=i;j<i+k;j++) cnt[a[j]]++;
+              int best=0; ll mode=a[i];
+              for(auto&pr:cnt)
+                  if(pr.second>best || (pr.second==best && pr.first<mode))
+                      { best=pr.second; mode=pr.first; }
+              cout<<mode<<(i==n-k?"\n":" ");
+          }
+          return 0;
+      }
+      ```
+
+      *`O(n·k)` — a full recount and scan per window. Far too slow.*
+
+      **② Optimization — frequency buckets + running maxCount, O(n log n) time (optimal)**
+
+      Maintain `cnt`, the `frequency → set(values)` buckets, and `maxCount`. The
+      mode is the smallest value in `bucket[maxCount]`. This is the tier we
+      compile and verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+
+          unordered_map<ll,int> cnt;          // value -> frequency in window
+          map<int, set<ll>> bucket;           // frequency -> {values with it}
+          int maxCount=0;
+
+          auto add=[&](ll x){
+              int c = cnt[x];
+              if(c>0) bucket[c].erase(x);     // leave old frequency bucket
+              cnt[x] = c+1;
+              bucket[c+1].insert(x);
+              if(c+1 > maxCount) maxCount = c+1;
+          };
+          auto rem=[&](ll x){
+              int c = cnt[x];
+              bucket[c].erase(x);
+              cnt[x] = c-1;
+              if(c-1>0) bucket[c-1].insert(x);
+              while(maxCount>0 && bucket[maxCount].empty()) maxCount--;
+          };
+
+          for(int i=0;i<n;i++){
+              add(a[i]);
+              if(i>=k) rem(a[i-k]);
+              if(i>=k-1){
+                  ll mode = *bucket[maxCount].begin();  // smallest at max freq
+                  cout<<mode<<(i==n-1?"\n":" ");
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`O(n log n)` time (each add/remove does two `set` operations), `O(n)`
+      space. `bucket` is a `map`, so the top-frequency bucket is reached via
+      `maxCount`; the amortized `maxCount--` while-loop keeps total decrements
+      linear.*
+
+      **③ Alternative — coordinate-compressed array version, O(n log n)**
+
+      When values are huge, compress them to ranks `0..m-1` so `cnt` becomes an
+      array; `bucket` still holds per-frequency `set`s of ranks. Lower constant
+      than `unordered_map`, identical complexity.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<int> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          vector<int> sorted=a; sort(sorted.begin(),sorted.end());
+          sorted.erase(unique(sorted.begin(),sorted.end()), sorted.end());
+          for(auto&x:a) x = lower_bound(sorted.begin(),sorted.end(),x)-sorted.begin();
+          int m=sorted.size();
+          vector<int> cnt(m,0);
+          vector<set<int>> bucket(n+1);       // bucket[f] = ranks with freq f
+          int maxCount=0;
+          auto add=[&](int v){
+              int c=cnt[v];
+              if(c>0) bucket[c].erase(v);
+              cnt[v]=c+1; bucket[c+1].insert(v);
+              if(c+1>maxCount) maxCount=c+1;
+          };
+          auto rem=[&](int v){
+              int c=cnt[v]; bucket[c].erase(v);
+              cnt[v]=c-1; if(c-1>0) bucket[c-1].insert(v);
+              while(maxCount>0 && bucket[maxCount].empty()) maxCount--;
+          };
+          for(int i=0;i<n;i++){
+              add(a[i]);
+              if(i>=k) rem(a[i-k]);
+              if(i>=k-1){
+                  int modeRank = *bucket[maxCount].begin();
+                  cout<<sorted[modeRank]<<(i==n-1?"\n":" ");
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`O(n log n)` (sort + per-element bucket ops), `O(n)` space. Same idea as
+      ② with array indexing instead of hashing. Alternative ④ (sqrt-decomposition
+      block methods for real online range-mode) exists in the literature but is
+      overkill for a fixed-window scan, so we stop here.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`cnt[x]` is the single source of truth for a value's frequency.**
+        Every slide changes exactly one `cnt` entry by ±1.
+      - **Moving between buckets is two `set` ops.** `add` erases from
+        `bucket[c]` and inserts into `bucket[c+1]`; `rem` is the mirror. Because
+        a `set` stores each value once, its first element is the smallest value
+        at that frequency — exactly our tie-break.
+      - **`maxCount` points at the top frequency.** Full disclosure: `add` only
+        ever raises it; `rem`'s `while` lowers it as buckets empty. Total
+        decrements ≤ total increments (each ±1 on `maxCount`), so it is
+        amortized O(1) — no risk of O(n) per step.
+      - **Mode = `*bucket[maxCount].begin()`.** That is the smallest value with
+        the maximum frequency, satisfying the tie-break. No separate scan: the
+        buckets already organize values by frequency for us.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 8, k = 4`, `a = [1, 2, 2, 1, 3, 3, 3, 2]`. Expected output
+      `1 2 3 3 3`.
+
+      Using tier ② (we show, per window, the frequency buckets at `maxCount`):
+
+      - `[1,2,2,1]`: freqs `1:2, 2:2`. `maxCount=2`, `bucket[2]={1,2}` →
+        smallest = **1**. print 1.
+      - slide in `3`, out `1` → `[2,2,1,3]`: freqs `1:1,2:2,3:1`. `maxCount=2`,
+        `bucket[2]={2}` → **2**. print 2.
+      - slide in `3`, out `2` → `[2,1,3,3]`: freqs `1:1,2:1,3:2`. `maxCount=2`,
+        `bucket[2]={3}` → **3**. print 3.
+      - slide in `3`, out `2` → `[1,3,3,3]`: freqs `1:1,3:3`. `maxCount=3`,
+        `bucket[3]={3}` → **3**. print 3.
+      - slide in `2`, out `1` → `[3,3,3,2]`: freqs `2:1,3:3`. `maxCount=3`,
+        `bucket[3]={3}` → **3**. print 3.
+
+      Printed: `1 2 3 3 3` — matches expected. The tie moment is the first
+      window: both 1 and 2 sit at the top frequency, and taking `begin()` of
+      `bucket[2]` returns the smaller value, 1, per the stated rule.
+  - type: flowchart
+    title: "Sliding window mode"
+    nodes: ["window full? yes", "get maxCount (top frequency)", "mode = smallest value in bucket[maxCount]", "print mode", "slide: add a[i], rem a[i-k]"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+  - type: mcq
+    prompt: "Why do we need a set of values per frequency (bucket) rather than just the maximum frequency number?"
+    options:
+      - "Because the maximum frequency alone does not name WHICH value is the mode, nor which of several tied values is the smallest — the bucket stores exactly the candidates, and its minimum is the tied-winner."
+      - "Because buckets guarantee O(1) mode queries on every slide."
+      - "Because bucket[maxCount] always contains a single value."
+      - "Because the mode equals the maximum frequency value itself."
+    answer: 0
+    explanation: "maxCount only tells the magnitude of the modal frequency; the answer we print is a value. The bucket for that frequency holds all values reaching it, and since we break ties toward the smallest, the right answer is the set's minimum. This is what makes the approach a correct labeled mode algorithm: it always names a concrete value, deterministically."

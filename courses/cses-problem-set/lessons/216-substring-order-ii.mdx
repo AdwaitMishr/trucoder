@@ -1,0 +1,272 @@
+---
+id: substring-order-ii
+title: Substring Order II
+difficulty: hard
+order: 216
+tags:
+  - string
+  - suffix-automaton
+  - lexicographic
+  - endpos
+blocks:
+  - type: markdown
+    content: |
+      # Substring Order II — the k-th substring *counting duplicates*
+
+      This is Substring Order I, but now **every occurrence counts**: if `a`
+      appears 4 times, it occupies 4 consecutive positions in the sorted list.
+      We want the k-th smallest substring in that multiset. The task is solved
+      by a **suffix automaton (SAM)**.
+
+      **The suffix automaton in one paragraph.** A SAM of a string is the
+      smallest DFA whose accepted language is exactly the set of substrings. It
+      has **one state per equivalence class of substrings sharing the same set
+      of end positions** (`endpos`). Every (distinct) substring corresponds to
+      exactly **one path** from the root. Each state `v` has a `link` pointer to
+      the state of its longest *proper* suffix-equivalence class.
+
+      **Two numeric facts we need.**
+
+      1. **`endpos[v]`** — the number of distinct end positions (occurrences)
+         of any substring in state `v`. Compute it by setting `size = 1` on real
+         states (each represents one new position), `size = 0` on clones, and
+         then propagating `size` up the suffix-link tree (process states from
+         longest to shortest). The root's `endpos` is `n`.
+      2. **`total[v]`** — the total number of multiset-entries in the subtree
+         of substrings reachable by extending a path at `v`:
+         `total[v] = Σ_char ( endpos[v.next[c]] + total[v.next[c]] )`.
+         The `+ endpos` term counts the *identical* copies of the extension, the
+         `+ total` term counts its own deeper extensions.
+
+      **Why the walk is correct.** Ordering the multiset = a DFS of the
+      automaton by character. When we arrive at a state via the character `c`,
+      the substring so-far plus `c` contributes `endpos[u]` **identical** copies
+      first (they sort together), then the `u`-subtree. So we keep `k`, subtract
+      whole subtrees until `k` lands in one transition: if `k ≤ endpos[u]` the
+      answer is `prefix + c`; else move into `u` and continue.
+
+      **Complexity.** Building the SAM is O(n); the `total` DP and the walk are
+      O(n · |Σ|). Total **O(n)** time, **O(n)** space — comfortably linear.
+
+      :::tip
+      **Interview tip:** suffix automata are the "big gun" string structure.
+      Master the pair *count distinct substrings* (already in this course) and
+      *weight paths by `endpos` to count duplicates* — they cover most
+      substring-counting questions. In interviews, the key statement is: "**a
+      SAM state's `endpos` size is the occurrence count of every substring in
+      that state.**"
+      :::
+  - type: markdown
+    content: |
+      # Question — Substring Order II
+
+      You are given a string of length `n`. If **all of its substrings (not
+      necessarily distinct)** are ordered lexicographically, what is the **k-th
+      smallest** of them?
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 10^5`
+      - `1 ≤ k ≤ n(n+1)/2`
+
+      **Input.** The first input line has the string of length `n` (characters
+      `a`–`z`). The second line has the integer `k`.
+
+      **Output.** Print the k-th smallest substring in lexicographical order.
+
+      Sample input:
+
+      ```
+      baabaa
+      10
+      ```
+
+      Sample output:
+
+      ```
+      ab
+      ```
+
+      Explanation: the 10 smallest substrings in order are `a, a, a, a, aa, aa,
+      aab, aaba, aabaa, ab`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — build the whole multiset and sort, O(n³ log n)**
+
+      Enumerate every substring (each occurrence separately), sort everything,
+      pick the k-th.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; long long k; cin >> s >> k;
+          int n = (int)s.size();
+          vector<string> v;
+          for (int i = 0; i < n; ++i) {
+              string cur;
+              for (int j = i; j < n; ++j) { cur += s[j]; v.push_back(cur); }
+          }
+          sort(v.begin(), v.end());
+          cout << v[k - 1] << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n³ log n)** time, **O(n²)** space — impossible at `n = 10^5` (the
+      multiset alone has ~5×10⁹ entries).
+
+      **② Optimization — suffix automaton weighted by endpos, O(n) (submission)**
+
+      Build the SAM, compute `endpos` sizes and the `total` DP, then walk the
+      automaton greedily by character.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      struct SAM {
+          struct St { int len, link; array<int,26> nxt; ll sz, total; };
+          vector<St> st; int last;
+          SAM() { st.push_back({0, -1, array<int,26>{}, 0, 0}); last = 0; }
+          void extend(int ch) {
+              int cur = (int)st.size();
+              st.push_back({st[last].len + 1, 0, array<int,26>{}, 1, 0});
+              int p = last;
+              while (p != -1 && st[p].nxt[ch] == 0) { st[p].nxt[ch] = cur; p = st[p].link; }
+              if (p == -1) st[cur].link = 0;
+              else {
+                  int q = st[p].nxt[ch];
+                  if (st[p].len + 1 == st[q].len) st[cur].link = q;
+                  else {
+                      int clone = (int)st.size();
+                      st.push_back({st[p].len + 1, st[q].link, st[q].nxt, 0, 0});
+                      while (p != -1 && st[p].nxt[ch] == q) { st[p].nxt[ch] = clone; p = st[p].link; }
+                      st[q].link = st[cur].link = clone;
+                  }
+              }
+              last = cur;
+          }
+      };
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; ll k; cin >> s >> k;
+          SAM sam;
+          for (char ch : s) sam.extend(ch - 'a');
+
+          int M = (int)sam.st.size();
+          vector<int> ord(M); iota(ord.begin(), ord.end(), 0);
+          sort(ord.begin(), ord.end(), [&](int a, int b) { return sam.st[a].len < sam.st[b].len; });
+
+          // endpos sizes along suffix links, longest-first
+          for (int i = M - 1; i >= 0; --i) {
+              int v = ord[i];
+              if (sam.st[v].link != -1) sam.st[sam.st[v].link].sz += sam.st[v].sz;
+          }
+          // total[v] = multiset size of all strict extensions of v
+          for (int i = M - 1; i >= 0; --i) {
+              int v = ord[i]; ll tot = 0;
+              for (int ch = 0; ch < 26; ++ch) if (sam.st[v].nxt[ch]) {
+                  int u = sam.st[v].nxt[ch];
+                  tot += sam.st[u].sz + sam.st[u].total;
+              }
+              sam.st[v].total = tot;
+          }
+
+          string ans; int v = 0;
+          while (true) {
+              bool moved = false;
+              for (int ch = 0; ch < 26; ++ch) {
+                  int u = sam.st[v].nxt[ch]; if (!u) continue;
+                  ll sz = sam.st[u].sz, tot = sam.st[u].total;
+                  if (k <= sz) { ans += char('a' + ch); cout << ans << "\n"; return 0; }
+                  if (k <= sz + tot) { k -= sz; ans += char('a' + ch); v = u; moved = true; break; }
+                  k -= sz + tot;
+              }
+              if (!moved) break;
+          }
+          return 0;
+      }
+      ```
+
+      **O(n)** time, **O(n)** space. This is the submission tier. (Each state
+      carries a fixed 26-wide `nxt`, so the DP and walk are `O(n·26)`.)
+
+      **③ Alternative — suffix array with a clever count** (note)
+
+      The same multiset can be walked over the suffix array using the LCP array
+      and an occurrence-weighted stack, but reproducing the duplicates ordering
+      is notably fiddlier than the SAM's `endpos` weighting. The suffix
+      automaton is the intended clean solution here.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **`sz` (endpos).** Every new real state records +1 occurrence (the
+        current position). Clones record 0 (they only add links, not new end
+        positions). Propagating up the suffix links (longest → shortest) sums
+        each state's `endpos` set size. For the root this becomes `n`.
+      - **`total` DP.** `total[v] = Σ_ch ( sz[nxt] + total[nxt] )` = the number
+        of multiset entries in all strict extensions. This is what lets us skip
+        a whole character-subtree in the walk instead of expanding it.
+      - **The walk.** At state `v` (current prefix `ans`), iterate characters
+        `a..z`. For transition `ch → u`: the `sz[u]` identical copies of
+        `ans + ch` come first; if `k` falls in them the answer is `ans + ch`.
+        Otherwise, if `k` is within `tot`, enter `u` for the deeper search
+        (after subtracting the `sz[u]` copies); else subtract `sz+tot` and try
+        the next character.
+      - **Why `n(n+1)/2` total.** The root's `total` equals the size of the
+        whole multiset = sum of occurrence counts over all distinct substrings,
+        which is exactly `n(n+1)/2`. So any valid `k` is always found.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `s = baabaa`, `k = 10`.
+
+      `baabaa` = `b a a b a a`; the letter `a` appears at indices `1, 2, 4, 5`.
+
+      Substrings starting with `a`, with their occurrence counts:
+
+      | substring | occurrences |
+      |-----------|-------------|
+      | a | 4 (indices 1,2,4,5) |
+      | aa | 2 (indices 1–2, 4–5) |
+      | aab | 1 (indices 1–3) |
+      | aaba | 1 (indices 1–4) |
+      | aabaa | 1 (indices 1–5) |
+      | ab | 1 (indices 2–3) |
+      | aba | 1 (indices 2–4) |
+      | abaa | 1 (indices 2–5) |
+
+      Every `a...` substring sorts before any `b...` substring, so the front of
+      the sorted multiset is:
+
+      `a a a a` (1–4) → `aa aa` (5–6) → `aab` (7) → `aaba` (8) → `aabaa` (9) →
+      `ab` (10)
+
+      **k = 10 lands on the 10th entry = `ab`.** ✓
+
+      The compiled SAM walk replicates this exactly: its `endpos` sizes make the
+      four copies of `a` (positions 1–4) and two of `aa` (5–6) come out as
+      distinct identical entries, so by the time it reaches the `ab` transition
+      the running `k` is precisely at the 10th position.
+
+      **Expected `ab` — Actual `ab` (from the compiled submission). Match.**
+  - type: mcq
+    prompt: 'When walking the suffix automaton and we reach a transition by character c into state u, why do the sz[u] copies of the current substring come before its deeper extensions in the sorted order?'
+    options:
+      - Because sz[u] counts how many letters follow in the string
+      - Because all sz[u] copies are the identical string ans+c, so they sort together (earlier than any longer string starting with ans+c)
+      - Because they are stored in a different part of the array
+      - Because deeper extensions start with a larger character
+    answer: 1
+    explanation: Every copy of the substring ans+c is the exact same string, so in lexicographic order they occupy consecutive positions immediately after any identical predecessors and before any strictly longer string that starts with ans+c (a longer string with the same prefix sorts later). sz[u] (the endpos size) counts exactly how many such copies exist.
+type: content
+---

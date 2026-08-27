@@ -1,0 +1,267 @@
+---
+id: permutation-prime-sums
+title: Permutation Prime Sums
+difficulty: medium
+order: 290
+tags:
+  - construction
+  - permutation
+  - primes
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — a constructive pairing using primes
+
+      We must build **two permutations** `a` and `b` of `1..n` so that every
+      coordinate-wise sum `a[i] + b[i]` is **prime**. If we keep `a` as the
+      identity `1, 2, …, n`, the task becomes: assign a permutation `b` so that
+      `i + b[i]` is prime for every `i`. This is a pure construction.
+
+      **The core trick — pair a whole suffix against one prime.** Fix a prime
+      `p` and try to satisfy every index in some range with the *same* `p`:
+
+      ```
+      choose b[i] = p - i   so that   a[i] + b[i] = i + (p - i) = p  (prime)
+      ```
+
+      For this to place distinct values, `b[i] = p - i` must be distinct as `i`
+      varies — true, since it decreases with `i`. But every `b[i]` must lie in
+      `1..n` *and* be a permutation. If we apply this to the **whole** range
+      `i = 1..n`, then `b[i] = p - i` ranges over `p-1, p-2, …, p-n`, i.e. all of
+      `{p-n, …, p-1}`. That covers `1..n` exactly when `p - 1 = n`, i.e. when
+      `n + 1` is prime: then `b = [n, n-1, …, 1]` (the reversal) and every sum
+      is `n + 1`.
+
+      **What if `n + 1` is not prime?** Then we cannot cover everything with one
+      prime. Instead, peel off a suffix `[L, n]` that *one* prime can cover, and
+      solve the smaller range `[1, L-1]` recursively:
+
+      - pick `p` = the smallest prime ≥ `n + 1`;
+      - set `L = p - n`. For indices `i = L..n`, `b[i] = p - i` gives values
+        `p - n = L`, `L+1`, …, `p - L = n` — exactly the suffix `[L, n]`;
+      - solve the prefix `[1, L-1]` the same way.
+
+      **Why this always terminates.** For a current range opening at `1`, we
+      always need a prime `p` in `[n+1, 2n]`. **Bertrand's postulate** guarantees
+      a prime strictly between `n` and `2n`, so the smallest prime ≥ `n+1` is
+      `≤ 2n`, hence `L = p - n` satisfies `1 ≤ L ≤ n`. Either `L = 1` (base case:
+      the whole range is the reversal) or the prefix shrinks. Everything stays in
+      `1..n` because all placed values are `≥ 1` and `≤ n`.
+
+      **Is it ever impossible?** No — for every `n ≥ 1` this construction runs
+      to completion (e.g. `n = 1` trivially pairs `1 + 1 = 2`). So the solution
+      never prints `IMPOSSIBLE`.
+
+      **Complexity.** A sieve to `2n` costs `O(n log log n)`, and placing the
+      values costs `O(n)` time / `O(n)` space.
+
+      :::tip
+      **Interview tip:** "Adjacent/coordinate pair sums are prime" is a classic
+      pairing-construction motif. Notice it reduces to a *single* prime covering
+      a whole (suffix) stretch: `i + (p - i) = p`. Interviewers like how this
+      turns a search into an arithmetic guarantee, and how **Bertrand's
+      postulate** is invoked to keep the recursion from running out of primes.
+      Keep `a` fixed as the identity to halve the problem.
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given `n`, create two permutations `a` and `b` of size `n` such that
+      `a[i] + b[i]` is prime for `i = 1, 2, …, n`.
+
+      **Input.** The only line has an integer `n`.
+
+      **Output.** Print two permutations. You can print any valid solution.
+      If there are no solutions, print `IMPOSSIBLE`.
+
+      **Constraints.** `1 ≤ n ≤ 10^5`
+
+      ### Sample
+
+      **Input:**
+      ```
+      5
+      ```
+
+      **Output:**
+      ```
+      2 1 3 5 4
+      5 1 4 2 3
+      ```
+      **Explanation:** the sums `2+5=7`, `1+1=2`, `3+4=7`, `5+2=7` and `4+3=7`
+      are all primes. (Any valid pair is accepted; this is one example.)
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O((n!)²) time, O(n) space (try all pairs).** Generate
+      permutations of `a` and `b` and test whether every `a[i]+b[i]` is prime.
+      Correct by exhaustive search, but astronomically slow — there are `n!`
+      choices for `a` and `b`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      bool isPrime(int x){ if(x<2) return false; for(int d=2; 1LL*d*d<=x; ++d) if(x%d==0) return false; return true; }
+
+      string solve(int n) {
+          vector<int> a(n); iota(a.begin(),a.end(),1);
+          do {
+              vector<int> b(n); iota(b.begin(),b.end(),1);
+              do {
+                  bool ok=true;
+                  for(int i=0;i<n;i++) if(!isPrime(a[i]+b[i])){ ok=false; break; }
+                  if(ok){ ostringstream o; for(int i=0;i<n;i++){ if(i)o<<' ';o<<a[i];} o<<"\n"; for(int i=0;i<n;i++){ if(i)o<<' ';o<<b[i];} return o.str(); }
+              } while(next_permutation(b.begin(),b.end()));
+          } while(next_permutation(a.begin(),a.end()));
+          return "IMPOSSIBLE";
+      }
+      ```
+
+      **② Optimization — O(n log log n + n) time, O(n) space (suffix-pairing
+      recursion).** Fix `a = 1..n`. Recursively peel a prime-covered suffix and
+      pair it against the chosen prime; recurse on the remaining prefix. A sieve
+      gives prime tests in O(1).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(int n) {
+          int lim = 2 * n + 1;
+          vector<char> isPrime(lim + 1, true);
+          if (lim >= 0) isPrime[0] = false;
+          if (lim >= 1) isPrime[1] = false;
+          for (int p = 2; p * p <= lim; ++p)
+              if (isPrime[p]) for (int m = p * p; m <= lim; m += p) isPrime[m] = false;
+
+          vector<int> b(n + 1);
+          function<void(int,int)> rec = [&](int l, int r) {
+              if (l > r) return;
+              int sum = l + r;
+              while (!isPrime[sum]) ++sum;     // smallest prime >= l+r
+              int L = sum - r;                 // suffix [L, r] paired with 'sum'
+              if (L > l) rec(l, L - 1);        // solve the prefix
+              for (int i = L; i <= r; ++i) b[i] = sum - i;
+          };
+          rec(1, n);
+
+          ostringstream out;
+          for (int i = 1; i <= n; ++i) { if (i > 1) out << ' '; out << i; }   // a = identity
+          out << "\n";
+          for (int i = 1; i <= n; ++i) { if (i > 1) out << ' '; out << b[i]; }
+          return out.str();
+      }
+      ```
+      Complexity: O(n log log n) sieve + O(n) construction. Optimal — the answer
+      itself has two lines of n numbers.
+
+      **④ Alternative algorithm — O(n √n) with trial division (iterative variant).**
+      A slightly different framing: start from the idea "pair a suffix against
+      one prime, shrink the prefix" but written with an explicit loop and a
+      trial-division prime test. Same correctness, simpler control flow, but the
+      primality checks cost O(√sum) each instead of O(1) — a sieve (as in ②)
+      is what you would ship for `n = 10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      bool isPrime2(int x){ if(x<2) return false; for(int d=2; 1LL*d*d<=x; ++d) if(x%d==0) return false; return true; }
+
+      string solve(int n) {
+          vector<int> b(n + 1);
+          int l = 1, r = n;
+          while (l <= r) {
+              int sum = l + r;
+              while (!isPrime2(sum)) ++sum;
+              int L = sum - r;
+              for (int i = L; i <= r; ++i) b[i] = sum - i;
+              r = L - 1;                       // shrink the open prefix [l, r]
+          }
+          ostringstream out;
+          for (int i = 1; i <= n; ++i) { if (i > 1) out << ' '; out << i; }
+          out << "\n";
+          for (int i = 1; i <= n; ++i) { if (i > 1) out << ' '; out << b[i]; }
+          return out.str();
+      }
+      ```
+      Complexity: O(n √n) with the trial-division test, O(n) space. The
+      recursion and the loop are the same construction; the sieve in ② is the
+      faster way to prime-check.
+
+      Now reason through the chosen tier (②) in the next block, then trace it.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n)` for the O(n log log n + n) suffix-pairing version.
+
+      1. **Sieve to `2n`.** Every sum we ever produce is `i + b[i]`, and both are
+         in `1..n`, so sums lie in `2..2n`. Sieving to `2n` makes each primality
+         test O(1).
+      2. **`rec(l, r)`** solves the open index range `[l, r]` with `a = l..r` (in
+         our use `l` is always `1`).
+      3. **`sum = smallest prime ≥ l + r`.** For `l = 1`, Bertrand's postulate
+         guarantees this is `≤ 2r`, so `L = sum - r` satisfies `1 ≤ L ≤ r`.
+      4. **Pair the suffix `[L, r]`:** for `i = L..r`, `b[i] = sum - i` runs over
+         `{sum - r, …, sum - L} = {L, …, r}` — a permutation of the suffix. Every
+         such sum is the prime `sum`.
+      5. **Recurse on the prefix `[l, L-1]`.** The placed suffix values are
+         exactly `L..r`, disjoint from the prefix's `1..L-1`, and `b` stays a
+         permutation of `1..n`. `sum - i ≥ L ≥ 1` keeps all values in range.
+
+      Because each call places a positive number of positions and the open range
+      strictly shrinks, the recursion terminates; the total assignment is O(n).
+      The answer is only `IMPOSSIBLE`-free — every `n` works, including `n = 1`
+      (`1 + 1 = 2`).
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 5`.
+
+      **Step 1 — `rec(1, 5)`.** `sum = smallest prime ≥ 6 = 7`. `L = 7 - 5 = 2`.
+      Since `L = 2 > l = 1`, first solve `rec(1, 1)`.
+
+      **Step 2 — `rec(1, 1)`.** `sum = smallest prime ≥ 2 = 2`. `L = 2 - 1 = 1`.
+      `L == l`, no recursion. Pair `i = 1`: `b[1] = 2 - 1 = 1`.
+
+      **Step 3 — back in `rec(1, 5)`.** Pair suffix `i = 2..5` with `sum = 7`:
+      ```
+      b[2] = 7 - 2 = 5
+      b[3] = 7 - 3 = 4
+      b[4] = 7 - 4 = 3
+      b[5] = 7 - 5 = 2
+      ```
+
+      **Result:**
+      ```
+      a = 1 2 3 4 5
+      b = 1 5 4 3 2
+      ```
+
+      **Check the sums:**
+      ```
+      i=1: 1+1=2 ✓    i=2: 2+5=7 ✓    i=3: 3+4=7 ✓    i=4: 4+3=7 ✓    i=5: 5+2=7 ✓
+      ```
+      All prime; `a` and `b` are both permutations of `1..5`.
+
+      **Actual vs expected:** The CSES sample shows `a = 2 1 3 5 4`,
+      `b = 5 1 4 2 3`; our code prints `a = 1 2 3 4 5`, `b = 1 5 4 3 2`. Both are
+      valid — only the primality of every sum matters, so our answer belongs to
+      the accepted set. (Boundary `n = 1` yields the single line pair `1 / 1`,
+      sum `2`. `n = 2`: `rec(1,2)`, prime ≥ 3 is 3, `L=1`, `b = 2 1`, sums `3,3`.)
+  - type: mcq
+    prompt: "Why does the suffix-pairing recursion always find a prime p with L = p − n between 1 and n?"
+    options:
+      - "Because Bertrand's postulate guarantees a prime strictly between n and 2n."
+      - "Because every number from 1 to n is coprime to p."
+      - "Because a + b is always even for odd primes."
+      - "Because the sieve is computed up to exactly n."
+    answer: 0
+    explanation: "Bertrand's postulate states that for every n > 1 there is a prime p with n < p < 2n. The smallest prime ≥ n+1 is therefore at most 2n, so L = p − n falls in [1, n], which is exactly what keeps the peeled suffix b[i] = p − i within 1..n and lets the recursion shrink to a strictly smaller prefix."
+type: content
+---

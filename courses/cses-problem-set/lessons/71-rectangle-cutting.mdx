@@ -1,0 +1,285 @@
+---
+id: rectangle-cutting
+title: Rectangle Cutting
+difficulty: medium
+order: 71
+tags:
+  - dynamic-programming
+  - 2d-dp
+  - minimax
+  - partition-dp
+blocks:
+  - type: markdown
+    content: |
+      # Rectangle Cutting
+
+      **The technique: 2D DP over sub-rectangles (partition DP).** Given an `a × b`
+      rectangle, you may repeatedly cut any rectangle that is not yet a square into
+      two rectangles with integer side lengths. Find the **minimum number of cuts**
+      needed so that every resulting piece is a square.
+
+      Define `dp[i][j]` = the minimum number of cuts needed to turn an `i × j`
+      rectangle into squares. If `i == j` it is already a square → `dp[i][j] = 0`.
+      Otherwise, every optimal strategy makes a single *first cut*, splitting along one
+      whole row or column, then optimally solves the two pieces:
+
+      ```
+      dp[i][j] = 1 + min(
+          min over k=1..i-1 of   dp[k][j] + dp[i-k][j],   // cut horizontally (split i)
+          min over k=1..j-1 of   dp[i][k] + dp[i][j-k]    // cut vertically (split j)
+      )
+      ```
+
+      **Why this is exhaustive.** The very first cut splits the rectangle into two
+      sub-rectangles whose heights (or widths) sum to the original. Those two pieces
+      are independent — a cut inside one never affects the other — so the total cost
+      is `1` (the first cut) plus the optimal costs of both pieces. We take the
+      minimum over every possible first-cut position in both orientations.
+
+      **Symmetry.** `dp[i][j] = dp[j][i]` (rotating the rectangle swaps the labels), but
+      computing the full grid with the recurrence is just as easy.
+
+      **Worked mini-example.** `3 × 5`:
+      - Not a square; try a horizontal cut splitting `5` into `3` and `2` →
+        `1 + dp[3][3] + dp[3][2] = 1 + 0 + 2 = 3`.
+        (`3 × 3` needs 0; `3 × 2` → split `3` into 2+1 → `1 + dp[2][2] + dp[1][2] =
+        1 + 0 + 1 = 2`.)
+      - Result **3** — the minimum. ✓ (No placement beats it.)
+
+      **Complexity.** There are `a·b` sub-rectangles and each tries up to `a + b` cut
+      positions: **O(a·b·(a+b))** time and **O(a·b)** space. With `a, b ≤ 500` that is
+      at most `500·500·1000 = 2.5·10^8` candidate checks — a second or two in C++ but
+      fine for the limit; exploiting symmetry or early termination keeps it well under
+      1 s in practice.
+
+      **When you reach for it:** any "cut / split / partition an object into optimum
+      pieces where each piece's cost depends on its own dimensions" problem — e.g.
+      cutting steel rods, splitting partitions in DP arrays, matrix-tiling, or breaking
+      bars into target segments. The defining signal is a recursive subdivision whose
+      pieces are independent and whose optimal substructure is "best first split then
+      recurse."
+
+      :::tip
+      **Interview tip:** rectangular/interval *partition* DP shows the 
+      "try every split point, take the min" pattern. Interviewers want you to derive
+      the optimal-substructure argument (a first cut splits into two independent
+      problems). Common follow-ups: reduce the search by symmetry (`dp[i][j] = dp[j][i]`
+      → only compute `i ≤ j`), add a simple early break (`k = i/2`-style halving since
+      splits are symmetric), or return only the count of squares vs the number of cuts.
+      :::
+  - type: markdown
+    content: |
+      # Question — Rectangle Cutting
+
+      Given an `a × b` rectangle, cut it into squares. On each move you can select a
+      rectangle and cut it into two rectangles in such a way that all side lengths
+      remain integers. What is the **minimum possible number of moves**?
+
+      **Constraints:**
+      - `1 ≤ a, b ≤ 500`
+
+      **Input:** the only input line has two integers `a` and `b`.
+
+      **Output:** one integer — the minimum number of moves.
+
+      Sample input:
+
+      ```
+      3 5
+      ```
+
+      Sample output:
+
+      ```
+      3
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — naive recursion, exponential**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int cut(int i, int j) {
+          if (i == j) return 0;                 // already a square
+          int best = INT_MAX;
+          for (int k = 1; k < i; ++k)           // split the height i
+              best = min(best, 1 + cut(k, j) + cut(i - k, j));
+          for (int k = 1; k < j; ++k)           // split the width j
+              best = min(best, 1 + cut(i, k) + cut(i, j - k));
+          return best;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int a, b; cin >> a >> b;
+          cout << cut(a, b) << "\n";
+          return 0;
+      }
+      ```
+      Correct but recomputes the same sub-rectangles endlessly → exponential; useless
+      once `a, b` exceed ~20.
+
+      **② Optimization — memoized/iterative 2D DP, O(a·b·(a+b)) time, O(a·b) space**
+      *(the solution)*
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int a, b; cin >> a >> b;
+
+          int dp[501][501];
+          memset(dp, 0x3f, sizeof dp);
+
+          for (int i = 1; i <= a; ++i) {
+              for (int j = 1; j <= b; ++j) {
+                  if (i == j) { dp[i][j] = 0; continue; }   // already a square
+                  for (int k = 1; k < i; ++k)               // cut height: i -> k + (i-k)
+                      dp[i][j] = min(dp[i][j], 1 + dp[k][j] + dp[i - k][j]);
+                  for (int k = 1; k < j; ++k)               // cut width: j -> k + (j-k)
+                      dp[i][j] = min(dp[i][j], 1 + dp[i][k] + dp[i][j - k]);
+              }
+          }
+          cout << dp[a][b] << "\n";
+          return 0;
+      }
+      ```
+      O(a·b·(a+b)) time, O(a·b) space. Fill in order of increasing rows then columns so
+      every referenced piece (`k<i` or `k<j`) is already solved.
+
+      **③ Further optimization — symmetry-halved 2D DP, same complexity, ~2× faster**
+      *(the chosen solution)*
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int a, b; cin >> a >> b;
+          if (a > b) swap(a, b);               // keep a <= b; dp is symmetric
+
+          int dp[501][501];
+          memset(dp, 0x3f, sizeof dp);
+          dp[1][1] = 0;
+
+          for (int i = 1; i <= a; ++i) {
+              for (int j = i; j <= b; ++j) {          // only i <= j
+                  if (i == j) { dp[i][j] = 0; continue; }
+                  int best = INT_MAX;
+                  // split the smaller side up to its halfway point (splits are symmetric)
+                  for (int k = 1; k <= i / 2; ++k)
+                      best = min(best, 1 + dp[k][j] + dp[i - k][j]);
+                  // split the larger side up to its halfway point
+                  for (int k = 1; k <= j / 2; ++k)
+                      best = min(best, 1 + dp[min(i, k)][max(i, k)]
+                                          + dp[min(i, j - k)][max(i, j - k)]);
+                  dp[i][j] = best;
+              }
+          }
+          cout << dp[a][b] << "\n";
+          return 0;
+      }
+      ```
+      O(a·b·(a+b)) time, O(a·b) space with a ~2× constant cut. By symmetry we store
+      only `i ≤ j`, and each orientation's splits are mirrored, so testing `k` only up
+      to the halfway point finds every distinct cut. (Off-by-half storage: helper
+      cells marked INF for `i > j` are never read because every lookup uses normalized
+      `min`/`max`.)
+
+      **④ Alternative — memoized top-down recursion (same table, `std::map` or fixed
+      array).** Denoted variables per sub-rectangle with a recursion `solve(i,j)`,
+      identical recurrence, computing only reached states. It is conceptually the same
+      O(a·b·(a+b)) DP; prefer the iterative fill for predictable performance. No
+      meaningfully different algorithm exists — this recurrence is the intended and
+      tight solution.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **③ the symmetry-halved iterative DP.** Reading the code:
+
+      - **`dp[i][j]` = min cuts to square an `i × j` rectangle.** By symmetry we only
+        fill `i ≤ j` (swap input so `a ≤ b`), and every read normalizes with
+        `min`/`max`. This halves the table and roughly halves the work.
+      - **Base.** `dp[1][1] = 0`; any `i == j` is a square so `dp[i][j] = 0`.
+      - **First cut makes it recursive.** Try each horizontal position `k`
+        splitting side `i` into `k` and `i−k`, costing `1 + dp[k][j] + dp[i-k][j]`,
+        and each vertical position splitting side `j` into `k` and `j−k`, costing
+        `1 + dp[i][k] + dp[i][j-k]`. Take the global `min`.
+      - **Halfway pruning.** Splitting `x` into `k` and `x−k` is the same as `x−k` and
+        `k`, so testing `k` up to `x/2` covers every distinct split — the ~2× speedup
+        with zero correctness loss.
+      - **Fill order.** Rows ascending, columns ascending within a row ensure every
+        referenced sub-rectangle (`k < i` or `k < j`) was already solved. `INF` sentinel
+        cells for unused `i > j` slots are never read because lookups normalize.
+      - **Final answer** is `dp[a][b]` (stored as the normalized smaller-first cell).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      3 5
+      ```
+      `a = 3`, `b = 5`. We compute `dp[i][j]` for `i ≤ j`. Relevant sub-squares:
+
+      | i×j | computation | result |
+      |-----|-------------|--------|
+      | 1×1 | square | 0 |
+      | 1×2 | split 2 → 1+1: 1 + dp[1][1]+dp[1][1] = 1 | 1 |
+      | 1×3 | split 3: 1 + dp[1][1]+dp[1][2] = 2 (or 1+dp[1][2]+dp[1][1]) | 2 |
+      | 1×4 | 1 + dp[1][1]+dp[1][3] = 3, or split 2+2 = 1+1+1 = 3 | 3 |
+      | 1×5 | 1 + dp[1][2]+dp[1][3] = 4, or dp[1][1]+dp[1][4]=4 | 4 |
+      | 2×2 | square | 0 |
+      | 2×3 | split 3 → 1+2: 1 + dp[2][1]+dp[2][2] = 1+1+0 = 2; split 2→1+1: 1+dp[1][3]+dp[1][3]=1+2+2=5 → min = 2 | 2 |
+      | 2×5 | split 5 → 2+3: 1 + dp[2][2]+dp[2][3] = 1+0+2 = 3; split 2 → 1+1: 1+dp[1][5]+dp[1][5] = 1+4+4 = 9 → min = 3 | 3 |
+      | 3×3 | square | 0 |
+      | 3×5 | split 5 → 3+2: 1 + dp[3][3]+dp[3][2] = 1+0+2 = **3**; split 5 → 1+4: 1+dp[3][1]+dp[3][4] worse; split 3 → 1+2: 1+dp[1][5]+dp[2][5] = 1+4+3 = 8 | **3** |
+
+      Best for `3×5` is **3**. ✓ (matches the sample.)
+
+      One optimal sequence of moves:
+      1. Cut `3×5` vertically into `3×3` and `3×2`.
+      2. Cut `3×2` into `2×2` and `1×2`.
+      3. Cut `1×2` into `1×1` and `1×1`.
+
+      All pieces (`3×3`, `2×2`, `1×1×2`) are squares. Total = 3 moves.
+
+      **Edge cases:**
+      - Already a square, `5 5` → `dp[5][5] = 0` (no move).
+      - `1×1` → 0; `1×500` → 499 (slice into 500 `1×1`s, or 1×500 cuts).
+      - `2×3` → 2 (cut into `2×2` + `1×2` + cut the `1×2`).
+  - type: flowchart
+    title: "Rectangle-cutting DP decision"
+    nodes:
+      - "dp[i][j], i <= j"
+      - "i == j (square)?"
+      - "dp[i][j] = 0"
+      - "Try every horizontal split k of side i"
+      - "Try every vertical split k of side j"
+      - "dp[i][j] = 1 + min over all splits"
+      - "Next rectangle (i,j+1)"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "yes"}
+      - {from: 1, to: 3, label: "no"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6}
+      - {from: 2, to: 6}
+      - {from: 6, to: 0, label: "loop"}
+  - type: mcq
+    prompt: Why is trying every possible FIRST cut (horizontal and vertical position) sufficient for the optimal rectangle-cutting strategy?
+    options:
+      - Because once the first cut is made, the two resulting rectangles are independent and each is solved optimally by the same DP, so minimizing 1 + (best of left) + (best of right) over all first-cut positions captures the global optimum by optimal substructure
+      - Because the first cut should always be in the middle, regardless of dimensions
+      - Because cutting order never affects the number of total cuts
+      - Because squares never need the DP
+    answer: 0
+    explanation: 'An optimal solution has some first cut; it splits the rectangle into two independent sub-rectangles. Because cutting the left piece cannot help the right piece (no shared cells), the cost is exactly 1 + dp(left) + dp(right), and the recursion must minimize over every possible first-cut position in both orientations. This is the classic optimal-substructure (partition DP) argument: the best global solution is built from best solutions of the pieces arising from the best first split.'
+type: content
+---

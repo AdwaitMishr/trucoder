@@ -1,0 +1,226 @@
+---
+id: sum-of-four-values
+title: Sum of Four Values
+difficulty: medium
+order: 51
+tags:
+  - sorting-and-searching
+  - two-pointers
+  - hashing
+blocks:
+  - type: markdown
+    content: |
+      # Sum of Four Values — pair sums with a hash map
+
+      You have `n` integers and a target `x`; find **four values at distinct
+      positions** that sum to `x`, and print their (1-based) positions. Any
+      solution is acceptable.
+
+      The tempting recursion — fix one value, solve three-sum on the rest —
+      costs `O(n^3)`, too slow for `n = 1000`. The sharp trick is to work on
+      **pairs**:
+
+      - Precompute nothing globally; instead, **build a hash map as you walk**,
+        mapping `pair_sum -> one pair of indices` that achieves it.
+      - For each new pair `(j, k)` (with `j < k`), look up whether a previous
+        pair sums to `x - (a[j] + a[k])`. If yes, we have four distinct indices:
+        `(i, L, j, k)`.
+
+      Because we insert each visited pair immediately after checking it, the map
+      only ever contains pairs whose indices are all *strictly before* `j`.
+      So the four indices are automatically distinct: `i < L < j < k`.
+
+      **Why one pass per pair is enough.** There are `O(n^2)` ordered pairs
+      `(j,k)`. For each we do an `O(1)` hash lookup + one insertion, so the whole
+      thing is `O(n^2)` time. That is the theoretical optimum for this problem
+      (matching `n = 1000` → `~10^6` pair steps).
+
+      **Correctness of the distinctness guarantee.** Any valid solution has a
+      pair `(i, L)` appearing before the other pair `(j, k)` in this order. When
+      the scan reaches `(j, k)`, the map already holds `(i, L)` (inserted when we
+      passed it earlier), so the solution is found.
+
+      **Complexity:** `O(n^2)` time, `O(n^2)` space (the map holds up to `O(n^2)`
+      pairs).
+
+      :::tip
+      **Interview tip:** when you need `k` values summing to `X` and `k` is a
+      small even number, *halve the problem*: group values into pairs and use a
+      hash map on the pair sums. This is "sum-of-four = two pair-sums", and it
+      converts a `O(n^3)` recursion into `O(n^2)`. The keyboard move: store
+      `pair_sum -> indices` and keep the "only look at earlier pairs" ordering
+      trick so indices never repeat.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given an array of `n` integers, and your task is to find **four
+      values (at distinct positions) whose sum is `x`**.
+
+      **Constraints:** `1 <= n <= 1000`, `1 <= x, a[i] <= 10^9`
+
+      ## Input
+
+      The first input line has two integers `n` and `x`: the array size and the
+      target sum. The second line has `n` integers `a[1], ..., a[n]`.
+
+      ## Output
+
+      Print four integers: the positions of the values. If there are several
+      solutions, you may print any of them. If there are no solutions, print
+      `IMPOSSIBLE`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      8 15
+      3 2 5 8 1 3 2 3
+      ```
+      **Output:**
+      ```
+      2 4 6 7
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n⁴)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(int n, long long x, const std::vector<long long>& a) {
+          for (int i = 0; i < n; i++)
+              for (int j = i + 1; j < n; j++)
+                  for (int k = j + 1; k < n; k++)
+                      for (int m = k + 1; m < n; m++)
+                          if (a[i] + a[j] + a[k] + a[m] == x)
+                              return to_string(i+1) + " " + to_string(j+1) + " "
+                                   + to_string(k+1) + " " + to_string(m+1);
+          return "IMPOSSIBLE";
+      }
+      ```
+      Every quadruple of distinct indices: `O(n^4)` ≈ `1000^4 = 10^12` — never
+      finishes.
+
+      **② Optimization — hash map over pair sums, O(n²)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(int n, long long x, const std::vector<long long>& a) {
+          unordered_map<long long, pair<int,int>> mp; // pair_sum -> (i, j), i < j
+          for (int j = 0; j < n; j++) {
+              for (int k = j + 1; k < n; k++) {
+                  long long need = x - (a[j] + a[k]);
+                  if (mp.count(need)) {
+                      auto [i, L] = mp[need];          // both < j by construction
+                      string res = to_string(i+1) + " " + to_string(L+1) + " "
+                                 + to_string(j+1) + " " + to_string(k+1);
+                      return res;
+                  }
+              }
+              for (int i = 0; i < j; i++)              // now j is fixed; store pairs ending at j
+                  mp[a[i] + a[j]] = {i, j};
+          }
+          return "IMPOSSIBLE";
+      }
+      ```
+      The key ordering: pairs `(j,k)` are checked *before* the map is extended
+      with pairs ending at `j`. So any stored pair has both indices `< j`,
+      guaranteeing `i < L < j < k` — four distinct positions. `O(n^2)` time,
+      `O(n^2)` space. This is the intended solution.
+
+      **③ Further optimization — none needed.**
+      `O(n^2)` is optimal for `n = 1000` and matches the problem's expectation;
+      a pair-sum hash map is already the tightest form.
+
+      **④ Alternative — sort + two nested two-pointers, O(n²) or O(n³).**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(int n, long long x, const std::vector<long long>& a) {
+          vector<pair<long long,int>> p(n);
+          for (int i = 0; i < n; i++) p[i] = {a[i], i + 1};
+          sort(p.begin(), p.end());
+          for (int i = 0; i < n; i++)
+          for (int j = i + 1; j < n; j++) {
+              long long target = x - p[i].first - p[j].first;
+              int l = j + 1, r = n - 1;
+              while (l < r) {
+                  long long s = p[l].first + p[r].first;
+                  if (s == target) {
+                      string res = to_string(p[i].second) + " " + to_string(p[j].second)
+                                 + " " + to_string(p[l].second) + " " + to_string(p[r].second);
+                      return res;
+                  }
+                  (s < target) ? l++ : r--;
+              }
+          }
+          return "IMPOSSIBLE";
+      }
+      ```
+      Fix two values `(i, j)`, then two-pointer the remaining slice for the
+      complementary pair — a natural extension of the Sum-of-Three approach.
+      Worst case `O(n^3)` (three nested loops), which is borderline for
+      `n = 1000` (`10^9`), so the hash-map version is the safer submission.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Map shape.** `mp: long long -> pair<int,int>` stores, for each pair
+        sum, the two *indices* that produced it. We never store a bare count —
+        we need positions in the answer.
+      - **Two loops with a deliberate gap.** The outer block runs two inner
+        loops in sequence for each `j`:
+        1. First check fresh pairs `(j, k)` for `k > j` against existing sums.
+           If some earlier pair `(i, L)` sums to `need`, return the four
+           positions.
+        2. Only *after* checking do we insert pairs `(i, j)` for `i < j`.
+           This is the ordering trick that makes the four indices distinct:
+           anything already in `mp` was inserted for a `j' < j`, so its indices
+           are `< j`; the new pair is exactly `(j, k)`. Result: `i < L < j < k`.
+      - **No solution:** return `"IMPOSSIBLE"` after the loops.
+
+      `long long` is required — four values up to `10^9` sum past 32-bit range.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 8`, `x = 15`, `a = [3, 2, 5, 8, 1, 3, 2, 3]`.
+
+      **Expected output (sample):** `2 4 6 7` (values `2 + 8 + 3 + 2 = 15`).
+      Any valid quadruple is accepted.
+
+      **Actual run.** 1-based positions. Watch the map fill between phases.
+
+      | j | value | pairs (j,k) checked first | hit? | then inserted pairs (i,j) |
+      |----|-------|---------------------------|------|---------------------------|
+      | 0 | 3 | (0,·): no hits (map empty) | no | (none, i<0) |
+      | 1 | 2 | (1,·): no hit | no | (0,1)=5 → mp[5]=(0,1) |
+      | 2 | 5 | (2,·): no hit | no | (0,2)=8→mp[8]=(0,2); (1,2)=7→mp[7]=(1,2) |
+      | 3 | 8 | (3,4)=9 need6 ✗; (3,5)=11 need4 ✗; **(3,6)=10 need5 ✓** | **YES** | — (returns before inserting) |
+
+      At `j = 3`, the pair `(3,6)` sums to `a[3]+a[6] = 8 + 2 = 10`, so it needs a
+      previous pair summing to `15 − 10 = 5`. The map holds `mp[5] = (0,1)`
+      (`a[0]+a[1] = 3 + 2 = 5`). Return `0 1 3 6` → 1-based **`1 2 4 7`**:
+      values `3 + 2 + 8 + 2 = 15 = x` ✓.
+
+      The returned quadruple `1 2 4 7` is distinct and sums to `x`, so it is a
+      valid answer (the judge accepts any, such as the sample's `2 4 6 7`).
+      Note the ordering guarantee held: `(0,1)` was inserted during phase `j=1`,
+      before phase `j=3`, so its indices `0 < 1 < 3 < 6` are all distinct.
+  - type: mcq
+    prompt: How does the hash-map approach guarantee the four positions are distinct?
+    options:
+      - It checks that four indices are pairwise different before returning
+      - 'Pairs are only inserted into the map after being used for lookups, and only for indices i < j < k; any matching stored pair therefore has both indices < j, forcing i < L < j < k'
+      - It sorts the array first to remove duplicates
+      - It stores four positions per map entry
+    answer: 1
+    explanation: 'The two-loop split is the trick: for each j we first look up pairs (j,k) against the map, and only afterwards insert pairs (i,j) ending at j. So every entry already in the map has both indices < j; a fresh pair is (j,k) with j < k. Any match therefore has strictly ordered, distinct indices i < L < j < k.'
+type: content
+---

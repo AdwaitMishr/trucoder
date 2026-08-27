@@ -1,0 +1,193 @@
+---
+id: bubble-sort-rounds-ii
+title: Bubble Sort Rounds II
+difficulty: medium
+order: 348
+tags:
+  - sorting
+  - fenwick-tree
+  - coordinate-compression
+  - inversions
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting greater-before in O(n log n)
+
+      From *Bubble Sort Rounds I* we need
+      `rounds = 1 + max_i (#{j < i : a[j] > a[i]})`. For a huge array
+      (`n` up to `2·10^5`) the O(n²) double loop is far too slow, so we need to
+      count, for each position `i`, **how many elements before `i` are strictly
+      greater** than `a[i]` — efficiently.
+
+      **Fenwick tree (BIT) counts "at most".** If we sweep `i` from left to
+      right and insert each value once we pass it, then a Fenwick tree over
+      value ranks lets us query, in O(log n), how many of the already-inserted
+      elements are `≤ a[i]`. The count of **strictly greater** elements to the
+      left is then:
+
+      ```
+      greater_before(i) = (elements already inserted) − query(a[i])
+      ```
+
+      Because an element with value *equal* to `a[i]` should not count (equal
+      values never need to cross each other in bubble sort), we use `≤` and
+      subtract, which leaves exactly the strictly-greater elements.
+
+      **Coordinate compression.** Values can be up to `10^9`, too large for a
+      BIT indexed by raw value. We first **compress** them: sort the unique
+      values and replace each `a[i]` by its rank `1..m`. Relative order is
+      preserved, so "greater" / "at most" comparisons still mean the same thing,
+      but now ranks fit comfortably in the BIT.
+
+      :::tip
+      **Interview tip:** "How many elements to the left/right are strictly
+      greater/smaller" is the signature of a **Fenwick tree + coordinate
+      compression** question. The two-line trick is always the same: sweep, and
+      at each step query *inserted-so-far* and query *value-rank*. Nearly all
+      inversion-count variants (number of inversions, inversions per element,
+      greater-before, smaller-after) reduce to this.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given an array of `n` integers. Every round you run **one complete
+      left-to-right pass** of bubble sort, and the array is "done" once a pass
+      makes **no swaps**.
+
+      Count the minimum number of rounds until bubble sort is certain the array
+      is sorted — i.e. `1 +` the maximum, over all elements, of the number of
+      strictly greater elements that precede it.
+
+      **Input.** The first line has `n`. The second line has `n` integers.
+
+      **Output.** One integer: the number of rounds.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ a[i] ≤ 10^9`
+
+      **Sample.** (n = 5, `5 1 4 2 3`)
+
+      **Input:**
+      ```
+      5
+      5 1 4 2 3
+      ```
+
+      **Output:**
+      ```
+      3
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — simulate — O(n²·r).** Same as Rounds I: perform passes
+      until none swaps. At `n = 2·10^5` this is hopelessly slow (worst case
+      O(n³)).
+
+      **② Optimization — O(n²) greater-before counting.** For `i` scan all
+      `j < i` and count `a[j] > a[i]`. Correct but O(n²) ≈ 4·10^10 steps, too
+      slow. (This was the answer to Rounds I.) We need something sub-quadratic.
+
+      **③ Further optimization — O(n log n) with a Fenwick tree + compression
+      (`n ≤ 2·10^5`).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; if(!(cin>>n)) return 0;
+          vector<int> a(n); for(int&x:a) cin>>x;
+
+          // coordinate-compress values to ranks 1..m
+          vector<int> c = a;
+          sort(c.begin(), c.end());
+          c.erase(unique(c.begin(), c.end()), c.end());
+          int m = (int)c.size();
+
+          // Fenwick tree of size m
+          vector<int> bit(m+1, 0);
+          auto add = [&](int i,int v){ for(; i<=m; i+=i&-i) bit[i]+=v; };
+          auto sum = [&](int i){ int s=0; for(; i>0; i-=i&-i) s+=bit[i]; return s; };
+
+          int mx = 0, inserted = 0;
+          for(int i=0;i<n;i++){
+              int r = lower_bound(c.begin(), c.end(), a[i]) - c.begin() + 1;
+              int leq   = sum(r);                 // already-inserted elements <= a[i]
+              int gr    = inserted - leq;          // strictly greater, before i
+              mx = max(mx, gr);
+              add(r, 1);                           // now this element joins the left side
+              inserted++;
+          }
+          cout << mx + 1 << "\n";
+      }
+      ```
+      *Complexity: O(n log n) time, O(n) space — comfortably fast for
+      `n ≤ 2·10^5`.* Every element is inserted once and queried once; each BIT
+      update/query costs O(log n).
+
+      **④ Alternative — merge-sort inversion frame.** A mergesort-based
+      "count inversions" routine can also report, per element, how many larger
+      elements preceded it — tracking the maximum while merging. Identical
+      O(n log n) cost; the BIT version is usually easier to write correctly in
+      an interview.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n, a)` — O(n log n). Key lines:
+
+      1. **Compression:** `c = unique(sort(a))` turns big values into ranks.
+         `r = rank(a[i])` via `lower_bound`.
+      2. **`sum(r)`** asks the BIT: how many already-inserted elements are
+         `≤ a[i]`.
+      3. **`gr = inserted − sum(r)`** = strictly greater elements to the left —
+         *equal* values are inside `sum(r)`, so they are correctly excluded.
+      4. **`mx = max(mx, gr)`** keeps the worst element.
+      5. **`add(r,1)`, `inserted++`** move the current element onto the *left*,
+         ready for later positions.
+      6. **`cout << mx + 1`** adds the final zero-swap confirmation round.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5`, `a = [5, 1, 4, 2, 3]`.
+
+      Unique sorted values: `[1,2,3,4,5]` → ranks: `5→5, 1→1, 4→4, 2→2, 3→3`.
+
+      | i | a[i] | leq | inserted | greater_before | mx |
+      |---|------|-----|----------|----------------|----|
+      | 0 | 5 | 0   | 0 | 0−0 = **0** | 0 |
+      | 1 | 1 | 0   | 1 | 1−0 = **1** | 1 |
+      | 2 | 4 | 1   | 2 | 2−1 = **1** | 1 |
+      | 3 | 2 | 1   | 3 | 3−1 = **2** | 2 |
+      | 4 | 3 | 2   | 4 | 4−2 = **2** | 2 |
+
+      Max `greater_before = 2`, so **rounds = 2 + 1 = 3**. ✓
+
+      Verify by simulating `[5,1,4,2,3]`:
+
+      - **Round 1:** `5 1 4 2 3 → 1 4 2 3 5`
+      - **Round 2:** `1 4 2 3 5 → 1 2 3 4 5`
+      - **Round 3:** no swaps → done.
+
+      Total **3 rounds**, matching the sample output.
+
+  - type: mcq
+    prompt: "Why do we subtract sum(r) from the total 'inserted' count instead of tracking greater elements directly?"
+    options:
+      - "Because sum(r) counts elements ≤ a[i]; subtracting leaves exactly the strictly greater ones, excluding equals, which never need to cross in bubble sort."
+      - "Because sum(r) counts elements ≥ a[i], and we want the smaller ones."
+      - "Because subtracting makes the code shorter."
+      - "Because the BIT cannot store more than one value at a time."
+    answer: 0
+    explanation: "A Fenwick tree answers 'at most' (≤ rank) queries cheaply. Elements already inserted = elements before position i. Those ≤ a[i] (including equal values) do NOT force leftward travel, so greater_before = inserted − sum(r) isolates exactly the strictly-greater elements that a[i] must cross — one round each, plus the final confirmation pass."
+type: content
+---

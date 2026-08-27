@@ -1,0 +1,213 @@
+---
+id: flight-discount
+title: Flight Discount
+type: content
+difficulty: medium
+order: 93
+tags:
+  - graph-algorithms
+  - dijkstra
+  - state-space
+  - shortest-path
+blocks:
+  - type: markdown
+    content: |
+      # Flight Discount — Dijkstra on an augmented state space
+
+      Find the cheapest route from city `1` to city `n`, with a twist: you hold **one
+      discount coupon** that halves the price of exactly one flight on your route
+      (`x` becomes `⌊x/2⌋`). You may use it once, somewhere along the route.
+
+      The clever part is that we do **not** know which flight to discount in advance —
+      and Dijkstra alone tracks only "best cost at each city". The fix is to make the
+      *state* two-dimensional: reach city `v` either **without** having used the
+      coupon, or **having already used** it.
+
+      ## The 2-layer state
+
+      Define:
+
+      - `dist[v][0]` = cheapest to reach `v` with the coupon **unused**,
+      - `dist[v][1]` = cheapest to reach `v` with the coupon **already spent**.
+
+      When traversing an edge `u → v` of cost `c`:
+
+      - from state `0` at `u`: either pay full price and stay in state `0`
+        (`dist[v][0] = dist[u][0] + c`), or **pay half** `⌊c/2⌋` and move to state `1`
+        (`dist[v][1] = dist[u][0] + ⌊c/2⌋`);
+      - from state `1` at `u`: the coupon is gone, so only full price, staying in
+        state `1` (`dist[v][1] = dist[u][1] + c`).
+
+      Run ordinary Dijkstra over `2·n` states (cost, city, state) with a min-heap; the
+      answer is `min(dist[n][0], dist[n][1])`. Because every transition is non-negative,
+      Dijkstra's settle-on-pop invariant still holds.
+
+      **Complexity.** `O((n + m) log n)` time, `O(n)` memory (states are `2n`).
+
+      :::tip
+      **Interview tip:** "Use one special ability / coupon / discount / teleport during
+      the path" is a recurring pattern. The standard move is to **augment the state**
+      with a small flag (`0/1`, or `0..k`) and let Dijkstra (or BFS) run on the product
+      graph `(node, flag)`. Each "use" of the ability becomes a transition between
+      layers. Cost scales by only `(k+1)×`.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to find a minimum-price flight route from Syrjälä to Metsälä. You
+      have one discount coupon, using which you can halve the price of any single
+      flight during the route. You can only use the coupon once. When you use the
+      coupon for a flight whose price is `x`, its price becomes `⌊x/2⌋` (rounded
+      down).
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the number of cities and
+      flight connections. Cities are numbered `1, ..., n`; city `1` is Syrjälä and city
+      `n` is Metsälä.
+
+      After this there are `m` lines describing the flights. Each line has three
+      integers `a`, `b` and `c`: a flight begins at `a`, ends at `b`, and costs `c`.
+      Flights are unidirectional.
+
+      It is guaranteed you can get from Syrjälä to Metsälä.
+
+      **Constraints:** `2 <= n <= 10^5`, `1 <= m <= 2*10^5`, `1 <= c <= 10^9`
+
+      ## Output
+
+      Print one integer: the price of the cheapest route from Syrjälä to Metsälä.
+
+      ## Sample
+
+      **Input:**
+      ```
+      3 4
+      1 2 3
+      2 3 1
+      1 3 7
+      2 1 5
+      ```
+      **Output:**
+      ```
+      2
+      ```
+      Explanation: fly `1 → 2` (`3`), then use the coupon on `2 → 3` (`⌊1/2⌋ = 0`)
+      giving `3 + 0 = 2`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — try every route and every coupon position, O(:exponential)**
+
+      Enumerate each route from `1` to `n`, and for each, try discounting every single
+      one of its flights. The number of simple routes in a dense graph is exponential,
+      so this is hopeless for `m = 2·10^5`.
+
+      **② Optimization — Dijkstra over (city, coupon-used), O((n+m) log n)**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          int n, m; cin >> n >> m;
+          vector<vector<pair<int,long long>>> adj(n + 1);
+          for (int i = 0; i < m; i++) {
+              int a, b; long long c; cin >> a >> b >> c;
+              adj[a].push_back({b, c});
+          }
+          const long long INF = 4e18;
+          // dist[v][0] = no coupon used, dist[v][1] = coupon already spent
+          vector<array<long long,2>> dist(n + 1, {INF, INF});
+          using T = tuple<long long,int,int>;          // (cost, city, state)
+          priority_queue<T, vector<T>, greater<T>> pq;
+          dist[1][0] = 0; pq.push({0, 1, 0});
+          while (!pq.empty()) {
+              auto [d, u, used] = pq.top(); pq.pop();
+              if (d > dist[u][used]) continue;
+              for (auto [v, w] : adj[u]) {
+                  if (dist[v][used] > d + w) {         // stay in the same layer
+                      dist[v][used] = d + w;
+                      pq.push({dist[v][used], v, used});
+                  }
+                  if (used == 0 && dist[v][1] > d + w / 2) {   // spend the coupon now
+                      dist[v][1] = d + w / 2;
+                      pq.push({dist[v][1], v, 1});
+                  }
+              }
+          }
+          cout << min(dist[n][0], dist[n][1]) << "\n";
+          return 0;
+      }
+      ```
+
+      *O((n+m) log n) time, O(n) memory — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      The two-layer Dijkstra is already optimal for this shape; a coupon-limited state
+      space is fixed at `2n`, so the heap dominates the bound.
+
+      **④ Alternative — shortest-from-source + shortest-to-target (meet in middle)**
+
+      Compute `D1[u]` = cheapest `1 → u` (no coupon) and `Dn[v]` = cheapest `v → n` (no
+      coupon) with two plain Dijkstra runs. Then the answer is the minimum over all
+      edges `u → v` of `D1[u] + ⌊c/2⌋ + Dn[v]` (use the coupon on this edge). Same
+      `O((n+m) log n)`; especially clean when the coupon can be applied to *any* edge,
+      which is exactly this problem.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the `②` two-layer Dijkstra:
+
+      - **Layers.** `dist[v][0]` and `dist[v][1]` are two independent copies of the
+        city. The 0-layer can only move to the 0-layer (full price) or to the 1-layer
+        (halved); the 1-layer stays in the 1-layer.
+      - **Spend vs. save.** The edge `used == 0` guard ensures the coupon is used at
+        most once. After it is spent we never offer a halved edge again — `w / 2`
+        applies only when transitioning `0 → 1`.
+      - **The heap.** A `tuple(cost, city, state)` with `greater<>` gives a min-heap;
+        the `if (d > dist[u][used]) continue;` discards stale entries.
+      - **Answer.** `min(dist[n][0], dist[n][1])` — we reach `n` either having kept the
+        coupon (unlikely, but possible) or having spent it somewhere.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n=3`, flights `1→2 (3)`, `2→3 (1)`, `1→3 (7)`, `2→1 (5)`.
+      `dist` starts `[ (0, ∞), (∞,∞), (∞,∞) ]` for cities 1,2,3 (0-layer, 1-layer).
+
+      Dijkstra pops in order of cost:
+
+      | pop `(cost, city, state)` | relaxations |
+      |---------------------------|-------------|
+      | `(0,1,0)` | `1→2`: dist2[0]=3, dist2[1]=1; `1→3`: dist3[0]=7, dist3[1]=3 |
+      | `(1,2,1)` | `2→3` full: dist3[1]=1+1=2; `2→1` full: dist1[1]=1+5=6 |
+      | `(2,3,1)` | no outgoing (n reached in state 1) |
+      | `(3,2,0)` | `2→3`: dist3[0]=4, `2→3` half: dist3[1]=3+0=3 (not < 2, skip) |
+
+      The cheapest into city 3 is `dist[3][1] = 2` (fly `1→2` full-price `3`, then use
+      the coupon on `2→3`: `1/2 → 0`, total `2`).
+
+      Answer `min(dist[3][0], dist[3][1]) = min(7, 2) = 2`. Expected (sample) — `2`.
+      Actual — `2`. Match.
+  - type: flowchart
+    title: "Dijkstra with one-use coupon (2-layer state)"
+    nodes: ["dist[1][0]=0, rest INF", "pop cheapest (d, u, used)", "relax (u,v,c): full price same layer", "coupon unused? relax halved into layer 1", "heap empty? -> answer min(dist[n][0],dist[n][1])"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 1, label: "improved, push"}
+      - {from: 1, to: 4, label: "heap empty"}
+  - type: mcq
+    prompt: "Why do we keep two distances per city (coupon unused vs. already used) instead of one?"
+    options:
+      - "Because we may visit the same city twice and need to count the coupon on the second visit only."
+      - "Because the optimal route's remaining 'can I still discount' capability is part of the state; a halved price is only reachable when the coupon is still alive, and carrying that flag lets Dijkstra explore both possibilities to the same city."
+      - "Because a priority queue requires an even number of entries per vertex."
+      - "Because each flight must be discounted exactly half the time."
+    answer: 1
+    explanation: "The coupon is a one-time resource, so a city reached with the coupon still unused is a genuinely different situation from the same city reached without it. Encode that difference as a second layer; the edge 'use the coupon' is a transition from layer 0 to layer 1. This is the standard state-augmentation trick for one-use power-ups."

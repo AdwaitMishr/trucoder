@@ -1,0 +1,259 @@
+---
+id: cycle-finding
+title: Cycle Finding
+type: content
+difficulty: hard
+order: 94
+tags:
+  - graph-algorithms
+  - bellman-ford
+  - negative-cycle
+  - cycle-detection
+blocks:
+  - type: markdown
+    content: |
+      # Cycle Finding — detecting and printing a negative cycle
+
+      Given a directed graph with (possibly **negative**) edge weights, we must decide
+      whether it contains a **negative cycle** — a cycle whose total weight is less
+      than zero — and, if so, *print one such cycle*. (If the sum is exactly zero it is
+      not negative, so it does not count.)
+
+      Negative cycles are the reason shortest-path problems with negative weights are
+      subtle: if one lies on a route, Dijkstra-style "settle once" logic breaks and
+      distances are ill-defined (you can loop forever). Finding one explicitly is the
+      natural next step after High Score's *detect-and-print-`-1`*.
+
+      ## The core trick: Bellman–Ford's extra round
+
+      Bellman–Ford runs `n-1` full relaxation rounds over all `m` edges, each round
+      tightening `dist[v]` whenever `dist[u] + w < dist[v]`. Any shortest path uses at
+      most `n-1` edges, so after `n-1` rounds the distances are final **only if no
+      negative cycle exists**. Run **one more (the n-th) round**: if any edge *still*
+      relaxes, that improvement can only come from a negative cycle — so one exists.
+
+      To *print* the cycle we also keep `parent[v]` = the vertex from which `v`'s
+      distance was last improved. After the extra round, walk the parents back from a
+      still-improving vertex `n` times to climb *onto* the cycle, then trace around it
+      through parents until we return to the start.
+
+      **Complexity.** `O(n·m)` time, `O(n)` memory. With `n <= 2500`, `m <= 5000` this
+      is at most `1.25·10^7` edge relaxations.
+
+      :::tip
+      **Interview tip:** "Does this graph contain a negative cycle?" is the classic
+      Bellman–Ford problem (LeetCode *Course Schedule* variants, systems-of-constraints
+      feasibility). The detector is always: relax `n-1` times, then check if the n-th
+      round still improves any edge. When asked to also *output* the cycle, keep
+      `parent[]` and backtrack — the same trick that prints shortest-path trees.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given a directed graph. Find out if it contains a negative cycle, and
+      give an example of such a cycle.
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the number of nodes and edges.
+      Nodes are numbered `1, 2, ..., n`.
+
+      After this, the input has `m` lines describing the edges. Each line has three
+      integers `a`, `b` and `c`: there is an edge from node `a` to node `b` whose
+      length is `c`.
+
+      **Constraints:** `1 <= n <= 2500`, `1 <= m <= 5000`, `1 <= a,b <= n`, `-10^9 <= c
+      <= 10^9`
+
+      ## Output
+
+      If the graph contains a negative cycle, print first `YES`, and then the nodes in
+      the cycle in their correct order. If there are several negative cycles, you can
+      print any of them. If there are no negative cycles, print `NO`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 5
+      1 2 1
+      2 4 1
+      3 1 1
+      4 1 -3
+      4 3 -2
+      ```
+      **Output:**
+      ```
+      YES
+      1 2 4 1
+      ```
+      Explanation: edges `1→2`, `2→4`, `4→1` have total `1 + 1 + (-3) = -1 < 0`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate all cycles, O(exponential)**
+
+      Backtrack over every cycle and sum its edges, returning one with a negative
+      total. The number of cycles in a graph is exponential, so this is only a
+      strawman for tiny inputs.
+
+      **② Optimization — Bellman–Ford detection, O(n·m)**
+
+      Relax every edge `n` times; if the last (n-th) round still improves *any* edge,
+      a negative cycle exists → print `YES`. This detects existence but does not yet
+      print the cycle.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          int n, m; cin >> n >> m;
+          struct E { int a, b; long long c; };
+          vector<E> e;
+          for (int i = 0; i < m; i++) {
+              int a, b; long long c; cin >> a >> b >> c;
+              e.push_back({a, b, c});
+          }
+          vector<long long> dist(n + 1, 0);      // start everywhere: find any cycle
+          vector<int> par(n + 1, -1);
+          int last = -1;
+          for (int it = 0; it < n; it++) {       // n rounds (not n-1) to catch the cycle
+              last = -1;
+              for (auto& ed : e)
+                  if (dist[ed.a] + ed.c < dist[ed.b]) {
+                      dist[ed.b] = dist[ed.a] + ed.c;
+                      par[ed.b] = ed.a;
+                      last = ed.b;               // an edge still improved this round
+                  }
+          }
+          cout << (last == -1 ? "NO\n" : "YES\n");   // step ② ends here
+          return 0;
+      }
+      ```
+      *O(n·m) — detects existence, but we still must print the nodes.*
+
+      **③ Optimization — reconstruct and print the cycle, O(n·m)**
+
+      Finish the job. If `last != -1`, step `n` times through `parent[]` from `last` to
+      land on a node that is guaranteed to be *inside* the cycle, then walk parents
+      until we come back to it; reverse the collected nodes and close the loop.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          int n, m; cin >> n >> m;
+          struct E { int a, b; long long c; };
+          vector<E> e;
+          for (int i = 0; i < m; i++) {
+              int a, b; long long c; cin >> a >> b >> c;
+              e.push_back({a, b, c});
+          }
+          vector<long long> dist(n + 1, 0);
+          vector<int> par(n + 1, -1);
+          int last = -1;
+          for (int it = 0; it < n; it++) {
+              last = -1;
+              for (auto& ed : e)
+                  if (dist[ed.a] + ed.c < dist[ed.b]) {
+                      dist[ed.b] = dist[ed.a] + ed.c;
+                      par[ed.b] = ed.a;
+                      last = ed.b;
+                  }
+          }
+          if (last == -1) { cout << "NO\n"; return 0; }
+
+          for (int i = 0; i < n; i++) last = par[last];   // climb onto the cycle
+          vector<int> cyc;
+          int v = last;
+          do { cyc.push_back(v); v = par[v]; } while (v != last);  // trace around it
+          reverse(cyc.begin(), cyc.end());
+          cyc.push_back(cyc.front());                     // close the loop
+          cout << "YES\n";
+          for (int i = 0; i < (int)cyc.size(); i++)
+              cout << cyc[i] << (i + 1 == (int)cyc.size() ? "\n" : " ");
+          return 0;
+      }
+      ```
+      *O(n·m) time, O(n) memory — the intended solution.*
+
+      **④ Alternative — queue-based SPFA detection**
+
+      SPFA pushes a vertex only when its distance improves, and a vertex that improves
+      `n` times proves a cycle. It is often faster in practice on easy graphs but has
+      the same `O(n·m)` worst case and the same `parent[]` reconstruction, so
+      Bellman–Ford is preferred here for its reliability and simplicity.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the `③` solution:
+
+      - **Start `dist = 0` everywhere.** We do not care about paths from one source;
+      we want *any* negative cycle, reachable or not. Zero-initializing every node
+      means the first edge relaxation that dips below `0` is a real improvement and
+      starts building a parent chain.
+      - **`n` rounds.** After `n-1` rounds shortest paths are final; the `n`-th round is
+        the detector. `last` records any vertex whose distance improved during this
+        round — set every round so after the loop it is `-1` iff no edge relaxed on the
+        final round.
+      - **Climbing onto the cycle.** `last` might be a vertex the improved edge *sent*
+        a distance to, not necessarily a member of the cycle. Repeatedly applying
+        `last = par[last]` `n` times pulls it back along the parent chain by `n` steps,
+        which is guaranteed to place it on the cycle (a walk of `n` edges in a graph of
+        `n` nodes must repeat a vertex).
+      - **Tracing the cycle.** Starting from that proven on-cycle node we follow
+        parents until we return to it; the resulting chain, reversed, lists the cycle's
+        nodes in edge order (`parent[x]` is the immediate predecessor, so reversing the
+        chain orders them correctly). Appending the first node again closes the loop.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: nodes `1..4`, edges `1→2(1)`, `2→4(1)`, `3→1(1)`, `4→1(-3)`,
+      `4→3(-2)`. There is a negative cycle `1→2→4→1` with sum `1+1-3 = -1`.
+
+      Running the `n=4` rounds, `dist` keeps sinking because the negative cycle lets
+      every lap reduce the current totals. `parent` chain settles into
+      `par[2]=1, par[4]=2, par[1]=4`, and the last-improved vertex on the final round
+      is on the cycle, so `last != -1`.
+
+      Reconstruction: climb `n=4` parent-steps from `last` → we land on a node inside
+      the cycle. Tracing parents from it:
+
+      ```
+      follow parents: 4 → 2 → 1 → (4)   … back to start
+      reverse:        1 → 2 → 4
+      close loop:     1 2 4 1
+      ```
+
+      Printed:
+
+      ```
+      YES
+      1 2 4 1
+      ```
+
+      Expected (sample) — `YES` / `1 2 4 1`. Actual — `YES` / `1 2 4 1`. Match.
+  - type: flowchart
+    title: "Detect and print a negative cycle"
+    nodes: ["dist=0, parent=-1 for all nodes", "relax every edge; record last vertex that improved", "repeat n times", "did the final round improve any edge?", "climb parents n times onto the cycle", "trace parents around the cycle, reverse, close", "print YES + nodes (or NO)"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 6, label: "no cycle"}
+      - {from: 3, to: 4, label: "cycle found"}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6}
+  - type: mcq
+    prompt: "Why do we run Bellman-Ford for n full rounds (instead of n-1) to detect a negative cycle?"
+    options:
+      - "Because n rounds are needed to reach every node once, and any fewer misses the farthest nodes."
+      - "Because after n-1 rounds all shortest paths are final when no negative cycle exists; the n-th round is a separate probe that only improves a distance if a negative cycle is present, turning the nth round into the cycle detector."
+      - "Because each edge needs to be relaxed once per node it touches."
+      - "Because Dijkstra requires exactly n rounds to terminate."
+    answer: 1
+    explanation: "With no negative cycle, n-1 rounds are enough to settle every shortest path, so the n-th round changes nothing. If a negative cycle exists, distances can keep decreasing forever, so the n-th round will still improve some edge — that single lasting improvement is the proof. Hence an 'extra round that still relaxes' is the signal."

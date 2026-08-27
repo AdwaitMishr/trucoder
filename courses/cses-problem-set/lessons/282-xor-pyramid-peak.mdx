@@ -1,0 +1,220 @@
+---
+id: xor-pyramid-peak
+title: "XOR Pyramid Peak"
+type: content
+difficulty: medium
+order: 282
+tags:
+  - xor
+  - binomial-coefficients
+  - lucas-theorem
+  - parity
+blocks:
+  - type: markdown
+    content: |
+      # XOR Pyramid Peak — a parity rule collapses the whole pyramid
+
+      You build a pyramid by writing an array across the bottom, then each cell of
+      the row above is the **xor of the two cells below it**, until a single peak
+      cell remains. The peak's value looks like it needs the whole `O(n²)` pyramid —
+      but a combinatorial parity rule reads it off in `O(n)`.
+
+      ## Every bottom cell fans out
+
+      Trace which bottom cells reach the peak and how many times. Xoring with the
+      same value an even number of times contributes nothing (they cancel), while
+      an odd number of times leaves the value. So the answer is the xor of exactly
+      those bottom elements that reach the peak an **odd** number of times.
+
+      The count of paths from bottom position `i` (0-indexed) to the peak is the
+      binomial coefficient
+
+      ```
+      C(n - 1, i)
+      ```
+
+      Why? Think of the pyramid as Pascal's triangle: choosing between "up-left"
+      and "up-right" at each of the `n-1` steps from peak down to the bottom, with
+      `i` of the steps going right. So `a[i]` contributes to the peak xor if and
+      only if `C(n-1, i)` is **odd**.
+
+      ## Lucas' theorem: when is C(n, k) odd?
+
+      Lucas' theorem says (in prime base 2) that `C(n, k)` is odd if and only if
+      every bit of `k` is also set in `n` — i.e. `k` is a **bitwise submask** of
+      `n`. Applying it to `n-1`:
+
+      ```
+      C(n-1, i) is odd   ⟺   i is a submask of (n-1)   ⟺   (i & (n-1)) == i
+      ```
+
+      So the peak is simply:
+
+      ```
+      peak = xor of a[i] for all i in [0, n-1] with (i & (n-1)) == i
+      ```
+
+      For example with `n = 5` (so `n-1 = 4 = 100₂`), only `i ∈ {0, 4}` qualify, so
+      the peak is `a[0] ^ a[4]` and every middle element cancels out.
+
+      :::tip
+      **Interview tip:** an "xor pyramid" (each row is adjacent-xor of the row
+      below) is recognized by the **parity/binomial trick**: `a[i]` reaches the top
+      `C(n-1, i)` times, and cancels unless that is odd. Lucas' theorem turns
+      "odd binomial" into the one-liner `(i & (n-1)) == i`. Say that phrase and the
+      problem collapses from `O(n²)` to `O(n)`. This is one of the cleanest
+      "combinatorics meets bitwise" interview traps.
+      :::
+
+      Time: `O(n)`. Space: `O(1)`.
+  - type: markdown
+    content: |
+      # The Problem
+
+      A pyramid is built from an array of `n` integers written as the bottom row.
+      Each cell in every higher row is the **xor** of the two cells directly below
+      it. The topmost cell is the **peak**. Find the peak value.
+
+      ## Input
+
+      The first line contains an integer `n`. The second line contains `n`
+      integers `a1, a2, …, an`.
+
+      **Constraints:** `1 ≤ n ≤ 2·10^5`, `0 ≤ ai ≤ 10^9`.
+
+      ## Output
+
+      Print one integer: the peak value.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5
+      5 3 2 7 9
+      ```
+      **Output:**
+      ```
+      12
+      ```
+      Building the rows: `[5,3,2,7,9] → [6,1,5,14] → [7,4,11] → [3,15] →
+      [12]`. The peak is `12 = a1 ^ a5 = 5 ^ 9`; the middle elements `3, 2, 7`
+      cancel out over the build-up.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — build the whole pyramid, O(n²)**
+
+      Repeatedly produce the next row by xoring adjacent cells until one remains.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin >> n; vector<int> cur(n);
+          for (int &x : cur) cin >> x;
+          while (cur.size() > 1){
+              vector<int> nxt(cur.size() - 1);
+              for (int i = 0; i + 1 < (int)cur.size(); ++i)
+                  nxt[i] = cur[i] ^ cur[i + 1];
+              cur = nxt;
+          }
+          cout << cur[0] << "\n";
+          return 0;
+      }
+      ```
+
+      *Correct, but it allocates `O(n²)` cells in total — at `n = 2·10^5` that is
+      `4·10^10` operations, far too slow.*
+
+      **② Optimization — binomial parity rule, O(n) (optimal)**
+
+      Xor only the positions whose `C(n-1, i)` is odd, i.e. `(i & (n-1)) == i`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin >> n; vector<int> a(n);
+          for (int &x : a) cin >> x;
+          int ans = 0, mask = n - 1;
+          for (int i = 0; i < n; ++i)
+              if ((i & mask) == i)      // C(n-1,i) odd  <=>  i submask of n-1
+                  ans ^= a[i];
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n)` time, `O(1)` space — the tier we compile and verify.*
+
+      **③ Further optimization — none needed**
+
+      Reading `n` numbers already costs `O(n)`, so `O(n)` is optimal for the peak.
+
+      **④ Alternative algorithm — Lucas' theorem explicitly**
+
+      The same answer follows by computing `C(n-1, i)` mod 2 via Lucas: reduce in
+      base 2 and require every `k` bit `≤` the corresponding `n-1` bit.
+
+      ```cpp
+      int oddBinom(long long N, long long K){      // 1 if C(N,K) is odd
+          while (N || K){ if ((K & 1) && !(N & 1)) return 0; N >>= 1; K >>= 1; }
+          return 1;
+      }
+      // in main: for i in [0,n-1] if (oddBinom(n-1, i)) ans ^= a[i];
+      ```
+
+      *`O(n · log n)`. Conceptually identical to tier ② — tier ② is just Lucas'
+      theorem rewritten as the submask test.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`mask = n - 1`.** The peak-to-bottom path has `n-1` steps; bottom
+        position `i` is reached after `i` rightward steps, so it is hit `C(n-1, i)`
+        times.
+      - **`(i & mask) == i` is Lucas' theorem.** In base 2, `C(n-1, i)` is odd
+        exactly when every set bit of `i` is also set in `mask`. Since `i < n ≤
+        n-1+1`, no bit of `i` lies above `mask`, so `(i & (n-1)) == i` is exactly
+        the submask condition.
+      - **`ans ^= a[i]` only for odd counts.** Each bottom element reaching the
+        peak an even number of times xors away to 0 and disappears from the
+        answer; odd counts survive.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5`, array `5 3 2 7 9`, `mask = n-1 = 4 = 100₂`.
+
+      Check each `i`:
+      - `i=0`: `(0 & 4) == 0` ✓ → take `5`.
+      - `i=1`: `(1 & 4) = 0 ≠ 1` ✗
+      - `i=2`: `(2 & 4) = 0 ≠ 2` ✗
+      - `i=3`: `(3 & 4) = 0 ≠ 3` ✗
+      - `i=4`: `(4 & 4) = 4 == 4` ✓ → take `9`.
+
+      Peak `= 5 ^ 9 = 12`, matching the full pyramid construction in the sample.
+      Note `(n-1)` only has bit 2 set, so only positions whose bits are a subset of
+      `{bit 2}` — here `0` and `4` — survive.
+  - type: flowchart
+    title: "XOR pyramid peak via binomial parity"
+    nodes: ["bottom row a[0..n-1]", "a[i] reaches peak C(n-1,i) times", "odd count <=> C(n-1,i) odd <=> (i & (n-1)) == i", "xor a[i] where (i & (n-1)) == i", "print peak"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+  - type: mcq
+    prompt: "Why can we ignore a bottom element even when it takes part in many pyramid cells?"
+    options:
+      - "We cannot; every bottom element always affects the peak."
+      - "If a[i] reaches the peak C(n-1, i) times and that count is even, the copies cancel (x^...^x an even number of times = 0) inside the total xor, so only elements with an odd C(n-1, i) matter."
+      - "Because xoring is commutative, only the first element matters."
+      - "Because higher rows erase the elements below them."
+    answer: 1
+    explanation: "The peak is the xor of the copies of each bottom element that reach the top. XOR is its own inverse, so an even number of identical copies of a[i] xors to 0 regardless — they cancel. Only when the binomial count C(n-1, i) is odd does a[i] survive, which Lucas' theorem reduces to the simple submask test (i & (n-1)) == i."
+---

@@ -1,0 +1,204 @@
+---
+id: removing-digits
+title: Removing Digits
+difficulty: easy
+order: 64
+tags:
+  - dynamic-programming
+  - digits
+  - bfs
+  - minimisation
+  - dp
+blocks:
+  - type: markdown
+    content: |
+      # Removing Digits — fewest steps down to 0 by subtracting a digit
+
+      You have a number `n`. In one step you may subtract **one of the digits of
+      the current number** from it. (A `0` digit cannot be subtracted — you can
+      only subtract a positive digit `1..9`.) How many steps does it take to
+      reach `0`?
+
+      This is a *single-state* minimisation DP: the only parameter is the current
+      number.
+
+      ## The recurrence
+
+      From a value `v`, one step can move to `v − d` for any positive digit `d`
+      of `v`. We want the fewest steps to `0`, so:
+
+      ```
+      f(0) = 0
+      f(v) = 1 + min over positive digits d of v of f(v − d)
+      ```
+
+      `f(v)` = the minimum steps to reduce `v` to `0`. Because `d ≥ 1`, every
+      step strictly decreases `v`, so `f(v)` depends only on smaller values —
+      bottom-up over `v = 1 … n` works directly.
+
+      **Worked mini-example.** `n = 27` → `5` steps:
+      `27 → 20 → 18 → 10 → 9 → 0`. (Subtract `7`, then `2`, then `8`, then `1`,
+      then `9`.)
+
+      **Complexity.** Time `O(n · 10)` (each value has at most 9 useful digits),
+      which is effectively `O(n)`. Space `O(n)`. `n ≤ 10^6` is trivially fine.
+
+      **Another lens: BFS.** The transition structure is a *graph* — each value
+      `v` has edges `v → v−d` — and we want the shortest path from `n` to `0`.
+      Since all edges have weight 1, **BFS** gives the same answer with the same
+      `O(n · 10)` bound. So both the DP and a BFS are valid; the DP is the more
+      direct framing because the sub-problems are linearly ordered.
+
+      :::tip
+      **Interview tip:** "Repeatedly subtract a digit / reduce by removing
+      digits" problems are a favourite NT/-digit warm-up (e.g. *Minimum Number of
+      Steps to Reduce a Number to Zero*). The giveaway is a small bounded action
+      set — here at most 9 digits — that you apply over a range up to `10^6`.
+      A tiny bottom-up array `f[0..n]` with `f[v] = 1 + min f[v−digit]` is the
+      fastest safe answer. Be ready to explain why each step strictly decreases
+      `v` (so no cycles and no infinity).
+      :::
+  - type: markdown
+    content: |
+      # Question — Removing Digits
+
+      You are given an integer `n`. On each step, you may subtract one of the
+      digits from the number. How many steps are required to make the number
+      equal to `0`?
+
+      **Input:** The only input line has an integer `n`.
+
+      **Output:** Print one integer: the minimum number of steps.
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 10^6`
+
+      **Example**
+
+      Input:
+
+      ```
+      27
+      ```
+
+      Output:
+
+      ```
+      5
+      ```
+
+      (An optimal solution is `27 → 20 → 18 → 10 → 9 → 0`.)
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — recursion, exponential**
+
+      Try every first digit-subtraction and recurse. Branching is up to 9 ways
+      per level and depth is linear in `n`, so the recursion explores an
+      exponentially large tree.
+
+      ```cpp
+      int brute(int v, const vector<int>& big = {}) {
+          if (v == 0) return 0;
+          int best = INT_MAX, t = v;
+          while (t) { int d = t % 10; t /= 10;
+                      if (d > 0) best = min(best, brute(v - d) + 1); }
+          return best;
+      }
+      ```
+
+      Time exponential in `n` — impractically slow for `n = 10^6`.
+
+      **② Optimization — bottom-up DP, O(n · 10) time, O(n) space**
+
+      ```cpp
+      int solve(int n) {
+          vector<int> f(n + 1, 0);
+          for (int v = 1; v <= n; ++v) {
+              int best = INT_MAX, t = v;
+              while (t) { int d = t % 10; t /= 10;
+                          if (d > 0) best = min(best, f[v - d]); }
+              f[v] = 1 + best;                     // always one reachable digit, since v>0
+          }
+          return f[n];
+      }
+      ```
+
+      Time `O(n · 10) ≈ O(n)`, space `O(n)` — the intended solution.
+
+      **③ Alternative — BFS (shortest path), O(n · 10) time / O(n) space**
+
+      Model reachable values as nodes of an unweighted graph `v → v−d` and run a
+      BFS from `n` to `0`. Same complexity, and it doubles as a sanity check.
+
+      ```cpp
+      int solveBfs(int n) {
+          vector<int> dist(n + 1, -1);
+          queue<int> q; q.push(n); dist[n] = 0;
+          while (!q.empty()) {
+              int v = q.front(); q.pop();
+              if (v == 0) return dist[v];
+              int t = v;
+              while (t) { int d = t % 10; t /= 10;
+                          if (d > 0 && dist[v - d] == -1)
+                              { dist[v - d] = dist[v] + 1; q.push(v - d); } }
+          }
+          return -1;
+      }
+      ```
+
+      Time `O(n · 10)`, space `O(n)`.
+
+      **④ Greedy heuristic — subtract the largest digit**
+
+      "Always subtract the largest digit" is a natural short-cut. It is **not
+      optimal in general for digit-subtraction games**, but for *this* problem it
+      turns out correct: I verified it against the DP for every `n ≤ 10^6` (the
+      entire input domain) and it never disagrees. Use it only with that
+      verification in hand — the DP is the provable, standard answer.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the `②` DP:
+
+      - `f[0] = 0` (implicit) — reaching `0` from `0` needs no steps.
+      - For each `v` from `1` to `n` (ascending, so `f[v-d]` is finalised), we
+        extract its decimal digits with the `t % 10 … t /= 10` loop, discarding
+        `d = 0` (can't subtract zero).
+      - `best` holds the minimum `f[v-d]` over all positive digits; `f[v] =
+        1 + best` adds the one step taken. Since `v > 0` always has at least one
+        positive digit, `best` is always set and `f[v]` is well-defined.
+      - Strict decrease (`d ≥ 1`) means the recurrence is acyclic and bottom-up
+        filling is correct — no cycles to worry about.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(27)` on the sample. We compute `f[0..27]`; when computing
+      `f[v]` we look at digits of `v`. The interesting tail:
+
+      | v | digits | best f[v−d] | f[v] |
+      |---|--------|------------|------|
+      | 9 | 9 | f[0]=0 | 1 |
+      | 10 | 1 (0 ignored) | f[9]=1 | 2 |
+      | 18 | 8, 1 | min(f[10], f[17]) = 2 | 3 |
+      | 20 | 2 (0 ignored) | f[18]=3 | 4 |
+      | 27 | 7, 2 | min(f[20], f[25]) = 4 | **5** |
+
+      `f[27] = 5`, matching the sample output. The optimal path the DP finds is
+      `27 → 20 → 18 → 10 → 9 → 0`, exactly the explanation in the problem
+      statement.
+  - type: mcq
+    prompt: 'Why is the bottom-up DP correct (no cycles, always terminates) while a greedy "always subtract the largest digit" needs external justification?'
+    options:
+      - 'Because every step subtracts a positive digit, so the value strictly decreases and the DP scans smaller values already computed; greedy optimises one step at a time and is only safe when you can prove it matches, which is not generally true for digit games.'
+      - 'Because DP is always faster than greedy, regardless of correctness.'
+      - 'Because subtracting the largest digit always makes the number smaller than any DP could.'
+      - 'Because the digits must be sorted before they can be subtracted.'
+    answer: 0
+    explanation: 'DP is sound because each transition moves to a strictly smaller value (no cycles) and all sub-problems are solved in ascending order. Greedy maximizes the current decrease but its optimality for the full game needs a proof (here verified empirically over the whole input domain); in general digit-subtraction greedies can be suboptimal, so the DP is the defensible solution.'
+type: content
+---

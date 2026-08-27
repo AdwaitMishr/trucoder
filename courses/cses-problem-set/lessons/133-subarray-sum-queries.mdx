@@ -1,0 +1,260 @@
+---
+id: subarray-sum-queries
+title: Subarray Sum Queries
+type: content
+difficulty: medium
+order: 133
+tags:
+  - range-queries
+  - segment-tree
+  - maximum-subarray
+  - kadane
+blocks:
+  - type: markdown
+    content: |
+      # Subarray Sum Queries — a segment tree that combines subarrays
+
+      There is an array that changes one value at a time; after **every** point
+      update you must print the **maximum subarray sum** (empty subarray, sum
+      `0`, allowed). The killer detail: you need the answer *fresh after each of
+      `m` updates*.
+
+      The maximum-subarray problem alone is Kadane's algorithm, `O(n)`. But
+      re-running Kadane across the whole array `m` times is `O(m·n)` — and since
+      only *one* element changes per update, we can answer in `O(log n)` with a
+      segment tree, provided each node remembers **four numbers**:
+
+      - `sum` — the total sum of the segment;
+      - `bestPrefix` — max sum of a prefix of the segment;
+      - `bestSuffix` — max sum of a *suffix* of the segment;
+      - `best` — max sum of any *contiguous subarray* inside the segment.
+
+      Why four? Because when two segments `L` and `R` are joined, the best
+      subarray is either wholly in `L`, wholly in `R`, or **crosses the seam**
+      — and a crossing subarray is exactly `L.bestSuffix + R.bestPrefix`. So the
+      merge needs the suffix of the left and the prefix of the right, plus both
+      halves' internal bests.
+
+      ## Merge rules
+
+      For a node made of children `L` and `R`:
+
+      ```
+      sum        = L.sum + R.sum
+      bestPrefix = max( L.bestPrefix,  L.sum + R.bestPrefix )
+      bestSuffix = max( R.bestSuffix,  R.sum + L.bestSuffix )
+      best       = max( L.best, R.best, L.bestSuffix + R.bestPrefix )
+      ```
+
+      A prefix of `L+R` is either a prefix of `L` or all of `L` plus a prefix of
+      `R` (hence `L.sum + R.bestPrefix`); suffixes are symmetric; and the
+      crossing subarray uses the best suffix of `L` glued to the best prefix of
+      `R`. This is the same family of "derived-value merge" trees used for max
+      prefix sums, enriched with both directions.
+
+      :::tip
+      **Interview tip:** "report the maximum subarray after point updates" is a
+      very common upgrade-from-Kadane question. The expected answer is the
+      four-field segment tree. Interviewers listen for the exact seam argument —
+      "a crossing subarray is `left.bestSuffix + right.bestPrefix`" — and for
+      remembering that the *root*'s `best`, read off after each update, is the
+      live answer. Nail those two points and the rest follows mechanically.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There is an array consisting of `n` integers. Some values of the array
+      will be updated, and after each update your task is to report the
+      **maximum subarray sum** in the array.
+
+      Empty subarrays (with sum `0`) are allowed.
+
+      ## Input
+
+      The first input line contains integers `n` and `m`: the size of the array
+      and the number of updates. The array is indexed `1, 2, ..., n`.
+
+      The next line has `n` integers `x_1, x_2, ..., x_n`: the initial contents.
+
+      Then there are `m` lines describing the changes. Each line has two integers
+      `k` and `x`: the value at position `k` becomes `x`.
+
+      ## Output
+
+      After each update, print the maximum subarray sum on its own line.
+
+      ## Constraints
+
+      - `1 <= n, m <= 2 * 10^5`
+      - `-10^9 <= x_i <= 10^9`
+      - `1 <= k <= n`
+      - `-10^9 <= x <= 10^9`
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 3
+      1 2 -3 5 -1
+      2 6
+      3 1
+      2 -2
+      ```
+      **Output:**
+      ```
+      9
+      13
+      6
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — Kadane after each update, O(m·n) total**
+
+      After every point update, run Kadane's algorithm over the whole array
+      (`O(n)`) and print `max(0, best)`. Correct, but `m` updates times `O(n)`
+      each is up to `4*10^10` steps — far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          vector<ll> a(n + 1);
+          for (int i = 1; i <= n; i++) cin >> a[i];
+          while (m--) {
+              int k; ll x; cin >> k >> x; a[k] = x;
+              ll endHere = 0, best = 0;            // Kadane, empty allowed
+              for (int i = 1; i <= n; i++) { endHere = max(0LL, endHere + a[i]); best = max(best, endHere); }
+              cout << best << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      *`O(m·n)` worst case — correct but too slow for the real constraints.*
+
+      **② Optimization — segment tree `{sum, pre, suf, best}` — O((n+m) log n)** — optimal
+
+      Each node stores `sum`, `bestPrefix`, `bestSuffix`, `best`. A point update
+      re-merges one root-to-leaf path; after each update, print `max(0,
+      root.best)`. This is the tier we compile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      struct Node { ll sum, pre, suf, best; };
+
+      struct SegTree {
+          int n; vector<Node> t;
+          SegTree(const vector<ll>& a) { n = (int)a.size() - 1; t.assign(4 * n, {0, 0, 0, 0}); build(1, 1, n, a); }
+          Node merge(const Node& L, const Node& R) {
+              return {
+                  L.sum + R.sum,
+                  max(L.pre, L.sum + R.pre),
+                  max(R.suf, R.sum + L.suf),
+                  max({ L.best, R.best, L.suf + R.pre })
+              };
+          }
+          void build(int v, int l, int r, const vector<ll>& a) {
+              if (l == r) { ll s = a[l]; t[v] = { s, s, s, s }; return; }
+              int m = (l + r) / 2;
+              build(v * 2, l, m, a); build(v * 2 + 1, m + 1, r, a);
+              t[v] = merge(t[v * 2], t[v * 2 + 1]);
+          }
+          void update(int v, int l, int r, int pos, ll val) {
+              if (l == r) { t[v] = { val, val, val, val }; return; }
+              int m = (l + r) / 2;
+              if (pos <= m) update(v * 2, l, m, pos, val); else update(v * 2 + 1, m + 1, r, pos, val);
+              t[v] = merge(t[v * 2], t[v * 2 + 1]);
+          }
+      };
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          vector<ll> a(n + 1);
+          for (int i = 1; i <= n; i++) cin >> a[i];
+          SegTree st(a);
+          while (m--) {
+              int k; ll x; cin >> k >> x;
+              st.update(1, 1, n, k, x);
+              cout << max(0LL, st.t[1].best) << "\n";   // empty subarray allowed
+          }
+          return 0;
+      }
+      ```
+
+      *`O((n+m) log n)` time, `O(n)` space — optimal.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Leaf.** A single element `s` is its own segment: `sum = pre = suf =
+        best = s`.
+
+      - **Merge — the four formulas.** `sum` adds. `pre`/`suf` mirror the
+        max-prefix logic from the prefix-sum lesson, in both directions. `best`
+        is the interesting one: the max subarray in `L+R` can't start in `L` and
+        end in `R` without taking a suffix of `L` and a prefix of `R`, whose sum
+        is `L.suf + R.pre`. Taking `max` over all three cases is exact.
+
+      - **Update.** One leaf changes; `update` re-merges every ancestor of that
+        leaf (an `O(log n)` climb). Crucially, after a `+val` the whole tree is
+        rebuilt *influenced only by that one path* — nothing else moves.
+
+      - **Answer.** Since the whole array is the root's segment, `t[1].best` is
+        the max subarray sum over the entire array *right now*. We clamp with
+        `max(0, ...)` because the empty subarray is allowed and may beat a
+        counter-example where all elements are negative. Printing it after every
+        update is the whole requirement.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, `a = [1, 2, -3, 5, -1]`.
+
+      **Update `2 6`** — `a[2] = 6`, array `[1, 6, -3, 5, -1]`. The best
+      contiguous sum is `1 + 6 + (-3) + 5 = 9`. Expected `9`, answer `9`.
+
+      **Update `3 1`** — `a[3] = 1`, array `[1, 6, 1, 5, -1]`. Best is
+      `1 + 6 + 1 + 5 = 13`. Expected `13`, answer `13`.
+
+      **Update `2 -2`** — `a[2] = -2`, array `[1, -2, 1, 5, -1]`. The best
+      subarray is `[3..4] = 1 + 5 = 6` (`max(0,6)=6`, above the single element
+      `5`). Expected `6`, answer `6`.
+
+      Printed output:
+      ```
+      9
+      13
+      6
+      ```
+      Matching the sample exactly. Each answer is the root `best` read off right
+      after the point update propagated up the tree.
+  - type: flowchart
+    title: "Max subarray sum under point updates"
+    nodes: ["point update at position k", "re-merge one root-to-leaf path (O(log n))", "each node: sum, pre, suf, best", "crossing best = left.suf + right.pre", "root.best = live max subarray", "print max(0, root.best) after every update"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "To merge two adjacent segments L and R into a parent, a segment tree needs L's suffix and R's prefix because…"
+    options:
+      - "…without them the parent cannot know the total sum of the combined segment."
+      - "…the best subarray that crosses the seam is exactly some suffix of L plus some prefix of R, whose maximum sum is L.bestSuffix + R.bestPrefix; the best of (L.best, R.best, that crossing value) is the combined best."
+      - "…the crossing subarray must always start at L's first element and end at R's last element."
+      - "…prefixes and suffixes are never needed for maximum-subarray problems."
+    answer: 1
+    explanation: "A subarray crossing the boundary between L and R consists of a suffix of L glued to a prefix of R — no gap. L.bestSuffix + R.bestPrefix is its max sum, and taking the max with each half's internal best covers every subarray of the combined segment."
+---

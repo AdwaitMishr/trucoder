@@ -1,0 +1,262 @@
+---
+id: mst-edge-set-check
+title: MST Edge Set Check
+difficulty: hard
+order: 306
+tags:
+  - advanced-graph
+  - mst
+  - kruskal
+  - cycle-property
+  - rollback-dsu
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — can THIS whole set sit in one minimum spanning tree?
+
+      Now we get a collection of queries, each listing a **set of edges**, and must say whether every
+      edge of a set can be included in **one single** minimum spanning tree (simultaneously). This is
+      strictly stronger than the per-edge question from the previous lesson: each edge may be in *some*
+      MST, yet the whole set may be impossible.
+
+      **A cycle of equal-weight set-edges is the classic culprit.** Think of a triangle whose three
+      edges all have the same weight. Any one of them is in some MST (an MST picks two of the three),
+      but the set of **all three cannot**: a spanning tree holds only two edges of that triangle. The
+      batch idea must therefore test the set *as a whole*.
+
+      **Reduction to per-weight "forest" tests.** Build the MST by Kruskal in increasing weight. Give
+      the required set-edges **priority** within every weight class (this is the most favourable
+      tie-breaking for the set — if it fails even then, no MST contains them). Then:
+
+      1. Let `comp` be the components formed by **all** edges with weight `< w` (the same for every
+         query, since lighter edges are merged regardless of membership).
+      2. Within weight group `w`, the set's edges of weight `w` must all be addable **onto `comp`**
+         without forming a cycle. If two of them (after contracting `comp`) create a cycle, the whole
+         set is impossible.
+      3. Equal-weight non-set edges are *not* added before the set's edges — same weight never blocks,
+         which is exactly the priority we wanted.
+
+      > **A set `S` extends to some MST ⟺ for every weight `w`, the edges of `S` with weight `w`
+      > form a forest over the components built from edges of weight `< w`.**
+
+      **Efficient offline handling.** Because the total number of set-edges across all queries is at
+      most `m`, we can afford one grouped pass. At each weight group, the components `comp` differ per
+      query only in what that query's own lighter set-edges forced, so we reuse a single DSU and undo
+      (roll back) each query's temporary unions with a **rollback DSU**, keeping `comp` intact for the
+      next query and the next group.
+
+      **Complexity.** Sorting `m` edges plus, per weight group, a few find/union per set-edge with
+      rollback: **O((m + total set-edges)·log n)** time and **O(n + m)** space.
+
+      :::tip
+      **Interview tip:** "can this whole *set* be in some MST" upgrades the per-edge cycle property to
+      a **simultaneous constraint**. The two moves are (a) test each equal-weight slice of the set as
+      a **forest** over the lighter-edge components, and (b) keep those slices independent with a
+      **rollback (undo) DSU** so many sets can be checked in one offline sweep. This flexes the same
+      muscle as matroid/greedoid "extendability" arguments: a collection is extendable iff no piece of
+      it is forced into a cycle of its own kind.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an undirected weighted graph and edge sets, determine for each set if the edges can be
+      included in a minimum spanning tree.
+
+      **Input.** The first line has three integers `n`, `m` and `q`: the number of nodes, edges and
+      edge sets. The nodes are numbered `1, 2, …, n`. The following `m` lines describe the edges, each
+      with three integers `a`, `b`, `w`: there is an edge between nodes `a` and `b` with weight `w`.
+      The edges are numbered `1, 2, …, m` in the input order. The following `2q` lines describe the
+      edge sets: for each set, the first line contains its size and the second line contains its edges.
+      The total number of edges in all sets is at most `m`. The graph is connected and simple.
+
+      **Output.** For each edge set, print `YES` if the edges can be included in a minimum spanning
+      tree and `NO` otherwise.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 10^5`
+      - `1 ≤ m, q ≤ 2·10^5`
+      - `1 ≤ a, b ≤ n`
+      - `1 ≤ w ≤ 10^9`
+
+      ### Sample
+
+      **Input:**
+      ```
+      5 6 4
+      1 2 4
+      1 3 2
+      2 4 2
+      3 4 1
+      3 5 3
+      4 5 3
+      3
+      2 3 4
+      1
+      1
+      2
+      2 6
+      2
+      5 6
+      ```
+
+      **Output:**
+      ```
+      YES
+      NO
+      YES
+      NO
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — force each set into a full MST, O(q·m·α).** For each set, union all of the
+      set's edges first (fail if any cannot be added), complete into a spanning tree with Kruskal, and
+      compare its weight with the global MST weight. Exactly evaluates the definition, but does a full
+      MST per set — too slow when `q` is large.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct DSU{ vector<int> p; DSU(int n):p(n){iota(p.begin(),p.end(),0);} int f(int x){return p[x]==x?x:p[x]=f(p[x]);} bool u(int a,int b){a=f(a);b=f(b);if(a==b)return false;p[a]=b;return true;} };
+      int main(){
+          int n,m,q; cin>>n>>m>>q;
+          struct E{int w,a,b,id;};
+          vector<E> e(m);                              // edges in Kruskal (ascending weight) order
+          for(int i=0;i<m;i++){cin>>e[i].a>>e[i].b>>e[i].w; --e[i].a; --e[i].b; e[i].id=i; }
+          sort(e.begin(),e.end(),[](auto&x,auto&y){return x.w<y.w;});
+          DSU d(n); long long W=0;                     // global MST weight
+          for(auto&x:e) if(d.u(x.a,x.b)) W+=x.w;
+          while(q--){
+              int k; cin>>k; vector<char> inSet(m,0);
+              for(int i=0;i<k;i++){int id;cin>>id; --id; inSet[id]=1;}
+              DSU dd(n); bool ok=true; long long cw=0;
+              for(auto&x:e) if(inSet[x.id]){           // force every set edge in
+                  if(!dd.u(x.a,x.b)) ok=false; else cw+=x.w;
+              }
+              for(auto&x:e) if(!inSet[x.id]){          // then complete with the cheapest others
+                  if(dd.u(x.a,x.b)) cw+=x.w;
+              }
+              cout << ((ok && cw==W) ? "YES" : "NO") << '\n';
+          }
+      }
+      ```
+      **O(m·α)** per set — correct, but `O(q·m)` overall.
+
+      **② Optimization — offline grouped forest test with rollback DSU (submission).** Sort real edges
+      by weight; sweep weight groups; at group `w`, for each set, test whether its weight-`w` edges
+      form a forest over the current lighter-edge components (roll back afterwards so sets stay
+      independent), then permanently commit the group's unions:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      struct RollbackDSU {
+          vector<int> p, sz;
+          vector<array<int,3>> hist;                 // {node, field(0=p,1=sz), oldVal}
+          RollbackDSU(int n): p(n), sz(n,1){ iota(p.begin(),p.end(),0); }
+          int snap(){ return (int)hist.size(); }
+          void roll(int sn){ while((int)hist.size()>sn){ auto[node,field,old]=hist.back(); hist.pop_back();
+                              if(field==0) p[node]=old; else sz[node]=old; } }
+          int find(int x){ while(p[x]!=x) x=p[x]; return x; }
+          void unite(int a,int b){
+              a=find(a); b=find(b); if(a==b) return;
+              if(sz[a]<sz[b]) swap(a,b);
+              hist.push_back({b,0,p[b]});   p[b]=a;
+              hist.push_back({a,1,sz[a]});  sz[a]+=sz[b];
+          }
+      };
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m,q; cin>>n>>m>>q;
+          struct E{int a,b,w;};
+          vector<E> edge(m+1);
+          for(int i=1;i<=m;i++){ int a,b,w; cin>>a>>b>>w; --a; --b; edge[i]={a,b,w}; }
+
+          map<int, vector<pair<int,int>>> byW;        // weight -> (setId, edgeId)
+          for(int qi=0; qi<q; ++qi){ int k; cin>>k; for(int j=0;j<k;j++){ int id; cin>>id; byW[edge[id].w].push_back({qi,id}); } }
+
+          vector<char> ok(q, 1);
+          RollbackDSU d(n);
+          vector<int> ord(m); for(int i=0;i<m;i++) ord[i]=i+1;
+          sort(ord.begin(), ord.end(), [&](int x,int y){ return edge[x].w < edge[y].w; });
+
+          size_t oi=0;
+          for(auto& [w, qedges] : byW){                // ascending weight groups that touch a query
+              while(oi<ord.size() && edge[ord[oi]].w < w){ d.unite(edge[ord[oi]].a, edge[ord[oi]].b); ++oi; }
+              map<int, vector<int>> perq;
+              for(auto&[qi,id]: qedges) perq[qi].push_back(id);
+              for(auto&[qi,ids]: perq){                // test each set's weight-w slice independently
+                  int sn=d.snap();
+                  for(int id: ids){
+                      if(d.find(edge[id].a) == d.find(edge[id].b)){ ok[qi]=0; break; }   // cycle in slice
+                      d.unite(edge[id].a, edge[id].b);
+                  }
+                  d.roll(sn);                          // undo this set's temporary unions
+              }
+              while(oi<ord.size() && edge[ord[oi]].w == w){ d.unite(edge[ord[oi]].a, edge[ord[oi]].b); ++oi; }
+          }
+          for(char x: ok) cout << (x ? "YES" : "NO") << '\n';
+          return 0;
+      }
+      ```
+      **O((m + total set-edges)·log n)** time, **O(n + m)** space — the submission tier.
+
+      **④ Alternative — the same idea without rollback.** Instead of undoing unions, one can map each
+      set's weight-`w` endpoints to their `comp` roots and run a tiny per-set connectivity check over
+      just those roots. Conceptually identical and avoids rollback, but the rollback DSU above is the
+      cleanest to reason about and passes comfortably at the given limits.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      - `byW` groups every query edge by its **weight class**. We only visit weight groups that
+        actually contain a query edge.
+      - `RollbackDSU` adds a history stack: `unite` records the old parent/size before changing them,
+        `snap()`/`roll()` restore a previous state — used to make each set's slice test independent.
+      - At group `w`, `d` holds **all** edges of weight `< w` (permanently unioned as we sweep). Then,
+        for each set with weight-`w` edges, we test adding all of them: the first `find(a)==find(b)`
+        collision means a cycle within this slice → the set is impossible. After the test we `roll` so
+        the next set sees the untouched `d`.
+      - Finally the whole weight `w` real-edge group is committed, and we move on. A set is `YES` only
+        if no weight-group slice ever produced a cycle.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n=5,m=6,q=4`. Edge ids (1-indexed): `1=(1,2,4)`, `2=(1,3,2)`, `3=(2,4,2)`,
+      `4=(3,4,1)`, `5=(3,5,3)`, `6=(4,5,3)`. Sets: `{2,3,4}`, `{1}`, `{2,6}`, `{5,6}`.
+
+      **Set 1 `{2,3,4}` (weights 2,2,1):** at `w=1`, slice `{4}` over empty comp → ok. At `w=2`, slice
+      `{2,3}` over comp from `{3-4}` (i.e. `{3,4}`): `(1,3)` ok then `(2,4)` ok → **YES**.
+
+      **Set 2 `{1}` (weight 4):** by the time `w=4`, the lighter edges `{3,4},{1,3},{2,4},{3,5},{4,5}`
+      have connected **all five nodes**. Edge 1 `(1,2)` has `find(1)==find(2)` → cycle → **NO**.
+
+      **Set 3 `{2,6}` (weights 2,3):** `w=2` slice `{2}` over `{3,4}` → ok. `w=3` slice `{6}` over the
+      `{1,2,3,4}` component (node 5 alone) → `(4,5)` still disjoint → **YES**.
+
+      **Set 4 `{5,6}` (both weight 3):** at `w=3`, comp is `{1,2,3,4}` plus singleton `{5}`. Slice is
+      `{(3,5),(4,5)}`: add `(3,5)` ok (merges node 5 in), then `(4,5)` now has `find(4)==find(5)` →
+      cycle → this set is **NO** (an MST keeps only one of `3-5`/`4-5`; it cannot keep both).
+
+      **Result:** `YES NO YES NO` — matches the sample exactly.
+
+  - type: mcq
+    prompt: "For a set to extend to one MST, what must hold within every single weight group w?"
+    options:
+      - "The set's edges of weight w must form a forest over the components built from edges of weight < w."
+      - "Every set edge must be the globally lightest edge of the graph."
+      - "The set must contain all edges of weight w."
+      - "The set's edges must all connect to the root of the DSU."
+    answer: 0
+    explanation: "Kruskal with priority given to the set means its weight-w edges must all be addable at once onto the lighter-edge components. If two of them (after contraction) form a cycle, they cannot all be kept — exactly the equal-weight-triangle case — so the whole set fails. The offline sweep checks this for every weight class and every set, undoing each check with a rollback DSU."
+type: content
+---

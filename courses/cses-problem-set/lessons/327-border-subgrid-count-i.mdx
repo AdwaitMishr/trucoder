@@ -1,0 +1,222 @@
+---
+id: border-subgrid-count-i
+title: Border Subgrid Count I
+difficulty: medium
+order: 327
+tags:
+  - counting
+  - grid
+  - subgrid
+  - prefix-sum
+  - border
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting subgrids with a fully-filled border
+
+      This time the grid is binary (`0`/`1`) and the property is about the
+      **perimeter**: count every rectangular subgrid whose **entire border** (top
+      edge + bottom edge + left edge + right edge) consists of `1`s. The **interior
+      cells are free** — they may be `0` or `1`. This is a different, richer
+      counting problem than the all-filled ones: a subgrid can be valid even with
+      holes inside, as long as its frame is solid.
+
+      **The two building blocks.**
+
+      1. **2D prefix sums** give `O(1)` border verification: `borderSum(r1,r2,c1,c2)
+         = perimeter − corners` (sum of the two edge rows plus two edge columns,
+         minus the double-counted corners). With a prefix-sum array we can test any
+         subgrid's border in constant time.
+
+      2. **Row-pair run counting** gives the efficient count. Fix the top and bottom
+         rows `(r1, r2)`. Call a column `c` **solid** if column `c` is all `1`s from
+         `r1` to `r2` (so it can serve as a *side* edge). Within a maximal span of
+         columns where *both* `r1` and `r2` are `1` (so the top and bottom edges can
+         be filled), a span with `k` solid columns yields `k·(k+1)/2` bordered
+         subgrids: pick any solid column as left edge and any *later-or-equal* solid
+         column as right edge.
+
+      **Complexity.** Iterating all `O(n²)` row pairs and scanning columns gives
+      time `O(n²·m)`, space `O(m)`.
+
+      :::tip
+      **Interview tip:** \"count submatrices whose border is all ones\" (and the
+      related *largest* 1-bordered square, LeetCode 1139) rewards realising the
+      interior is irrelevant. Two patterns appear in interviews: a 2D prefix-sum for
+      border checks, and a row-pair sweep that counts in `O(n²·m)` instead of
+      enumerating `O(n²·m²)` subgrids. Show you can derive the border formula from
+      the prefix sums — that arithmetic is what they probe.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an `n × m` grid of `0` and `1`, count the number of rectangular
+      subgrids (contiguous blocks of cells) whose **border is entirely `1`s** — each
+      cell on the top, bottom, left or right boundary of the block must be `1`. Cells
+      strictly inside the block are unconstrained.
+
+      **Input.** The first line has two integers `n` and `m`. After this there are
+      `n` lines, each with `m` characters (`0` or `1`).
+
+      **Output.** Print the number of bordered subgrids.
+
+      **Constraints**
+      - `1 ≤ n, m ≤ 700`
+
+      **Example**
+
+      Input:
+      ```
+      3 4
+      1111
+      1001
+      1111
+      ```
+
+      Output:
+      ```
+      29
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²·m²·(n+m)).** Enumerate every subgrid, walk its border,
+      verify each border cell is `1`. Correct; far too slow at `n, m ≤ 700`.
+
+      ```cpp
+      long long brute(int n, int m, const vector<string>& g) {
+          long long ans = 0;
+          for (int r1 = 0; r1 < n; r1++) for (int r2 = r1; r2 < n; r2++)
+              for (int c1 = 0; c1 < m; c1++) for (int c2 = c1; c2 < m; c2++) {
+                  bool ok = all_of(g[r1].begin()+c1, g[r1].begin()+c2+1, [](char c){return c=='1';})
+                         && all_of(g[r2].begin()+c1, g[r2].begin()+c2+1, [](char c){return c=='1';});
+                  for (int rr = r1; rr <= r2 && ok; rr++)
+                      if (g[rr][c1] != '1' || g[rr][c2] != '1') ok = false;
+                  if (ok) ans++;
+              }
+          return ans;
+      }
+      ```
+
+      **② Optimization — O(n²·m²) with 2D prefix sums.** Precompute a 2D prefix
+      sum, then a subgrid's *whole-line* sum is `O(1)`; a subgrid is valid iff the
+      sum of its border equals the border's cell count (equivalently, each edge line
+      sums to its length). Still enumerates all `O(n²·m²)` subgrids — better
+      constant, same big-O — so at `n, m ≤ 700` it remains too slow; kept as the
+      stepping stone that introduces the prefix-sum border test.
+
+      ```cpp
+      long long solvePrefix(int n, int m, const vector<string>& g) {
+          vector<vector<int>> P(n+1, vector<int>(m+1, 0));
+          for (int i = 0; i < n; i++) for (int j = 0; j < m; j++)
+              P[i+1][j+1] = P[i][j+1] + P[i+1][j] - P[i][j] + (g[i][j] == '1');
+          auto sum = [&](int r1, int c1, int r2, int c2) { // inclusive, 0-based
+              return P[r2+1][c2+1] - P[r1][c2+1] - P[r2+1][c1] + P[r1][c1];
+          };
+          long long ans = 0;
+          for (int r1 = 0; r1 < n; r1++) for (int r2 = r1; r2 < n; r2++)
+              for (int c1 = 0; c1 < m; c1++) for (int c2 = c1; c2 < m; c2++) {
+                  int H = r2 - r1 + 1, W = c2 - c1 + 1;
+                  bool ok = true;
+                  if (sum(r1,c1,r1,c2) != W) ok = false;      // top edge
+                  if (sum(r2,c1,r2,c2) != W) ok = false;      // bottom edge
+                  if (sum(r1,c1,r2,c1) != H) ok = false;      // left edge
+                  if (sum(r1,c2,r2,c2) != H) ok = false;      // right edge
+                  if (ok) ans++;
+              }
+          return ans;
+      }
+      ```
+
+      **③ Further optimization — O(n²·m) row-pair counting — the intended
+      solution.** Fix `(r1, r2)`; a bordered subgrid's left and right edges must be
+      *solid* columns. Within each maximal span where both edge rows are `1`, count
+      solid columns `k` and add `k·(k+1)/2`. Verified against brute force.
+
+      ```cpp
+      long long solve(int n, int m, const vector<string>& g) {
+          long long ans = 0;
+          for (int r1 = 0; r1 < n; r1++) {
+              vector<char> solid(m);
+              for (int c = 0; c < m; c++) solid[c] = (g[r1][c] == '1');
+              for (int r2 = r1; r2 < n; r2++) {
+                  long long k = 0;
+                  for (int c = 0; c < m; c++) {
+                      solid[c] = solid[c] && (g[r2][c] == '1');   // column c solid for rows r1..r2
+                      if (g[r1][c] == '1' && g[r2][c] == '1') {   // inside a top&bottom-edge span
+                          if (solid[c]) k++;
+                      } else { ans += k * (k + 1) / 2; k = 0; }    // span ends
+                  }
+                  ans += k * (k + 1) / 2;
+              }
+          }
+          return ans;
+      }
+      int main() { int n, m; cin >> n >> m; vector<string> g(n);
+                   for (auto& r : g) cin >> r; cout << solve(n, m, g) << "\n"; }
+      ```
+
+      **④ Note.** The ①–③ ladder is the whole story here: ② teaches the prefix-sum
+      border test (valuable for the *largest* variant), ③ provides the counting
+      speed-up. There is no faster closed-form — counting bordered rectangles is
+      inherently `Ω(n²)` in the row gap.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      Focus on the **③** row-pair solution.
+
+      - **`solid[c]`:** accumulated across `r2`; `solid[c]` stays truthy only while
+        column `c` is `1` in every row from `r1` to `r2`. It is a *side-edge*
+        candidate.
+      - **Double-condition gather:** we count a column toward `k` only when it is in
+        a maximal span `g[r1][c]=='1' && g[r2][c]=='1'` — i.e. the top and bottom
+        edges can run across it — *and* the column is solid (so it can serve as a
+        vertical border).
+      - **Span close:** the moment a column breaks the top/bottom-edge run, the
+        current span ends; every left/right solid-column pair inside it (`k` choose
+        ordered `≤`) forms a valid bordered subgrid, `k·(k+1)/2`.
+      - **Single-column subgrids:** a lone solid column is counted as `k` of the
+        formula's `k+1` factor (a `1`-atom when `k=1` → `1`), covering width-`1`
+        rectangles.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 3, m = 4`, grid
+      `["1111", "1001", "1111"]`. A brute-force enumeration groups the 29 bordered
+      subgrids by size:
+
+      | size | count | why |
+      |------|-------|-----|
+      | `1×1` | 10 | every `1` cell (row 0/2 have 4 each, row 1 has 2) |
+      | `1×2` | 6 | row 0 + row 2, each contributes 3 two-wide subarrays |
+      | `1×3` | 4 | row 0 + row 2, each 2 three-wide subarrays |
+      | `1×4` | 2 | the two full rows 0 and 2 |
+      | `2×1` | 4 | solid 2-tall columns: cols 0 & 3 for rows `(0,1)` and `(1,2)` |
+      | `3×1` | 2 | solid full-height columns 0 & 3 (rows 0..2) |
+      | `3×4` | 1 | the whole grid — the only height ≥ 2, width ≥ 2 block whose frame of 1s is solid (its interior `0`s at `(1,1),(1,2)` are allowed) |
+
+      Height-1 column = 22, width-1 column = 16, **total = 29**.
+
+      **Actual vs expected:** output `29`, matching the sample (and the brute-force
+      cross-check). Note the `3×4` full grid is counted even though its interior has
+      two `0`s — only the border matters.
+  - type: mcq
+    prompt: "In the row-pair O(n²·m) method, why can a bordered subgrid have a '0' strictly inside it and still be counted?"
+    options:
+      - "Because the border condition only constrains the four edge lines; any cells not on the top, bottom, left or right boundary are interior and are never inspected."
+      - "Because 0 and 1 are interchangeable everywhere in this problem."
+      - "Because interior cells are ignored when n or m is odd."
+      - "Because prefix sums already zero out interior 0s before counting."
+    answer: 0
+    explanation: "A subgrid is 'bordered' iff every cell on its perimeter is 1. The interior (cells strictly between the two edge rows and the two edge columns) plays no role — it is neither checked nor counted. The row-pair method therefore only needs two properties: the top/bottom edge rows are all 1 across the span, and the left/right edge columns are solid — never the interior. This is why a sparse interior doesn't invalidate the subgrid."
+
+type: content
+---

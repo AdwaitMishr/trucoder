@@ -1,0 +1,271 @@
+---
+id: parcel-delivery
+title: Parcel Delivery
+type: content
+difficulty: hard
+order: 256
+tags:
+  - min-cost-flow
+  - graph
+  - successive-shortest-paths
+  - spfa
+blocks:
+  - type: markdown
+    content: |
+      # Parcel Delivery — cheapest way to move k units of flow
+
+      There are `n` cities connected by `m` one-way routes. Each route `a → b`
+      can carry at most `r` parcels and charges `c` per parcel. We must send `k`
+      parcels from city `1` (Syrjälä) to city `n` (Lehmälä) at minimum total
+      cost, or report `-1` if impossible.
+
+      This is exactly **min-cost max-flow** (more precisely, min-cost *flow of
+      value exactly `k`*). Each route becomes an edge with capacity `r` and per-
+      unit cost `c`; we push from a super-source `1` toward sink `n` until
+      `k` units have moved, always preferring the cheapest remaining route.
+
+      With `n ≤ 500`, `m ≤ 1000`, `k ≤ 100`, the **successive shortest path**
+      algorithm is the natural fit.
+
+      ## Why "cheapest path greedily" must be done in the residual graph
+
+      One might naively send parcels down the current cheapest `1 → n` path,
+      delete it, and repeat. That fails: pushing flow down one path can *free or
+      cheapen* capacity elsewhere (flow can be re-routed backwards), so the
+      optimal plan is not generally a set of independently-cheapest paths. The
+      fix is the **residual graph**: every unit of flow we send creates a reverse
+      edge of capacity `1` and cost `-c`. Finding the *cheapest path in the
+      residual graph* each round and pushing along it gracefully allows flow to
+      be **redirected** at zero cost, so the greedy becomes optimal. This is the
+      Successive Shortest Path (SSP) algorithm.
+
+      ## Algorithm outline
+
+      1. Build the flow network: each route → directed edge, capacity `r`,
+         cost `c`, plus a zero-cost reverse edge (capacity `0`, cost `-c`).
+      2. While total flow `< k`: find the minimum-*cost* `1 → n` path in the
+         residual graph (Bellman-Ford / SPFA, since negative edges appear via
+         reverses). If none exists, the answer is `-1`.
+      3. Push as much as possible along it, add `pushed × pathCost` to the answer.
+      4. When flow reaches `k`, print the total cost.
+
+      A path can have negative-cost edges (reverse arcs), so Dijkstra needs
+      potentials — or we simply use **SPFA/Bellman-Ford**, which handles
+      negatives directly and is fast enough at these sizes.
+
+      :::tip
+      **Interview tip:** "each edge has a capacity and a per-unit cost; minimize
+      total cost to ship k units" is the min-cost-flow signal. Say "successive
+      shortest paths on the residual graph" and name why the residual is needed
+      (route redirection/undo). Variants to expect: transportation with supply
+      and demand, job scheduling with costs, and bipartite **assignment** which
+      collapses into min-cost matching (the Hungarian algorithm). If `k` is tiny,
+      a plain Dijkstra-per-unit also passes — but mention SSP for big `k`.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` cities and `m` routes through which parcels can be carried
+      from one city to another city. For each route, you know the maximum number
+      of parcels and the cost of a single parcel.
+
+      You want to send `k` parcels from Syrjälä to Lehmälä. What is the cheapest
+      way to do that?
+
+      ## Input
+
+      The first input line has three integers `n`, `m` and `k`: the number of
+      cities, routes and parcels. The cities are numbered `1, 2, …, n`. City `1`
+      is Syrjälä and city `n` is Lehmälä.
+
+      After this, there are `m` lines that describe the routes. Each line has four
+      integers `a, b, r` and `c`: there is a route from city `a` to city `b`, at
+      most `r` parcels can be carried through the route, and the cost of each
+      parcel is `c`.
+
+      **Constraints:** `2 <= n <= 500`, `1 <= m <= 1000`, `1 <= k <= 100`,
+      `1 <= a, b <= n`, `1 <= r, c <= 1000`
+
+      ## Output
+
+      Print one integer: the minimum total cost, or `-1` if there are no
+      solutions.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 5 3
+      1 2 5 100
+      1 3 10 50
+      1 4 7 500
+      2 4 8 350
+      3 4 2 100
+      ```
+      **Output:**
+      ```
+      750
+      ```
+      One parcel is delivered through route `1 → 2 → 4` (cost `1·(100+350)=450`)
+      and two parcels are delivered through route `1 → 3 → 4` (cost `2·(50+100)
+      =300`), total `750`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — one parcel per cheapest path, O(k·n·m)**
+
+      With `k ≤ 100`, repeatedly find the cheapest `1 → n` residual path with
+      Bellman-Ford and push a single parcel. Correct (SSP with one unit per
+      round), just slower.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      struct E { int to, rev; ll cap, cost; };
+      vector<vector<E>> g;
+      void addE(int a,int b,ll cap,ll cost){
+          g[a].push_back({b,(int)g[b].size(),cap,cost});
+          g[b].push_back({a,(int)g[a].size()-1,0,-cost});
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,m; ll k; cin>>n>>m>>k;
+          g.assign(n,{});
+          for(int i=0;i<m;i++){ int a,b; ll r,c; cin>>a>>b>>r>>c; a--;b--; addE(a,b,r,c); }
+          int s=0,t=n-1; ll flow=0,cost=0;
+          while(flow<k){
+              vector<ll> dist(n,LLONG_MAX), par(n,-1), pe(n,-1); dist[s]=0;
+              bool upd=true;
+              for(int it=0; it<n && upd; it++){
+                  upd=false;
+                  for(int v=0;v<n;v++) if(dist[v]<LLONG_MAX)
+                      for(int i=0;i<(int)g[v].size();i++){ auto&e=g[v][i];
+                          if(e.cap>0 && dist[e.to]>dist[v]+e.cost){ dist[e.to]=dist[v]+e.cost; par[e.to]=v; pe[e.to]=i; upd=true; } }
+              }
+              if(dist[t]==LLONG_MAX) break;
+              for(int v=t;v!=s;v=par[v]){ auto&e=g[par[v]][pe[v]]; e.cap--; g[v][e.rev].cap++; cost+=e.cost; }
+              flow++;
+          }
+          cout << (flow<k ? -1 : cost) << "\n";
+          return 0;
+      }
+      ```
+
+      *Correct, but up to `k` rounds × `O(n·m)` Bellman-Ford ≈ `100 · 10⁵` —
+      OK-ish here, but not the clean optimal tier.*
+
+      **② Optimization — SPFA shortest path, push the whole bottleneck, O(k·n·m)**
+      **with fast constants (optimal)**
+
+      Use a dequeue-optimized SPFA per round and push as much as the path allows
+      (the residual bottleneck), so each round pushes optimally and the code
+      stays simple. This is the tier we compile and verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      struct E { int to, rev; ll cap, cost; };
+      vector<vector<E>> g;
+      void addE(int a,int b,ll cap,ll cost){
+          g[a].push_back({b,(int)g[b].size(),cap,cost});
+          g[b].push_back({a,(int)g[a].size()-1,0,-cost});
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,m; ll k; cin>>n>>m>>k;
+          g.assign(n,{});
+          for(int i=0;i<m;i++){ int a,b; ll r,c; cin>>a>>b>>r>>c; a--;b--; addE(a,b,r,c); }
+          int s=0,t=n-1; ll flow=0,cost=0;
+          while(flow<k){
+              vector<ll> dist(n,LLONG_MAX); vector<int> par(n,-1), pe(n,-1); vector<char> inq(n,false);
+              deque<int> q; dist[s]=0; q.push_back(s); inq[s]=true;
+              while(!q.empty()){
+                  int v=q.front(); q.pop_front(); inq[v]=false;
+                  for(int i=0;i<(int)g[v].size();i++){ auto&e=g[v][i];
+                      if(e.cap>0 && dist[e.to]>dist[v]+e.cost){
+                          dist[e.to]=dist[v]+e.cost; par[e.to]=v; pe[e.to]=i;
+                          if(!inq[e.to]){ inq[e.to]=true; q.push_back(e.to); } } }
+              }
+              if(dist[t]==LLONG_MAX) break;                  // no more flow possible
+              ll f = k - flow;
+              for(int v=t;v!=s;v=par[v]) f = min(f, g[par[v]][pe[v]].cap);   // bottleneck
+              for(int v=t;v!=s;v=par[v]){ auto&e=g[par[v]][pe[v]]; e.cap-=f; g[v][e.rev].cap+=f; cost+=f*e.cost; }
+              flow+=f;
+          }
+          cout << (flow<k ? -1 : cost) << "\n";
+          return 0;
+      }
+      ```
+
+      *Each round is an `O(k·n·m)`-bounded SPFA; pushing the bottleneck means at
+      most `k` unit-pushes at the sink per round but typically far fewer, so it
+      runs comfortably for the given constraints. `O(n+m)` space.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Network model.** Every route becomes a directed edge `(cap=r, cost=c)`
+        plus a reverse residual edge `(cap=0, cost=-c)`. The reverse arcs are the
+        key to correctness — they let flow be rerouted — so we always push along
+        a residual-graph cheapest path, never just "delete the used route".
+      - **SPFA for negative edges.** Reverse arcs carry negative cost, and costs
+        become cheaper as flow reroutes, so plain Dijkstra is invalid without
+        potentials. SPFA (a deque-optimized Bellman-Ford) handles negative edges
+        directly and is fast at `n ≤ 500`.
+      - **Stop conditions.** Loop while `flow < k`. If the sink becomes
+        unreachable in the residual graph, the max flow is `< k` — output `-1`.
+        Otherwise the accumulated `cost` is the minimum total parcel cost.
+      - **Bottleneck push.** `f = min(k - flow, path bottleneck)` sends as many
+        parcels as the cheapest path will bear in one go, so the count of rounds
+        stays small even though `k` can be up to `100`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 4`, routes:
+      ```
+      1→2 (cap5, c100)   1→3 (cap10, c50)   1→4 (cap7, c500)
+      2→4 (cap8, c350)   3→4 (cap2, c100)
+      ```
+      `k = 3`.
+
+      **Round 1 — cheapest residual `1 → 1→3→4`, cost `50+100=150`.**
+      Bottleneck `min(10, 2, k-flow=3) = 2`. Push 2 parcels, `cost += 2·150=300`.
+      `flow = 2`. Residual `1→3, 3→4` now nearly saturated (3→4 cap left 0).
+
+      **Round 2 — cheapest residual path now `1→2→4`, cost `100+350=450`.**
+      Bottleneck `min(5, 8, k-flow=1) = 1`. Push 1 parcel, `cost += 450`.
+      `flow = 3 = k`. Stop.
+
+      Total cost `300 + 450 = 750`.
+
+      Printed:
+      ```
+      750
+      ```
+      Expected (sample) `750` — **match**. (Matches the explanation: 1 parcel
+      via `1→2→4` costing `450`, 2 via `1→3→4` costing `300`.)
+  - type: flowchart
+    title: "Min-cost flow via successive shortest paths"
+    nodes: ["model routes as edges cap=r cost=c (+reverse residual)", "while flow < k", "find cheapest residual path 1 -> n (SPFA)", "path exists?", "push bottleneck along path, add cost", "yes: loop", "no: print flow < k ? -1 : cost"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 4, to: 1}
+      - {from: 3, to: 5, label: "no"}
+  - type: mcq
+    prompt: "Why must the cheapest path be searched in the residual graph rather than simply deleting the used route each round?"
+    options:
+      - "Because residual reverse edges give zero-cost shortcuts that let a later path effectively re-route earlier flow, which is required for the greedy repeated-cheapest-path choice to be globally optimal."
+      - "Because edge deletion is not implemented in the adjacency list."
+      - "Because the residual graph has fewer nodes and is therefore faster to search."
+      - "Because deleting edges guarantees -1 output, which is always the correct answer."
+    answer: 0
+    explanation: "A set of independently-cheapest paths is not necessarily optimal — an early cheap path can block a better global plan. The residual network records, for every unit pushed, a reverse edge of cost -c; taking such an edge in a later shortest path effectively undoes part of a previous decision at no real cost. Successive-shortest-path is only optimal because this local undo capability lets it explore re-routing, not just fresh routes."
+---

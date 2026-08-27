@@ -1,0 +1,314 @@
+---
+id: dynamic-connectivity
+title: Dynamic Connectivity
+type: content
+difficulty: hard
+order: 255
+tags:
+  - dsu
+  - offline
+  - divide-and-conquer
+  - rollback
+  - segment-tree
+blocks:
+  - type: markdown
+    content: |
+      # Dynamic Connectivity — components under edge insertions and deletions
+
+      We start with `n` nodes and `m` edges, then an online stream of `k`
+      events: *add edge (a, b)* or *remove edge (a, b)*. After every event we
+      must print the number of connected components.
+
+      The catch is the **removals**. A plain DSU only supports inserts; deleting
+      an edge can split a component, so we cannot just keep union-ing. With
+      `n, m, k ≤ 10⁵`, rebuilding components from scratch after each event
+      (`O(k·(n+m))`) is too slow. The fix is to process events **offline** with a
+      **divide-and-conquer over time** driven by a **rollback DSU**.
+
+      ## Each edge lives on a time interval
+
+      An edge is not "always present" — it has a lifetime `[l, r]` of event-index
+      positions during which it exists. Offline, we can compute these intervals:
+
+      - an initial edge lives from the start until the event that removes it;
+      - an added edge lives from its add event until its remove event (or the end).
+
+      The answer at event `t` is the component count of the graph that contains
+      exactly the edges whose interval covers `t`. If we could, for each `t`,
+      apply exactly those edges and ask "how many components", we would be done.
+
+      ## Segment tree over time + DFS with rollback
+
+      The "for each `t`, apply edges whose interval covers `t`" problem is the
+      classic job of a **segment tree over the time axis**:
+
+      1. Insert every edge's interval `[l, r]` into the `O(log k)` segment-tree
+         nodes that fully cover it — so each edge is stored in only `O(log k)`
+         places.
+      2. DFS from the root. At a node, **union** all its stored edges into a
+         rollback DSU, recurse into children, then **roll back** the un-ions
+         before leaving (so siblings never leak edges into each other).
+      3. At a leaf (time `t`), record the current component count.
+
+      Total insertions are `O((m+k) log k)`; each union is near `O(1)` amortised,
+      so the whole process is `O((m+k) log k · α)`. Critically, the rollback DSU
+      must be able to undo its last union — track a stack of "what changed".
+
+      ## The rollback DSU
+
+      Union by **size/rank** (never path-compress, or undo becomes impossible
+      because compressed pointers rewrite history). Store on a stack, for each
+      union, the two roots and their sizes; `rollback()` pops the stack and
+      restores, decrementing the component counter that popped un-union.
+
+      :::tip
+      **Interview tip:** "add *and* remove edges, answer connectivity after every
+      operation" is the canonical **offline dynamic connectivity** question.
+      The trick to remember: turn insertions/deletions into **lifetimes over a
+      time axis**, drop them into a segment tree, and DFS with a **rollback
+      DSU**. It is also the jumping-off point for divide-and-conquer
+      optimisation (parallel binary search) on other monotone query families.
+      An online alternative (link-cut trees) is rarely expected in interviews.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Consider an undirected graph that consists of `n` nodes and `m` edges.
+      There are two types of events that can happen: a new edge is created, or
+      an existing edge is removed.
+
+      Your task is to report the number of components after every event.
+
+      ## Input
+
+      The first input line has three integers `n`, `m` and `k`: the number of
+      nodes, edges and events.
+
+      After this there are `m` lines describing the edges. Each line has two
+      integers `a` and `b`: there is an edge between nodes `a` and `b`. There is
+      at most one edge between any pair of nodes.
+
+      Then there are `k` lines describing the events. Each line has the form
+      `t a b` where `t` is `1` (create a new edge) or `2` (remove an edge). A new
+      edge is always created between two nodes that do not already have an edge
+      between them, and only existing edges can be removed.
+
+      **Constraints:** `2 <= n <= 10^5`, `1 <= m, k <= 10^5`, `1 <= a, b <= n`
+
+      ## Output
+
+      Print `k + 1` integers: first the number of components before the first
+      event, and after this the new number of components after each event.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 3 3
+      1 4
+      2 3
+      3 5
+      1 2 5
+      2 3 5
+      1 1 2
+      ```
+      **Output:**
+      ```
+      2 2 2 1
+      ```
+      (`m = 3` initial edges; then add `2-5`, remove `3-5`, add `1-2`.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — rebuild after every event, O(k·(n+m))**
+
+      Keep the current edge set, and after each event rebuild the component count
+      with a fresh path-compressing DSU over all current edges.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int comps(int n, const set<pair<int,int>>& es){
+          vector<int> p(n); iota(p.begin(), p.end(), 0);
+          function<int(int)> f = [&](int x){ return p[x]==x ? x : p[x]=f(p[x]); };
+          for (auto& e : es){ int a=f(e.first), b=f(e.second); if (a!=b) p[a]=b; }
+          set<int> roots; for (int i=0;i<n;i++) roots.insert(f(i));
+          return (int)roots.size();
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m, k; cin >> n >> m >> k;
+          set<pair<int,int>> es;
+          for (int i=0;i<m;i++){ int a,b; cin>>a>>b; a--;b--; if(a>b) swap(a,b); es.insert({a,b}); }
+          cout << comps(n, es);
+          for (int i=0;i<k;i++){
+              int t,a,b; cin>>t>>a>>b; a--;b--; if(a>b) swap(a,b);
+              if (t==1) es.insert({a,b}); else es.erase({a,b});
+              cout << " " << comps(n, es);
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(k·(n+m))` — rebuilding `m`-edge connectivity `k+1` times. Too slow for
+      `10⁵`.*
+
+      **② Optimization — offline D&C with rollback DSU, O((m+k) log k) (optimal)**
+
+      Build edge lifetime intervals, drop them into a segment tree over the time
+      axis, then DFS with a rollback DSU, recording the component count at each
+      leaf. Compiled and run against the sample.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct DSU {
+          vector<int> p, sz; int comps;
+          struct Op { int a, b, sa, sb; };
+          vector<Op> hist;
+          DSU(int n){ p.resize(n); sz.assign(n,1); iota(p.begin(),p.end(),0); comps=n; }
+          int find(int x){ while (p[x]!=x) x=p[x]; return x; }   // no path compression
+          void unite(int a,int b){
+              a=find(a); b=find(b);
+              if (a==b) return;
+              if (sz[a]<sz[b]) swap(a,b);
+              hist.push_back({a,b,sz[a],sz[b]});
+              p[b]=a; sz[a]+=sz[b]; comps--;
+          }
+          void rollback(int to){
+              while ((int)hist.size() > to){
+                  Op o=hist.back(); hist.pop_back();
+                  p[o.b]=o.b; sz[o.a]=o.sa; comps++;
+              }
+          }
+          int snapshot(){ return (int)hist.size(); }
+      };
+      struct Seg { vector<pair<int,int>> edges; };
+      const int MAXS = 1<<18;
+      Seg st[MAXS*2];
+      int K; vector<int> ans;
+      void addSeg(int node,int l,int r,int ql,int qr,pair<int,int> e){
+          if (qr<l || r<ql) return;
+          if (ql<=l && r<=qr){ st[node].edges.push_back(e); return; }
+          int mid=(l+r)/2;
+          addSeg(node*2,l,mid,ql,qr,e);
+          addSeg(node*2+1,mid+1,r,ql,qr,e);
+      }
+      void dfs(DSU& dsu,int node,int l,int r){
+          int snap=dsu.snapshot();
+          for (auto& e : st[node].edges) dsu.unite(e.first,e.second);
+          if (l==r) ans[l]=dsu.comps;
+          else { int mid=(l+r)/2; dfs(dsu,node*2,l,mid); dfs(dsu,node*2+1,mid+1,r); }
+          dsu.rollback(snap);
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,m,k; cin>>n>>m>>k;
+          map<pair<int,int>,int> lifeStart;
+          vector<pair<int,int>> events(k); vector<int> t(k);
+          for (int i=0;i<m;i++){ int a,b; cin>>a>>b; a--;b--; if(a>b) swap(a,b); lifeStart[{a,b}]=0; }
+          for (int i=0;i<k;i++){ int tt,a,b; cin>>tt>>a>>b; a--;b--; if(a>b) swap(a,b); t[i]=tt; events[i]={a,b}; }
+          vector<pair<pair<int,int>,pair<int,int>>> lives;   // edge -> {startState,endState}
+          auto record=[&](pair<int,int> e,int endState){
+              auto it=lifeStart.find(e); if (it==lifeStart.end() || it->second==INT_MAX) return;
+              int s=it->second; if (s<=endState) lives.push_back({e,{s,endState}});
+              it->second=INT_MAX;
+          };
+          for (int i=0;i<k;i++){
+              auto e=events[i];
+              if (t[i]==1) lifeStart[e]=i+1;                 // active from state i+1
+              else record(e,i);                              // removed at event i(0-based): active through state i
+          }
+          for (auto& kv : lifeStart) if (kv.second!=INT_MAX) lives.push_back({kv.first,{kv.second,k}});
+          K=k;
+          for (auto& L : lives){ int l=L.second.first, r=L.second.second; if (l<=r) addSeg(1,0,k,l,r,L.first); }
+          DSU dsu(n); ans.assign(k+1,0);
+          dfs(dsu,1,0,k);
+          for (int i=0;i<=k;i++){ if(i) cout<<" "; cout<<ans[i]; }
+          cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O((m+k) log k · α)` time, `O((m+k) log k)` space. This is the optimal
+      offline tier.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Lifetime bookkeeping.** A `map<pair,int>` remembers where each edge
+        *started* living (state 0 for initial edges). An add event sets the
+        start to `i+1`; a remove event closes the interval at `i` and pushes one
+        live edge `{start, end}`. Edges never removed live until `k`. Only edges
+        actually created are recorded (`INT_MAX` marks a closed edge so we never
+        double-count).
+      - **Time axis = states 0..k.** State `t` is the component count *after*
+        events `1..t` (`t=0` is the initial graph). An edge whose interval covers
+        `t` is present in that state — exactly the graph the segment tree leaf
+        `t` must reflect.
+      - **Segment tree insertion.** `addSeg` places one edge into all `O(log k)`
+        canonical nodes covering its interval, so the DFS applies each edge only
+        where it matters, not everywhere.
+      - **DFS + snapshot/rollback.** At a node, `unite` all stored edges, recurse,
+        then `rollback` to the pre-node snapshot. Siblings therefore never see
+        each other's edges — the tree's coverage is exactly temporal disjointness.
+      - **Rollback DSU.** Union by size, no path compression (else undo breaks).
+        Each union logs the two roots and sizes, so `rollback` can reverse it and
+        bump `comps` back up.
+      - **Leaf output.** `ans[l] = dsu.comps` at every leaf; printed front to
+        back gives the `k+1` requested values.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5`, initial edges `1-4, 2-3, 3-5`, events
+      `add 2-5, remove 3-5, add 1-2`. States `0..3`.
+
+      **Intervals (states during which each edge exists):**
+      ```
+      1-4 : [0,3]   2-3 : [0,3]   3-5 : [0,1]   (removed at event1 -> gone from state 2)
+      2-5 : [1,3]   (added by event0)            1-2 : [3,3]  (added by event2)
+      ```
+
+      **Segment-tree DFS.** Leaf states build the graph from exactly the edges
+      covering them, then report component counts:
+      ```
+      state0: edges 1-4,2-3,3-5        -> comps = {1,4},{2,3,5}   = 2
+      state1: + 2-5 (add event0)       -> still connected 2,5     = 2
+      state2: - 3-5 (remove event1)    -> {1,4},{2},{3},{5}? no:
+             edges 1-4,2-3,2-5         -> {1,4},{2,3,5}           = 2
+      state3: + 1-2 (add event2)       -> all of {1,2,3,4,5}      = 1
+      ```
+      Let me recheck state 2 carefully. Edges at state 2: `1-4`, `2-3`, `2-5`
+      (`3-5` was removed). Components: `{1,4}`, `{2,3,5}` (2-3 and 2-5 tie 2,3,5
+      together). Count `2`. State 3 adds `1-2`, gluing everything: `1`.
+
+      Printed:
+      ```
+      2 2 2 1
+      ```
+      Expected (sample) `2 2 2 1` — **match**.
+  - type: flowchart
+    title: "Offline dynamic connectivity via D&C + rollback DSU"
+    nodes: ["compute lifetime interval [l,r] of every edge", "insert each interval into O(log k) segment-tree nodes", "DFS the time tree from the root", "at node: unite all stored edges (rollback DSU)", "recurse into children", "rollback to node snapshot", "at leaf t: record component count"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 2, label: "on unwind"}
+      - {from: 4, to: 6, label: "leaf"}
+  - type: mcq
+    prompt: "Why must the rollback DSU avoid path compression?"
+    options:
+      - "Path compression makes find() slower on sparse graphs."
+      - "Path compression rewrites parent pointers of many nodes, destroying the information needed to undo an edge removal; Table of only union-by-size operations, with a log of roots and sizes, can be rolled back exactly, so siblings in the divide-and-conquer tree never leak edges into each other."
+      - "The segment tree cannot store compressed nodes."
+      - "Path compression changes the component count, which the problem forbids."
+    answer: 1
+    explanation: "A rollback DSU must reconstruct the exact prior parent array when undoing, so every change must be logged and reversible. Path compression mutates far more pointers than the union itself, making undo impossible. Sticking to union by size and recording just the two roots and sizes lets rollback() restore the exact state, which is what lets the DFS share one DSU across many disjoint branches."
+---

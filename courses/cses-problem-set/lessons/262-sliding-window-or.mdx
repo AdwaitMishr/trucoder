@@ -1,0 +1,251 @@
+---
+id: sliding-window-or
+title: Sliding Window OR
+type: content
+difficulty: medium
+order: 262
+tags:
+  - sliding-window
+  - bitwise
+  - or
+blocks:
+  - type: markdown
+    content: |
+      # Sliding Window OR — bitwise OR of every k-length window
+
+      Given `n` non-negative integers and a window length `k`, report the
+      **bitwise OR of every contiguous window of length `k`**.
+
+      OR is the *hardest* of the basic sliding operators, and understanding why
+      teaches the deepest lesson of the chapter. `sum` subtracts its leaver,
+      `xor` re-XORs its leaver — but **OR has no inverse**: once a bit is set,
+      there is no operation you can apply to *remove* it. You cannot write
+      `cur = cur - something` or `cur = cur ^ something`.
+
+      ## The trick: count how many elements hold each bit
+
+      The OR of a set of numbers is the bitmask of all bits present in **at
+      least one** member. So track, for each of the (up to 30) bit positions,
+      **how many elements in the current window have that bit set**. Then:
+
+      - **slide in** an element: for each set bit, increment its count; OR the
+        element into `cur`.
+      - **slide out** an element: for each set bit, decrement its count; and
+        **only when a bit's count drops to zero** clear that bit from `cur`.
+
+      A bit leaves `cur` exactly at the moment no element in the window still
+      holds it — which the count tells us precisely.
+
+      ## Why this is O(n·B)
+
+      Each element sets at most 30 bits, so an add/remove does at most 30 count
+      operations. `B = 30` (or 31 for unsigned) is a constant, so the whole scan
+      is `O(n · B) = O(n)`.
+
+      ## Worked mini-example
+
+      `a = [1, 4, 8, 2, 5]` (binary: `001, 100, 1000, 010, 101`), `k = 3`.
+
+      - window `[1,4,8]`: bits present `{0,2,3}` → `1101` = **13**.
+      - slide in `2(010)`, out `1(001)`: bits `{1,2,3}` → `1110` = **14**.
+      - slide in `5(101)`, out `4(100)`: bits `{0,1,2,3}` → `1111` = **15**.
+
+      Result: `13 14 15`.
+
+      :::tip
+      **Interview tip:** any time a problem says "OR over a sliding window" the
+      trap is that OR has no inverse — candidates reach for `cur ^= a[i-k]` and
+      break. The correct move is **bit-count masks**: keep one counter per bit
+      and clear a bit only when its count hits zero. The identical pattern
+      answers *"how many subarrays have OR exactly X"* (O(n·B) with a
+      two-pointer on a bit-count mask). Remember `B` is tiny (30), so
+      `O(n·B)` is effectively `O(n)` and the interviewer will agree.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given an array of `n` non-negative integers and a window length `k`, print
+      the bitwise OR of each contiguous window of length `k`, from the window
+      starting at position `1` to the window starting at position `n - k + 1`.
+
+      ## Input
+
+      The first line has two integers `n` and `k`. The second line has `n`
+      integers `a_1, a_2, …, a_n` (each `0 <= a_i < 2^31`).
+
+      **Constraints:** `1 <= k <= n <= 2 * 10^5`
+
+      ## Output
+
+      Print `n - k + 1` integers separated by spaces: the bitwise OR of each
+      window in left-to-right order.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 3
+      1 4 8 2 5
+      ```
+      **Output:**
+      ```
+      13 14 15
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·k·B)**
+
+      For each window, OR together its `k` elements.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<unsigned> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          for(int i=0;i<n-k+1;i++){
+              unsigned o=0;
+              for(int j=i;j<i+k;j++) o|=a[j];
+              cout<<o<<(i==n-k?"\n":" ");
+          }
+          return 0;
+      }
+      ```
+
+      *`O(nk)` time — too slow at the constraint limit.*
+
+      **② Optimization — bit-count mask, O(n·B) time, O(B) space (optimal)**
+
+      Maintain one count per bit and the current OR; clear a bit only when its
+      count reaches zero. This is the tier we compile and verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          const int B=30;
+          int n,k; cin>>n>>k;
+          vector<unsigned> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          vector<int> cnt(B,0);
+          unsigned cur=0;
+          auto add=[&](unsigned x){
+              cur |= x;
+              for(int b=0;b<B;b++) if(x>>b & 1u) cnt[b]++;
+          };
+          auto rem=[&](unsigned x){
+              for(int b=0;b<B;b++)
+                  if(x>>b & 1u){ cnt[b]--; if(cnt[b]==0) cur &= ~(1u<<b); }
+          };
+          for(int i=0;i<k;i++) add(a[i]);
+          cout<<cur;
+          for(int i=k;i<n;i++){
+              add(a[i]);     // slide in
+              rem(a[i-k]);   // slide out
+              cout<<" "<<cur;
+          }
+          cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n·B)` time, `O(B)` extra space (B = 30, effectively O(n) and O(1)).*
+
+      **③ Alternative — sparse table for range-OR, O(n log n) build, O(1) query**
+
+      Range-OR is idempotent (`x|y|x = x|y`), so overlapping RMQ-style blocks
+      are allowed. Precompute `st[p][i]` = OR of the `2^p` elements from `i`;
+      any window of length `k` is the OR of two overlapping blocks and is read
+      in O(1).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<unsigned> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          int P=31-__builtin_clz(n)+1;
+          vector<vector<unsigned>> st(P, vector<unsigned>(n));
+          for(int i=0;i<n;i++) st[0][i]=a[i];
+          for(int p=1;p<P;p++)
+              for(int i=0;i+(1<<p)<=n;i++)
+                  st[p][i]=st[p-1][i] | st[p-1][i+(1<<(p-1))];
+          for(int i=0;i<n-k+1;i++){
+              int p=31-__builtin_clz(k);
+              unsigned o=st[p][i] | st[p][i+k-(1<<p)];   // two overlapping blocks
+              cout<<o<<(i==n-k?"\n":" ");
+          }
+          return 0;
+      }
+      ```
+
+      *`O(n log n)` build, `O(1)` per window, `O(n log n)` space. Overkill for a
+      fixed window but the basis for answering *arbitrary* range-OR queries.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`cur |= x` on entry, and per-bit counts for exit.** The running `cur`
+        is only ever OR-gained; it is *cleared* via counts, not by any inverse.
+      - **Count decides whether a bit survives.** `cnt[b]` = how many window
+        elements hold bit `b`. On remove we decrement; the instant it reaches
+        `0`, no window element holds that bit, so `cur &= ~(1u<<b)` clears it.
+      - **`B = 30` bound.** `a_i < 2^31` uses bits `0..30`, so looping over
+        `B = 30` bits (an exact-width scan) makes each add/remove cost constant.
+        We define `const int B=30` and rely on the non-negative constraint.
+      - **`unsigned` avoids undefined shifts.** `~(1u<<b)` over `unsigned int`
+        keeps bit `31` well-defined; using `int` for bit 31 shifts would be UB.
+        Values `< 2^31` fit comfortably either way.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5, k = 3`, `a = [1, 4, 8, 2, 5]`. Expected output
+      `13 14 15`.
+
+      Bits of the values: `1 = 001`, `4 = 100`, `8 = 1000`, `2 = 010`,
+      `5 = 101`.
+
+      Using tier ② (running `cur` + per-bit counts):
+
+      - seed window `[1,4,8]`: `cur = 001|100|1000 = 1101` = **13**; counts for
+        bits 0, 2, 3 are 1 each. print **13**.
+      - `i=3`: add `a[3]=2(010)` → bit-1 count `0→1`, `cur = 1101|0010 = 1111`.
+        rem `a[0]=1(001)` → bit-0 count `1→0` → **clear bit 0**: `cur =
+        1111 & ~1 = 1110` = **14**. print 14. (window `[4,8,2]` = `100|1000|010`
+        = `1110` = 14 ✓)
+      - `i=4`: add `a[4]=5(101)` → bit-0 count `0→1`, bit-2 count `1→2`,
+        `cur = 1110|0101 = 1111` = **15**. rem `a[1]=4(100)` → bit-2 count
+        `2→1` (still ≥ 1, so it **survives**), no bit cleared, `cur` stays
+        `1111` = **15**. print 15. (window `[8,2,5]` = `1000|010|101 = 1111` = 15 ✓)
+
+      Printed: `13 14 15` — matches expected. The instructive moment is the last
+      step: bit 2 is still held by `5` even though `4` left, so its count only
+      drops to 1 and the bit stays set. A bit leaves `cur` *only* when its count
+      hits exactly zero.
+  - type: flowchart
+    title: "Sliding window OR via bit-count mask"
+    nodes: ["slide in x", "for each set bit b: cnt[b]++", "cur |= x", "slide out y", "for each set bit b: cnt[b]--, clear bit if cnt==0", "print cur"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "Why does sliding-window OR need per-bit counts instead of a simple inverse operation?"
+    options:
+      - "Because OR is linear, so a running value can be recomputed from two endpoints."
+      - "OR has no inverse: clearing a bit you once set requires knowing whether ANY live element still has it. Per-element bit counts answer exactly that, letting a bit be cleared the instant its count hits zero — the only correct way to 'remove' an element from an OR."
+      - "Because the array must be sorted before OR can be applied."
+      - "OR is its own inverse, like XOR."
+    answer: 1
+    explanation: "There is no operator 'remove' for OR — a bit once set stays set until no member holds it. The count of elements holding each bit is the precise bookkeeping: increment on entry, decrement on exit, and clear a bit only when its count reaches zero. The element leaving may share its bits with others, so logic (not arithmetic) decides whether each bit survives."

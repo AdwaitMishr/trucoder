@@ -1,0 +1,247 @@
+---
+id: strongly-connected-edges
+title: Strongly Connected Edges (Orientation)
+difficulty: hard
+order: 300
+tags:
+  - graph-algorithms
+  - strongly-connected-components
+  - bridges
+  - orientation
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — making a directed graph strongly connected by directing edges
+
+      Suppose we have an **undirected, connected** graph and we must **choose the
+      direction** of every edge so that the resulting directed graph is
+      **strongly connected** — from any vertex you can reach any other by following
+      the oriented edges. When can we do it, and how?
+
+      **The obstruction — bridges.** A *bridge* is an edge whose removal disconnects
+      the graph. If a bridge `e` separates the graph into side `A` and side `B`,
+      orienting `e` one way lets `A → B` but not `B → A`, and the other way is the
+      mirror — either way the two sides cannot reach each other *both* ways. So:
+      **if the graph has a bridge, strong connectivity is impossible.**
+
+      **The construction — a DFS with a purpose.** If there are no bridges (the
+      graph is *2-edge-connected*), orient during a single DFS from an arbitrary
+      root:
+      - **tree edges** (parent → child) get directed **downwards** (away from the
+        root);
+      - **back edges** (descendant → ancestor) get directed **upwards** (toward
+        the root).
+
+      **Why this is strongly connected.** From any vertex `u` you can walk up the
+      back edges to reach the root — this is exactly what "no bridges" guarantees:
+      every subtree has a back edge leaving it. And from the root you can walk
+      down tree edges to reach every `u`. Composing "u → … → root → … → v" gives a
+      directed path between any two vertices. So the result is strongly connected.
+
+      **Complexity.** A single DFS computes edges, bridges, and the orientation in
+      `O(n + m)` time.
+
+      :::tip
+      **Interview tip:** This is the classic "direct a graph to make it strongly
+      connected" problem (related: checking *if directed 2-edge-connectivity* is
+      possible). The two-part answer to memorise: **a bridge is the only
+      impossible case**, and otherwise **every tree edge is directed down and every
+      back edge is directed up** during one DFS. It pairs naturally with bridge
+      finding (low-links), which is a frequent standalone interview topic too.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given a connected **undirected** graph with `n` vertices and `m`
+      edges, each edge `{a, b}` connecting distinct vertices. For every edge you
+      must choose one direction — turning it into a directed edge either `a → b`
+      or `b → a`.
+
+      Your aim: make the resulting directed graph **strongly connected** (for every
+      ordered pair `(u, v)` there is a directed path from `u` to `v`). If that is
+      impossible, print `IMPOSSIBLE`.
+
+      **Input.** The first line has `n` and `m`. Then `m` lines each have two
+      integers `a b` — an undirected edge between `a` and `b`. The graph is
+      connected.
+
+      **Output.** Either `IMPOSSIBLE`, or `m` lines, one per edge, each `x y`
+      meaning the edge is directed `x → y`. The `i`-th line corresponds to the
+      `i`-th input edge. Any strongly-connected orientation is accepted.
+
+      **Constraints** `1 ≤ n ≤ 2·10^5`, `1 ≤ m ≤ 2·10^5`.
+
+      **Sample**
+      ```
+      Input:
+      4 4
+      1 2
+      2 3
+      3 4
+      4 1
+
+      Output:
+      1 2
+      2 3
+      3 4
+      4 1
+      ```
+      Explanation: the graph is a 4-cycle (no bridges). Orient it as a directed
+      cycle `1→2→3→4→1`; from any vertex you can reach any other by going around.
+      (A graph with a bridge — e.g. a line `1−2−3` — must print `IMPOSSIBLE`.)
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2^m·(n+m)).** Try every assignment of a direction to
+      each of the `m` edges, and for each check strong connectivity by testing
+      reachability between all pairs (or from one node both forward and on the
+      reversed graph). Correct but exponential — unusable beyond tiny graphs.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n,m;
+      vector<pair<int,int>> edges;
+      bool strong(vector<pair<int,int>> dir){
+          vector<vector<int>> g(n+1), rg(n+1);
+          for(auto [u,v]: dir){ g[u].push_back(v); rg[v].push_back(u); }
+          auto reach=[&](const vector<vector<int>>& gg, int s){
+              vector<bool> vis(n+1,false); queue<int> q; vis[s]=true; q.push(s);
+              while(!q.empty()){ int u=q.front(); q.pop(); for(int v: gg[u]) if(!vis[v]){vis[v]=true;q.push(v);} }
+              return vis;
+          };
+          auto f=reach(g,1), b=reach(rg,1);
+          for(int v=1; v<=n; v++) if(!f[v] || !b[v]) return false; // unreachable one way
+          return true;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin>>n>>m; edges.resize(m);
+          for(int i=0;i<m;i++) cin>>edges[i].first>>edges[i].second;
+          for(int mask=0; mask<(1<<m); mask++){
+              vector<pair<int,int>> dir;
+              for(int i=0;i<m;i++){ auto [u,v]=edges[i];
+                  dir.push_back((mask>>i & 1)? make_pair(u,v): make_pair(v,u)); }
+              if(strong(dir)){ for(auto p: dir) cout<<p.first<<" "<<p.second<<"\n"; return 0; }
+          }
+          cout<<"IMPOSSIBLE\n";
+      }
+      ```
+      (Strong connectivity equivalently checked via reachability from vertex 1 in
+      both `g` and the reversed graph.)
+
+      **② Optimization — bridges + one DFS, O(n+m) (submission).** Find bridges
+      with Tarjan low-links. If any bridge exists → `IMPOSSIBLE`. Otherwise run one
+      DFS from vertex 1: orient each tree edge parent→child ("down") and each back
+      edge descendant→ancestor ("up"). Because every edge is used exactly once, the
+      orientation covers all `m` edges, and the construction yields strong
+      connectivity.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n,m;
+      vector<vector<pair<int,int>>> adj; // (to, edgeId)
+      vector<int> tin, low;
+      vector<pair<int,int>> dir;          // dir[edgeId] = chosen directed edge
+      int timer=0; bool hasBridge=false;
+      void dfs(int v, int pe){
+          tin[v]=low[v]=++timer;
+          for(auto [to,id]: adj[v]){
+              if(id==pe) continue;
+              if(tin[to]){
+                  low[v]=min(low[v], tin[to]);
+                  if(dir[id].first==0) dir[id]={v,to};   // back edge: v -> ancestor
+              } else {
+                  dfs(to,id);
+                  low[v]=min(low[v], low[to]);
+                  if(low[to]>tin[v]) hasBridge=true;      // bridge
+                  if(dir[id].first==0) dir[id]={v,to};    // tree edge: parent -> child
+              }
+          }
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin>>n>>m;
+          adj.assign(n+1,{});
+          for(int i=0;i<m;i++){ int a,b; cin>>a>>b; adj[a].push_back({b,i}); adj[b].push_back({a,i}); }
+          tin.assign(n+1,0); low.assign(n+1,0);
+          dir.assign(m,{0,0});
+          for(int v=1; v<=n; v++) if(tin[v]==0) dfs(v,-1);
+          if(hasBridge){ cout<<"IMPOSSIBLE\n"; return 0; }
+          for(int i=0;i<m;i++) cout<<dir[i].first<<" "<<dir[i].second<<"\n";
+      }
+      ```
+
+      **③ Note — the impossibility condition is exactly "has a bridge".** There is
+      no further "tighter" check: a bridge is both necessary (it splits strong
+      reachability) and sufficient (removing the bridge condition lets the DFS
+      construction succeed). So the algorithm is already tight — one DFS detects
+      bridges *and* builds the orientation together.
+
+      **④ Alternative — orient by SCC / ear decomposition reasoning.** Instead of
+      "tree down + back up", one can view the same DFS as orienting each cycle
+      consistently: along every fundamental cycle (a back edge plus the tree path
+      from ancestor to descendant), orient tree edges forward and the closing back
+      edge backward. When no bridge exists, these cycles can be merged into one
+      strongly-connected structure. The code is the same DFS; only the intuition
+      differs — actual alternative implementations (e.g. explicit two-pass per
+      component) do not improve on the single DFS above.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The submission (② ) folds orientation into the bridge-finding DFS.
+
+      1. **Edge-indexed adjacency** so each undirected edge (id `i`) can be
+         assigned exactly one direction in `dir[i]`.
+      2. **DFS with low-links.** `tin[v]` is discovery time, `low[v]` the lowest
+         `tin` reachable from `v`'s subtree.
+         - For a neighbor already visited (a **back edge**), direction is `v → to`
+           (up toward the ancestor) and `low[v]` is lowered to `tin[to]`.
+         - For an unvisited neighbor (a **tree edge**), recurse first, then
+           direction is `v → to` (down from parent) and a bridge is detected when
+           `low[to] > tin[v]`.
+      3. **Impossible branch:** any `low[to] > tin[v]` ⇒ bridge ⇒ `IMPOSSIBLE`.
+      4. **Output** the `m` recorded directions in input-edge order.
+
+      The whole algorithm is `O(n+m)`: each vertex and edge is touched a constant
+      number of times.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 4`, edges `1-2, 2-3, 3-4, 4-1` (a 4-cycle, no
+      bridges).
+
+      1. **DFS from 1.** Discovery order: tin `[1:1, 2:2, 3:3, 4:4]`.
+         - Edge `1-2`: tree → `dir = 1 → 2`.
+         - Edge `2-3`: tree → `dir = 2 → 3`.
+         - Edge `3-4`: tree → `dir = 3 → 4`.
+         - Edge `4-1`: 4's neighbor 1 visited → back edge, `dir = 4 → 1`.
+      2. **Bridges?** `low[4]=tin[1]=1`, so `low[4] < tin[4]`; no bridge anywhere.
+      3. **Directed edges:** `1→2, 2→3, 3→4, 4→1` — a directed cycle.
+
+      **Output:** `1 2 / 2 3 / 3 4 / 4 1` — exactly the sample, and every vertex
+      reaches every other by going around the cycle.
+
+      **Bridge case:** a line `1−2−3` (`n=3, m=2`) → edge `1-2` is a bridge →
+      prints `IMPOSSIBLE`.
+
+  - type: mcq
+    prompt: "Why does the presence of a single bridge make a strongly-connected orientation impossible?"
+    options:
+      - "Because the bridge separates the graph into two sides that can reach each other only one way regardless of its direction."
+      - "Because bridges are the only edges that are ever directed downward."
+      - "Because a bridge disconnects the graph into two strongly connected components automatically."
+      - "Because bridges cannot be part of any directed path."
+    answer: 0
+    explanation: "A bridge e splits the undirected graph into side A and side B with e as their only connection. Orienting e as A→B gives A reachable from... only one direction across e, so B cannot reach A (and vice versa for the other orientation). Neither choice yields a path both ways, so the directed graph cannot be strongly connected. Conversely, with no bridges every subtree has a back edge leaving it, so the tree-down/back-up DFS orientation succeeds — making the bridge test both necessary and sufficient."
+type: content
+---

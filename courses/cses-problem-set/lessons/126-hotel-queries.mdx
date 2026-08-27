@@ -1,0 +1,264 @@
+---
+id: hotel-queries
+title: "Hotel Queries"
+type: content
+difficulty: medium
+order: 126
+tags:
+  - range-queries
+  - segment-tree
+  - lower-bound-search
+blocks:
+  - type: markdown
+    content: |
+      # Hotel Queries — segment tree, find first position with capacity
+
+      There are `n` hotels in a row; hotel `i` has `h_i` free rooms. Groups
+      arrive one after another; each group needs `r` rooms, must stay in a
+      *single* hotel, and goes to the **first hotel (smallest index) with at
+      least `r` free rooms**. The chosen hotel's free rooms drop by `r`. If no
+      hotel fits, print `0`.
+
+      This is a *search + update* problem: we must find the **leftmost hotel
+      whose value is at least `r`**, then **decrease that value**. Both steps
+      are the job of a **segment tree**.
+
+      ## What we store
+
+      A segment tree keeps an array by splitting it into a binary tree of
+      segments; each node stores a summary of its segment. Here the useful
+      summary is the **maximum number of free rooms** in that segment:
+
+      ```
+      node value = max( free rooms over the segment )
+      ```
+
+      To find the leftmost hotel with capacity `>= r`, descend from the root:
+
+      - if the root's max `< r`, no hotel fits → answer `0`;
+      - otherwise, at a node the *left child* holds the first half. If the
+        left child's max `>= r`, a fitting hotel exists there and is leftmost,
+        so go left; else go right. Repeat until a leaf — that leaf is the
+        first fitting hotel.
+
+      This is **`O(log n)`** — we make one decision per tree level. After the
+      hotel is chosen, subtracting `r` is a **point update**: update the leaf,
+      then recompute every ancestor as the max of its two children, again
+      `O(log n)`.
+
+      **Time:** `O((n + m) log n)`. **Space:** `O(n)`.
+
+      :::tip
+      **Interview tip:** "find the leftmost/first index where a condition
+      holds, then update it" is a canonical segment-tree descent pattern. The
+      same shape solves problems like first element ≥ x, kth active position
+      (List Removals), and priority-interval allocation. The key insight to
+      remember: when the condition is monotone across the array, descending a
+      max/min segment tree gives you a `binary-search-without-log-two-trees`
+      in a single `O(log n)` walk.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` hotels on a street. For each hotel you know the number of
+      free rooms. Your task is to assign hotel rooms for groups of tourists.
+      All members of a group want to stay in the same hotel.
+
+      The groups come one after another, and you know for each group the number
+      of rooms it requires. You always assign a group to the **first hotel
+      having enough rooms**. After this, the number of free rooms in the hotel
+      decreases.
+
+      ## Input
+
+      The first input line contains two integers `n` and `m`: the number of
+      hotels and the number of groups. The hotels are numbered `1, 2, ..., n`.
+
+      The next line contains `n` integers `h_1, h_2, ..., h_n`: the number of
+      free rooms in each hotel.
+
+      The last line contains `m` integers `r_1, r_2, ..., r_m`: the number of
+      rooms each group requires.
+
+      **Constraints**
+
+      - `1 <= n, m <= 2 * 10^5`
+      - `1 <= h_i <= 10^9`
+      - `1 <= r_i <= 10^9`
+
+      ## Output
+
+      Print the assigned hotel for each group. If a group cannot be assigned a
+      hotel, print `0` instead.
+
+      ## Example
+
+      Input:
+
+      ```
+      8 5
+      3 2 4 1 5 5 2 6
+      4 4 7 1 1
+      ```
+
+      Output:
+
+      ```
+      3 5 0 1 1
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — scan from hotel 1 for each group, O(n · m)**
+
+      For each group, walk from hotel `1` to `n`, pick the first with `>= r`
+      rooms, subtract `r`. With `n = m = 2*10^5` that's up to `4 * 10^10`
+      steps in the worst case. Too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          vector<long long> h(n + 1);
+          for (int i = 1; i <= n; i++) cin >> h[i];
+          while (m--) {
+              long long r; cin >> r;
+              int pos = 0;
+              for (int i = 1; i <= n; i++)
+                  if (h[i] >= r) { pos = i; break; }   // first fitting hotel
+              if (pos) h[pos] -= r;                    // consume rooms
+              cout << pos << " ";
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n · m)` — up to `4 * 10^10` steps.*
+
+      **② Optimization — segment tree of segment maxima, O((n + m) log n)**
+
+      Build a max segment tree over the hotels. For each group, if the root
+      max `< r` print `0`; otherwise descend left-then-right to the leftmost
+      leaf `>= r`, print it, and point-update that leaf by `r`. This is the
+      optimal tier.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          vector<ll> h(n);
+          for (auto &x : h) cin >> x;
+
+          int base = 1; while (base < n) base <<= 1;
+          vector<ll> seg(2 * base, 0);               // node = max rooms of its segment
+          for (int i = 0; i < n; i++) seg[base + i] = h[i];
+          for (int i = base - 1; i >= 1; i--) seg[i] = max(seg[2 * i], seg[2 * i + 1]);
+
+          while (m--) {
+              ll r; cin >> r;
+              if (seg[1] < r) { cout << "0 "; continue; }   // no hotel fits
+              int idx = 1;                                  // descend to leftmost leaf >= r
+              while (idx < base) {
+                  if (seg[2 * idx] >= r) idx = 2 * idx;
+                  else idx = 2 * idx + 1;
+              }
+              int pos = idx - base;                         // 0-based hotel index
+              cout << pos + 1 << " ";
+              seg[idx] -= r;                                // rooms now used
+              for (idx /= 2; idx >= 1; idx /= 2)
+                  seg[idx] = max(seg[2 * idx], seg[2 * idx + 1]);   // rebuild path
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      *`O((n + m) log n)` — comfortably within limits.*
+
+      **③ Alternative — segment tree with a find-first helper**
+
+      Equivalent approach: keep a range-max tree and implement a recursive
+      `find(r, node, l, r)` that returns the first position `>= r`. The
+      iterative left/right descent above is just this recursion unrolled —
+      same complexity, less call overhead.
+
+      **④ Further optimization —** none needed: `O(log n)` per group is
+      optimal (the hotel is located by `log n` binary decisions, and each
+      update touches `log n` ancestors).
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on **②** (`base` is the smallest power of two `>= n`, the padded
+      leaves live in `seg[base .. base+n-1]`):
+
+      - **Build.** Copied the input hotel capacities into the leaves, then for
+        `i = base-1 .. 1` set `seg[i] = max(seg[2i], seg[2i+1])`.
+
+      - **`seg[1] < r` check.** The root holds the max over *all* hotels. If
+        even that is smaller than `r`, no hotel qualifies → print `0` and move
+        to the next group (no update, capacities unchanged).
+
+      - **Descent.** At a node `idx`, its left child covers the earlier half.
+        If the left child's max `>= r`, the fitting hotel is (one of) the
+        leftmost, so go left (`idx = 2*idx`); otherwise go right
+        (`idx = 2*idx+1`). At a leaf (`idx >= base`), `pos = idx - base` is the
+        actual 0-based hotel index → `pos + 1` is the 1-based answer.
+
+      - **Point update.** Subtract `r` from that leaf, then walk up recomputing
+        each ancestor as `max(left, right)`. Only `log n` ancestors change.
+
+      - **Leftmost guarantee.** Because we always prefer the left child when
+        it contains a valid hotel, the leaf we reach is the *smallest* index
+        with capacity `>= r`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: hotels `h = [3, 2, 4, 1, 5, 5, 2, 6]`, group needs
+      `r = [4, 4, 7, 1, 1]`.
+
+      | group r | root max | descent decision | hotel (1-based) | hotels after update |
+      |---------|----------|------------------|-----------------|---------------------|
+      | 4 | 6 | left half max 4 >= 4 → go left, pick first 4 | **3** | `[3,2,0,1,5,5,2,6]` |
+      | 4 | 6 | leftmost >= 4 is index 5 | **5** | `[3,2,0,1,1,5,2,6]` |
+      | 7 | 6 | 6 < 7 → no fit | **0** | unchanged |
+      | 1 | 6 | leftmost >= 1 is index 1 | **1** | `[2,2,0,1,1,5,2,6]` |
+      | 1 | 6 | leftmost >= 1 is index 1 | **1** | `[1,2,0,1,1,5,2,6]` |
+
+      Expected (sample) — `3 5 0 1 1`. Actual — `3 5 0 1 1`. Match.
+  - type: flowchart
+    title: "Assign a group to the first hotel with enough rooms"
+    nodes: ["group needs r", "root max < r?", "print 0, no update", "go to left child", "left child max >= r?", "else go right", "reached a leaf: print pos, subtract r", "rebuild ancestors", "next group?", "done"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "yes"}
+      - {from: 1, to: 3, label: "no"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 3, label: "yes"}
+      - {from: 4, to: 5, label: "no"}
+      - {from: 3, to: 6, label: "leaf"}
+      - {from: 5, to: 6, label: "leaf"}
+      - {from: 6, to: 7}
+      - {from: 7, to: 8}
+      - {from: 8, to: 0, label: "yes"}
+      - {from: 8, to: 9, label: "no"}
+  - type: mcq
+    prompt: "During descent, why do we always move to the left child whenever its segment max is >= r?"
+    options:
+      - "Because the left child always contains the largest values."
+      - "Because the hotel indices increase from left to right, and taking the left child whenever it suffices guarantees we reach the smallest-index hotel with capacity >= r (the greedy leftmost choice)."
+      - "Because the right child never has enough rooms."
+      - "To reduce the number of point updates needed."
+    answer: 1
+    explanation: "The left child covers the earlier (smaller-index) half of the segment. If it already contains a fitting hotel, any hotel in the right half has a larger index, so it cannot be the 'first'. Preferring the left whenever possible therefore lands on the leftmost valid hotel. The root-max < r check handles the no-fit case (answer 0) before descending."
+---

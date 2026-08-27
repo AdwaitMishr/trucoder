@@ -1,0 +1,270 @@
+---
+id: distinct-sums-grid
+title: Distinct Sums Grid
+difficulty: hard
+order: 292
+tags:
+  - construction
+  - matrix
+  - determinism
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — a closed-form grid with distinct row/column sums
+
+      We must fill an `n × n` table so that (1) each integer `1..n` appears
+      exactly `n` times, and (2) the `n` row-sums and `n` column-sums are all
+      different — `2n` distinct values in total. The naive idea (a Latin square,
+      where every row and column is `1..n`) makes **every** row and column sum
+      to the same `n(n+1)/2` — useless. The trick is a **base grid whose sums
+      form two arithmetic progressions**, then a single tiny fix for the one
+      collision.
+
+      **Base grid (n ≥ 5).** For 1-indexed `(i, j)` define
+      ```
+      a[i][1] = n            (first column is all n)
+      a[i][j] = i            if j > i
+      a[i][j] = i - 1        if 2 ≤ j ≤ i
+      ```
+      Concretely, for `n = 6`:
+      ```
+      6 1 1 1 1 1
+      6 1 2 2 2 2
+      6 2 2 3 3 3
+      6 3 3 3 4 4
+      6 4 4 4 4 5
+      6 5 5 5 5 5
+      ```
+      A short count shows each value `v` appears `n` times:
+      - value `n` lives in column 1 (n copies);
+      - value `v` (for `2 ≤ v ≤ n-1`) appears in row `v` cells `j = v+1..n`
+        (`n - v` of them) plus in rows `v+1..n` at column positions where it is
+        `v-1`… — total `n` copies after collecting all the "staircase" bands.
+
+      **Sums.** Row `i` sums to `R(i) = 2n − 1 + (n−2)(i−1)`, an increasing
+      arithmetic progression. Column `1` sums to `n²`; column `j ≥ 2` sums to
+      `C(j) = n(n−1)/2 + j − 1`, also an arithmetic progression. For `n ≥ 5`
+      these two progressions overlap in **exactly one** pair `R(i) = C(j)`.
+
+      **Kill the single collision.** Let `(r, c)` be that unique match. Two
+      swaps of grid cells:
+      ```
+      swap(a[2][1], a[2][c])
+      swap(a[r+1][n], a[r+2][n])
+      ```
+      change only four sums (`C(1)`, `C(c)`, `R(r+1)`, `R(r+2)`), and the
+      construction is designed so the new values land strictly between all the
+      others — leaving `2n` distinct sums. The swaps keep the multiset of values
+      identical, so requirement (1) still holds.
+
+      **Small cases.** `n ≤ 3` is `IMPOSSIBLE` (you cannot get `2n` distinct
+      sums with so few cells/values); `n = 4` has a verified hand grid. Every
+      `n ≥ 5` uses the closed form above.
+
+      **Complexity.** O(n²) time and O(n²) output space — you must print the
+      whole grid, so this is optimal.
+
+      :::tip
+      **Interview tip:** This is a *deterministic*-construction pattern: derive a
+      clean closed-form grid whose row/column sums are predictable progressions,
+      then surgically remove the one collision with cell swaps. Interviewers
+      value that you (a) count value-frequencies as you design, and (b) handle
+      the small cases (`n ≤ 4`) explicitly instead of forcing a formula that only
+      works for "large" `n`.
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Create an `n × n` grid that fulfills the following requirements:
+
+      1. Each integer `1 … n` appears `n` times in the grid.
+      2. If we create a set that consists of all sums in rows and columns, there
+         are `2n` distinct values.
+
+      **Input.** The only line has an integer `n`.
+
+      **Output.** Print a grid that fulfills the requirements. You can print any
+      valid solution. If there are no solutions, print `IMPOSSIBLE`.
+
+      **Constraints.** `1 ≤ n ≤ 1000`
+
+      ### Sample
+
+      **Input:**
+      ```
+      5
+      ```
+
+      **Output:**
+      ```
+      2 3 1 1 1
+      1 5 5 3 3
+      2 3 5 2 4
+      5 4 5 4 1
+      2 3 4 4 2
+      ```
+      **Explanation:** each integer `1..5` appears 5 times, and the sums in
+      rows and columns are `{8, 11, 12, 14, 15, 16, 17, 18, 19, 20}` (10 =
+      2n distinct values). Any valid grid is accepted.
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n! · n) time, O(n) space (backtracking fill).** Fill the
+      grid position by position respecting the remaining count of each value and,
+      at the end, check that all `2n` row/column sums are distinct. Correct only
+      as a small-`n` oracle; the search space explodes and cannot reach `n =
+      1000`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      // n <= 6 only: backtracking; returns rows of the grid or empty on IMPOSSIBLE
+      vector<vector<int>> brute(int n){
+          int N=n*n; vector<int> rem(n+1,n); vector<vector<int>> g(n, vector<int>(n));
+          vector<vector<int>> ans;
+          function<void(int)> bt = [&](int pos){
+              if(!ans.empty()) return;
+              if(pos==N){
+                  vector<int> rs(n),cs(n);
+                  for(int i=0;i<n;i++)for(int j=0;j<n;j++){rs[i]+=g[i][j];cs[j]+=g[i][j];}
+                  set<int> s(rs.begin(),rs.end()); for(int x:cs) s.insert(x);
+                  if((int)s.size()==2*n) ans=g;
+                  return;
+              }
+              int r=pos/n,c=pos%n;
+              for(int v=1;v<=n;v++) if(rem[v]>0){ rem[v]--; g[r][c]=v; bt(pos+1); g[r][c]=0; rem[v]++; }
+          };
+          bt(0); return ans;
+      }
+      ```
+      Enumerates every multiset fill → far too slow for real `n`.
+
+      **② Optimization — O(n²) time, O(n²) space (closed-form + collision fix).**
+      Build the base staircase grid, locate the single row/column sum collision,
+      apply the two swaps, and print. Handles `n ≤ 3` (IMPOSSIBLE), the `n = 4`
+      special grid, and every `n ≥ 5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(int n) {
+          if (n <= 3) return "IMPOSSIBLE";
+          ostringstream out;
+          if (n == 4) {
+              static const int g4[4][4] = {{1,1,1,2},{1,2,2,3},{2,3,4,4},{3,4,4,3}};
+              for (int i = 0; i < n; ++i) {
+                  for (int j = 0; j < n; ++j) { if (j) out << ' '; out << g4[i][j]; }
+                  out << "\n";
+              }
+              string s = out.str(); s.pop_back(); return s;
+          }
+          // base staircase grid (1-indexed)
+          vector<vector<int>> A(n + 1, vector<int>(n + 1));
+          for (int i = 1; i <= n; ++i)
+              for (int j = 1; j <= n; ++j) {
+                  if (j == 1) A[i][j] = n;
+                  else if (j > i) A[i][j] = i;
+                  else A[i][j] = i - 1;
+              }
+          auto rowS=[&](int i){int s=0; for(int j=1;j<=n;j++) s+=A[i][j]; return s;};
+          auto colS=[&](int j){int s=0; for(int i=1;i<=n;i++) s+=A[i][j]; return s;};
+          int mi=0,mj=0;
+          for (int i=1;i<=n && mi==0;++i)
+              for (int j=1;j<=n;++j) if (rowS(i)==colS(j)) { mi=i; mj=j; break; }
+          swap(A[2][1], A[2][mj]);          // fix column-1 / matching-column
+          swap(A[mi+1][n], A[mi+2][n]);     // shift two rows' last cell
+          for (int i = 1; i <= n; ++i) {
+              for (int j = 1; j <= n; ++j) { if (j>1) out << ' '; out << A[i][j]; }
+              out << "\n";
+          }
+          string s = out.str(); s.pop_back();
+          return s;
+      }
+      ```
+
+      **④ Alternative — none needed beyond the closed form.** There is no
+      meaningfully different construction to cover `n ≥ 5`; the staircase grid
+      plus the collision fix *is* the intended solution, and the `n ≤ 4` cases
+      are handled exhaustively/verbatim. This is a fine place to say "④ skipped".
+
+      Now reason through the chosen tier (②) in the next block, then trace it.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n)` — the O(n²) closed-form reference.
+
+      1. **`n ≤ 3` → `IMPOSSIBLE`** (fewer degrees of freedom than the `2n`
+         distinct sums demanded).
+      2. **`n = 4`** returns the verified hand-grid
+         `{{1,1,1,2},{1,2,2,3},{2,3,4,4},{3,4,4,3}}` whose row/col sums are all
+         8 distinct values.
+      3. **Base staircase** `A`: first column `n`, and `A[i][j] = (j>i ? i :
+         i-1)`. This is the pattern whose value-frequencies are all `n` and
+         whose sums `R(i)`, `C(j)` are arithmetic.
+      4. **`rowS`/`colS`** recompute sums to find the *unique* row-column
+         collision `(mi, mj)`.
+      5. **Two swaps:** `A[2][1] ↔ A[2][mj]` fixes column `1` (drops it from
+         `n²`) and moves column `mj`'s sum up; `A[mi+1][n] ↔ A[mi+2][n]` shifts
+         the neighbouring rows so their sums land in the empty gaps. Values are
+         only exchanged, so each integer still appears exactly `n` times.
+      6. **Print** row by row. The whole build is a constant number of passes
+         over the `n × n` grid → O(n²) time and output space.
+
+      The two-swap fix is the only non-obvious part; the walkthrough shows it
+      concretely on `n = 6`.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 5`. (`n ≥ 5`, so the closed form runs.)
+
+      **Base grid `A`:**
+      ```
+      5 1 1 1 1
+      5 1 2 2 2
+      5 2 2 3 3
+      5 3 3 3 4
+      5 4 4 4 4
+      ```
+      **Row sums `R(i) = 9 + 3(i-1)`:** `9, 12, 15, 18, 21`.
+      **Column sums:** `C(1) = 25`; `C(2)=11, C(3)=12, C(4)=13, C(5)=14`.
+
+      **Collision:** `R(2) = 12 = C(3)` → `(mi, mj) = (2, 3)`.
+
+      **Fix 1 — `swap(A[2][1], A[2][3])`** (row 2 was `[5,1,2,2,2]` →
+      `[2,1,5,2,2]`):
+      - `C(1)` becomes `22`, `C(3)` becomes `15`, `R(2)` stays `12`.
+      **Fix 2 — `swap(A[3][5], A[4][5])`** (rows 3, 4 tail `3,4` → `4,3`):
+      - `R(3) = 16`, `R(4) = 17`, `C(5)` stays `14`.
+
+      **Final grid:**
+      ```
+      5 1 1 1 1
+      2 1 5 2 2
+      5 2 2 3 4
+      5 3 3 3 3
+      5 4 4 4 4
+      ```
+
+      **Final sums:** rows `{9,12,16,17,21}`; columns `{22,11,15,13,14}` — all 10
+      values distinct ✓. Value counts still 5 of each ✓.
+
+      **Actual vs expected:** the CSES sample prints a *different* valid grid;
+      our output is accepted because it satisfies both requirements (this is
+      exactly what the judge checks). **Boundary `n = 4`** returns the verified
+      grid with 8 distinct sums; **`n = 3`** prints `IMPOSSIBLE`.
+  - type: mcq
+    prompt: "In the staircase base grid, why does the pair of swaps keep each integer 1..n appearing exactly n times?"
+    options:
+      - "Because a swap only exchanges two values between cells; the multiset of grid values is unchanged."
+      - "Because swaps can change a value into a prime."
+      - "Because row sums and column sums stay equal after swapping."
+      - "Because the staircase pattern is symmetric."
+    answer: 0
+    explanation: "Both repairs are transpositions of two cells (swap A[2][1] with A[2][c], then A[r+1][n] with A[r+2][n]). A swap never adds or removes a value, so the multiset — hence each integer's frequency of n — is identical before and after. What changes is only where values sit, which is exactly what lets us diversify the row and column sums."
+type: content
+---

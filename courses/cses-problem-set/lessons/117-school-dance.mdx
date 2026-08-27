@@ -1,0 +1,286 @@
+---
+id: school-dance
+title: School Dance
+type: content
+difficulty: medium
+order: 117
+tags:
+  - graph
+  - bipartite-matching
+  - kuhn
+  - augmenting-path
+blocks:
+  - type: markdown
+    content: |
+      # School Dance — maximum bipartite matching
+
+      We have `n` boys and `m` girls and a list of `k` boy-girl pairs who are
+      willing to dance together. A dance pair consists of one boy and one girl,
+      and a single person can be in at most one pair. We want the **maximum
+      number of dance pairs** — the largest set of boy-girl edges that share no
+      boy and no girl.
+
+      This is the **maximum bipartite matching** problem: the boys form one side
+      of a bipartite graph, the girls the other, edges are the willingness
+      pairs; a *matching* is a set of edges with no shared endpoint, and we
+      maximize its size.
+
+      ## The augmenting-path idea
+
+      Start with the empty matching and grow it. Suppose a boy `u` wants girl
+      `v`. If `v` is unmatched, pair them — the matching grows by one. If `v` is
+      already matched to some boy `w`, we can try to **reassign** `w`: look for a
+      *different* girl `w` can go to, recursively. If that succeeds we "shift"
+      the matching along an alternating path `u - v - w - ...` in which edges
+      are alternately unmatched, matched, unmatched, and we flip them all: one
+      more pair results. Such a path is an **augmenting path**.
+
+      **Kuhn's algorithm** (also called the Hungarian/DFS augmenting algorithm)
+      is the simplest implementation: for each boy, DFS for an augmenting path,
+      always rematching along it. It runs in `O(V · E)`.
+
+      The crucial fact (Berge's lemma): *a matching is maximum iff it has no
+      augmenting path.* So if no augmenting path can be found for any boy, the
+      matching is optimal.
+
+      :::tip
+      **Interview tip:** Bipartite matching is one of the most "recognize-and-
+      reduce" patterns in interviews and competitive programming. Teams to
+      projects, jobs to candidates, ships to ports, tasks to time slots — any
+      "pair things from two groups, each usable once, maximize the count" is a
+      matching, and Kuhn's DFS is the easiest implementation to write under
+      time pressure. Even better: matching also solves min vertex cover and max
+      independent set on bipartite graphs via **König's theorem**.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` boys and `m` girls in a school. Next week a school dance
+      will be organized. A dance pair consists of a boy and a girl, and there
+      are `k` potential pairs.
+
+      Your task is to find out the maximum number of dance pairs and show how
+      this number can be achieved.
+
+      ## Input
+
+      The first input line has three integers `n`, `m` and `k`: the number of
+      boys, girls, and potential pairs. The boys are numbered `1, 2, ..., n`,
+      and the girls are numbered `1, 2, ..., m`.
+
+      After this, there are `k` lines describing the potential pairs. Each line
+      has two integers `a` and `b`: boy `a` and girl `b` are willing to dance
+      together.
+
+      **Constraints:** `1 <= n, m <= 500`, `1 <= k <= 1000`
+
+      ## Output
+
+      First print one integer `r`: the maximum number of dance pairs. After
+      this, print `r` lines describing the pairs. You can print any valid
+      solution.
+
+      ## Sample
+
+      **Input:**
+      ```
+      3 2 4
+      1 1
+      1 2
+      2 1
+      3 1
+      ```
+      **Output:**
+      ```
+      2
+      1 2
+      3 1
+      ```
+      (Boy `1` with girl `2`, boy `3` with girl `1`; two pairs is maximal.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — try every subset of pairs, O(2^k · k)**
+
+      Enumerate every subset of the `k` willingness edges and check whether it
+      uses each boy and girl at most once; take the largest such subset. Correct
+      but exponential.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m, kk; cin >> n >> m >> kk;
+          vector<pair<int,int>> e(kk);
+          for (int i = 0; i < kk; i++) { cin >> e[i].first >> e[i].second; e[i].first--; e[i].second--; }
+          int best = 0;
+          for (int mask = 0; mask < (1 << kk); mask++) {
+              int c = __builtin_popcount(mask); if (c <= best) continue;
+              vector<int> usedB(n, 0), usedG(m, 0);
+              bool ok = true;
+              for (int i = 0; i < kk && ok; i++) if (mask & (1 << i)) {
+                  int b = e[i].first, g = e[i].second;
+                  if (usedB[b] || usedG[g]) ok = false;
+                  usedB[b] = usedG[g] = 1;
+              }
+              if (ok) best = c;
+          }
+          cout << best << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(2^k · k)`. With `k <= 1000` this is astronomically slow.*
+
+      **② Optimization — Kuhn's augmenting-path algorithm, O(V·E)**
+
+      Process every boy once; run a DFS that tries to claim a girl, rematching
+      the current owner if the girl is taken. This is the optimal tier.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m, k;
+          cin >> n >> m >> k;
+
+          vector<vector<int>> likes(n);
+          for (int i = 0; i < k; i++) {
+              int a, b; cin >> a >> b; a--; b--;
+              likes[a].push_back(b);
+          }
+
+          vector<int> matchGirl(m, -1);       // which boy is matched to girl j, -1 = free
+          vector<char> used(m, 0);            // per-DFS "already tried this girl"
+
+          // try to augment a matching so that boy v gets a girl
+          function<bool(int)> tryKuhn = [&](int v) -> bool {
+              for (int to : likes[v]) {
+                  if (used[to]) continue;
+                  used[to] = 1;
+                  if (matchGirl[to] == -1 || tryKuhn(matchGirl[to])) {
+                      matchGirl[to] = v;                    // (re)claim this girl
+                      return true;
+                  }
+              }
+              return false;
+          };
+
+          int r = 0;
+          for (int v = 0; v < n; v++) {
+              used.assign(m, 0);               // fresh attempt for each boy
+              if (tryKuhn(v)) r++;
+          }
+
+          cout << r << "\n";
+          for (int g = 0; g < m; g++)
+              if (matchGirl[g] != -1)
+                  cout << matchGirl[g] + 1 << " " << g + 1 << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(V · E)` time (`500 · 1000` = 500k worst), `O(V + E)` space. This is
+      the intended optimal solution for the constraints.*
+
+      **③ Further optimization — Hopcroft–Karp, O(E·√V)**
+
+      For much larger graphs (e.g. `n, m` in the tens of thousands) Kuhn's
+      `O(V·E)` can be too slow; the **Hopcroft–Karp** algorithm batches many
+      augmenting paths per BFS+DFS phase, giving `O(E√V)` — the best known for
+      general bipartite matching. It is strictly more code and unnecessary at
+      `n, m <= 500`.
+
+      **④ Alternative — max flow reduction**
+
+      Matching is also solvable with a max-flow reduction: a source `s` linked to
+      every boy by a capacity-1 edge, every boy linked to the girls he likes by
+      capacity 1, every girl linked to a sink `t` by capacity 1. An integral max
+      flow saturates exactly a maximum matching, and unit capacities make it
+      fast (Dinic). This is the general technique when a matching problem is
+      embedded in a larger flow, but for *pure* bipartite matching Kuhn's is
+      simpler — so we keep ② as the primary solution.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Outputting both the count and the actual pairs is the point of this
+      problem, so the matching must be *recoverable*, not just counted:
+
+      - **Adjacency.** `likes[v]` holds the girls boy `v` is willing to dance
+        with (0-indexed).
+
+      - **Matching storage.** `matchGirl[g]` = the boy currently matched to
+        girl `g`, or `-1` if she is free. To print pairs we need this mapping;
+        we read it out at the end for every girl with a match.
+
+      - **`tryKuhn(v)` — one augmenting attempt.** Iterate the girls `to` that
+        `v` likes. The `used[to]` flag stops a girl being reconsidered within
+        one DFS chain (visiting her again can't help). If `to` is free, claim
+        her — but if she is owned by `matchGirl[to]`, recursively try to *re*
+        match that boy. If the recursion succeeds we flip the meaning: girl
+        `to` now belongs to `v`, and the "shifted" chain rematches the rest.
+
+      - **Fresh `used` per boy.** We clear `used` before each new starting
+        boy so every augmenting search sees all girls as available candidates
+        again.
+
+      - **Counting and printing.** `r` increments for each boy whose augment
+        succeeds (each success adds exactly one edge — an augmenting path always
+        increases the matching size by 1). The final scan over girls prints
+        each matched pair as `boy+1 girl+1`.
+
+      - **Why maximum.** By Berge's lemma, repeatedly augmenting until no
+        augmenting path exists yields a maximum matching — exactly what trying
+        every boy one final time detects.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 3, m = 2`, willingness `(1,1),(1,2),(2,1),(3,1)`
+      0-indexed as boy `0 -> {0,1}`, boy `1 -> {0}`, boy `2 -> {0}`.
+
+      | boy | attempt | girl chosen | matching |
+      |-----|---------|-------------|----------|
+      | 0 | free girl 0 | match 0 -> 0 | `0:0` |
+      | 1 | likes {0}; 0 owned by boy 0 → try again boy 0 (girl 1 free) → shift | 1 -> 0, 0 -> 1 | `1:0`, `0:1` |
+      | 2 | likes {0}; 0 owned by boy 1 → try boy 1 (only likes 0, no alternative) → fail | none | stays `1:0`, `0:1` |
+
+      Final matching: boy `0`↔girl `1` and boy `1`↔girl `0` (1-based pairs
+      `1  2` and `2  1`). Size `r = 2`.
+
+      The sample prints the alternative optimum `1 2` and `3 1` (boy 0↔girl 1
+      and boy 2↔girl 0); both are maximum because `2` is an upper bound (there
+      are only two girls). Our program prints its own valid maximum of `2`
+      pairs, which the judge accepts.
+
+      Expected (sample) — `2`. Actual — `2`. Match in count and validity.
+  - type: flowchart
+    title: "Kuhn's maximum bipartite matching"
+    nodes: ["start: no pairs yet", "pick boy v", "try a girl to that v likes", "girl free? claim her", "owner? recursively rematch owner", "augment ok? r++", "all boys tried?", "answer: print r and the pairs"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "yes"}
+      - {from: 2, to: 4, label: "no"}
+      - {from: 3, to: 5, label: "claimed"}
+      - {from: 4, to: 5, label: "shifted"}
+      - {from: 5, to: 6}
+      - {from: 6, to: 1, label: "more boys"}
+      - {from: 6, to: 7, label: "done"}
+  - type: mcq
+    prompt: "When boy v tries to claim girl g who is already matched to boy w and w has no alternative girl, why is v unable to increase the matching through g?"
+    options:
+      - "Because a maximum matching always leaves g free for the last boy."
+      - "Because claiming g would require rematching w to another free girl; if w has none, there is no alternating augmenting path from v, so the greedy augment simply fails and the matching is unchanged."
+      - "Because used[] permanently blocks g after one attempt."
+      - "Because the DFS is guaranteed to find another length-one path anyway."
+    answer: 1
+    explanation: "Augmenting works by shifting the owner along an alternating path v-g-w-h-… ending at a free girl. If w's only liked girl is g itself, the shift has nowhere to go and no augmenting path exists for this attempt; the algorithm backtracks and leaves the matching intact. Berge's lemma says these augmenting paths are exactly what must be searched for to reach maximality."
+---

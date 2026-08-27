@@ -1,0 +1,194 @@
+---
+id: food-division
+title: Food Division
+difficulty: medium
+order: 377
+tags:
+  - additional
+  - prefix-sums
+  - median
+  - circular-balancing
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — balancing a circular supply/demand around a ring
+
+      `n` children sit in a circle; child `i` currently holds `a_i` units of food
+      and wants `b_i`. Total supply equals total demand, so food only needs to
+      **move around the ring**, and each move carries one unit across one edge
+      between neighbours. The question is the minimum number of unit-moves.
+
+      **Model the flow per edge.** Let `c_i = a_i − b_i` (surplus if positive,
+      deficit if negative), and let `f_i` be the *net* number of units that cross
+      the edge `(i, i+1)` (positive = clockwise `i → i+1`). Balancing child `i`
+      requires `f_i = f_(i-1) + c_i`. So once we pick one free value `f_0`, every
+      flow is fixed:
+
+      ```
+      f_0 = f_0
+      f_i = f_0 + c_1 + c_2 + … + c_i        (i = 1..n-1)
+      ```
+
+      The **total number of moves** is `Σ_i |f_i|` (each unit that crosses an
+      edge costs one move; a monotone schedule achieves the net flows with no
+      back-and-forth). So the problem reduces to: choose the integer `f_0`
+      minimising `Σ |f_0 + v_i|`, where the `v_i` are the fixed prefix offsets.
+
+      **Median minimises a sum of absolute deviations.** The function
+      `g(t) = Σ |t − v_i|` is convex and piecewise-linear, and it is minimised
+      at any median of the `v_i`. Rearranging `Σ|f_0 + v_i| = Σ|f_0 − (−v_i)|`,
+      the optimum is `f_0 = −median(v)` and the answer is `Σ|v_i − median(v)|`.
+      That is the classic "circular card / gas-station balancing" result.
+
+      :::tip
+      **Interview tip:** The pattern "balance a total amount around a circle"
+      (food, gas, coins) always collapses to prefix sums and a median: put each
+      edge's net flow as a prefix sum of surpluses, then choose the free
+      parameter via the median. The same idea powers "minimum moves so everyone
+      has equal coins" and rotating-queue load balancing.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      There are `n` children around a round table. For each child, you know the
+      amount of food they currently have and the amount of food they want. The
+      total amount of food in the table is correct. At each step, a child can
+      give one unit of food to his or her neighbour. What is the minimum number
+      of steps needed?
+
+      **Input.** The first input line contains an integer `n`. The next line has
+      `n` integers `a_1, …, a_n`: the current amount of food for each child. The
+      last line has `n` integers `b_1, …, b_n`: the required amount of food for
+      each child.
+
+      **Output.** Print one integer: the minimum number of steps.
+
+      **Constraints**
+      - `1 ≤ n ≤ 2·10^5`
+      - `0 ≤ a_i, b_i ≤ 10^6`
+
+      **Sample**
+
+      Input:
+      ```
+      3
+      3 5 0
+      2 4 2
+      ```
+
+      Output:
+      ```
+      2
+      ```
+
+      *Explanation:* child 1 gives one unit of food to child 3, and child 2
+      gives one unit of food to child 3.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²) candidate scan.** Compute the surplus array `c`,
+      build the prefix offsets `v`, then for each plausible integer `f_0` (the
+      offsets themselves are the only breakpoints worth trying) evaluate
+      `Σ|f_0 + v_i|` and keep the minimum. Exact but quadratic.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          int n; cin>>n;
+          vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          ll sumc=0;
+          vector<ll> v(n); v[0]=0;
+          for(int i=0;i<n;i++){
+              ll b; cin>>b; a[i]-=b;          // c_i = a_i - b_i
+          }
+          for(int i=1;i<n;i++) v[i]=v[i-1]+a[i-1];
+          ll best=LLONG_MAX;
+          for(ll f0 : v){                      // candidates = the offsets (and any median)
+              ll cur=0; for(int i=0;i<n;i++) cur+=llabs(f0+v[i]);
+              best=min(best,cur);
+          }
+          cout<<best<<"\n";
+      }
+      ```
+      *Complexity: O(n²) — ok for small `n`, far too slow for `2·10^5`.*
+
+      **② Optimization — O(n log n) median of prefix offsets.** Sort the `v_i`
+      and add `Σ|v_i − median|`; that is the minimum, found directly instead of
+      by scanning candidates.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          for(int i=0;i<n;i++){ ll b; cin>>b; a[i]-=b; }   // a[i] = c_i = surplus
+          vector<ll> v(n); v[0]=0;
+          for(int i=1;i<n;i++) v[i]=v[i-1]+a[i-1];
+          sort(v.begin(), v.end());
+          ll med=v[n/2], res=0;
+          for(int i=0;i<n;i++) res += llabs(v[i]-med);
+          cout<<res<<"\n";
+      }
+      ```
+      *Complexity: O(n log n) time, O(n) memory.*
+
+      **④ Alternative / note.** This is the classical *circular card passing* /
+      *gas-station balancing* problem; the median-of-averages solution is the
+      canonical accepted method. No faster exact approach exists, since reading
+      the input already costs `O(n)`.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n log n). Key lines:
+
+      1. **Surpluses.** `a[i] -= b[i]` turns "current" and "want" into a single
+         signed surplus `c_i` (positive = has extra, negative = needs food).
+      2. **Prefix offsets.** `v[0] = 0` and `v[i] = v[i-1] + c_(i-1)` encode the
+         flow equation `f_i = f_0 + prefix_i`.
+      3. **Median.** Sorting and taking `v[n/2]` gives a median; `Σ|v_i − med|`
+         is the minimum total moves. Picking the free flow as the median is what
+         converts a 1-DOF optimisation (varying `f_0`) into a direct formula.
+      4. **Sum of absolute deviations** = the total number of unit crossing
+         moves.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 3`, `a = 3 5 0`, `b = 2 4 2` → expected `2`.
+
+      Surpluses: `c = [3-2, 5-4, 0-2] = [1, 1, -2]` (total `0` ✓).
+
+      | child | surplus `c_i` | wants? |
+      |-------|---------------|--------|
+      | 1     | +1            | gives 1 away |
+      | 2     | +1            | gives 1 away |
+      | 3     | -2            | receives 2  |
+
+      Prefix offsets: `v = [0, c_1, c_1+c_2] = [0, 1, 2]`; sorted `[0,1,2]`;
+      `median = v[1] = 1`. Answer `= |0-1|+|1-1|+|2-1| = 1 + 0 + 1 = 2`. The two
+      unit moves are child 1 → child 3 and child 2 → child 3, exactly the sample.
+
+  - type: mcq
+    prompt: "Why is the total number of moves equal to the sum of the absolute net flows across the edges?"
+    options:
+      - "Each unit that crosses an edge costs exactly one move, and food never needs to travel both directions across the same edge in an optimal monotone schedule — so gross moves equal the sum of |net flow| per edge."
+      - "Because every child must give away every surplus unit to both neighbours."
+      - "Because the maximum food value among b_i caps the total moves."
+      - "Because food can only move clockwise around the table."
+    answer: 0
+    explanation: "A unit moving to a neighbour is one move across one edge, so minimising moves = minimising total edge crossings. In the optimal solution each edge carries food in only one direction (net flow), so the gross count equals Σ|f_i|; the median choice sets f_0 so this sum is minimal. The other options misstate the movement model."
+type: content
+---

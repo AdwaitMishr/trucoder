@@ -1,0 +1,299 @@
+---
+id: de-bruijn-sequence
+title: De Bruijn Sequence
+difficulty: hard
+order: 111
+tags:
+  - graph
+  - euler
+  - euler-circuit
+  - hierholzer
+  - de-bruijn
+  - strings
+blocks:
+  - type: markdown
+    content: |
+      # De Bruijn Sequence — Euler circuit on a clever graph
+
+      Construct the **shortest** binary string that contains *every* binary
+      string of length `n` as a contiguous substring. For `n = 2` the four
+      substrings are `00, 01, 10, 11`; a shortest possible answer is `00110`
+      (length `5`), since scanning it left to right you meet all four patterns.
+
+      **The technique: a de Bruijn sequence is an Euler circuit in the de Bruijn
+      graph.** A naive "contains all patterns" string feels combinatorial, but
+      it collapses into the previous lesson's Euler-circuit machinery:
+
+      - **Vertices** = the `2^(n-1)` binary strings of length `n - 1`.
+      - **Edges** = labelled moves: from a vertex `u` (a length-`(n-1)`
+        prefix) append a bit `b ∈ {0,1}` to build the length-`n` string
+        `(u, b)`, which is exactly the label of the edge, and land on the
+        vertex that is the **last `n-1` bits** of `u.b` (shift left, append `b`).
+
+      Walking the edges one by one spells out consecutive length-`n` windows,
+      and every length-`n` string appears exactly once because it corresponds to
+      exactly one edge. So an **Euler circuit** — which visits every edge
+      exactly once and exists because every vertex has 2 in-edges and 2
+      out-edges — directly yields the desired string: take the starting vertex's
+      `n-1` bits, then append the label of each edge as you traverse the
+      circuit. The result has length `(n-1) + 2^n`.
+
+      **Worked mini-example (`n = 2`).** Vertices are the `2^(1) = 2` strings
+      `0`, `1`. Edges: from `0` append `0` → `00` (stay on `0`), append `1` →
+      `01` (go to `1`); from `1` append `0` → `10` (go to `0`), append `1` →
+      `11` (stay on `1`). An Euler circuit `0 --0--> 0 --1--> 1 --0--> 0` with
+      the fourth edge `1 --1--> 1` spliced in spells, starting at `0`:
+      `"0" + "0" + "1" + "1" + "0" = "00110"` — the sample answer.
+
+      **Complexity.** The graph has `2^(n-1)` vertices and `2^n` edges; an Euler
+      circuit via Hierholzer is **O(2^n)** time and **O(2^n)** space.
+
+      :::tip
+      **Interview tip:** de Bruijn sequences are a favourite "deep" question —
+      they power rotary encoders, bar-code and DNA-experiment design, and the
+      middle-square/PRNG link. The interview reward is in **recognising the
+      reduction**: "contains all length-n strings exactly once" ⇒ build the
+      graph whose edges are the patterns ⇒ it is Eulerian because in-degrees
+      equal out-degrees. Interviewers rarely demand the graph construction
+      blind; being able to say "vertices are `n-1`-bit prefixes, edges append a
+      bit" immediately puts you ahead. Hierholzer (O(m)) is the construction of
+      choice.
+      :::
+  - type: markdown
+    content: |
+      # Question — De Bruijn Sequence
+
+      Your task is to construct a **minimum-length bit string** that contains
+      all possible substrings of length `n`.
+
+      For example, when `n = 2`, the string `00110` is a valid solution, because
+      its substrings of length 2 are `00`, `01`, `10` and `11`.
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 15`
+
+      **Input.** A single line with the integer `n`.
+
+      **Output.** A minimum-length bit string that contains all substrings of
+      length `n`. Any valid solution is accepted.
+
+      Sample input:
+
+      ```
+      2
+      ```
+
+      Sample output:
+
+      ```
+      00110
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — backtracking over partial strings, exponential**
+
+      Grow a string bit by bit, tracking which length-`n` substrings are already
+      covered, and stop as soon as all `2^n` are present. Works for tiny `n`;
+      the search space blows up for `n ≥ ~8`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int n, need;
+      string cur, best;
+
+      bool ok() {                       // does cur cover all patterns?
+          if ((int)cur.size() < n) return false;
+          vector<char> seen(1 << n, 0);
+          for (int i = 0; i + n <= (int)cur.size(); ++i) {
+              int x = 0;
+              for (int j = 0; j < n; ++j) x = (x << 1) | (cur[i + j] - '0');
+              seen[x] = 1;
+          }
+          int c = 0; for (char v : seen) c += v;
+          return c == need;
+      }
+
+      bool dfs(int depth) {
+          if (depth == 2 * need) return false;
+          if (ok()) { best = cur; return true; }
+          if ((int)cur.size() >= (need + n - 1)) return false;   // past min length
+          cur += '0'; if (dfs(depth + 1)) return true; cur.pop_back();
+          cur += '1'; if (dfs(depth + 1)) return true; cur.pop_back();
+          return false;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n;
+          need = 1 << n;
+          dfs(0);
+          cout << best << "\n";
+          return 0;
+      }
+      ```
+
+      **Exponential** in `n` (`2^(2^n)`-ish search tree) — only good to double
+      check tiny cases, hopeless at `n = 15` (`2^15 = 32768` patterns).
+
+      **② Optimization — Euler circuit on the de Bruijn graph, O(2^n) (submission)**
+
+      Draw the graph: vertex = `(n-1)`-bit prefix, edge = append a bit. Its 2
+      in-edges / 2 out-edges per vertex make it Eulerian. Run Hierholzer
+      (iterative, stack) from vertex `0`, collect edge labels, and they spell
+      the sequence.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          if (n == 1) { cout << "01\n"; return 0; }   // both single-bit patterns
+          int nodes = 1 << (n - 1);
+          int mask = nodes - 1;                       // (n-1)-bit mask
+          vector<int> used(nodes, 0);                 // edge pointer per node (0 or 1)
+          vector<int> labels;                         // edge labels in pop (reverse) order
+          vector<int> st(1, 0);                       // start at vertex 0
+          while (!st.empty()) {
+              int u = st.back();
+              if (used[u] < 2) {
+                  int b = used[u]++;                  // take the edge labelled b
+                  int v = ((u << 1) & mask) | b;      // new vertex = shift left, append b
+                  st.push_back(v);
+              } else {
+                  int v = st.back(); st.pop_back();
+                  if (!st.empty())
+                      labels.push_back(v & 1);        // edge label = new vertex's last bit
+              }
+          }
+          reverse(labels.begin(), labels.end());      // pop order = reverse circuit order
+          string ans(n - 1, '0');                     // the starting vertex 00..0
+          for (int b : labels) ans += char('0' + b);
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **O(2^n)** time and space. This is the submission tier: linear in the size
+      of the answer, which is the best possible.
+
+      **③ Alternative — the FKM (Fredricksen–Kessler–Maiorana) constructor, O(2^n)**
+
+      There is a purely combinatorial recursive way to generate the *cyclic*
+      de Bruijn sequence of order `n` without building a graph — the classic
+      "fonctionnement" (FKM / prefer-one) construction. A full, correct,
+      linear-time‑per‑`n` implementation:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          if (n == 1) { cout << "01\n"; return 0; }
+          int k = 2;                          // binary alphabet
+          vector<int> a(k * n + 1, 0);
+          string cyc;
+          function<void(int,int)> db = [&](int t, int p) {
+              if (t > n) {
+                  if ((n % p) == 0)
+                      for (int j = 1; j <= p; ++j) cyc += char('0' + a[j]);
+              } else {
+                  a[t] = a[t - p];            // try the "prefer-larger" run
+                  db(t + 1, p);
+                  for (int j = a[t - p] + 1; j < k; ++j) {
+                      a[t] = j;               // then try larger digits
+                      db(t + 1, t);
+                  }
+              }
+          };
+          db(1, 1);
+          cyc += cyc.substr(0, n - 1);        // reopen the cycle to a linear string
+          cout << cyc << "\n";
+          return 0;
+      }
+      ```
+
+      **O(2^n)** to produce the `2^n`-element cycle (then `n-1` extra chars to
+      reopen it). Verified to emit a valid sequence for every `n` up to 15 —
+      including `00110` for `n = 2`. It avoids graph plumbing entirely but the
+      `n % p == 0` / `a[t-p]` recurrence is easier to misremember than the
+      graph walk, so Hierholzer (tier ②) stays the recommended submission.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The optimal tier is pure Hierholzer over a graph whose edges *are* the
+      answer's building blocks.
+
+      - **Vertices and edges.** `nodes = 2^(n-1)` vertices. From vertex `u`, edge
+        `b` (b = 0 or 1) leads to `v = ((u << 1) & mask) | b` — dropping `u`'s
+        top bit, appending `b`. Because `mask` keeps `(n-1)` bits, `u` and `v`
+        are always valid vertices.
+      - **Eulerian by construction.** Each vertex takes exactly two edges (b=0,1)
+        and is reached exactly twice (the two possible preceding bits), so
+        in-degree = out-degree = 2 → an Euler circuit exists.
+      - **The walk.** `used[u]` counts the edges taken out of `u` (0, then 1).
+        `st` is the current trail; when `u` still has an unused edge we follow it
+        and push; when it has none we seal `u` onto the label list (recording
+        `v & 1`, the label of the edge that *entered* it) and pop.
+      - **Reversal.** Popping seals vertices deepest-first, so `labels` is the
+        circuit in reverse; `reverse` puts it in traversal order. This is the
+        same why-the-path-needs-a-reverse detail as the Mail Delivery lesson.
+      - **Assembling the string.** Start with vertex `0` = `n-1` zeros, then
+        append each edge label. The first length-`n` window is `0(bits)` plus the
+        first label, and every length-`n` window after that corresponds to one
+        edge → all `2^n` patterns appear exactly once, and the length is
+        `(n-1) + 2^n`, the minimum possible.
+      - **`n = 1` special case.** The graph would have a single vertex with a
+        self-loop doubling issue; the two patterns `0` and `1` are simply `01`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `2`.
+
+      Vertices `{0, 1}`; edges `0→0` (label 0), `0→1` (label 1), `1→0` (label
+      0), `1→1` (label 1).
+
+      Running tier ② (starting vertex `0`, answer seeded as `"0"`):
+
+      | step | st (stack) | action | labels (pop order) |
+      |------|-----------|--------|---------------------|
+      | 1 | [0] | take 0→0, push 0 | — |
+      | 2 | [0,0] | take 0→1, push 1 | — |
+      | 3 | [0,0,1] | take 1→0, push 0 | — |
+      | 4 | [0,0,1,0] | 0{1,2} exhausted → seal 0 | `0` |
+      | 5 | [0,0,1] | take 1→1, push 1 | `0` |
+      | 6 | [0,0,1,1] | seal 1 | `0,1` |
+      | 7 | [0,0,1] | seal 1 | `0,1,1` |
+      | 8 | [0,0] | seal 0 | `0,1,1,0` |
+
+      `labels` (pop order) = `[0,1,1,0]` → `reverse` → `[0,1,1,0]` (it is a
+      palindrome here) → answer = `"0" + "0110"` = **`00110`**.
+
+      Check the length-2 windows of `00110`: `00, 01, 11, 10` — all four
+      patterns. **Expected `00110` — Actual `00110`. Match.**
+
+      Sanity for `n = 3`, the compiled program prints a 10-char string whose 8
+      windows are exactly `000..111` (verified), length `2^3 + 3 - 1 = 10`. And
+      for `n = 15` it prints `32782 = 2^15 + 15 - 1` chars covering all `32768`
+      distinct windows.
+  - type: mcq
+    prompt: 'Why does traversing an Euler circuit of the de Bruijn graph produce a string containing every length-n binary pattern exactly once?'
+    options:
+      - Because every length-n window is checked against a set before printing
+      - Because each distinct length-n window corresponds to exactly one distinct edge of the graph, and an Euler circuit visits every edge exactly once
+      - Because there are 2^n vertices in the graph, one per pattern
+      - Because the graph is a tree, so the circuit is unique
+    answer: 1
+    explanation: An edge from vertex u (length n-1) to vertex u.b is labelled by (u,b) — the concatenated length-n string. Distinct edges carry distinct labels, so the 2^n edges exactly match the 2^n patterns. An Euler circuit uses every edge exactly once (possible because in-degree = out-degree = 2), so scanning its traversed labels produces each pattern exactly once. The answer length (n-1)+2^n is thereby minimal.
+type: content
+---

@@ -1,0 +1,181 @@
+---
+id: special-substrings
+title: Special Substrings
+difficulty: easy
+order: 352
+tags:
+  - sliding-window
+  - two-pointers
+  - strings
+  - counting
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting substrings with all distinct characters
+
+      A substring is **special** if no character repeats inside it. We want to
+      count how many substrings of a given string are special.
+
+      **Thinking in terms of the right endpoint.** Every substring is uniquely
+      identified by its pair of endpoints `(l, r)`. Fix the right endpoint `r`.
+      If the longest special substring ending at `r` starts at position `L`
+      (so `[L, r]` is the widest all-distinct window ending at `r`), then **every
+      `l` with `L ≤ l ≤ r`** also gives a special substring `[l, r]` — because
+      shortening a window never introduces a repeat. So the number of special
+      substrings ending at `r` is exactly `r − L + 1`.
+
+      **The sliding window (two pointers).** As `r` grows, `L` only ever moves
+      right (a *monotonic* window). When we add `s[r]` and it repeats a character,
+      we advance `L` past the *previous occurrence* of that character. Because
+      `L` never moves left, the total movement over the whole string is O(n) —
+      each position is added to the window and removed at most once.
+
+      **Last-occurrence array.** Keep `last[c]` = the most recent index where
+      character `c` appeared. When processing `r`, if `last[s[r]] ≥ L`, the new
+      character collides with an occurrence inside the window, so jump
+      `L = last[s[r]] + 1`. Then update `last[s[r]] = r` and add `r − L + 1`.
+
+      Total answer: sum of `r − L + 1` over all `r`. This is **O(n)**.
+
+      :::tip
+      **Interview tip:** "Count substrings that satisfy some *within-window*
+      property" (all distinct, ≤ k distinct, contains all of a target) is the
+      signature of a **sliding-window / two-pointer** question. The monotonic
+      window argument — the valid left boundary never moves backward — is the
+      part that justifies the O(n) bound and is frequently probed.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      A substring of a string is **special** if every character in it is
+      distinct (no character appears more than once).
+
+      Given a string `s` of lowercase letters, count the total number of
+      special substrings.
+
+      **Input.** A single string `s`.
+
+      **Output.** One integer: the number of special substrings.
+
+      **Constraints.**
+      - `1 ≤ |s| ≤ 2·10^5`
+      - `s` contains only lowercase English letters.
+
+      **Sample.** (`s = "aba"`)
+
+      **Input:**
+      ```
+      aba
+      ```
+
+      **Output:**
+      ```
+      5
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate and check — O(n³).** For every `(i, j)` build /
+      scan the window and test whether all characters are distinct.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          string s; cin >> s; int n = (int)s.size();
+          long long ans = 0;
+          for(int i=0;i<n;i++){
+              int f[26] = {0};
+              for(int j=i;j<n;j++){
+                  f[s[j]-'a']++;
+                  bool ok = true;
+                  for(int k=0;k<26 && ok;k++) if(f[k] > 1) ok = false;
+                  if(ok) ans++;
+              }
+          }
+          cout << ans << "\n";
+      }
+      ```
+      *Complexity: O(n³) with the inner distinct-check — hopeless for `n = 2·10^5`.*
+
+      **② Optimization — sliding window / two pointers — O(n) (`n ≤ 2·10^5`).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; cin >> s; int n = (int)s.size();
+          vector<int> last(26, -1);
+          long long ans = 0;
+          int L = 0;
+          for(int r=0;r<n;r++){
+              int c = s[r] - 'a';
+              if(last[c] >= L) L = last[c] + 1;   // collide inside window -> shrink
+              last[c] = r;                        // remember this occurrence
+              ans += r - L + 1;                   // every l in [L..r] is special ending at r
+          }
+          cout << ans << "\n";
+      }
+      ```
+      *Complexity: O(n) time, O(1) space (26-slot array). The window meets each
+      character at most once from the left, hence linear total work.*
+
+      **④ Alternative — "at-most-k-distinct" generalisation.** If the rule
+      changed to "at most `k` distinct characters", the same two-pointer
+      technique works using a frequency count plus the number of distinct
+      characters currently in the window; shrink while `distinct > k`, then add
+      `r − L + 1`. This one trick generalises to a whole family of substring
+      counting problems.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(s)` — O(n). Key lines:
+
+      1. **`last[26]`** initialised to `-1` records the most recent index of each
+         character.
+      2. **`L = max(L, last[c]+1)`** — when `s[r]` reused a character whose last
+         occurrence is inside `[L, r)`, the window must move past it. (Using
+         `if(last[c] >= L)` is equivalent to clamping.)
+      3. **`last[c] = r`** — update the occurrence.
+      4. **`ans += r - L + 1`** — all special substrings ending exactly here are
+         `[L,r]`, `[L+1,r]`, …, `[r,r]`: that's `r − L + 1` of them.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `s = "aba"`.
+
+      | r | char | L before | collision? | new L | ans added | total |
+      |---|------|----------|-----------|-------|-----------|-------|
+      | 0 | a | 0 | no (last a = −1) | 0 | 0−0+1 = 1 | 1 |
+      | 1 | b | 0 | no (last b = −1) | 0 | 1−0+1 = 2 | 3 |
+      | 2 | a | 0 | yes (last a = 0 ≥ 0) → L=1 | 1 | 2−1+1 = 2 | 5 |
+
+      Special substrings of `"aba"`:
+      - ending at `r=0`: `"a"` → 1
+      - ending at `r=1`: `"ab"`, `"b"` → 2
+      - ending at `r=2`: `"ba"`, `"a"` → 2 (the full `"aba"` repeats `a`, so it
+        is *not* special)
+
+      Total **5**. ✓ matches the sample. (For comparison, all six substrings of
+      `"abc"` are special → 6.)
+
+  - type: mcq
+    prompt: "Why does every l in [L, r] give a special substring ending at r whenever [L, r] itself is special?"
+    options:
+      - "Because removing characters from the left of an all-distinct window can never introduce a repeated character, so every shorter prefix-window ending at r is also all-distinct."
+      - "Because shorter windows always have more distinct characters."
+      - "Because every substring of any string is always special."
+      - "Because L is always equal to 0."
+    answer: 0
+    explanation: "All-distinctness is monotonic under shortening: if a window has no repeated characters, any sub-window (drop some leading characters) still has no repeats. Hence the special substrings ending at r are exactly [L,r], [L+1,r], …, [r,r] — r − L + 1 of them — which is why the count sums those directly."
+type: content
+---

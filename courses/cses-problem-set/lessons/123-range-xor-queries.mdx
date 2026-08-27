@@ -1,0 +1,263 @@
+---
+id: range-xor-queries
+title: Range Xor Queries
+difficulty: easy
+order: 123
+tags:
+  - prefix-xor
+  - range-queries
+  - static-array
+  - bitwise
+blocks:
+  - type: markdown
+    content: |
+      # Range Xor Queries
+
+      **The technique: prefix xor.** Identical in shape to prefix sums, but the
+      accumulating operation is **xor** instead of addition. Build a prefix array
+      where `pref[i] = x[1] ^ x[2] ^ … ^ x[i]`, with `pref[0] = 0`. Any range
+      xor is:
+
+      ```
+      xor(l, r) = pref[r] ^ pref[l - 1]
+      ```
+
+      **Why it works.** Xor is its **own inverse**: `x ^ x = 0`, and `a ^ a ^ b =
+      b`. So the prefix up to `r` is exactly the range `[l, r]` xored with the
+      prefix up to `l-1`; xor-ing that prefix back off (`^ pref[l-1]`) cancels it
+      and leaves the range. Which bit `0..31` doesn't matter — the trick works
+      per bit, and bitwise independent.
+
+      **When you reach for it.** A static array with many range-xor queries — a
+      very common CSES-style and interview pattern (e.g. "xor of a subarray",
+      variants on subarray-xor counting). Because xor is invertible, it slots
+      into exactly the same O(1)-per-query pattern as prefix sums, with `^`
+      standing in for `-`.
+
+      **Worked mini-example.** `[3, 2, 4, 5, 1]`:
+      `pref = [0, 3, 1, 5, 0, 1]`. Then
+      `xor(2,4) = pref[4] ^ pref[1] = 0 ^ 3 = 3`, i.e. `2 ^ 4 ^ 5 = 3`. ✓
+
+      **Complexity.** O(n) build, O(1) per query, O(n) memory — optimal.
+
+      :::tip
+      **Interview tip:** Range xor and range sum are siblings — both are
+      *invertible*, so both reduce to a single prefix-difference. The interviewer
+      probe is usually conceptual: "xor is its own inverse, so to remove the
+      earlier prefix you xor it back." From there the common extension is
+      **subarray-xor counting**: with `pref[hi] ^ pref[lo-1] = target`, the answer
+      is the number of pairs of equal prefix values, solvable with xor in a hash
+      map in O(n). Because `a ^ b = c ⟺ a = b ^ c`, rewrite the pairing however
+      is convenient — that algebraic freedom is the whole trick.
+      :::
+  - type: markdown
+    content: |
+      # Question — Range Xor Queries
+
+      Given an array of `n` integers, your task is to process `q` queries asking
+      for the **xor sum** of the values in the range `[a, b]`. The array never
+      changes.
+
+      **Constraints:**
+      - `1 ≤ n, q ≤ 2·10^5`
+      - `1 ≤ x[i] ≤ 10^9`
+      - `1 ≤ a ≤ b ≤ n`
+
+      **Input:** the first line has `n` and `q`. The second line has the `n`
+      values. Then `q` lines, each with two integers `a b`.
+
+      **Output:** for each query, print the xor of the values in the range.
+
+      Sample input:
+
+      ```
+      8 4
+      3 2 4 5 1 1 5 3
+      2 4
+      5 6
+      1 8
+      3 3
+      ```
+
+      Sample output:
+
+      ```
+      3
+      0
+      6
+      4
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·q)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<int> a(n + 1);
+          for (int i = 1; i <= n; ++i) cin >> a[i];
+          while (q--) {
+              int l, r; cin >> l >> r;
+              int x = 0;
+              for (int i = l; i <= r; ++i) x ^= a[i];
+              cout << x << '\n';
+          }
+          return 0;
+      }
+      ```
+      O(n) per query → O(n·q) ≈ `4·10^10` xors at the limit. Correct, far too
+      slow.
+
+      **② Optimization — prefix xor, O(n + q)** (the chosen solution)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<int> pref(n + 1, 0);
+          for (int i = 1; i <= n; ++i) {
+              int x; cin >> x;
+              pref[i] = pref[i - 1] ^ x;
+          }
+          while (q--) {
+              int a, b; cin >> a >> b;
+              cout << (pref[b] ^ pref[a - 1]) << '\n';
+          }
+          return 0;
+      }
+      ```
+      O(n + q). Build once, then every query is a single xor (O(1)). Optimal.
+
+      **③ Further optimization — none needed**
+      O(1) per query and a mandatory O(n) read make O(n + q) optimal. Nothing to
+      improve.
+
+      **④ Alternative — a segment tree / Fenwick over xor, O(log n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<int> a(n);
+          for (int i = 0; i < n; ++i) cin >> a[i];
+          vector<int> st(4 * n);
+          function<int(int,int,int)> build = [&](int node, int lo, int hi) {
+              if (lo == hi) return st[node] = a[lo];
+              int mid = (lo + hi) / 2;
+              return st[node] = build(2*node, lo, mid) ^ build(2*node+1, mid+1, hi);
+          };
+          function<int(int,int,int,int,int)> qry = [&](int node, int lo, int hi, int l, int r) {
+              if (r < lo || hi < l) return 0;                 // neutral for xor
+              if (l <= lo && hi <= r) return st[node];
+              int mid = (lo + hi) / 2;
+              return qry(2*node, lo, mid, l, r) ^ qry(2*node+1, mid+1, hi, l, r);
+          };
+          build(1, 0, n - 1);
+          while (q--) { int a, b; cin >> a >> b; cout << qry(1, 0, n-1, a-1, b-1) << '\n'; }
+          return 0;
+      }
+      ```
+      O(log n) per query, O(n) build. Overkill for a **static** array (prefix xor
+      wins at O(1)), but the exact structure you would use if updates arrived —
+      xor is associative, so a segment tree/Fenwick handles it fine.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② prefix xor**, and it mirrors prefix sums exactly:
+
+      - **Build:** `pref[i] = pref[i-1] ^ x`. The running xor to position `i` is
+        the previous running xor combined with the new value. `pref[0] = 0` — `0`
+        is the identity for xor (`0 ^ x = x`).
+      - **Query:** `pref[b] ^ pref[a-1]`. The prefix ending at `b` holds the
+        range xored with the leading prefix; xor-ing `pref[a-1]` back cancels the
+        leading part because `y ^ y = 0`:
+        `(range ^ pref[a-1]) ^ pref[a-1] = range`.
+      - **Type:** `pref` holds `int`. Values are ≤ `10^9` and xor never grows the
+        value range, so each entry stays well within 32 bits — no `long long`
+        needed here (unlike the sum version, where totals could reach `10^14`).
+
+      The only change vs. prefix sums is `^` instead of `-`; both work because
+      both operations are invertible. That single-line swap is the entire lesson.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      8 4
+      3 2 4 5 1 1 5 3
+      2 4
+      5 6
+      1 8
+      3 3
+      ```
+
+      Build the prefix-xor array from the stream:
+
+      | i | x | pref[i] = pref[i-1] ^ x |
+      |---|-----|--------------------------|
+      | 0 | – | 0 |
+      | 1 | 3 | 3 |
+      | 2 | 2 | 1 |
+      | 3 | 4 | 5 |
+      | 4 | 5 | 0 |
+      | 5 | 1 | 1 |
+      | 6 | 1 | 0 |
+      | 7 | 5 | 5 |
+      | 8 | 3 | 6 |
+
+      Each query is a single xor:
+
+      | Query | Answer | Check |
+      |-------|--------|-------|
+      | `2 4` | pref[4] ^ pref[1] = 0 ^ 3 = **3** | 2^4^5 = 3 ✓ |
+      | `5 6` | pref[6] ^ pref[4] = 0 ^ 0 = **0** | 1^1 = 0 ✓ |
+      | `1 8` | pref[8] ^ pref[0] = 6 ^ 0 = **6** | whole array = 6 ✓ |
+      | `3 3` | pref[3] ^ pref[2] = 5 ^ 1 = **4** | a[3] = 4 ✓ |
+
+      Result: `3 0 6 4` ✓. Note `[2,4]` = `3` even though digit-fast answers can
+      differ: xor is a per-bit parity count, so a pair of equal values (`1^1`)
+      cancels to `0`, exactly as `[5,6]` shows.
+
+      **Edge cases:** `[1,n]` uses `pref[0] = 0` (identity, so the answer is just
+      `pref[n]`); a single element `[k,k]` returns that element itself.
+  - type: flowchart
+    title: "Prefix-xor build and query"
+    nodes:
+      - "Stream array x[1..n]"
+      - "pref[i] = pref[i-1] ^ x"
+      - "Read query a b"
+      - "Print pref[b] ^ pref[a-1]"
+      - "More queries?"
+      - "Done"
+    edges:
+      - {from: 0, to: 1, label: "one pass"}
+      - {from: 1, to: 2, label: "after build"}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 2, label: "yes"}
+      - {from: 4, to: 5, label: "no"}
+  - type: mcq
+    prompt: 'Range xor is answered like range sum: xor(l, r) = pref[r] ^ pref[l-1]. What property of xor makes this cancellation valid?'
+    options:
+      - Xor is commutative (a^b = b^a) only
+      - Xor is its own inverse: any element xored with itself gives 0, so the leading prefix pref[l-1] is cleanly "xored back off" and disappears, leaving only the overlapping range's value
+      - Xor converts numbers to integers
+      - Xor sorts the array
+    answer: 1
+    explanation: The identity relies on a ^ a = 0 combined with associativity, since pref[r] = range ^ pref[l-1], which means pref[r] ^ pref[l-1] = range ^ (pref[l-1] ^ pref[l-1]) = range ^ 0 = range. Negation (−) achieves the same cancellation for sums; xor cancels by self-inverse. Any invertible, associative operation on a static array admits this O(1)-query prefix trick.
+type: content
+---

@@ -1,0 +1,221 @@
+---
+id: number-spiral
+title: Number Spiral
+difficulty: medium
+order: 6
+tags:
+  - intro
+  - math
+  - geometry
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — O(1) closed-form by ring
+
+      The spiral fills a grid ring by ring, and the key observation is that
+      the **outer square of side `m = max(y, x)` entirely determines the
+      answer**: the cell `(y, x)` always lies on the border of the `m × m`
+      square (if either coordinate equals `m`), and that border has a clean
+      formula.
+
+      The largest number in the `m × m` square is `m^2`, and it sits:
+      - at the **top-right corner** `(1, m)` when `m` is **odd**;
+      - at the **bottom-left corner** `(m, 1)` when `m` is **even**.
+
+      From that corner the border winds by steps of 1, so we only need to know
+      *which side* of the border `(y, x)` is on and *which end* it starts from.
+
+      Work out the two cases (let `m = max(y, x)`):
+
+      **Odd `m`** (max at `(1, m) = m^2`):
+      - right column (`x = m`, `y ≠ m`): going down from the top, the value
+        decreases → `m^2 - y + 1`;
+      - bottom row (`y = m`): going left-to-right from the smallest corner
+        `(m, 1) = (m-1)^2 + 1` → `(m-1)^2 + x`.
+
+      **Even `m`** (max at `(m, 1) = m^2`):
+      - bottom row (`y = m`): going right from the max, the value decreases →
+        `m^2 - x + 1`;
+      - right column (`x = m`, `y ≠ m`): going down from `(1, m) = (m-1)^2 + 1`
+        → `(m-1)^2 + y`.
+
+      **Worked mini-example.** `(2, 3)` → `m = 3` (odd), `x = m`, so
+      `value = m^2 - y + 1 = 9 - 2 + 1 = 8`. ✓ (row 2, col 3 of the spiral
+      really is 8.)
+
+      **Complexity.** Only `max`, a comparison, and arithmetic:
+      **O(1) per query**, O(1) extra space.
+
+      :::tip
+      **Interview tip:** Grid-pattern problems like this reward *finding the
+      closed form for a single cell* instead of simulating the whole grid
+      (simulation needs O(y·x) space and time and dies on `10^9` inputs).
+      Recognising "one cell → constant-time formula" is a strong signal to
+      reach for a math solution.
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      A number spiral is an infinite grid whose upper-left square has number 1.
+      Here are the first five layers of the spiral:
+
+      ```text
+      1  2  9 10 25
+      4  3  8 11 24
+      5  6  7 12 23
+      16 15 14 13 22
+      17 18 19 20 21
+      ```
+
+      Your task is to find out the number in row `y` and column `x`.
+
+      **Input:** The first input line contains an integer `t`: the number of
+      tests. After this, there are `t` lines, each containing integers `y` and
+      `x`.
+
+      **Output:** For each test, print the number in row `y` and column `x`.
+
+      **Constraints:** `1 ≤ t ≤ 10^5`, `1 ≤ y, x ≤ 10^9`
+
+      ### Sample
+
+      Input:
+      ```text
+      3
+      2 3
+      1 1
+      4 2
+      ```
+
+      Output:
+      ```text
+      8
+      1
+      15
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(m²) time, O(m²) space (build the whole grid).**
+
+      ```cpp
+      long long solve(long long y, long long x) {
+          long long m = std::max(y, x);
+          vector<vector<long long>> g(m, vector<long long>(m, 0));
+          long long v = 1; g[0][0] = 1; ++v;
+          for (long long k = 2; k <= m; ++k) {
+              if (k % 2 == 0) {                 // even ring: right col down, then bottom row left
+                  for (long long r = 0; r <= k - 1; ++r) g[r][k - 1] = v++;
+                  for (long long c = k - 2; c >= 0; --c) g[k - 1][c] = v++;
+              } else {                          // odd ring: bottom row right, then right col up
+                  g[k - 1][0] = v++;
+                  for (long long c = 1; c <= k - 1; ++c) g[k - 1][c] = v++;
+                  for (long long r = k - 2; r >= 0; --r) g[r][k - 1] = v++;
+              }
+          }
+          return g[y - 1][x - 1];
+      }
+      ```
+
+      Build the *actual* spiral grid ring by ring up to side `m = max(y, x)`, then read
+      the cell. Trivially correct, but `O(m²)` time and `O(m²)` space — for `m = 10^9`
+      that is `10^18` cells, which cannot fit in memory or finish in time. It only
+      survives here because the sample's largest coordinate is `4`.
+
+      **② Optimization — O(1) per query, O(1) space (closed form by ring).**
+
+      ```cpp
+      long long solve(long long y, long long x) {
+          long long m = std::max(y, x);
+          if (m % 2 == 0) {
+              if (y == m) return m * m - x + 1;          // bottom row
+              return (m - 1) * (m - 1) + y;              // right column
+          }
+          if (y == m) return (m - 1) * (m - 1) + x;      // bottom row
+          return m * m - y + 1;                          // right column
+      }
+      ```
+
+      The cell `(y, x)` always sits on the border of the `m × m` spiral square, because
+      one of its coordinates equals `m`. That border's largest number is `m²` — at the
+      top-right corner `(1, m)` when `m` is odd, or at the bottom-left `(m, 1)` when `m`
+      is even — so each branch just walks the correct side down from the corner. A few
+      arithmetic operations per query: `O(1)` time, `O(1)` space.
+
+      **④ Alternative algorithm — O(m) time, O(1) space (walk the ring border).**
+
+      ```cpp
+      long long solve(long long y, long long x) {
+          long long m = std::max(y, x);
+          long long v = (m - 1) * (m - 1);                // last cell just before this ring
+          if (m % 2 == 0) {                               // even ring: right col down, then bottom row left
+              for (long long r = 1; r <= m; ++r) { v++; if (y == r && x == m) return v; }
+              for (long long c = m - 1; c >= 1; --c) { v++; if (y == m && x == c) return v; }
+          } else {                                        // odd ring: bottom row right, then right col up
+              for (long long c = 1; c <= m; ++c) { v++; if (y == m && x == c) return v; }
+              for (long long r = m - 1; r >= 1; --r) { v++; if (y == r && x == m) return v; }
+          }
+          return -1;                                      // unreachable
+      }
+      ```
+
+      Instead of a closed form, simulate only the outer ring border, counting up from the
+      ring's first cell and stopping the moment `(y, x)` is visited. This is a genuinely
+      different approach — `O(m)` time per query instead of `O(1)` — so it would be too
+      slow for `y, x` up to `10^9`, but it shows exactly how the closed form is derived
+      and still beats building the whole grid.
+
+      Reason through the code above with the next block — then trace it on the sample input below.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` handles one query `(y, x)`. We set `m = max(y, x)` — the cell is
+      guaranteed to be on the border of the `m × m` spiral square, because one
+      of its coordinates equals `m`. We branch on `m`'s parity:
+      - **even `m`**: if `y == m` the cell is on the bottom row, and walking
+        right from the bottom-left max `m^2` gives `m^2 - x + 1`; otherwise it
+        is on the right column, where `(m-1)^2 + y` counts upward from the
+        corner `(1, m) = (m-1)^2 + 1`.
+      - **odd `m`**: if `y == m` it is the bottom row, `(m-1)^2 + x`; otherwise
+        the right column, `m^2 - y + 1` (descending from the top-right max).
+
+      Every quantity is `long long`, so `m * m` for `m` up to `10^9` (that is
+      `10^18`) stays exact. Constant work per query — no grid is ever built.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** the three sample queries `(2, 3)`, `(1, 1)`, `(4, 2)`.
+
+      **Expected output:** `8`, `1`, `15` (one per line).
+
+      **Actual run:**
+
+      Query `(2, 3)`:
+      - `m = max(2, 3) = 3`, odd; `y = 2 ≠ m`, so right column.
+      - `value = m^2 - y + 1 = 9 - 2 + 1 = 8`. ✓
+
+      Query `(1, 1)`:
+      - `m = max(1, 1) = 1`, odd; `y = 1 == m`, so bottom row.
+      - `value = (m-1)^2 + x = 0 + 1 = 1`. ✓
+
+      Query `(4, 2)`:
+      - `m = max(4, 2) = 4`, even; `y = 4 == m`, so bottom row.
+      - `value = m^2 - x + 1 = 16 - 2 + 1 = 15`. ✓
+
+      All three results match the expected output exactly.
+  - type: mcq
+    prompt: Why must we use O(1) math instead of simulating the spiral?
+    options:
+      - 'Because y and x can be up to 10^9, so an O(y·x) simulation is both far too slow and cannot even fit the grid in memory.'
+      - 'Because the spiral only contains even numbers, so a formula is needed to reach them.'
+      - Because the judge only accepts code with exactly one loop.
+      - 'Because t is small, so a fast simulation would still pass.'
+    answer: 0
+    explanation: 'The coordinates go up to 10^9 and t up to 10^5, so building even one full layer is impossible (10^18 cells). A closed-form answer reduces each query to a handful of arithmetic operations — O(1) per query — which handles the full 10^5 queries trivially.'
+type: content
+---
+

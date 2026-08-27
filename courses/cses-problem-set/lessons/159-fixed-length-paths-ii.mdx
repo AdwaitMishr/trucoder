@@ -1,0 +1,316 @@
+---
+id: fixed-length-paths-ii
+title: Fixed-Length Paths II
+type: content
+difficulty: hard
+order: 159
+tags:
+  - tree
+  - centroid-decomposition
+  - fenwick-tree
+  - path-counting
+blocks:
+  - type: markdown
+    content: |
+      # Fixed-Length Paths II — count paths with length in a range
+
+      Count the distinct paths whose length (number of edges) lies in a *range*
+      `[k1, k2]` instead of one exact value. This is the same **centroid-
+      decomposition** idea as Fixed-Length Paths I, but the "frequency array +
+      single coefficient" trick becomes a **range-count**: for each node at
+      distance `d`, its valid partners sit at distances `k1 - d .. k2 - d`, and
+      we sum those counts.
+
+      ## From "exactly k" to "between k1 and k2"
+
+      At a centroid `c`, a length-`k` path through `c` pairs two endpoints at
+      distances `d1, d2` with `d1 + d2 = k`. For a *range* of lengths, a node at
+      distance `d` pairs with partners at distance `pd` satisfying
+      `k1 <= d + pd <= k2`, i.e. `pd in [k1 - d, k2 - d]`. So instead of reading
+      one `cnt[k - d]`, we sum `cnt` over that contiguous index interval.
+
+      A **Fenwick tree (BIT) over distances** gives us exactly that: point
+      updates when merging a subtree, and `O(log n)` prefix sums to read out the
+      range total. Each centroid does one small sweep, and the whole recursion
+      stays `O(n log² n)`.
+
+      ## Complexity
+
+      - Centroid search: `O(log n)` levels, `O(n)` overall per level →
+        `O(n log n)`.
+      - Range counts + point merges: each is `O(log n)`, done `O(n log n)`
+        times total → `O(n log² n)`.
+      - Space: `O(n)`.
+
+      :::tip
+      **Interview tip:** The pivot between the "exactly k" and "at most / range"
+      counting versions is swapping a `cnt[k-d]` lookup for a `cnt[l..r]` sum —
+      which is a Fenwick-worthy operation. If an interviewer asks "paths of
+      length between a and b", the moment you say "per centroid, for each node
+      count partners at distances in a window" is the moment you've got it.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given a tree of `n` nodes, count the number of distinct paths that have at
+      least `k1` and at most `k2` edges.
+
+      ## Input
+
+      The first input line has three integers `n`, `k1` and `k2`: the number of
+      nodes and the path length limits. The nodes are numbered `1, 2, ..., n`.
+
+      Then there are `n - 1` lines describing the edges: each has two integers
+      `a` and `b` — an edge between `a` and `b`.
+
+      **Constraints:** `1 <= k1 <= k2 <= n <= 2 * 10^5`, `1 <= a, b <= n`
+
+      ## Output
+
+      Print one integer: the number of paths.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 2 3
+      1 2
+      2 3
+      3 4
+      3 5
+      ```
+      **Output:**
+      ```
+      6
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — distances from every node, O(n²)**
+
+      From every source, BFS/DFS to record distances; count pairs whose distance
+      is in `[k1, k2]`, divide by `2`. `O(n)` per source × `n` sources = `O(n²)`
+      ≈ `4 * 10^10` for `n = 2 * 10^5`. Too slow.
+
+      **② Optimization — centroid decomposition + Fenwick range-count, O(n log² n) (optimal)**
+
+      At each centroid, a Fenwick tree indexed by distance holds the centroid
+      (distance 0) plus already-processed subtrees. For every node at distance
+      `d`, add the Fenwick sum over `[k1-d, k2-d]`, then merge the subtree.
+      Compiled and run against the sample below.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int n, k1, k2;
+      vector<int> g[200005];
+      int blocked[200005], sz[200005];
+      ll ans = 0;
+      int BIT[200005];
+      vector<int> used;                    // distances added by the current centroid
+
+      void add(int i, int v){ for (; i <= n + 1; i += i & -i) BIT[i] += v; }
+      int sum(int i){ int s = 0; for (; i > 0; i -= i & -i) s += BIT[i]; return s; }
+      int rangeSum(int l, int r){ if (l < 1) l = 1; if (r > n + 1) r = n + 1; if (r < l) return 0; return sum(r) - sum(l - 1); }
+      #define IDX(d) ((d) + 1)             // BIT index for distance d (0 -> 1)
+
+      void dfsSize(int v, int p){ sz[v] = 1; for (int u : g[v]) if (u != p && !blocked[u]){ dfsSize(u, v); sz[v] += sz[u]; } }
+      int findCentroid(int v, int p, int total){
+          for (int u : g[v]) if (u != p && !blocked[u] && sz[u] > total / 2) return findCentroid(u, v, total);
+          return v;
+      }
+
+      void work(int v, int p, int d, vector<int>& dists){     // answer + collect
+          if (d > k2) return;
+          ans += rangeSum(IDX(max(0, k1 - d)), IDX(k2 - d));  // partners at dist in [k1-d, k2-d]
+          dists.push_back(d);
+          for (int u : g[v]) if (u != p && !blocked[u]) work(u, v, d + 1, dists);
+      }
+
+      void decompose(int entry){
+          dfsSize(entry, -1);
+          int c = findCentroid(entry, -1, sz[entry]);
+
+          used.clear();
+          add(IDX(0), 1); used.push_back(0);                  // centroid at distance 0
+
+          for (int u : g[c]) if (!blocked[u]){
+              vector<int> dists;
+              work(u, c, 1, dists);                            // answer against centroid + prior subtrees
+              for (int d : dists){ add(IDX(d), 1); used.push_back(d); }  // merge this subtree
+          }
+
+          for (int d : used) add(IDX(d), -1);                  // clear BIT for the next centroid
+
+          blocked[c] = 1;
+          for (int u : g[c]) if (!blocked[u]) decompose(u);
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          cin >> n >> k1 >> k2;
+          for (int i = 0; i + 1 < n; i++){ int a, b; cin >> a >> b; --a; --b; g[a].push_back(b); g[b].push_back(a); }
+          decompose(0);
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n log² n)` time, `O(n)` space. The recommended solution.*
+
+      **③ Alternative algorithm — "count ≤ L" with sorted two-pointers, O(n log² n)**
+
+      Instead of a Fenwick, count paths whose length is **at most** `L`, then
+      answer `countLE(k2) - countLE(k1 - 1)`. At each centroid, collect all
+      component distances, sort them, and count pairs summing to `<= L` with
+      two pointers — then *subtract* each subtree's internal pairs so only pairs
+      passing through the centroid remain (inclusion-exclusion). Verifiable and
+      accepted; no Fenwick needed.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int n;
+      vector<int> g[200005];
+      int blocked[200005], sz[200005];
+
+      void dfsSize(int v, int p){ sz[v] = 1; for (int u : g[v]) if (u != p && !blocked[u]){ dfsSize(u, v); sz[v] += sz[u]; } }
+      int findCentroid(int v, int p, int total){
+          for (int u : g[v]) if (u != p && !blocked[u] && sz[u] > total / 2) return findCentroid(u, v, total);
+          return v;
+      }
+
+      ll pairCountLE(const vector<int>& a, int L){          // unordered pairs (i<j), a[i]+a[j] <= L
+          vector<int> b(a); sort(b.begin(), b.end());
+          ll pairs = 0; int j = (int)b.size() - 1;
+          for (int i = 0; i < (int)b.size(); i++){
+              while (j > i && b[i] + b[j] > L) j--;
+              if (j <= i) break;
+              pairs += (j - i);
+          }
+          return pairs;
+      }
+
+      ll countLE(int L){
+          ll total = 0;
+          vector<int> all, sub;
+          function<void(int,int,int)> collectA = [&](int v, int p, int d){
+              if (d > L) return;
+              all.push_back(d); sub.push_back(d);
+              for (int u : g[v]) if (u != p && !blocked[u]) collectA(u, v, d + 1);
+          };
+          function<void(int)> decompose = [&](int entry){
+              dfsSize(entry, -1);
+              int c = findCentroid(entry, -1, sz[entry]);
+
+              all.clear(); all.push_back(0);                // centroid at distance 0
+              for (int u : g[c]) if (!blocked[u]){
+                  sub.clear(); collectA(u, c, 1);
+                  total -= pairCountLE(sub, L);             // drop same-subtree pairs
+              }
+              total += pairCountLE(all, L);                 // pairs through c = all - internal
+
+              blocked[c] = 1;
+              for (int u : g[c]) if (!blocked[u]) decompose(u);
+              blocked[c] = 0;
+          };
+          decompose(0);
+          return total;
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int k1, k2;
+          cin >> n >> k1 >> k2;
+          for (int i = 0; i + 1 < n; i++){ int a, b; cin >> a >> b; --a; --b; g[a].push_back(b); g[b].push_back(a); }
+          cout << countLE(k2) - countLE(k1 - 1) << "\n";
+          return 0;
+      }
+      ```
+
+      *Two `O(n log² n)` passes (sorting per centroid dominates `O(n log n)`
+      cleanly; the two-pointer sweep is linear). Same asymptotic as tier ②, just
+      a different data structure.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Distance-indexed Fenwick.** `IDX(d) = d + 1` maps a distance onto a
+        BIT position, so `add` and prefix `sum` are standard. `used` records
+        every distance written, letting us undo the current centroid's writes
+        cheaply before recursing — the Fenwick is shared across centroids, so
+        correctness depends on restoring it to all-zero.
+      - **Range partner query.** For a node at distance `d`, partners must be at
+        distance `max(0, k1-d) .. k2-d`; `rangeSum` clamps outside `[1, n+1]`.
+        Both `d > k2` (too deep) and negative partner distances are pruned by
+        the clamp and by the `d > k2` early return.
+      - **Process-then-merge.** Like Fixed-Length Paths I, each subtree is
+        answered *before* its distances join the BIT, so two nodes from the same
+        subtree never pair at this centroid — their path is counted deeper.
+      - **Inclusion-exclusion in tier ③.** `pairCountLE(all)` counts every pair
+        at distance `<= L`, including same-subtree pairs; subtracting each
+        subtree's `pairCountLE(sub)` removes exactly those, leaving pairs whose
+        path passes through the centroid.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5`, `k1 = 2`, `k2 = 3`, edges `1-2, 2-3, 3-4, 3-5`. Centroid
+      is node `3` (components of sizes 2, 1, 1 all `<= 2`); the small components
+      hold no length-2/3 paths, so everything is counted at `3`.
+
+      Fenwick (distance → index: `0→1, 1→2, 2→3, 3→4`). Start: BIT has centroid,
+      `(idx 1)=1`. For each node at distance `d`, add range `[k1-d, k2-d]`
+      clamped to `>= 0`:
+      - Subtree `2` (nodes 2 @1, 1 @2). Node 2: range `[1,2]` → sum over indexes
+        2..3 = 0. Node 1 at `d=2`: range `[0,1]` → `idx1` = centroid → **+1**
+        (path `1-2-3`, length 2). Merge `2→+1`, `1→+1` (BIT: idx2=1, idx3=1).
+      - Subtree `4` (node 4 @1). Range `[1,2]` → `idx2..3` = 1 (node 2) → **+1**
+        (`4-3-2`). Merge `idx2=2`.
+      - Subtree `5` (node 5 @1). Range `[1,2]` → `idx2..3` = 2 (nodes 2,4) →
+        **+2** (`5-3-2`, `5-3-4`). Merge `idx2=3`.
+      - Revisit node 2's partner @1 (dist to 5 stored earlier)? Those were added
+        at merge time; length-3 paths like `1-2-3-4` arise when node `1` (@2)
+        pairs with partner @1: node 1's range was `[0,1]` only (node 4 @1 wasn't
+        in BIT yet when node 1 was processed in the first subtree). That length-3
+        path is instead counted in a *deeper* centroid? No — it passes through
+        centroid 3 (1 and 4 are in different subtrees), so it must be counted
+        here: node 4 is processed in its own subtree AFTER node 1, and node 4 at
+        `d=1` queries range `[1,2]` which includes `idx3` = node1@2 → **+1**
+        (`1-3-4`, i.e. `1-2-3-4`) and node "idx3" also holds node2@? no — idx3
+        holds distance-2 nodes = {node1}. So node 4 adds partners {node1} = `+1`
+        for the length-3 path `1-2-3-4`. Similarly node 5 @1 adds {node1} = `+1`
+        for `1-2-3-5`.
+
+      Sum: `1 + 1 + 2 + 1 + 1 = 6`.
+
+      Printed:
+      ```
+      6
+      ```
+      Expected `6` — match. (All six: `1-2-3`, `2-3-4`, `2-3-5`, `4-3-5`,
+      `1-2-3-4`, `1-2-3-5`.)
+  - type: flowchart
+    title: "Count length-<k paths by centroid decomposition"
+    nodes: ["find centroid c", "BIT: insert centroid at distance 0", "for each subtree: query range sum [k1-d,k2-d]", "merge subtree distances into BIT", "clear BIT, recurse into components"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+  - type: mcq
+    prompt: "In the centroid-decomposition range-count, why must a subtree be answered against the Fenwick BEFORE its own distances are merged in?"
+    options:
+      - "Because merging first would make the Fenwick too large to fit in memory."
+      - "Because a path of length in [k1,k2] passing through the centroid must have its two endpoints in different subtrees (or one is the centroid) — answering first then merging prevents pairing two nodes from the same subtree, whose path does not pass through the centroid."
+      - "Because Fenwick prefix sums are only correct on a sorted array."
+      - "Because the centroid is only discovered after all subtrees are merged."
+    answer: 1
+    explanation: "The same principle as Fixed-Length Paths I: a path through centroid c has endpoints in different subtrees of c, or one endpoint is c itself. By querying the already-merged set before adding the current subtree, the current subtree's nodes never pair with each other at this centroid; that pair's path avoids c and is counted exactly once at the deeper centroid separating them."
+---

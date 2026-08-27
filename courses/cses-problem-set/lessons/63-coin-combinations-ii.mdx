@@ -1,0 +1,206 @@
+---
+id: coin-combinations-ii
+title: Coin Combinations II
+difficulty: medium
+order: 63
+tags:
+  - dynamic-programming
+  - counting
+  - unordered
+  - knapsack
+  - dp
+blocks:
+  - type: markdown
+    content: |
+      # Coin Combinations II — counting the *unordered* ways (coins outer)
+
+      Same setup as lesson 62 — `n` coin denominations (unlimited supply), target
+      sum `x` — but now **order does not matter**: only the *multiset* of coins
+      you use counts. `2 + 2 + 5`, `2 + 5 + 2` and `5 + 2 + 2` are **one single
+      way**. This is the coin-change *combination* (knapsack) count.
+
+      ## The recurrence (coins outer)
+
+      The trick that turns an ordered count into an unordered one is to change
+      the **loop order**: put the **coins** on the outside and the **sums** on
+      the inside.
+
+      ```
+      dp[0] = 1
+      for each coin c:                                    // outer: fix a coin type
+          for s = c .. x:                                 // inner: extend sums upward
+              dp[s] += dp[s - c]
+      ```
+
+      **Why does this kill ordering?** The outer loop processes coin types *one
+      at a time*, left to right. A coin that was processed first can only ever
+      appear before later coins, never after them. So the DP builds sums using
+      coins in a fixed non-decreasing order of type — every *set* of coins is
+      built exactly once, in its unique sorted order. All permutations of the
+      same multiset collapse into that single representative.
+
+      The inner loop runs `s` from `c` **upward** so that `dp[s-c]` may already
+      include the same coin — that independence-within-a-type is what makes the
+      supply *unlimited* while still staying unordered across types.
+
+      **Worked mini-example.** Coins `{2, 3, 5}`, target `9` → `3` ways:
+      `{2,2,5}`, `{2,2,2,3}`, `{3,3,3}`. (Lesson 62's ordered version counted
+      `8` for the same input.)
+
+      **Complexity.** Time `O(n · x)`, space `O(x)`, mod `10^9+7`.
+
+      :::tip
+      **Interview tip:** LeetCode *Coin Change 2* (also *518*), and the classic
+      "ways to make change" problem, are this exact problem. The single decision
+      that separates it from *Combination Sum IV* is the loop order: **coins
+      outer = combinations (unordered)**, **sums outer = permutations
+      (ordered)**. Interviewers often hint with the phrase "different orderings
+      count as the same" — that is your cue for coins-outer.
+      :::
+  - type: markdown
+    content: |
+      # Question — Coin Combinations II
+
+      Consider a money system consisting of `n` coins. Each coin has a positive
+      integer value. Your task is to calculate the number of **distinct
+      unordered ways** (different multiset of coins) you can produce a money sum
+      `x` using the available coins. You may use each coin any number of times.
+
+      For example, if the coins are `{2, 3, 5}` and the desired sum is `9`, there
+      are `3` ways: `2+2+5`, `2+2+2+3` and `3+3+3`.
+
+      **Input:** The first input line has two integers `n` and `x`: the number of
+      coins and the desired sum of money. The second line has `n` distinct
+      integers `c_1, c_2, …, c_n`: the value of each coin.
+
+      **Output:** Print the number of ways **modulo `10^9+7`**.
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 100`
+      - `1 ≤ x ≤ 10^6`
+      - `1 ≤ c_i ≤ 10^6`
+
+      **Example**
+
+      Input:
+
+      ```
+      3 9
+      2 3 5
+      ```
+
+      Output:
+
+      ```
+      3
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate multisets, exponential**
+
+      Produce every combination (set) of coins summing to `x`. Even deduplicated,
+      the number of multisets grows roughly as `x^(n)` worst case (many coins of
+      value 1 duplicate every partition), so it explodes for `x = 10^6`.
+
+      ```cpp
+      long long brute(const vector<int>& c, int idx, int x, const long long MOD = 1000000007LL) {
+          if (x == 0) return 1;                       // a complete, sorted multiset
+          if (idx == (int)c.size()) return 0;         // ran out of coin types
+          long long tot = brute(c, idx + 1, x, MOD);  // never use coin idx again
+          if (x >= c[idx]) tot = (tot + brute(c, idx, x - c[idx], MOD)) % MOD; // take it again
+          return tot;
+      }
+      ```
+
+      (`idx` only ever increases and `x` never increases, so every path terminates;
+      taking a coin at `idx` can never be followed by an earlier coin, which is
+      exactly what enforces "each coin added in non-decreasing type order" — the
+      same idea the DP bakes in.) Time is exponential in `x`.
+
+      **② Optimization — bottom-up DP, coins-outer, O(n · x) time, O(x) space**
+
+      ```cpp
+      long long solve(int n, int x, const vector<int>& c) {
+          const long long MOD = 1000000007LL;
+          vector<long long> dp(x + 1, 0);
+          dp[0] = 1;
+          for (int v : c)                             // outer: one coin *type* at a time
+              for (int s = v; s <= x; ++s)            // inner: sums ascending
+                  dp[s] = (dp[s] + dp[s - v]) % MOD;
+          return dp[x];
+      }
+      ```
+
+      Time `O(n · x)`, space `O(x)` — the intended solution.
+
+      **③ Further optimization — none needed**
+
+      All `n` coin types against all `x` reachable sums must be considered, so
+      `Ω(n · x)` is the floor and the `②` loops are optimal for these
+      constraints.
+
+      **④ Alternative — 2D knapsack view (explicitly counting sets)**
+
+      An equivalent formulation keeps an explicit outer index: `f(v, s)` = ways
+      using only the first `v` coin types to sum to `s`, with
+      `f(v, s) = f(v-1, s) + f(v, s - c_v)`. The coins-outer loop is the
+      space-compressed (rolling) version of this 2D table, dropping the first
+      dimension to `O(x)` memory. This is a valuable picture when you also need
+      to *reconstruct* the chosen sets.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the `②` solution:
+
+      - `dp[0] = 1` seeds the empty multiset (no coins sum to `0`).
+      - **Outer loop = coin types.** Processing coin `v` adds all ways that use
+        `v` *and only coins processed so far*. Because `v` is never revisited, a
+        coin can only be placed at or after its own "slot" in the order — no
+        later coin can ever appear before it. That single fact removes the
+        orderings.
+      - **Inner loop ascending** `s = v … x` means `dp[s-v]` may itself already
+        include `v` (unlimited supply), while still never going "backwards" to
+        use `v` for sums that conceptually would need a different ordering.
+      - Adding `dp[s-v]` into `dp[s]` is the "take one more `v`" move from the
+        1D-knapsack view `f(v, s) = f(v-1, s) + f(v, s - c_v)`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(3, 9, [2, 3, 5])` on the sample. `dp[0]=1`, all else `0`.
+
+      **After coin `2`** (inner `s=2..9`, `dp[s]+=dp[s-2]`):
+
+      | s | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+      |---|--|--|--|--|--|--|--|--|--|--|
+      | dp | 1 | 0 | 1 | 0 | 1 | 0 | 1 | 0 | 1 | 0 |
+
+      **After coin `3`**:
+
+      | s | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+      |---|--|--|--|--|--|--|--|--|--|--|
+      | dp | 1 | 0 | 1 | 1 | 1 | 1 | 2 | 1 | 2 | 2 |
+
+      **After coin `5`**:
+
+      | s | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+      |---|--|--|--|--|--|--|--|--|--|--|
+      | dp | 1 | 0 | 1 | 1 | 1 | 2 | 2 | 2 | 3 | **3** |
+
+      `dp[9] = 3`, matching the sample output. The three multisets
+      `{2,2,5}`, `{2,2,2,3}`, `{3,3,3}` are exactly the ways counted.
+  - type: mcq
+    prompt: 'Why does putting the coin loop on the outside and the sum loop on the inside change an ordered count into an unordered count?'
+    options:
+      - 'Because a coin type is added to the DP only once (in its outer slot), so it can only ever appear in one relative position; all permutations of the same multiset collapse into the single non-decreasing sorted representative.'
+      - 'Because the inner sum loop runs downward instead of upward.'
+      - 'Because the modulo operation differs between the two loops.'
+      - 'Because sorting the coin array is what removes ordering.'
+    answer: 0
+    explanation: 'Coins-outer fixes the order in which coin types are introduced: a coin processed earlier can only precede later coins, never follow them. Hence each multiset is counted exactly once, in its sorted order — the permutations collapse. The ascending inner loop only handles the unlimited supply; the unordered-ness of the count is handled by the coins-outer structure itself.'
+type: content
+---

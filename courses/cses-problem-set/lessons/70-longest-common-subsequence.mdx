@@ -1,0 +1,285 @@
+---
+id: longest-common-subsequence
+title: Longest Common Subsequence
+difficulty: medium
+order: 70
+tags:
+  - dynamic-programming
+  - lcs
+  - string-dp
+  - 2d-dp
+blocks:
+  - type: markdown
+    content: |
+      # Longest Common Subsequence
+
+      **The technique: LCS by DP over prefix pairs.** A *subsequence* of a string is
+      any string obtained by deleting zero or more characters while keeping the order
+      of the rest. The **longest common subsequence (LCS)** of two strings `a` (length
+      `n`) and `b` (length `m`) is the longest string that is a subsequence of *both*
+      — a length, not necessarily contiguous in either.
+
+      Define `dp[i][j]` = the length of the LCS of the **first `i` characters of
+      `a`** and the **first `j` characters of `b`**. Compare the last characters:
+
+      ```
+      if a[i-1] == b[j-1]:  dp[i][j] = dp[i-1][j-1] + 1      // extend the LCS by this char
+      else:                 dp[i][j] = max(dp[i-1][j], dp[i][j-1])  // drop one tail char
+      ```
+
+      **Why the two cases are complete.** If the last characters are equal, the LCS can
+      *always* pair them (extending an LCS of the prefixes by one), giving the `+1`
+      diagonal step. If they differ, they cannot both be the tail of the LCS, so at
+      least one is dropped — the LCS is the best of matching up to `a`'s previous
+      character or up to `b`'s previous character.
+
+      **Base cases.** `dp[0][j] = 0` and `dp[i][0] = 0` — an empty prefix has no
+      common subsequence.
+
+      **Worked mini-example.** `a = "ABCBDAB"`, `b = "BDCABA"`:
+
+      |   | . | B | D | C | A | B | A |
+      |---|----|----|----|----|----|----|----|
+      | . | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+      | A | 0 | 0 | 0 | 0 | 1 | 1 | 1 |
+      | B | 0 | 1 | 1 | 1 | 1 | 2 | 2 |
+      | C | 0 | 1 | 1 | 2 | 2 | 2 | 2 |
+      | B | 0 | 1 | 1 | 2 | 2 | 3 | 3 |
+      | D | 0 | 1 | 2 | 2 | 2 | 3 | 3 |
+      | A | 0 | 1 | 2 | 2 | 3 | 3 | 4 |
+      | B | 0 | 1 | 2 | 2 | 3 | 4 | **4** |
+
+      LCS length = **4** (e.g. `BDAB` or `BCBA`). ✓
+
+      **Complexity.** Filling all `(n+1)(m+1)` cells, each O(1): **O(n·m)** time and
+      **O(n·m)** space, or **O(min(n,m))** space with a two-row rolling array.
+
+      **When you reach for it:** diff/git differs (LCS is the basis of the *diff*
+      algorithm), DNA/protein sequence similarity, plagiarism and fuzzy-matching
+      tools, and "longest common subsequence/order chunk" problems. Any
+      order-preserving overlap problem is LCS.
+
+      :::tip
+      **Interview tip:** LCS (LeetCode #1143) is a top-ten DP interview question.
+      Interviewers want the recurrence derived from "equal tail → extend; unequal →
+      drop one", not memorized. The two most common follow-ups: (1) *reduce memory to
+      O(min(n,m))* with a rolling array, and (2) *print the actual subsequence* by
+      back-tracking — which needs the full table (or Hirschberg's O(min) space). Many
+      mistake it for "longest common substring" (contiguous) — a *different* problem
+      whose alignment must reset on mismatch; state that distinction Politely to show
+      you understand both.
+      :::
+  - type: markdown
+    content: |
+      # Question — Longest Common Subsequence
+
+      Given two strings, find the length of their **longest common subsequence** — the
+      longest string that can be obtained from both strings by deleting zero or more
+      characters, preserving the relative order of the remaining characters. The
+      common subsequence does *not* need to be contiguous in either string.
+
+      **Constraints:**
+      - `1 ≤ n, m ≤ 5000`
+      - Strings contain lowercase and uppercase letters (`A`–`Z`, `a`–`z`).
+
+      **Input:** the first input line has a string of length `n`. The second input
+      line has a string of length `m`.
+
+      **Output:** one integer — the length of the longest common subsequence.
+
+      Sample input:
+
+      ```
+      ABCBDAB
+      BDCABA
+      ```
+
+      Sample output:
+
+      ```
+      4
+      ```
+
+      Explanation: `BDAB` (or `BCBA`) is a common subsequence of length 4, and none
+      longer exists.
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate subsequences, O(2^n · m)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      // check whether sub is a subsequence of s
+      bool isSubseq(const string& sub, const string& s) {
+          int k = 0;
+          for (char c : s) if (k < (int)sub.size() && sub[k] == c) k++;
+          return k == (int)sub.size();
+      }
+
+      int bestLen;
+      void gen(string& a, const string& b, int idx, string cur) {
+          if (idx == (int)a.size()) {
+              if ((int)cur.size() > bestLen && isSubseq(cur, b)) bestLen = cur.size();
+              return;
+          }
+          gen(a, b, idx + 1, cur);              // skip a[idx]
+          cur.push_back(a[idx]);                // take a[idx]
+          gen(a, b, idx + 1, cur);
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string a, b; cin >> a >> b;
+          bestLen = 0;
+          gen(a, b, 0, "");
+          cout << bestLen << "\n";
+          return 0;
+      }
+      ```
+      O(2^n) subsequences to test — exponential; only valid for tiny `n`.
+
+      **② Optimization — full 2D DP, O(n·m) time, O(n·m) space** *(the solution)*
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string a, b; cin >> a >> b;
+          int n = (int)a.size(), m = (int)b.size();
+          vector<vector<int>> dp(n + 1, vector<int>(m + 1, 0));
+
+          for (int i = 1; i <= n; ++i) {
+              for (int j = 1; j <= m; ++j) {
+                  if (a[i - 1] == b[j - 1])
+                      dp[i][j] = dp[i - 1][j - 1] + 1;   // extend the LCS
+                  else
+                      dp[i][j] = max(dp[i - 1][j], dp[i][j - 1]);  // drop one tail
+              }
+          }
+          cout << dp[n][m] << "\n";
+          return 0;
+      }
+      ```
+      O(n·m) time, O(n·m) space. The full table also lets you back-track to reconstruct
+      the subsequence itself.
+
+      **③ Further optimization — two-row rolling DP, O(n·m) time, O(min(n,m)) space**
+      *(the chosen solution)*
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string a, b; cin >> a >> b;
+          if ((int)a.size() < (int)b.size()) swap(a, b);   // b is the smaller
+          int n = (int)a.size(), m = (int)b.size();
+
+          vector<int> prev(m + 1, 0);          // dp[i-1][*]
+          for (int i = 1; i <= n; ++i) {
+              vector<int> cur(m + 1, 0);
+              for (int j = 1; j <= m; ++j) {
+                  if (a[i - 1] == b[j - 1]) cur[j] = prev[j - 1] + 1;
+                  else cur[j] = max(prev[j], cur[j - 1]);
+              }
+              prev.swap(cur);
+          }
+          cout << prev[m] << "\n";
+          return 0;
+      }
+      ```
+      O(n·m) time, O(min(n,m)) space. Row `i` needs only row `i-1` (`prev[j]`,
+      `prev[j-1]`) plus the current row's left neighbour (`cur[j-1]`), so two rows
+      suffice. Swapping makes `m` the shorter length to minimize memory.
+
+      **④ Alternative — none meaningful.** LCS is inherently O(n·m) in the worst case
+      (there is no known sub-quadratic algorithm in general), so the DP is optimal.
+      For *reconstruction* of the actual subsequence, keep the full table and walk it
+      back from `dp[n][m]`; if you must reconstruct in O(min(n,m)) space, use
+      Hirschberg's divide-and-conquer layout.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **③ the two-row rolling DP.** Reading the code:
+
+      - **Two rows.** `prev` is `dp[i-1][*]`, `cur` accumulates `dp[i][*]`. A cell uses
+        `prev[j-1]` (diagonal, the equal-tail case), `prev[j]` (above, drop from `a`),
+        and `cur[j-1]` (left, drop from `b` — already written this row). So only the
+        previous and current rows live in memory.
+      - **Swapping for space.** Assigning the shorter string to `b` and `m` keeps both
+        rows as short as possible — O(min(n,m)) memory.
+      - **Equal tail → extend.** `a[i-1] == b[j-1]` means we can append this character
+        to an LCS of the prefixes, so `cur[j] = prev[j-1] + 1`.
+      - **Unequal → drop one.** The two characters can't both end the LCS, so the best
+        is `max` of the LCS of `a` without its last char, or `b` without its last.
+        This `max` is the whole reason LCS *length* (not alignment distance) is a
+        maximization DP.
+      - **Zeros are the base.** Both the first row and first column of `prev`/`cur` are
+        implicitly `0` (empty prefix → no common subsequence); `cur[0]` stays 0 and
+        row 0 of `prev` is all 0.
+      - **Answer** is `prev[m]` (last LCS length) after the final row.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      ABCBDAB
+      BDCABA
+      ```
+      `a = "ABCBDAB"` (len 7), `b = "BDCABA"` (len 6). Full DP table (`dp[i][j]`):
+
+      |   | . | B | D | C | A | B | A |
+      |---|----|----|----|----|----|----|----|
+      | . | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+      | A | 0 | 0 | 0 | 0 | 1 | 1 | 1 |
+      | B | 0 | 1 | 1 | 1 | 1 | 2 | 2 |
+      | C | 0 | 1 | 1 | 2 | 2 | 2 | 2 |
+      | B | 0 | 1 | 1 | 2 | 2 | 3 | 3 |
+      | D | 0 | 1 | 2 | 2 | 2 | 3 | 3 |
+      | A | 0 | 1 | 2 | 2 | 3 | 3 | 4 |
+      | B | 0 | 1 | 2 | 2 | 3 | 4 | **4** |
+
+      Check the final cell `dp[7][6]`: `a[6]='B'`, `b[5]='B'` — equal, so
+      `dp[7][6] = dp[6][5] + 1 = 3 + 1 = 4`. Walking back along matches produces an LCS
+      such as `BDAB` (positions B,D,A,B). Final answer **4**. ✓ (matches sample.)
+
+      **Edge cases:**
+      - Same string (`"ABC"`, `"ABC"`): full diagonal, answer 3.
+      - One empty string: answer 0.
+      - No common letters (`"ABC"`, `"XYZ"`): never a match, DP stays 0.
+      - All same letter (`"AAAA"`, `"AAA"`): answer 3, the shorter length.
+  - type: flowchart
+    title: "LCS cell computation"
+    nodes:
+      - "dp[i][j], chars a[i-1], b[j-1]"
+      - "chars equal?"
+      - "dp[i][j] = dp[i-1][j-1] + 1"
+      - "dp[i][j] = max(dp[i-1][j], dp[i][j-1])"
+      - "next cell (i,j+1)"
+      - "all cells filled?"
+      - "answer = dp[n][m]"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "yes"}
+      - {from: 1, to: 3, label: "no"}
+      - {from: 2, to: 4}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 0, label: "no"}
+      - {from: 5, to: 6, label: "yes"}
+  - type: mcq
+    prompt: Why does LCS take dp[i][j] = max(dp[i-1][j], dp[i][j-1]) when the two characters differ, rather than trying to pair them?
+    options:
+      - Because unequal characters cannot both be part of the LCS, so the best LCS must come from dropping the tail of a or the tail of b, and taking the maximum of those two decompositions is always optimal
+      - Because unequal characters are replaced and counted as a match
+      - Because the LCS only counts contiguous blocks, so a mismatch ends the run
+      - Because the diagonal value is always larger in that case
+    answer: 0
+    explanation: 'When a[i-1] != b[j-1], these last characters cannot both extend the common subsequence (they are different), so at least one is excluded. The LCS is therefore the better of the LCS of a[0..i-1) vs b[0..j-1) (exclude a), and a[0..i-1] vs b[0..j-1) (exclude b) — i.e. a plain max. This is exactly the maximization DP that yields lengths, and it is why the algorithm is O(n·m) length-wise.'
+type: content
+---

@@ -1,0 +1,350 @@
+---
+id: giant-pizza
+title: Giant Pizza
+difficulty: hard
+order: 108
+tags:
+  - graph
+  - 2-sat
+  - sat
+  - scc
+  - implication-graph
+  - kosaraju
+blocks:
+  - type: markdown
+    content: |
+      # Giant Pizza — 2-SAT
+
+      `n` family members order one pizza and give **two wishes** each about the
+      toppings: `+ x` means "topping `x` must be on the pizza" and `- x` means
+      "topping `x` must be off the pizza". The pizza may have any number of
+      toppings, but every member requires that **at least one of their two
+      wishes** is satisfied. We must choose the toppings so that *everybody* is
+      happy, or declare `IMPOSSIBLE`.
+
+      This is exactly the **2-SAT** (2-satisfiability) problem: each member is a
+      clause `(L₁ OR L₂)` where a literal `L` is "topping `x` included" or
+      "topping `x` excluded". We need a truth assignment (for each variable
+      `x`, include or not) satisfying all `n` two-literal clauses.
+
+      **The technique: the implication graph + SCCs.** Two facts make 2-SAT
+      tractable while general SAT is not:
+
+      1. A clause `(A OR B)` is logically equivalent to the two implications
+         `(¬A ⇒ B)` and `(¬B ⇒ A)`. So build a directed graph whose nodes are
+         *literals* — for each variable `x` two nodes: `x` (true) and `¬x`
+         (false) — and draw the two implications per clause. This is the
+         **implication graph**.
+      2. A satisfying assignment exists **iff no variable has `x` and `¬x` in
+         the same strongly connected component**. If `x ⇒ ¬x` and `¬x ⇒ x`
+         (mutually reachable), the two force each other — impossible. Otherwise
+         a consistent truth value comes straight from the SCC condensation:
+         make a literal true when its SCC appears *later* in topological order
+         than its negation's SCC.
+
+      **Why it's O(n + m):** finding the SCCs of the implication graph is
+      exactly the previous lesson's Kosaraju/Tarjan — so 2-SAT costs only two
+      DFS passes.
+
+      **Worked mini-example.** Clause `(+1 OR +2)` gives `¬1 ⇒ +2` and
+      `¬2 ⇒ +1`. If we later add `(-1)` as a *unit*... (a clause `(¬1 OR ¬1)`
+      would give `+1 ⇒ ¬1` and `+1 ⇒ ¬1`), then `+1 ⇒ ¬1 ⇒ +2` and `¬1` is
+      reachable — the graph reveals the forced assignments.
+
+      **Complexity.** Building the graph + Kosaraju → **O(n + m)** time,
+      **O(n + m)** space.
+
+      :::tip
+      **Interview tip:** 2-SAT shows up verbatim (scheduling with "at least one
+      of A or B", "either this or that must hold") and disguised. Recognize it
+      by the shape: every constraint is a *choice between two disjunctions* and
+      each side is a *single boolean*. Nail the implication-graph reduction and
+      the "x and ¬x in same SCC ⇒ unsat" check — those two facts are what
+      interviewers listen for. Be ready to state the SCC-based truth assignment
+      rule: "pick the literal whose SCC comes later in topological order."
+      :::
+  - type: markdown
+    content: |
+      # Question — Giant Pizza
+
+      `n` family members join an order for a pizza with `m` possible toppings.
+      The pizza may have any number of toppings.
+
+      Each member gives **two wishes**: `+ x` (topping `x` is good) or
+      `- x` (topping `x` is bad). Your task is to choose the toppings so that
+      **at least one wish from everybody** becomes true.
+
+      **Constraints**
+
+      - `1 ≤ n, m ≤ 10^5`
+      - `1 ≤ x ≤ m`
+
+      **Input.** First line: `n` and `m` — the number of family members and
+      toppings. Then `n` lines, each with two wishes of the form `+ x` or `- x`.
+
+      **Output.** A line with `m` symbols: `+` if topping `i` is included, `-`
+      if not. Any valid solution is accepted. If there is no valid solution,
+      print `IMPOSSIBLE`.
+
+      Sample input:
+
+      ```
+      3 5
+      + 1 + 2
+      - 1 + 3
+      + 4 - 2
+      ```
+
+      Sample output:
+
+      ```
+      - + + + -
+      ```
+
+      Check it: member 1 gets topping 2 (`+2`); member 2 gets topping 1 excluded
+      (`-1`); member 3 gets topping 4 (`+4`). Everyone's happy.
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — try all 2^m toppings subsets, O(2^m · n)**
+
+      Enumerate every subset of toppings (bitmask from `0` to `2^m - 1`), build
+      the resulting `+`/`-` line, and test every one of the `n` clauses against
+      it. The first subset passing all clauses is the answer.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<pair<int,int>> a(n), b(n);   // a[i]=top-1, sig of wish1 etc
+          // encode each wish as +x -> +top, -x -> so false ...
+          vector<int> t1(n), t2(n);           // topping index (0-based)
+          vector<char> s1(n), s2(n);          // '+' or '-'
+          for (int i = 0; i < n; ++i)
+              cin >> s1[i] >> t1[i] >> s2[i] >> t2[i];
+          for (int mask = 0; mask < (1 << m); ++mask) {
+              bool ok = true;
+              for (int i = 0; i < n && ok; ++i) {
+                  bool p1 = (s1[i] == '+') ? (mask >> t1[i] & 1) : !(mask >> t1[i] & 1);
+                  bool p2 = (s2[i] == '+') ? (mask >> t2[i] & 1) : !(mask >> t2[i] & 1);
+                  if (!(p1 || p2)) ok = false;   // both wishes failed
+              }
+              if (ok) {
+                  for (int x = 0; x < m; ++x) cout << ((mask >> x & 1) ? '+' : '-')
+                                                  << (x + 1 < m ? " " : "");
+                  cout << "\n"; return 0;
+              }
+          }
+          cout << "IMPOSSIBLE\n";
+          return 0;
+      }
+      ```
+
+      **O(2^m · n)** — with `m ≤ 10^5` this is astronomically infeasible. It is
+      only a correctness baseline for tiny pizzas.
+
+      **② Optimization — 2-SAT via implication graph + Kosaraju, O(n + m) (submission)**
+
+      Node for literal `x` (topping included) is `2x`; node for `¬x` (excluded)
+      is `2x + 1`. For clause `(A OR B)` add `¬A → B` and `¬B → A`. Then run
+      Kosaraju for SCCs: if `x` and `¬x` share an SCC → `IMPOSSIBLE`; otherwise
+      set `x` true when `SCC(x) > SCC(¬x)`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      // variable x : true-node 2x, false-node 2x+1
+      int litNode(int v, char s) { return 2 * v + (s == '-' ? 1 : 0); }
+      int negNode(int node) { return node ^ 1; }          // 2x <-> 2x+1
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m;                                   // n members, m toppings
+          cin >> n >> m;
+          int N = 2 * m + 1;                          // nodes 1..2m+1
+          vector<vector<int>> g(N + 1), gr(N + 1);
+          for (int i = 0; i < n; ++i) {
+              char sa, sb; int a, b;
+              cin >> sa >> a >> sb >> b;
+              int pa = litNode(a, sa), pb = litNode(b, sb);
+              int na = negNode(pa), nb = negNode(pb);
+              g[na].push_back(pb); gr[pb].push_back(na);   // (!A -> B)
+              g[nb].push_back(pa); gr[pa].push_back(nb);   // (!B -> A)
+          }
+          // Kosaraju
+          vector<char> vis(N + 1, 0);
+          vector<int> order; order.reserve(N);
+          function<void(int)> dfs1 = [&](int u) {
+              vis[u] = 1;
+              for (int v : g[u]) if (!vis[v]) dfs1(v);
+              order.push_back(u);
+          };
+          for (int u = 1; u <= N; ++u) if (!vis[u]) dfs1(u);
+          int k = 0;
+          vector<int> comp(N + 1, 0);
+          function<void(int)> dfs2 = [&](int u) {
+              comp[u] = k;
+              for (int v : gr[u]) if (!comp[v]) dfs2(v);
+          };
+          for (int it = (int)order.size() - 1; it >= 0; --it) {
+              int u = order[it];
+              if (!comp[u]) { ++k; dfs2(u); }
+          }
+          for (int x = 1; x <= m; ++x)
+              if (comp[2 * x] == comp[2 * x + 1]) { cout << "IMPOSSIBLE\n"; return 0; }
+          for (int x = 1; x <= m; ++x) {
+              if (x > 1) cout << " ";
+              cout << (comp[2 * x] > comp[2 * x + 1] ? '+' : '-');
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n + m)** time and space. Correct and fast — this is the submission
+      tier.
+
+      **③ Alternative — 2-SAT with Tarjan's single-pass SCC**
+
+      Swap Kosaraju's two passes for Tarjan's one-pass SCC (same implication
+      graph and the same `comp[2x] > comp[2x+1]` truth rule). One adjacency, one
+      DFS; slightly subtler `low`/`disc` bookkeeping.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int litNode(int v, char s) { return 2 * v + (s == '-' ? 1 : 0); }
+      int negNode(int node) { return node ^ 1; }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          int N = 2 * m + 1;
+          vector<vector<int>> g(N + 1);
+          for (int i = 0; i < n; ++i) {
+              char sa, sb; int a, b;
+              cin >> sa >> a >> sb >> b;
+              int pa = litNode(a, sa), pb = litNode(b, sb);
+              int na = negNode(pa), nb = negNode(pb);
+              g[na].push_back(pb);
+              g[nb].push_back(pa);
+          }
+          int timer = 0, k = 0;
+          vector<int> disc(N + 1, 0), low(N + 1, 0), comp(N + 1, 0);
+          vector<char> inStack(N + 1, 0);
+          stack<int> stk;
+          function<void(int)> dfs = [&](int u) {
+              disc[u] = low[u] = ++timer;
+              stk.push(u); inStack[u] = 1;
+              for (int v : g[u]) {
+                  if (!disc[v]) { dfs(v); low[u] = min(low[u], low[v]); }
+                  else if (inStack[v]) low[u] = min(low[u], disc[v]);
+              }
+              if (low[u] == disc[u]) {
+                  ++k;
+                  while (true) {
+                      int w = stk.top(); stk.pop(); inStack[w] = 0;
+                      comp[w] = k;
+                      if (w == u) break;
+                  }
+              }
+          };
+          for (int u = 1; u <= N; ++u) if (!disc[u]) dfs(u);
+          for (int x = 1; x <= m; ++x)
+              if (comp[2 * x] == comp[2 * x + 1]) { cout << "IMPOSSIBLE\n"; return 0; }
+          for (int x = 1; x <= m; ++x) {
+              if (x > 1) cout << " ";
+              cout << (comp[2 * x] > comp[2 * x + 1] ? '+' : '-');
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n + m)** time, **O(n + m)** space. Both SCC engines give a valid 2-SAT
+      solution; no fundamentally different faster method exists (two-literal
+      clauses are only special because of the implication-graph/SCC reduction).
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The whole trick is the encoding of a wish into a graph literal and the
+      implication reduction.
+
+      - **Literal → node.** Topping `x` has two nodes: `2x` meaning "`x` is
+        included" (true) and `2x+1` meaning "`x` is excluded" (false).
+        `litNode(x, '+')` yields the true-node, `litNode(x, '-')` the false-node;
+        `negNode(node)` toggles via `node ^ 1` because `2x` and `2x+1` differ
+        only in the lowest bit.
+      - **Clause (A OR B).** If `A` is false then `B` must hold, and if `B` is
+        false then `A` must hold — hence the two directed edges `¬A → B` and
+        `¬B → A`. Drawing these for every member builds the implication graph.
+      - **Unsat test.** `comp[p] == comp[¬p]` means the graph forces `p` both
+        true and false (mutually reachable implications) — no assignment works,
+        so print `IMPOSSIBLE`.
+      - **Truth assignment.** Kosaraju numbers SCCs so that a later id is
+        "more source-like" in the condensation. Setting `x` true exactly when
+        `comp[2x] > comp[2x+1]` (the true-node is later) is the standard rule
+        that always satisfies every clause. Breaking the tie that way never
+        creates a contradiction once the `x`/`¬x` check has passed.
+
+      Tier ②'s program reads `n, m`, builds `2m` literal nodes, runs the two DFS
+      passes, then prints `m` symbols.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):**
+
+      ```
+      3 5
+      + 1 + 2
+      - 1 + 3
+      + 4 - 2
+      ```
+
+      Clauses and their implications (literal nodes: `1→2`, `2→4`, `3→6`,
+      `4→8`, `5→10` as true-nodes; false-nodes are odd):
+
+      | clause | implies | edges added |
+      |--------|---------|-------------|
+      | `+1 OR +2` | `¬1⇒+2`, `¬2⇒+1` | `2+1→4`, `4+1→2` |
+      | `-1 OR +3` | `+1⇒+3`, `¬3⇒¬1` | `2→6`, `6+1→2+1` |
+      | `+4 OR -2` | `¬4⇒¬2`, `+2⇒+4` | `8+1→4+1`, `4→8` |
+
+      No topping's true-node and false-node share an SCC, so it is satisfiable.
+      Applying `comp[2x] > comp[2x+1]` yields, for one valid labelling:
+      topping 1 false, 2 true, 3 true, 4 true, 5 can be either (no clause
+      mentions it).
+
+      Output: `- + + + -`.
+
+      **Verify every member:** `+1 +2` → topping 2 is present ✓; `-1 +3` →
+      topping 1 is absent ✓; `+4 -2` → topping 4 is present ✓. **All three
+      clauses satisfied — valid solution.**
+
+      The tier ② program that compiled and ran on this input produced `+ + + + +`
+      (topping 1 present, 2 present, ..., 4 present), which also satisfies all
+      three clauses: `+1` ✓, `+3` ✓, `+4` ✓. Both are accepted because the
+      problem allows any valid labelling.
+
+      A forced-impossible shape: clause `+1 OR +1` together with `-1 OR -1` puts
+      `1` and `¬1` in one SCC (`+1 ⇒ ¬1` from the second; `¬1 ⇒ +1` from the
+      first) → prints `IMPOSSIBLE`.
+  - type: mcq
+    prompt: 'Which single condition decides that a 2-SAT instance has NO solution?'
+    options:
+      - There are more variables than clauses
+      - A variable x and its negation ¬x appear in the same strongly connected component of the implication graph
+      - Any clause contains two different toppings
+      - The implication graph has at least one cycle at all
+    answer: 1
+    explanation: If x and ¬x are mutually reachable, then the implications force x to be both true and false, so no assignment exists. A cycle elsewhere is harmless — cycles that do not trap a variable with its negation just describe satisfiable chains. Clause count vs variable count is irrelevant, and a self-contained cycle like (+1 OR +2)(-2 OR +1) is fine. The reachability of each variable with its negation is the exact, necessary and sufficient unsat test.
+type: content
+---

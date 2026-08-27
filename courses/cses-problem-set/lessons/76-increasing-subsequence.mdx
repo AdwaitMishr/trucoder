@@ -1,0 +1,273 @@
+---
+id: increasing-subsequence
+title: "Increasing Subsequence"
+difficulty: hard
+order: 76
+tags:
+  - dynamic-programming
+  - lis
+  - binary-search
+blocks:
+  - type: markdown
+    content: |
+      # Increasing Subsequence — the longest rising chain, in O(n log n)
+
+      Given an array of `n` integers, find the length of the longest
+      **strictly increasing** subsequence (a subsequence keeps elements in their
+      original order, but they need not be adjacent). The classic O(n²) DP
+      `dp[i] = 1 + max dp[j]` over all `j < i` with `a[j] < a[i]` is right but
+      too slow for `n = 2·10^5`. The intended technique is a clever O(n log n)
+      **"tails"** array.
+
+      ## The tails idea
+
+      Keep an array `tails` where
+
+      ```
+      tails[k] = the smallest possible value that ends an increasing
+                 subsequence of length k+1
+      ```
+
+      As we scan each value `x`, we ask: which increasing subsequence lengths had
+      a tail we can improve? Since the subsequence is strictly increasing, a new
+      value `x` can extend any subsequence whose last value is **strictly less**
+      than `x`. The best such extension is captured by binary search.
+
+      `tails` is always **strictly increasing**: for length `m+1` to exist, its
+      last element must be strictly greater than the tail of some length-`m`
+      subsequence, and we keep the minimum possible tail. That invariant lets us
+      binary-search.
+
+      For each `x`:
+
+      ```
+      pos = lower_bound(tails, x)   // first position whose value >= x
+      tails[pos] = x                // x is the new best tail for length pos+1
+      ```
+
+      `pos` is also the length of the longest subsequence (prefix of `tails` up to
+      one shorter than the new one) that `x` can extend, so running length is
+      tracked by the size of `tails`. Why this is correct:
+
+      - If `x` is larger than all existing tails, `lower_bound` returns `end`, we
+        push — `x` extends the longest so far, growing the LIS.
+      - Otherwise we **overwrite** the first `tails[pos] >= x` with the smaller
+        `x`. We never reduce the answer, we only make a future continuation easier
+        (smaller tail is greedily better), so the longest achievable length is
+        preserved — a classic patience-sorting argument.
+
+      **Time:** O(n log n) — `n` values × O(log n) binary search.
+      **Space:** O(n) (the `tails` array).
+
+      :::tip
+      **Interview tip:** LIS is a top interview DP classic. Two answers impress:
+      the O(n log n) `tails` + `lower_bound` (patience sorting) for length-only,
+      and either a Fenwick/segment tree over compressed values if you must also
+      reconstruct/weight it. The invariance "tails is strictly increasing → binary
+      search works" is what interviewers probe, as is the greedy intuition behind
+      overwriting with a smaller tail.
+      :::
+  - type: markdown
+    content: |
+      # Question — Increasing Subsequence
+
+      You are given an array containing `n` integers. Your task is to determine
+      the length of the longest increasing subsequence. The elements of the
+      subsequence must be strictly increasing.
+
+      **Input**
+
+      The first input line has an integer `n`.
+
+      The second line has `n` integers `x_1, x_2, ..., x_n`.
+
+      **Output**
+
+      Print one integer: the length of the longest increasing subsequence.
+
+      **Constraints**
+
+      - `1 <= n <= 2*10^5`
+      - `1 <= x_i <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      8
+      7 3 5 3 6 2 9 8
+      ```
+
+      Output:
+
+      ```
+      4
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n²) classic DP, O(n) space**
+
+      For each `i`, `dp[i] = 1 + max(dp[j])` over strictly-smaller, earlier
+      elements. Comparing every pair is `n²/2 ≈ 2·10^10` steps at `n = 2·10^5` —
+      too slow, but it is the correct baseline.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          int n;
+          cin >> n;
+          vector<long long> a(n);
+          for (auto &v : a) cin >> v;
+          vector<int> dp(n, 1);
+          int ans = 1;
+          for (int i = 0; i < n; ++i) {
+              for (int j = 0; j < i; ++j)
+                  if (a[j] < a[i]) dp[i] = max(dp[i], dp[j] + 1);
+              ans = max(ans, dp[i]);
+          }
+          cout << ans << "\n";
+      }
+      ```
+
+      **② Optimisation — patience-sorting tails + binary search, O(n log n)**
+
+      Maintain `tails`, binary-search the first value `>= x`, and overwrite/push.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n;
+          cin >> n;
+          vector<long long> tails;
+          tails.reserve(n);
+          for (int i = 0; i < n; ++i) {
+              long long x;
+              cin >> x;
+              auto it = lower_bound(tails.begin(), tails.end(), x);
+              if (it == tails.end()) tails.push_back(x);  // x extends the longest
+              else *it = x;                                // a smaller, better tail
+          }
+          cout << tails.size() << "\n";
+      }
+      ```
+
+      **③ Alternative — Fenwick tree over compressed values, O(n log n)**
+
+      If you must support queries ("for a value `v`, best dp ending below `v`")
+      — for example to reconstruct elements or apply weights — coordinate-compress
+      `a` and maintain a Fenwick tree over ranks storing the max length so far.
+      For each `x`, query the max over ranks `< rank(x)` and update rank `x`.
+      Same O(n log n), and reconstructable; `lower_bound` tails is terser for
+      length-only.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      vector<int> bit;
+      void upd(int i, int v) { for (++i; i < (int)bit.size(); i += i & -i) bit[i] = max(bit[i], v); }
+      int qry(int i) { int r = 0; for (++i; i > 0; i -= i & -i) r = max(r, bit[i]); return r; }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n;
+          cin >> n;
+          vector<long long> a(n), coord(n);
+          for (int i = 0; i < n; ++i) { cin >> a[i]; coord[i] = a[i]; }
+          sort(coord.begin(), coord.end());
+          coord.erase(unique(coord.begin(), coord.end()), coord.end());
+          bit.assign(coord.size() + 1, 0);
+          int ans = 0;
+          for (long long x : a) {
+              int r = lower_bound(coord.begin(), coord.end(), x) - coord.begin();
+              int best = qry(r - 1) + 1;     // strictly smaller ranks
+              upd(r, best);
+              ans = max(ans, best);
+          }
+          cout << ans << "\n";
+      }
+      ```
+
+      **④ Alternative algorithm** — none beats O(n log n) for LIS length over
+      arbitrary values; O(n²) is the only straightforward alternative and both
+      O(n log n) methods above are equivalent in speed. A segment tree would work
+      identically to the Fenwick but with more code. The `tails` solution is the
+      intended CSES answer.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O(n log n) `tails` solution in **②**:
+
+      - `tails` is a strictly increasing array of the **minimal possible tail** for
+        each subsequence length — that monotonicity is what makes
+        `lower_bound` valid.
+      - For each `x`, `lower_bound(tails, x)` finds the first subsequence-length
+        whose current best tail is `>= x`. That subsequence cannot be extended by
+        `x` (needs a strictly smaller tail), but `x` is a better (smaller) tail
+        for exactly that length, so we overwrite `tails[pos] = x`.
+      - If no tail is `>= x`, every length's tail is `< x`, so `x` extends the
+        longest subsequence — we push, growing the answer by one.
+      - Overwriting never shrinks the eventual maximum: it only makes a future
+        element's extension *easier* than the larger value it replaced, so the
+        largest attainable LIS length is monotone in the tails.
+      - The answer is `tails.size()`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the `tails` solution on `7 3 5 3 6 2 9 8`:
+
+      | x | lower_bound | action | tails after | LIS |
+      |-----|-------------|--------|-------------|-----|
+      | 7 | end | push 7 | [7] | 1 |
+      | 3 | pos 0 (>=3) | overwrite | [3] | 1 |
+      | 5 | pos 1 (end) | push 5 | [3,5] | 2 |
+      | 3 | pos 0 (>=3) | overwrite | [3,5] | 2 |
+      | 6 | pos 2 (end) | push 6 | [3,5,6] | 3 |
+      | 2 | pos 0 (>=2) | overwrite | [2,5,6] | 3 |
+      | 9 | pos 3 (end) | push 9 | [2,5,6,9] | 4 |
+      | 8 | pos 3 (>=8) | overwrite | [2,5,6,8] | 4 |
+
+      Final `tails.size() = 4`, matching the sample output. The length-4 LIS here
+      is `3, 5, 6, 9` (indices 1,2,4,6); note the array `[2,5,6,8]` is **not**
+      itself a subsequence — `tails` stores only *minimal tails*, which is why
+      reconstructing the actual elements needs the (optional) Fenwick approach,
+      while length-only is perfectly answered by `tails.size()`.
+  - type: flowchart
+    title: "LIS via patience-sorting tails"
+    nodes:
+      - "Read value x"
+      - "lower_bound(tails, x)"
+      - "found (tail >= x)?"
+      - "Overwrite tails[pos] = x"
+      - "Push x (extends longest)"
+      - "Answer = tails.size()"
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: "yes"}
+      - {from: 2, to: 4, label: "no"}
+      - {from: 3, to: 5, label: ""}
+      - {from: 4, to: 5, label: ""}
+  - type: mcq
+    prompt: 'Why is it always safe to overwrite tails[pos] with the smaller value x even though that position no longer holds the tail of a real subsequence?'
+    options:
+      - 'Because a smaller tail makes every future extension strictly easier while never reducing the maximum achievable LIS length, so the length (not the exact subsequence) stays correct'
+      - 'Because x is always larger than all existing tails'
+      - 'Because lower_bound keeps the array sorted no matter what we write'
+      - 'Because the tail is never used again'
+    answer: 0
+    explanation: 'tails tracks the minimal tail for each length, i.e. a quantity that only needs to stay <= any realizable tail for that length. Replacing it with a smaller value preserves that invariant and can only help later extensions; the LIS length is derived purely from the array size, which never decreases.'
+type: content
+---

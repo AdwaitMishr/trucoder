@@ -1,0 +1,257 @@
+---
+id: maximum-xor-subset
+title: "Maximum XOR Subset"
+type: content
+difficulty: medium
+order: 278
+tags:
+  - xor
+  - linear-basis
+  - gaussian-elimination
+  - greedy
+blocks:
+  - type: markdown
+    content: |
+      # Maximum XOR Subset — the linear basis over GF(2)
+
+      Given a bag of numbers, we may form a subset and xor its members. Over all
+      2ⁿ subsets, which subset produces the **largest** xor? This is the flagship
+      problem of the **linear basis** (a.k.a. XOR basis) — the single most
+      important tool in competitive xor-combination problems.
+
+      ## Everything a set of numbers can xor to is a vector space
+
+      Think of each number as a binary vector over GF(2) (each bit is a
+      coordinate; `^` is vector addition). A subset xor is just a sum of some of
+      these vectors, so the collection of *all* reachable xors is a **linear
+      subspace** of the 31-bit space. The **rank** `r` of the basis is its
+      dimension: there are exactly `2^r` distinct reachable xors (including 0).
+      The empty subset always produces 0.
+
+      The **linear basis** is a set of at most 31 numbers `b[0..30]` with this
+      invariant: after inserting all input numbers, `b[bit]` either is 0 or is a
+      vector whose **highest set bit is exactly `bit`**, and every input (and
+      every reachable xor) can be expressed as a xor of some subset of the basis
+      vectors. It is built by Gaussian elimination, 31 rows, over GF(2).
+
+      ## Why the greedy max works
+
+      With a reduced basis (each `b[bit]` having no other basis vector sharing its
+      top bit), to maximize xor we sweep from bit 30 down and *take* `b[bit]`
+      whenever it increases the running xor. Because a higher bit outweighs all
+      lower bits combined, greedy top-down is provably optimal: no future low-bit
+      choice can compensate for giving up a set high bit. (Any algorithm must
+      read all inputs and consider the 31 rows, so `O(31·n)` is optimal up to the
+      fixed bit width.)
+
+      This is the engine behind countless "xor a subset to maximize / test /
+      count" problems.
+
+      :::tip
+      **Interview tip:** the instant a problem says "xor of some subset" or "xor
+      of any combination", reach for the **linear basis**: build it once with
+      `O(n·31)` Gaussian elimination, then answer max / membership / counting in
+      `O(31)` each. Memorize the construction: for each number, reduce its
+      highest set bit away repeatedly until it hits an empty basis slot or drops
+      to 0. Say "this is xor-linear algebra over GF(2)" — interviewers commonly
+      accept that framing instantly.
+      :::
+
+      Time: `O(31·n)` to build, `O(31)` per query. Space: `O(31)`.
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given a set of `n` integers. You may choose **any subset** of them
+      (possibly empty) and take the **xor** of the chosen numbers. Find the
+      maximum possible xor value.
+
+      ## Input
+
+      The first line contains an integer `n`. The second line contains `n`
+      integers `a1, a2, …, an`.
+
+      **Constraints:** `1 ≤ n ≤ 2·10^5`, `0 ≤ ai ≤ 10^9`.
+
+      ## Output
+
+      Print one integer: the maximum xor obtainable by some subset.
+
+      ## Sample
+
+      **Input:**
+      ```
+      3
+      10 6 9
+      ```
+      **Output:**
+      ```
+      15
+      ```
+      The subset `{6, 9}` xors to `6 ^ 9 = 15`; checking all 8 subsets shows 15
+      is the maximum.
+
+      ## Beyond the limit
+
+      At `n = 2·10^5` it is infeasible to enumerate subsets; the linear basis
+      does it in microseconds.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2ⁿ · 31)**
+
+      Enumerate every subset mask and compute the xor.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin >> n; vector<int> a(n);
+          for (int &x : a) cin >> x;
+          long long ans = 0;
+          for (int m = 0; m < (1 << n); ++m){        // every subset
+              int x = 0;
+              for (int j = 0; j < n; ++j)
+                  if ((m >> j) & 1) x ^= a[j];
+              ans = max(ans, (long long)x);
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      *Correct but only for `n ≤ 20` or so — `2^(2·10^5)` subsets is hopeless.*
+
+      **② Optimization — linear basis, O(31·n) (optimal)**
+
+      Build the basis with Gaussian elimination, then greedily maximize from the
+      top bit down.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin >> n; vector<int> a(n);
+          for (int &x : a) cin >> x;
+
+          array<int, 31> b{};
+          for (int x : a){                      // insert x into the basis
+              int v = x;
+              for (int bit = 30; bit >= 0; --bit){
+                  if (!((v >> bit) & 1)) continue;
+                  if (!b[bit]) { b[bit] = v; break; }   // free slot -> keep
+                  v ^= b[bit];                   // eliminate this bit
+              }
+          }
+
+          int ans = 0;
+          for (int bit = 30; bit >= 0; --bit)    // top-down greedy
+              if ((ans ^ b[bit]) > ans) ans ^= b[bit];
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(31·n)` time, `O(31)` space — the tier we compile and verify.*
+
+      **③ Further optimization — none needed**
+
+      The basis build is `O(31·n)` and every input must be read, so this is
+      optimal.
+
+      **④ Alternative algorithm — meet in the middle, O(2^ⁿ/²)**
+
+      Useful when a basis is undesirable or values fit modest ranges: split the
+      array in half, enumerate every subset xor of each half, and take the max
+      xor of any pair.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin >> n; vector<int> a(n);
+          for (int &x : a) cin >> x;
+          int m = n / 2;
+          vector<int> L, R;                       // all subset xors of each half
+          for (int half = 0; half < 2; ++half){
+              auto gen = [&](vector<int> v){
+                  vector<int> out;
+                  for (int mask = 0; mask < (1 << (int)v.size()); ++mask){
+                      int x = 0;
+                      for (int j = 0; j < (int)v.size(); ++j)
+                          if ((mask >> j) & 1) x ^= v[j];
+                      out.push_back(x);
+                  }
+                  return out;
+              };
+              (half == 0 ? L : R) = gen(vector<int>(a.begin() + (half ? m : 0),
+                                                    a.begin() + (half ? n : m)));
+          }
+          sort(R.begin(), R.end());
+          int ans = 0;
+          for (int x : L)
+              for (int y : R)
+                  ans = max(ans, x ^ y);
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(2^ⁿ/² log)` time — fine for `n ≤ 40`, but the basis remains the primary
+      approach.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Insertion loop.** For each `x`, `v = x` descends from bit 30. If bit
+        `bit` of `v` is set and `b[bit]` is empty, store `v` there; otherwise
+        `v ^= b[bit]` wipes that bit off. Repeating kills `v`'s highest bit each
+        round, so it either lands in its own slot or collapses to 0 (dependent).
+      - **Rank = number of non-zero `b[bit]`** — we don't even need to count it
+        for the max, but it equals the dimension.
+      - **Greedy `if ((ans ^ b[bit]) > ans)`** — taking `b[bit]` flips every bit
+        it has; if the numeric result grows we keep it. Because each basis vector
+        has a *unique* top bit, bit 30 down never disagrees with a later choice.
+      - **The empty subset is included implicitly** (`ans` starts at 0), which
+        never hurts since all `ai ≥ 0`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 3`, array `10 6 9` = `1010₂, 0110₂, 1001₂`.
+
+      Build:
+      - Insert `10 = 1010₂`: highest bit 3 free → `b[3] = 10`.
+      - Insert `6 = 0110₂`: bit 2 free → `b[2] = 6`.
+      - Insert `9 = 1001₂`: top bit 3 set, `v = 9 ^ b[3] = 9^10 = 0011 = 3`. Now
+        top bit 1 free → `b[1] = 3`.
+
+      Basis: `b[3]=10, b[2]=6, b[1]=3`. Greedy:
+      - `bit 3`: `(0^10)>0` → `ans = 10`.
+      - `bit 2`: `(10^6)=12 > 10` → `ans = 12`.
+      - `bit 1`: `(12^3)=15 > 12` → `ans = 15`.
+
+      Final `15`, matching the sample (and indeed `6 ^ 9 = 15`).
+  - type: flowchart
+    title: "Maximum XOR subset via linear basis"
+    nodes: ["each input x", "for bit 30..0: while highest bit set and b[bit] used, v ^= b[bit]", "empty basis slot ? store v : continue eliminating", "rank r = #nonzero basis", "sweep bit 30..0: take b[bit] if it grows ans", "print ans"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "Why is the top-down greedy (take a basis vector whenever it increases the xor) optimal for the maximum subset xor?"
+    options:
+      - "It is not always optimal; you must try every basis combination to be sure."
+      - "Each basis vector has a unique highest set bit, so a decision at a higher bit is never outweighed by any combination of lower bits — once a 1 is locked at a high bit it stays."
+      - "Greedy works only when the input is pre-sorted."
+      - "Greedy works because XOR is commutative and associative."
+    answer: 1
+    explanation: "A binary number is dominated by its most significant bit: bit k weighs more than the sum of all bits below it (2^k > 2^k - 1). Since every basis vector owns a distinct top bit, choosing whether to flip that top bit is decided before any lower bit matters, and a lower bit can never override it. Sweeping from bit 30 to bit 0 and keeping a basis vector only when it increases the running value therefore yields the global maximum — no backtracking needed."
+---

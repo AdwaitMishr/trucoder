@@ -1,0 +1,272 @@
+---
+id: number-of-subset-xors
+title: "Number of Subsets with a Given XOR"
+type: content
+difficulty: medium
+order: 279
+tags:
+  - xor
+  - linear-basis
+  - rank
+  - counting
+blocks:
+  - type: markdown
+    content: |
+      # Number of Subsets with a Given XOR — a count falls out of the rank
+
+      Building on the linear basis, we now count: among all `2ⁿ` subsets, how
+      many have xor **exactly equal to** a target value `x`?
+
+      The beautiful observation is that a clean **closed form** exists, derived
+      purely from the dimension of the basis.
+
+      ## The key lemma
+
+      Let the input numbers span a space of **rank** `r` (the linear basis has `r`
+      non-zero vectors). The set of all reachable xors — the image of the linear
+      map *"choose a subset → xor its members"* — is a subspace of dimension `r`,
+      containing exactly `2^r` values (including 0, from the empty subset).
+
+      A linear map's kernel + image obey the **rank-nullity theorem**:
+      domain dimension = kernel dimension + rank. The domain has dimension `n`
+      (one coordinate per input element — each bit of the *choice* vector says
+      whether that element is in or out). So the kernel — the subsets that xor to
+      0 — has dimension `n − r`, meaning there are exactly `2^(n−r)` subsets with
+      xor 0.
+
+      Now take any fixed reachable target `x`. If `S` is a subset with `xor = x`
+      and `K` is a subset with `xor = 0`, then `S Δ K` (symmetric difference)
+      also has xor `x` (xoring a zero subset changes nothing). This gives a
+      bijection between "subsets equal to `x`" and "subsets equal to 0", so every
+      reachable value is hit by exactly the same number of subsets: **`2^(n−r)`**.
+
+      Summing over the `2^r` reachable values: `2^r · 2^(n−r) = 2^n` — everything
+      balances, confirming the count.
+
+      ## The two-line answer
+
+      - Build the basis (rank `r`).
+      - Ask: is `x` in the span? Reduce `x` against the basis; if it survives to
+        a non-zero remnant, `x` is **not reachable** → answer `0`.
+      - Otherwise the count is `2^(n−r)`.
+
+      This turns an exponential enumeration into `O(31·n)` build + `O(31)` check
+      + one exponentiation.
+
+      :::tip
+      **Interview tip:** when asked to *count* subsets xoring to a value, do not
+      enumerate. Compute the **rank** `r` and answer `2^(n−r)` (value in span) or
+      `0` (not in span). The proof — rank-nullity plus the "shift by a zero-xor
+      subset is a bijection" argument — is exactly what interviewers want to hear
+      when they probe *why* the formula holds. For huge `n`, report the count
+      modulo a prime using fast exponentiation.
+      :::
+
+      Time: `O(31·n)`. Space: `O(31)`.
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given `n` integers and a target value `x`. Count the number of
+      subsets (of any size, including the empty subset) whose xor equals `x`.
+
+      ## Input
+
+      The first line contains an integer `n`. The second line contains `n`
+      integers `a1, a2, …, an`. The third line contains the target `x`.
+
+      **Constraints:** `1 ≤ n ≤ 60`, `0 ≤ ai, x ≤ 10^9`. (With `n ≤ 60` the
+      answer `2^(n−r)` always fits in a 64-bit integer. For larger `n`, compute
+      it modulo a prime.)
+
+      ## Output
+
+      Print one integer: the number of subsets whose xor equals `x`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4
+      5 6 7 3
+      3
+      ```
+      **Output:**
+      ```
+      2
+      ```
+      The subsets with xor `3` are `{5, 6}` and `{3}`. Note `3` appears *twice*
+      as a target here only by coincidence — in general each reachable value is
+      hit the same number of times, and here the count is `2^(4−3) = 2`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2ⁿ)**
+
+      Enumerate every subset mask and count those whose xor equals `x`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin >> n; vector<int> a(n);
+          for (int &v : a) cin >> v;
+          int x; cin >> x;
+          long long cnt = 0;
+          for (int m = 0; m < (1 << n); ++m){
+              int xr = 0;
+              for (int j = 0; j < n; ++j)
+                  if ((m >> j) & 1) xr ^= a[j];
+              if (xr == x) ++cnt;
+          }
+          cout << cnt << "\n";
+          return 0;
+      }
+      ```
+
+      *Correct only for tiny `n ≤ ~25`. At `n ≤ 60` there are `2^60 ≈ 10^18`
+      subsets — impossible.*
+
+      **② Optimization — linear basis + rank, O(31·n) (optimal)**
+
+      Build the basis, test whether `x` is reachable, and print `2^(n−r)`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef unsigned long long ull;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin >> n; vector<int> a(n);
+          for (int &v : a) cin >> v;
+          int x; cin >> x;
+
+          array<int, 31> b{};
+          int rank = 0;
+          for (int v : a){
+              int cur = v;
+              for (int bit = 30; bit >= 0; --bit){
+                  if (!((cur >> bit) & 1)) continue;
+                  if (!b[bit]) { b[bit] = cur; ++rank; break; }
+                  cur ^= b[bit];
+              }
+          }
+
+          // is x in the span?
+          int rem = x;
+          for (int bit = 30; bit >= 0; --bit)
+              if (((rem >> bit) & 1) && b[bit]) rem ^= b[bit];
+
+          if (rem != 0) { cout << 0 << "\n"; return 0; }
+          cout << (1ULL << (n - rank)) << "\n";   // 2^(n-r)
+          return 0;
+      }
+      ```
+
+      *`O(31·n)` time, `O(31)` space — the tier we compile and verify.*
+
+      **③ Further optimization — modular exponentiation for huge n**
+
+      If `n` is large (e.g. `n = 10^5`), `2^(n−r)` is astronomically large;
+      answer modulo `M = 10^9+7` with fast pow:
+
+      ```cpp
+      long long fastpow(long long a, long long e, long long mod){
+          long long res = 1 % mod;
+          while (e){ if (e & 1) res = res * a % mod; a = a * a % mod; e >>= 1; }
+          return res;
+      }
+      // after computing rank: cout << fastpow(2, n - rank, 1000000007) << "\n";
+      ```
+
+      *`O(31·n)` build + `O(log n)` pow. Correct for any `n`.*
+
+      **④ Alternative algorithm — DP over reachable xors for small values**
+
+      When values fit a small range (say `ai, x ≤ 2^12`), a subset-xor DP is a
+      clean, correct alternative: `dp[v]` = number of subsets currently xoring
+      to `v`, updated by "skip or include" for each element.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          const int B = 1 << 12;                 // assumes ai, x < 2^12
+          int n; cin >> n; vector<int> a(n);
+          for (int &v : a) cin >> v;
+          int x; cin >> x;
+          vector<ll> dp(B, 0); dp[0] = 1;
+          for (int val : a){
+              vector<ll> nxt = dp;               // "skip val" keeps old subsets
+              for (int v = 0; v < B; ++v)
+                  if (dp[v]) nxt[v ^ val] += dp[v];   // "include val"
+              dp = nxt;
+          }
+          cout << dp[x] << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n · 2^B)` with `B` the bit width. Correct (each element is a skip-or-
+      include choice), but exponential in the bit width — it beats the basis only
+      when the value range is narrow, so it is an alternative, not the primary
+      method.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Basis build + rank.** Exactly as in the maximum-XOR lesson: inserting
+        each input yields either a new basis vector (incrementing `rank`) or a
+        dependent that collapses to 0.
+      - **Membership test.** `rem = x`; for each set bit, if a basis vector owns
+        that top bit we xor it off. If `rem` never fully reduces to 0, `x` is
+        outside the span → `0`.
+      - **`1ULL << (n - rank)`.** The count. Because the empty subset is counted
+        (`x = 0` is always in the span and the empty subset is one of the
+        `2^(n−r)` zero subsets), the formula covers size-0 subsets automatically.
+      - **Every value shares the count.** The rank-nullity argument guarantees
+        uniformity — we never enumerate subsets.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 4`, array `5 6 7 3`, target `x = 3`.
+
+      Build the basis:
+      - Insert `5 = 101₂`: top bit 2 free → `b[2] = 5`.
+      - Insert `6 = 110₂`: top bit 2 set, `cur = 6 ^ 5 = 011 = 3`; top bit 1 free
+        → `b[1] = 3`.
+      - Insert `7 = 111₂`: top bit 2 set, `cur = 7^5 = 2`; top bit 1 set, `cur =
+        2 ^ b[1] = 2^3 = 1`; top bit 0 free → `b[0] = 1`. `rank = 3`.
+      - Insert `3 = 011₂`: bit 1 set, `cur = 3 ^ b[1] = 0` → dependent.
+
+      Rank `r = 3`, `n − r = 1`, so each reachable value is hit `2^1 = 2` times.
+
+      Is `x = 3` reachable? `rem = 3`. Bit 1 set and `b[1]=3`: `rem ^= 3 → 0`.
+      Reachable. Count `= 1 << (4 − 3) = 2`.
+
+      Indeed the subsets with xor `3` are exactly `{5, 6}` and `{3}` — two of
+      them. Matches the sample.
+  - type: flowchart
+    title: "Count subsets with a target XOR"
+    nodes: ["build linear basis, get rank r", "reduce target x against the basis", "rem non-zero ? x unreachable", "x reachable", "answer = 2^(n-r)", "answer = 0"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "non-zero rem"}
+      - {from: 1, to: 3, label: "rem = 0"}
+      - {from: 3, to: 4}
+      - {from: 2, to: 5}
+  - type: mcq
+    prompt: "Why does every reachable xor value occur the same number of times — namely 2^(n-r) — among all subsets?"
+    options:
+      - "They do not: the empty subset is the only way to get xor 0, and all other values occur once."
+      - "Fixing one subset S with xor x, the symmetric difference S Δ K for any zero-xor subset K also has xor x. This is a bijection between 'xor-x subsets' and 'xor-0 subsets' (of which there are 2^(n-r)), so the counts are equal for every reachable x."
+      - "It is only true when the input is linearly independent."
+      - "2^(n-r) counts single elements only, ignoring other subset sizes."
+    answer: 1
+    explanation: "Adding a zero-xor subset to a subset changes nothing about the total xor, and subtraction of a subset (its symmetric difference) is reversible, so mapping each xor-x subset S to S Δ K is a perfect bijection onto the xor-0 family whenever K is a fixed subset with xor 0. Rank-nullity gives exactly 2^(n-r) zero-xor subsets. Since there are 2^r reachable values and they all share this count, the 2^r outcomes times 2^(n-r) each reproduces the 2^n total subsets."
+---

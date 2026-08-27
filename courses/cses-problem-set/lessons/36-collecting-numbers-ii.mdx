@@ -1,0 +1,313 @@
+---
+id: collecting-numbers-ii
+title: Collecting Numbers II
+difficulty: hard
+order: 36
+tags:
+  - permutation
+  - inverse-index
+  - incremental-update
+  - swaps
+  - counting
+blocks:
+  - type: markdown
+    content: |
+      # Collecting Numbers II
+
+      **The technique: order tracking when two elements are swapped.** This is
+      Collecting Numbers I plus **dynamic updates**: after each of `m` swaps of
+      two array positions, report the number of rounds needed to collect `1..n`.
+      The base result is the same — `rounds = 1 + #{v : pos[v] < pos[v-1]}`
+      over the inverse-index map.
+
+      The trick is that a swap of two positions changes the **positions of only
+      two values** (`u` and `v`). The "break" at value `x` is `pos[x] < pos[x-1]`,
+      which depends only on the positions of `x` and `x-1`. So a swap can change
+      the break status of at most the values `{valA, valA+1, valB, valB+1}` —
+      everything else is untouched. We therefore:
+
+      1. Subtract the old break-contributions of the affected values.
+      2. Perform the swap in both the value array and the inverse map.
+      3. Add back the new break-contributions of the affected values.
+
+      Total work per query is O(1) (a small constant set of values), so all `m`
+      queries cost O(n + m) overall.
+
+      **When you reach for it:** any problem with a static "answer = aggregate
+      over adjacent pairs" formula plus point updates. Rather than recompute the
+      whole aggregate each time, recompute only the terms whose inputs changed.
+      This is the same idea behind why Fenwick/segment trees localize updates.
+
+      **Worked mini-example.** Start `[4, 2, 1, 5, 3]` (`pos[1]=3, pos[2]=2,
+      pos[3]=5, pos[4]=1, pos[5]=4`), rounds = 3. Swap positions 2 and 3
+      (values `2` and `1`): the affected breaks are `{2, 3, 1, 2}` ∩ `[2,n]`
+      = `{2, 3}`. Old `isBreak(2)` = `pos[2] < pos[1]` = `2 < 3` → 1; `isBreak(3)`
+      = `5 < 2` → 0. Drop that `1`. After the swap `pos[1]=2, pos[2]=3`; new
+      `isBreak(2)` = `3 < 2` → 0, `isBreak(3)` = `5 < 3` → 0. Rounds = 3 − 1 + 0
+      = **2** ✓.
+
+      **Complexity.** Build + validate in O(n), then O(1) per query → **O(n + m)**
+      time, **O(n)** space. Optimal.
+
+      :::tip
+      **Interview tip:** this is the "static aggregate + point update" pattern
+      that appears in many hard problems. The essential move is the *update
+      locality* argument: a swap touches only the compared elements and their
+      neighbors, so you must design a formula where each term depends on a
+      bounded number of inputs. Interviewers love asking "which terms can
+      change when X moves?" — be precise that `break(x)` depends on `pos[x]`
+      and `pos[x-1]`, hence only values near the two swapped ones are affected.
+      Don't forget the degenerate case `a == b` (a position swapped with
+      itself) where nothing changes.
+      :::
+  - type: markdown
+    content: |
+      # Question — Collecting Numbers II
+
+      You are given an array that contains each number between `1` and `n`
+      exactly once (a permutation). Collect the numbers from `1` to `n` in
+      increasing order; on each round you go through the array left to right and
+      collect as many numbers as possible. Given **m operations that swap two
+      numbers** in the array, report the number of rounds **after each
+      operation**.
+
+      **Constraints:**
+      - `1 ≤ n, m ≤ 2·10^5`
+      - `1 ≤ a, b ≤ n` (positions swapped; `a` and `b` may be equal)
+
+      **Input:** the first line has two integers `n` and `m` (array size and
+      number of operations). The next line has `n` integers — a permutation of
+      `1..n`. Then `m` lines, each with two integers `a` and `b`: the numbers at
+      positions `a` and `b` are swapped.
+
+      **Output:** `m` integers — the number of rounds after each swap.
+
+      Sample input:
+
+      ```
+      5 3
+      4 2 1 5 3
+      2 3
+      1 5
+      2 3
+      ```
+
+      Sample output:
+
+      ```
+      2 3 4
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — recompute from scratch per swap, O(n + m·n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long rounds_of(const vector<int>& a, int n) {
+          vector<int> pos(n + 1);
+          for (int i = 1; i <= n; ++i) pos[a[i]] = i;
+          int rounds = 1;
+          for (int v = 2; v <= n; ++v) if (pos[v] < pos[v - 1]) ++rounds;
+          return rounds;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<int> a(n + 1);
+          for (int i = 1; i <= n; ++i) cin >> a[i];
+          for (int q = 0; q < m; ++q) {
+              int u, v; cin >> u >> v;
+              swap(a[u], a[v]);
+              cout << rounds_of(a, n) << "\n";   // full rebuild each time
+          }
+          return 0;
+      }
+      ```
+      O(n) per query, O(m·n) total — up to `4·10^10` for `n = m = 2·10^5`.
+      Correct but far too slow.
+
+      **② Optimization — inverse map + localized break updates, O(n + m)** (the chosen solution)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<int> a(n + 1);          // a[pos] = value
+          vector<int> pos(n + 1);        // pos[value] = position
+          for (int i = 1; i <= n; ++i) { cin >> a[i]; pos[a[i]] = i; }
+
+          auto isBreak = [&](int x) {    // new round needed between x-1 and x?
+              return (pos[x] < pos[x - 1]) ? 1 : 0;
+          };
+
+          int rounds = 1;
+          for (int x = 2; x <= n; ++x) rounds += isBreak(x);
+
+          for (int q = 0; q < m; ++q) {
+              int u, v; cin >> u >> v;
+              if (u == v) { cout << rounds << "\n"; continue; }
+              int valA = a[u], valB = a[v];
+
+              set<int> affected;         // break(x) may change only for these x
+              for (int x : {valA, valA + 1, valB, valB + 1})
+                  if (2 <= x && x <= n) affected.insert(x);
+
+              for (int x : affected) rounds -= isBreak(x);   // remove old
+              swap(a[u], a[v]);
+              swap(pos[valA], pos[valB]);                    // valA now at u's old slot -> v, valB -> u
+              for (int x : affected) rounds += isBreak(x);   // add new
+
+              cout << rounds << "\n";
+          }
+          return 0;
+      }
+      ```
+      O(n + m) time (a constant-size `affected` set per query), O(n) space.
+      Optimal.
+
+      **③ No further optimization — the update is already O(1)**
+      ```cpp
+      // The per-query cost is a constant 4-5 isBreak evaluations. Reading the m
+      // query lines is Omega(m), and the initial construction is Omega(n), so
+      // O(n + m) is the lower bound; there is no faster tier (a segment tree
+      // would only add overhead).
+      ```
+      The localized update is the end of the road — every query is O(1), which
+      is optimal.
+
+      **④ Alternative — recompute via pos rebuild in O(n) per query (contrast)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<int> a(n + 1);
+          for (int i = 1; i <= n; ++i) cin >> a[i];
+
+          for (int q = 0; q < m; ++q) {
+              int u, v; cin >> u >> v;
+              swap(a[u], a[v]);
+              vector<int> pos(n + 1);
+              for (int i = 1; i <= n; ++i) pos[a[i]] = i;
+              int rounds = 1;
+              for (int x = 2; x <= n; ++x) if (pos[x] < pos[x - 1]) ++rounds;
+              cout << rounds << "\n";
+          }
+          return 0;
+      }
+      ```
+      O(n) per query, O(m·n) total — essentially tier ① presented from the
+      `pos` viewpoint. Shown only to emphasize that the speed-up comes from
+      *not* rebuilding `pos`, but updating the handful of affected breaks.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② the localized-update version**. The key pieces:
+
+      - Two parallel arrays keep the permutation: `a[position] = value` and
+        `pos[value] = position`. `pos` is the **inverse index** of Collecting
+        Numbers I, reused for O(1) break checks.
+      - `isBreak(x) = pos[x] < pos[x-1]` — the exact condition that forces a new
+        round between values `x-1` and `x`; `rounds` starts at `1` and adds one
+        per break.
+      - **Affected set.** A swap of positions `u` and `v` moves values `valA`
+        and `valB`. The break at `x` reads `pos[x]` and `pos[x-1]`; those can
+        change only when `x` is `valA` or `valB` (its position moved) or `x` is
+        `valA+1` or `valB+1` (`x-1` moved). Values outside `{valA, valA+1,
+        valB, valB+1}` have identical inputs → identical breaks.
+      - **Order of update.** Subtract the old break sum, swap both arrays, add
+        the new break sum — so each affected `x` contributes its *net* change.
+      - **Degenerate case.** `u == v` swaps a position with itself; output the
+        current `rounds` unchanged.
+
+      Correctness rests on the same interval/break argument as Collecting
+      Numbers I; the only addition is keeping the aggregate current through
+      localized deltas instead of rebuilding it.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      5 3
+      4 2 1 5 3
+      2 3
+      1 5
+      2 3
+      ```
+
+      Initial `a = [4,2,1,5,3]`, `pos[1]=3, pos[2]=2, pos[3]=5, pos[4]=1,
+      pos[5]=4`. Breaks: (`2` vs `1`) `2<3` ✓, (`3` vs `2`) `5<2` ✗,
+      (`4` vs `3`) `1<5` ✓, (`5` vs `4`) `4<1` ✗ → `rounds = 1 + 2 = 3`.
+
+      **Query 1 — swap positions 2 and 3** (values `2` and `1`):
+      affected = `{2,3}`. Old: `isBreak(2)=1`, `isBreak(3)=0` → drop `1`.
+      After swap `a=[4,1,2,5,3]`, `pos[1]=2, pos[2]=3`. New: `isBreak(2)`
+      (`3<2`) = 0, `isBreak(3)` (`5<3`) = 0 → add `0`.
+      **rounds = 3 − 1 = 2** ✓. (Now `1,2,3` share a round: positions 2,3,5.)
+
+      **Query 2 — swap positions 1 and 5** (values `4` and `3`):
+      state `a=[4,1,2,5,3]`. affected = `{3,4,5}`. Old: `isBreak(3)=0`,
+      `isBreak(4)` (`pos4=1<pos3=5`) = 1, `isBreak(5)=0` → drop `1`.
+      After swap `a=[3,1,2,5,4]`, `pos[3]=1, pos[4]=5`. New: `isBreak(3)`
+      (`pos3=1<pos2=3`)=1, `isBreak(4)` (`5<1`)=0, `isBreak(5)` (`pos5=4<pos4=5`)=1
+      → add `2`. **rounds = 2 − 1 + 2 = 3** ✓.
+
+      **Query 3 — swap positions 2 and 3** (values `1` and `2`):
+      state `a=[3,1,2,5,4]`. affected = `{1,2,2,3}` → `{2,3}`. Old:
+      `isBreak(2)` (`3<2`)=0, `isBreak(3)` (`1<3`)=1 → drop `1`.
+      After swap `a=[3,2,1,5,4]`, `pos[1]=3, pos[2]=2`. New: `isBreak(2)`
+      (`2<3`)=1, `isBreak(3)` (`1<2`)=1 → add `2`.
+      **rounds = 3 − 1 + 2 = 4** ✓.
+
+      Output: **`2 3 4`** ✓.
+
+      **Edge cases:** position swapped with itself (`2 2`) → unchanged rounds;
+      single element (`n=1`) → always `1` round.
+  - type: flowchart
+    title: "Per-swap localized update"
+    nodes:
+      - "Build a[] and pos[]"
+      - "rounds = 1 + sum of breaks"
+      - "Read swap u, v"
+      - "u == v?"
+      - "Collect affected values"
+      - "Subtract old breaks of affected"
+      - "Swap a[u],a[v] and pos values"
+      - "Add new breaks of affected"
+      - "Print rounds"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 9, label: "yes"}
+      - {from: 3, to: 4, label: "no"}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6}
+      - {from: 6, to: 7}
+      - {from: 7, to: 8}
+      - {from: 8, to: 2, label: "next query"}
+      - {from: 9, to: 8, label: "unchanged"}
+  - type: mcq
+    prompt: 'Why does just one swap allow all m queries to be answered in O(1) each instead of O(n) each?'
+    options:
+      - Because the answer never changes under a swap, so it is printed once at the start
+      - Because after sorting the array once, every round count follows a fixed formula
+      - Because break(x) depends only on pos[x] and pos[x-1], and swapping two positions moves only two values — so only the breaks of values in {valA, valA+1, valB, valB+1} can change, and their contribution to rounds is re-derived by subtracting the old and adding the new
+      - Because a swap always decreases the number of rounds by exactly 2
+    answer: 2
+    explanation: The aggregate rounds = 1 + Σ break(x), where break(x) = pos[x] < pos[x-1] uses only the positions of x and x-1. A swap moves exactly the two values valA, valB, so pos and the adjacent relation change only for x in {valA, valA+1, valB, valB+1}. Removing those values' old break contributions and adding their new ones — the two arrays (value↔position) updated with a constant-size affected set — keeps the aggregate exact in O(1), which is why O(n + m) beats O(m·n).
+type: content
+---

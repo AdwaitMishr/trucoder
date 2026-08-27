@@ -1,0 +1,265 @@
+---
+id: intersection-points
+title: Intersection Points
+type: content
+difficulty: hard
+order: 227
+tags:
+  - geometry
+  - sweep-line
+  - fenwick
+  - coordinate-compression
+blocks:
+  - type: markdown
+    content: |
+      # Intersection Points — sweep line + Fenwick
+
+      Given `n` horizontal and vertical line segments, count how many **interior
+      intersection points** they form.
+
+      ## The layout
+
+      Each segment is axis-aligned: horizontal (constant `y`) or vertical (constant
+      `x`). A horizontal segment at `y = h` spanning `x in [xa, xb]` crosses a
+      vertical segment at `x = c` spanning `y in [y1, y2]` exactly when
+
+      ```
+      xa < c < xb      AND      y1 < h < y2
+      ```
+
+      The problem guarantees inputs are "clean": no parallel (same-direction)
+      segments touch, and no segment endpoint is an intersection point — so every
+      real intersection is strictly interior, and strict `<` inequalities are all we
+      need.
+
+      ## The 2-D counting problem
+
+      We must count pairs `(horizontal, vertical)` satisfying `xa < c < xb` and
+      `y1 < h < y2`. That is two independent ordering constraints in `x` and `y` — a
+      classic **offline dominance/sweep** shape.
+
+      ## Sweep-line + Fenwick idea
+
+      - Sweep the `x`-axis increasing.
+      - A vertical segment "becomes active" as soon as the sweeper passes its `x = c`
+        and stays active from then on.
+      - Only integer `x` matter: a horizontal segment at `[xa, xb]` wants verticals
+        with `c in (xa, xb)`, i.e. `xa < c < xb`. On integer grids that is
+        `c <= xb - 1` and `c >= xa + 1`.
+      - Maintain a Fenwick tree (over compressed `y`) that does **range-add /
+        point-query**: adding the `y`-interval `[y1, y2]` of each vertical as it
+        becomes active. Each horizontal contributes
+        `count(c <= xb-1) - count(c <= xa)` evaluated at `y = h`.
+
+      `count(c <= X)` at height `h` is exactly a point-query on the Fenwick — the
+      number of active vertical segments whose `y`-interval covers `h`.
+
+      ## Complexity
+
+      - Brute force over pairs: `O(H * V) = O(n²)`.
+      - **Sweep + Fenwick: `O(n log n)` time, `O(n)` space. Optimal.**
+
+      :::tip
+      **Interview tip:** "Sweep one axis, and use a Fenwick that adds each segment's
+      orthogonal span, then snapshot the BIT at two x-coordinates and subtract" is a
+      reusable pattern for counting orthogonal crossings, rectangle overlaps, and
+      range-rectangle queries. Snapshotting the BIT at two points and differencing is
+      the key move — it turns a rectangle into two prefixes.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given `n` horizontal and vertical line segments, calculate the number of their
+      intersection points. You can assume that no parallel line segments intersect,
+      and no endpoint of a line segment is an intersection point.
+
+      ## Input
+
+      The first line has an integer `n`: the number of line segments. Then there are
+      `n` lines describing the line segments. Each line has four integers
+      `x1, y1, x2, y2`: a line segment begins at `(x1, y1)` and ends at `(x2, y2)`.
+
+      ## Output
+
+      Print the number of intersection points.
+
+      ## Constraints
+
+      - `1 <= n <= 10^5`
+      - `-10^6 <= x1 <= x2 <= 10^6`
+      - `-10^6 <= y1 <= y2 <= 10^6`
+      - `(x1, y1) != (x2, y2)`
+
+      ## Sample
+
+      **Input:**
+      ```
+      3
+      2 3 7 3
+      3 1 3 5
+      6 2 6 6
+      ```
+      **Output:**
+      ```
+      2
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — check every H/V pair, O(n²)**
+
+      For each horizontal and each vertical, test the two interior conditions.
+      `O(H*V) = O(n²)`; with `n = 10^5`, that is `10^10` pair-checks.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          struct S { long long x1,y1,x2,y2; bool h; };
+          vector<S> v;
+          for(int i=0;i<n;i++){
+              S s; cin >> s.x1 >> s.y1 >> s.x2 >> s.y2;
+              s.h = (s.y1 == s.y2);
+              v.push_back(s);
+          }
+          long long ans = 0;
+          for(int i=0;i<n;i++) if(v[i].h)
+              for(int j=0;j<n;j++) if(!v[j].h){
+                  long long hy = v[i].y1, vx = v[j].x1;
+                  if(v[j].y1 < hy && hy < v[j].y2 &&
+                     v[i].x1 < vx && vx < v[i].x2) ans++;
+              }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n²)` time. Too slow for `n = 10^5`.*
+
+      **② Sweep + Fenwick — O(n log n) (optimal)**
+
+      Snapshot the BIT at `xb-1` and `xa` and subtract; range-add each vertical's
+      `y`-interval as it activates. Compiled and run: prints `2` on the sample below.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct BIT { int n; vector<long long> t; BIT(int n):n(n),t(n+2,0){}
+          void add(int i,long long d){ for(;i<=n;i+=i&-i) t[i]+=d; }
+          void addRange(int l,int r,long long d){ if(l>r)return; add(l,d); add(r+1,-d); }
+          long long query(int i){ long long s=0; for(;i>0;i-=i&-i) s+=t[i]; return s; }
+      };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<long long> ys;
+          struct V { long long x,y1,y2; }; struct H { long long xa,xb,y; };
+          vector<V> Vv; vector<H> Hv;
+          for(int i=0;i<n;i++){
+              long long x1,y1,x2,y2; cin >> x1 >> y1 >> x2 >> y2;
+              if(x1==x2){ Vv.push_back({x1,y1,y2}); ys.push_back(y1); ys.push_back(y2); }
+              else      { Hv.push_back({x1,x2,y1}); ys.push_back(y1); }
+          }
+          sort(ys.begin(), ys.end());
+          ys.erase(unique(ys.begin(), ys.end()), ys.end());
+          auto idx = [&](long long y){ return int(lower_bound(ys.begin(),ys.end(),y)-ys.begin())+1; };
+          struct Ev { long long x; int kind; long long l,r; int id; int sgn; };
+          vector<Ev> ev;
+          for(auto&w : Vv) ev.push_back({w.x, 0, idx(w.y1), idx(w.y2), 0, 0});   // add range
+          int qid = 0;
+          vector<long long> res(Hv.size(), 0);
+          for(auto&h : Hv){
+              ev.push_back({h.xa,   1, idx(h.y), idx(h.y), qid, -1});            // left snapshot
+              ev.push_back({h.xb-1, 1, idx(h.y), idx(h.y), qid, +1});            // right snapshot
+              qid++;
+          }
+          sort(ev.begin(), ev.end(), [](const Ev&a, const Ev&b){
+              if(a.x != b.x) return a.x < b.x;
+              return a.kind < b.kind;          // range-adds before queries at same x
+          });
+          BIT bit(ys.size());
+          for(auto&e : ev){
+              if(e.kind == 0) bit.addRange(e.l, e.r, 1);
+              else res[e.id] += e.sgn * bit.query(e.l);
+          }
+          long long ans = 0; for(auto r : res) ans += r;
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n log n)` time, `O(n)` space. The recommended solution. There is no
+      genuinely faster 3rd/4th approach — the sweep is already a single pass over the
+      compressed `y` domain, and a second sweep direction (horizontal instead of
+      vertical) is just the same algorithm mirrored.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Classify segments.** `y1 == y2` ⇒ horizontal; otherwise vertical (for a
+        vertical segment `x1 == x2`). Non-degenerate by the `(x1,y1) != (x2,y2)` rule.
+      - **Compress `y`.** Only coords in `ys` are ever indexed; `idx` maps a raw
+        height to `1..|ys|`.
+      - **Range-add BIT.** `addRange(l, r, +1)` marks "one active vertical covers
+        compressed positions `l..r`"; dropping it at `r+1` (`-d`) makes a point-query
+        the count of active intervals covering that height (difference-array trick).
+      - **Two snapshots per horizontal.** `query(h)` right before `xb-1` counts
+        verticals with `c <= xb-1`; right before `xa` counts `c <= xa`. Their
+        difference is exactly the verticals with `xa < c < xb` — the strict interior.
+      - **Order events by `x`, then kind.** Range-adds (`kind 0`) run before queries
+        (`kind 1`) at the same `x`, so snapshots include verticals whose left edge
+        coincides with the snapshot column.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample segments:
+      - `(2,3)-(7,3)` → horizontal, `y = 3`, `[xa,xb] = [2,7]`.
+      - `(3,1)-(3,5)` → vertical at `x = 3`, `y`-interval `[1,5]`.
+      - `(6,2)-(6,6)` → vertical at `x = 6`, `y`-interval `[2,6]`.
+
+      Compressed `y = [1,2,3,5,6]`. The horizontal queries height `idx(3) = 3`.
+      Events sorted by `(x, kind)`:
+
+      | x | kind | action |
+      |---|------|--------|
+      | 2 | query | snapshot L = `count(c<=2)` at `y=3` = 0 |
+      | 3 | add   | add `[1,4]` (covers heights 1,2,3,5) |
+      | 6 | add   | add `[2,5]` (covers 2,3,5,6) |
+      | 6 | query | snapshot R = `count(c<=6)` at `y=3` = 2 |
+
+      For the horizontal, result = `R - L = 2 - 0 = 2`.
+
+      Manually: the horizontal `y=3, x∈[2,7]` is cut by the verticals at `x=3`
+      (height 3 ∈ [1,5]) and `x=6` (height 3 ∈ [2,6]) — two intersections:
+      `(3,3)` and `(6,3)`.
+
+      Printed:
+      ```
+      2
+      ```
+      Expected `2` — match. (Two verticals never cross each other, and there is only
+      one horizontal.)
+  - type: flowchart
+    title: "Sweep counting H/V intersections"
+    nodes: ["split segments into H and V; compress y", "for each V: addRange(y1, y2)", "for each H: snapshot A at xa, snapshot B at xb-1", "ans(H) = B - A", "sum over all H"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 0, to: 2}
+      - {from: 1, to: 3}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+  - type: mcq
+    prompt: "Why does snapshotting the Fenwick at `xa` and at `xb-1` (for a horizontal spanning `[xa, xb]`) and subtracting give the correct interior-crossing count?"
+    options:
+      - "Because with integer coordinates the verticals crossing the horizontal are exactly those with `xa < c < xb`, which equals `c <= xb-1` minus `c <= xa`, and a point-query at the horizontal's height counts precisely the active verticals covering it."
+      - "Because all intersections occur only at segment endpoints, which the snapshots pair up."
+      - "Because subtracting two BIT snapshots always cancels the effect of every vertical segment."
+      - "Because the answer equals the number of vertical segments minus the number of horizontal segments."
+    answer: 0
+    explanation: "A vertical with `x = c` intersects the horizontal iff `xa < c < xb` (strict interior, the guaranteed-clean form). On integers that is `xa+1 <= c <= xb-1`, so `count(c<=xb-1)-count(c<=xa)`; evaluating both at the horizontal's height yields exactly the crossing count."
+---

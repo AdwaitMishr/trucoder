@@ -1,0 +1,233 @@
+---
+id: string-matching
+title: String Matching
+type: content
+difficulty: medium
+order: 198
+tags:
+  - string
+  - kmp
+  - z-function
+blocks:
+  - type: markdown
+    content: |
+      # String Matching — count occurrences of a pattern in a string
+
+      Count every position where a **pattern** `p` occurs inside a **string**
+      `s`. With `n, m` both up to `10^6`, a naive sliding-window comparison is
+      `O(n·m)` — catastrophic. The linear-time tool for this is the
+      **Knuth–Morris–Pratt (KMP)** algorithm, built on the **prefix function**.
+
+      ## The prefix function
+
+      The prefix function `pi[i]` of a string is the length of the **longest
+      proper prefix** of `s[0..i]` that is **also a suffix** of `s[0..i]`.
+      Example for `p = "ababc"`:
+
+      ```
+      i:  0  1  2  3  4
+      p:  a  b  a  b  c
+      pi: 0  0  1  2  0
+      ```
+
+      `pi[3] = 2` because `"ab"` is both a prefix and a suffix of `"abab"`.
+      The prefix function is computed in `O(m)`.
+
+      ## Why it makes matching linear
+
+      When scanning `s` character by character with a "current matched length"
+      `j`, a mismatch would naively restart at 0. KMP instead **falls back** to
+      `j = pi[j-1]` — the longest prefix of the pattern already guaranteed to
+      be matched — so no character of `s` is ever scanned twice. Total work is
+      `O(n + m)`, and every time `j` reaches `m` we found one occurrence.
+
+      ## Complexity
+
+      - Building `pi`: `O(m)`. Scanning `s`: `O(n)`.
+      - Total `O(n + m)` time, `O(m)` space.
+
+      :::tip
+      **Interview tip:** KMP is the reference answer for "match a pattern that
+      appears many times / count occurrences / carry a matching state across a
+      stream." The key interview insight is the **fallback through the prefix
+      function**, which is what keeps the total linear.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given a string and a pattern, count the number of positions where the
+      pattern occurs in the string.
+
+      ## Input
+
+      The first input line has a string of length `n`, and the second input
+      line has a pattern of length `m`. Both consist of characters `a`–`z`.
+
+      **Constraints:** `1 <= n, m <= 10^6`
+
+      ## Output
+
+      Print one integer: the number of occurrences.
+
+      ## Sample
+
+      **Input:**
+      ```
+      saippuakauppias
+      pp
+      ```
+      **Output:**
+      ```
+      2
+      ```
+      The pattern `pp` appears twice: `sai pp ua...` and `...kau pp ias`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — compare at every offset, O(n·m)**
+
+      For each starting index `i` in `0..n-m`, compare `p` against `s[i..i+m-1]`
+      character by character. Worst case `O(n·m) = 10^12` for the limits — far
+      too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s,p; cin>>s>>p;
+          int n=s.size(), m=p.size(), cnt=0;
+          for(int i=0;i+m<=n;i++) if(s.compare(i,m,p)==0) cnt++;
+          cout<<cnt<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n·m)` time, `O(1)` space. Too slow for `n, m = 10^6`.*
+
+      **② Optimization — KMP, O(n+m) (optimal)**
+
+      Compute the prefix function of the pattern, then scan `s` once, keeping a
+      matched length `j` and falling back through `pi` on mismatch. Count
+      whenever `j == m`. Compiled and run against the sample below.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s,p; cin>>s>>p;
+          int n=s.size(), m=p.size();
+          vector<int> pi(m,0);
+          for(int i=1;i<m;i++){ int j=pi[i-1]; while(j>0&&p[i]!=p[j]) j=pi[j-1]; if(p[i]==p[j]) j++; pi[i]=j; }
+          int cnt=0,j=0;
+          for(char c:s){
+              while(j>0 && c!=p[j]) j=pi[j-1];
+              if(c==p[j]) j++;
+              if(j==m){ cnt++; j=pi[j-1]; }
+          }
+          cout<<cnt<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n+m)` time, `O(m)` space. The recommended solution.*
+
+      **③ Alternative — Z-function, O(n+m)**
+
+      Build the concatenated string `p + '#' + s` and compute its Z-array
+      (`z[i]` = length of the longest prefix of the string that also starts at
+      `i`). Every `z[i] == m` reports an occurrence. A different linear-time
+      method with the same complexity.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s,p; cin>>s>>p;
+          string t=p+"#"+s;
+          int m=p.size(), zs=t.size();
+          vector<int> z(zs,0); int l=0,r=0;
+          for(int i=1;i<zs;i++){
+              if(i<=r) z[i]=min(r-i+1,z[i-l]);
+              while(i+z[i]<zs && t[z[i]]==t[i+z[i]]) z[i]++;
+              if(i+z[i]-1>r){ l=i; r=i+z[i]-1; }
+          }
+          int cnt=0;
+          for(int i=m+1;i<zs;i++) if(z[i]==m) cnt++;
+          cout<<cnt<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n+m)` time, `O(n+m)` space. The `#` sentinel guarantees no overlap
+      between the pattern part and the text part of `z`.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Building `pi`.** For each `i` we start from `pi[i-1]` (the longest
+        border of the previous prefix) and extend it: while `p[i] != p[j]`,
+        fall back to `j = pi[j-1]`; then if `p[i] == p[j]`, extend `j`. This is
+        the same fallback idea used during matching — learn it once and it
+        applies in both places.
+      - **Scanning `s`.** `j` holds how many characters of the pattern are
+        currently matched. On each new character `c`, fall back through `pi`
+        until `c` can extend the match (`c == p[j]`) or `j == 0`. When
+        `j == m` the whole pattern is matched: count it, then continue from
+        `pi[j-1]` so overlapping occurrences are found too (e.g. `aaa` in
+        `aaaa`).
+      - **Z-array details.** The `[l,r]` window is the rightmost matched
+        substring; when `i` is inside it, `z[i]` can be seeded from `z[i-l]`
+        and extended. Counting only starts after the `'#'` separator
+        (`i = m+1`).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `s = "saippuakauppias"`, pattern `p = "pp"` (`m = 2`).
+
+      Prefix function of `"pp"`: `pi = [0, 1]` (the prefix `"p"` is also the
+      suffix of `"pp"`). Scan `s` left to right:
+
+      - `s,a,i` → nothing matches; `j` stays `0`.
+      - `s[3] = 'p'`: `p[0]=='p'` matches → `j = 1`.
+      - `s[4] = 'p'`: `p[1]=='p'` matches → `j = 2 == m` → **count = 1**;
+        continue from `j = pi[1] = 1`.
+      - `s[5] = 'u'`: `'u' != p[1]('p')` → fall back `j = pi[1] = 1`... `'u'` vs
+        `p[0]='p'` no → fall back `j = pi[0] = 0`. `j` resets, no more input
+        until `k, a`.
+      - `s[9] = 'p'`: `j = 1`. `s[10] = 'p'`: `j = 2 == m` → **count = 2**;
+        `j = pi[1] = 1`.
+      - Rest (`i, a, s`) never completes `"pp"`.
+
+      Printed:
+      ```
+      2
+      ```
+      Expected `2` — match.
+  - type: flowchart
+    title: "KMP pattern scan"
+    nodes: ["build pi (prefix function)", "j = 0, count = 0", "next char c of s", "fall back j = pi[j-1] while c != p[j]", "c == p[j]?  j++", "j == m?  count++, j = pi[m-1]", "print count"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "equal"}
+      - {from: 4, to: 5, label: "yes"}
+      - {from: 4, to: 2, label: "no / ch parsed"}
+      - {from: 5, to: 2}
+      - {from: 2, to: 6, label: "end"}
+  - type: mcq
+    prompt: "After finding a full match (j == m), the code continues with j = pi[m-1] rather than j = 0. Why does that matter?"
+    options:
+      - "Because it allows overlapping occurrences — the prefix of the matched pattern that is also its suffix contributes to the next match."
+      - "Because it always resets the match counter to a smaller value."
+      - "Because it prevents the pattern from ever matching again."
+      - "Because it stores the number of occurrences directly in the prefix function."
+    answer: 0
+    explanation: "Falling back through the prefix function after a full match reuses the longest matched suffix as the head of the next match, so overlapping occurrences (e.g. 'aa' in 'aaa' = 2) are counted. Restarting at 0 would miss those and break the linear guarantee."
+---

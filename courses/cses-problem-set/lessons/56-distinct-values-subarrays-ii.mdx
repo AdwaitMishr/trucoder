@@ -1,0 +1,199 @@
+---
+id: distinct-values-subarrays-ii
+title: "Distinct Values Subarrays II"
+difficulty: medium
+order: 56
+tags:
+  - sorting-searching
+  - sliding-window
+  - two-pointers
+  - hashmap
+blocks:
+  - type: markdown
+    content: |
+      # Distinct Values Subarrays II — sliding window + frequency map
+
+      We must count how many subarrays contain **at most `k` distinct values**.
+      This is a "count the number of valid windows" problem, so the natural tool
+      is a **sliding window** paired with a **frequency map** that tracks how
+      many copies of each value the current window holds.
+
+      ## The window-invariant trick
+
+      For each right end `r`, keep the window `[l, r]` as the *shortest* window
+      ending at `r` whose distinct values are **at most `k`** by expanding `r`
+      and, whenever the window exceeds `k` distinct values, moving `l` right
+      (removing values) until it is valid again. Then:
+
+      ```
+      number of valid subarrays ending at r  =  r - l + 1
+      ```
+
+      Why? Any subarray ending at `r` is `[x, r]` for some `x` with
+      `l <= x <= r`. Because the window `[l, r]` already has at most `k`
+      distinct values, **every** longer start `x >= l` also does (shrinking a
+      set of values cannot introduce a new distinct value). So all `r-l+1`
+      starts from `l` up to `r` give valid subarrays ending at `r`, and we add
+      them all.
+
+      Summing `r - l + 1` over every `r` counts each valid subarray exactly
+      once (it has one unique right boundary).
+
+      **Time:** O(n), **Space:** O(n) for the frequency map.
+      Values can be up to `10^9`, so use a hash map rather than an array.
+
+      :::tip
+      **Interview tip:** "count subarrays with at most k distinct elements" (and
+      the almost identical "subarrays with exactly k distinct = at most k minus
+      at most k-1") are favourite two-pointer questions. The crucial insight to
+      state out loud: *once `[l,r]` is valid, every shorter start `x >= l` is
+      also valid*, so a valid window ending at `r` contributes `r-l+1` — not
+      one — subarrays.
+      :::
+  - type: markdown
+    content: |
+      # Question — Distinct Values Subarrays II
+
+      Given an array of `n` integers, your task is to calculate the number of
+      subarrays that have **at most `k` distinct values**.
+
+      **Input**
+
+      The first input line has two integers `n` and `k`: the size of the array
+      and the maximum allowed number of distinct values.
+
+      The next line has `n` integers `x_1, x_2, ..., x_n`: the contents of the
+      array.
+
+      **Output**
+
+      Print one integer: the number of subarrays.
+
+      **Constraints**
+
+      - `1 <= k <= n <= 2*10^5`
+      - `1 <= x_i <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 2
+      1 2 3 1 1
+      ```
+
+      Output:
+
+      ```
+      10
+      ```
+
+      There are 10 subarrays containing at most 2 distinct values (all
+      subarrays except `[1,2,3]`, `[2,3,1]`, `[1,2,3,1]`, `[2,3,1,1]` and
+      `[1,2,3,1,1]`).
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n²) time, O(n) space**
+
+      Enumerate every `(l, r)`, build a set of its values, and check the size
+      against `k`. With `n = 2*10^5` the O(n²) subarrays are far too many.
+
+      ```cpp
+      long long brute(int n, int k, const vector<long long>& a) {
+          long long count = 0;
+          for (int l = 0; l < n; ++l) {
+              unordered_set<long long> seen;
+              for (int r = l; r < n; ++r) {
+                  seen.insert(a[r]);
+                  if ((int)seen.size() <= k) count++;
+                  else break;              // adding more can only add distinct values
+              }
+          }
+          return count;
+      }
+      ```
+
+      **② Optimisation — sliding window, O(n) time, O(n) space**
+
+      Expand the right pointer, maintain a frequency map and a running
+      `distinct` counter, and shrink from the left only when distinct exceeds
+      `k`. Each valid window `[l, r]` contributes `r - l + 1` subarrays ending
+      at `r`.
+
+      ```cpp
+      long long solve(int n, long long k, const vector<long long>& a) {
+          unordered_map<long long, int> freq;
+          long long count = 0;
+          int distinct = 0, l = 0;
+          for (int r = 0; r < n; ++r) {
+              if (freq[a[r]]++ == 0) distinct++;   // new value enters the window
+              while (distinct > k) {
+                  if (--freq[a[l]] == 0) distinct--; // value left the window
+                  l++;
+              }
+              count += (r - l + 1);                // all starts x in [l, r] are valid
+          }
+          return count;
+      }
+      ```
+
+      **③ Further optimisation** — O(n) is optimal: the answer can already be
+      ~`n(n+1)/2` (when `k >= n`), and the sliding window only reads each
+      element twice.
+
+      **④ Alternative algorithm** — instead of counting exactly, use the
+      identity "at most k" = "at most n" − "at most k−1" is *not* needed here
+      because we are asked for "at most k", which the sliding window counts
+      directly. If the question ever asked for "at least k" or "exactly k
+      distinct", you would run the window twice (`atMost(k) − atMost(k−1)`).
+  - type: markdown
+    content: |
+      # Code logic
+
+      Step through the O(n) solution in **②**:
+
+      - `freq[value]` counts copies of each value inside the current window;
+        `distinct` is how many values have nonzero frequency.
+      - Adding `a[r]`: `if (freq[a[r]]++ == 0)` means this value was absent, so a
+        new distinct value has appeared and `distinct` grows by one.
+      - The `while (distinct > k)` loop evicts from the left. `--freq[a[l]]`
+        decreases the window's copy count; if it reaches `0` the value has left
+        the window and `distinct` drops. Only when `distinct <= k` do we stop.
+      - Now `[l, r]` is the shortest valid window ending at `r`, so every start
+        `x >= l` yields a valid subarray ending at `r` — there are exactly
+        `r - l + 1` of them, added directly to `count`.
+
+      The frequency map is keyed by the raw array value (up to `10^9`), so an
+      `unordered_map` is required — the values are not dense enough for an
+      index array without coordinate compression.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(5, 2, [1,2,3,1,1])`:
+
+      | r | a[r] | distinct before | action | l | r - l + 1 | count |
+      |---|------|-----------------|--------|---|-----------|-------|
+      | 0 | 1 | 0 | add 1 -> {1}, distinct=1 | 0 | 1 | 1 |
+      | 1 | 2 | 1 | add 2 -> {1,2}, distinct=2 | 0 | 2 | 3 |
+      | 2 | 3 | 2 | add 3 -> distinct=3 >2; drop a[0]=1 -> distinct=2 | 1 | 2 | 5 |
+      | 3 | 1 | 2 | add 1 -> distinct=3 >2; drop a[1]=2 -> distinct=2 | 2 | 2 | 7 |
+      | 4 | 1 | 2 | add 1 (already present), distinct stays 2 | 2 | 3 | 10 |
+
+      Return `10`, matching the sample. Checks: at `r = 4` the window
+      `[2, 4] = [3,1,1]` is valid, and all of `[3,1,1]`, `[1,1]`, `[1]` end at
+      index 4 — three subarrays, exactly `r - l + 1 = 4 - 2 + 1 = 3`.
+  - type: mcq
+    prompt: 'Why does a valid window [l, r] contribute r - l + 1 subarrays ending at r, instead of just 1?'
+    options:
+      - 'Because every subarray ending at r must be checked against every start'
+      - 'Because every longer start x in [l, r] is also valid since shrinking a window cannot increase the number of distinct values'
+      - 'Because the answer is always r - l + 1 regardless of the values'
+      - 'Because only the single-element window ending at r is ever valid'
+    answer: 1
+    explanation: 'Once [l, r] contains at most k distinct values, any smaller window [x, r] with x >= l is a subset of it, so it also has at most k distinct values. Hence all r - l + 1 starts from l to r are valid, and they are added at once.'
+type: content
+---

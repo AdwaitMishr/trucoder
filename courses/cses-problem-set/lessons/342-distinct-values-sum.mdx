@@ -1,0 +1,176 @@
+---
+id: distinct-values-sum
+title: "Distinct Values Sum"
+difficulty: medium
+order: 342
+tags:
+  - combinatorics
+  - contribution-counting
+  - subarrays
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — summing distinct counts via contribution counting
+
+      We are asked for the total over **every subarray** of the *number of
+      distinct values* in that subarray. The brute force — look at each
+      subarray and count its distinct elements — is `O(n²·n)`. The key trick is
+      to **count by contribution** instead of by subarray.
+
+      **The first-occurrence idea.** When a value `x = A[i]` appears inside some
+      subarray `[l, r]`, it contributes exactly `1` to that subarray's distinct
+      count if and only if `i` is the **first** occurrence of `x` inside
+      `[l, r]`. That happens precisely when no earlier copy of `x` is also in
+      the window, i.e. when `l` is after the previous occurrence of `x`.
+
+      Let `prev[i]` = the largest index `< i` with `A[prev] = A[i]` (or `0` if
+      none). Then `i` is the first occurrence in `[l, r]` exactly when
+      `prev[i] < l ≤ i`. Counting the windows:
+
+      - `l` has `i - prev[i]` choices (from `prev[i]+1` up to `i`);
+      - for such an `l`, `r` has `n - i + 1` choices (`r` from `i` to `n`).
+
+      So position `i` contributes `(i - prev[i]) · (n - i + 1)` to the grand
+      total, and
+
+      ```
+      total = Σ_{i=1..n} (i - prev[i]) · (n - i + 1)
+      ```
+
+      Each value contributes independently, so summing gives exactly the
+      distinct count of every subarray, once each. **Time:** `O(n)` with a hash
+      table for `prev`. **Space:** `O(n)`.
+
+      :::tip
+      **Interview tip:** Contribution counting ("count how many groups each
+      element participates in as the *first*/*last* of its kind") is a staple
+      for subarray-sum-over-a-property problems. Recognizing when to flip the
+      order of summation — over indices instead of over subarrays — is a
+      high-value interview skill.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an array of `n` integers, compute the **sum over all subarrays** of
+      the number of **distinct values** in each subarray.
+
+      Formally: let `dist(l, r)` be the number of distinct values in `A[l..r]`.
+      Print `Σ_{1 ≤ l ≤ r ≤ n} dist(l, r)`.
+
+      **Input.** The first input line has `n`, followed by `n` integers on the
+      next line.
+
+      **Output.** Print the required sum.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 10^5`
+      - `1 ≤ A[i] ≤ 10^9`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      4
+      1 2 1 3
+      ```
+
+      **Output:**
+      ```
+      18
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n³).** For every `l`, grow `r` and maintain a `set` to
+      recount distincts; too slow because each subarray is re-scanned.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin>>n; vector<int> a(n); for(int i=0;i<n;i++) cin>>a[i];
+          long long ans=0;
+          for(int i=0;i<n;i++){ set<int> st; for(int j=i;j<n;j++){ st.insert(a[j]); ans+=st.size(); } }
+          cout<<ans<<"\n"; return 0;
+      }
+      ```
+      *Complexity: `O(n³)` in the worst case (set insert inside two loops) — only for tiny `n`.*
+
+      **② Optimization — O(n) contribution counting (`n ≤ 10^5`).** Compute
+      `prev[i]` with a hash map, then add `(i - prev[i])·(n - i + 1)` for every
+      `i`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<int> a(n+1), prev(n+1,0);
+          unordered_map<int,int> last;
+          for(int i=1;i<=n;i++){ cin >> a[i]; prev[i] = last[a[i]]; last[a[i]] = i; }
+          long long ans = 0;
+          for(int i=1;i<=n;i++)
+              ans += 1LL*(i - prev[i])*(n - i + 1);
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+      *Complexity: `O(n)` time, `O(n)` space — instant for `n = 10^5`.*
+
+      **④ Alternative — O(n²) incremental distinct count.** A middle ground
+      keeps a `lastSeen` map while extending the right end: for each `l`, walk
+      `r` and add `1` only when `A[r]` was not seen in `[l, r-1]`. Exact but
+      `O(n²)`; it isolates *why* the closed form is needed at scale.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(a)` — O(n). Key lines:
+
+      1. **`prev[i]`** — the previous index holding the same value, read from
+         the `last` hash map right before updating it. `0` when `A[i]` is new.
+      2. **`i - prev[i]`** — the number of valid left endpoints `l` for which
+         `i` is the first occurrence of its value in `[l, r]`.
+      3. **`n - i + 1`** — the number of valid right endpoints `r ≥ i`.
+      4. **The product** accumulates `i`'s contribution into `ans`; summing over
+         all `i` yields the total distinct count over all subarrays.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 4`, `A = [1,2,1,3]`.
+
+      Compute `prev[]`:
+      | i | A[i] | prev[i] | contribution (i−prev[i])·(4−i+1) |
+      |---|------|---------|---------------------------------|
+      | 1 | 1    | 0       | (1−0)·4 = 4                     |
+      | 2 | 2    | 0       | (2−0)·3 = 6                     |
+      | 3 | 1    | 1       | (3−1)·2 = 4                     |
+      | 4 | 3    | 0       | (4−0)·1 = 4                     |
+
+      Total `= 4 + 6 + 4 + 4 = 18`. ✓ matches the sample.
+
+      **Spot-check a window:** `[1,3] = (1,2,1)` has 2 distinct values, and the
+      formula counts it once — value `1` contributes only via its first copy at
+      `i=1` (the copy at `i=3` has `prev=1`, so it is never "first" inside a
+      window starting at `l ≥ 2`).
+
+  - type: mcq
+    prompt: "In the O(n) first-occurrence formula, why is `(i - prev[i])` the number of left endpoints that make `i` the first occurrence of its value?"
+    options:
+      - "Because the window must start strictly after the previous equal value, so `l` ranges from `prev[i]+1` to `i`, giving exactly `i - prev[i]` choices."
+      - "Because the window must start at position 1."
+      - "Because `prev[i]` has no role when values are distinct."
+      - "Because `l` must equal `i` exactly."
+    answer: 0
+    explanation: "`i` is the first occurrence of `x = A[i]` in `[l,r]` iff there is no other copy of `x` with index in `[l, i]`. Since `prev[i]` is the closest earlier copy, that means `l > prev[i]`. With `l` also at most `i`, there are `i - prev[i]` valid left endpoints. The right endpoint is free from `i` to `n` (`n - i + 1` choices), giving the product."
+
+type: content
+---

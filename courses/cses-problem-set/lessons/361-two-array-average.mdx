@@ -1,0 +1,221 @@
+---
+id: two-array-average
+title: "Two Array Average"
+type: content
+difficulty: hard
+order: 361
+tags:
+  - combinatorics
+  - gcd
+  - maps
+blocks:
+  - type: markdown
+    content: |
+      # Two Array Average — count subset pairs with equal average
+
+      ## Theory
+
+      Given two arrays `A` and `B`, we count pairs `(subset of A, subset of B)` of non-empty
+      subsets that have the **same average**. A subset's average is `sum / size`. So for a
+      subset of `A` with `(size jA, sum sA)` and one of `B` with `(size jB, sum sB)`, equality
+      of averages means:
+
+      `sA / jA == sB / jB`  ⟺  `sA·jB == sB·jA`.
+
+      Grouping by reduced fraction makes counting fast. Each subset's average is a rational
+      `s/j`; reduce it via `g = gcd(|s|, j)` to a canonical pair `(s/g, j/g)` (with `(0, 1)`
+      for sum 0). Two subsets have equal average **iff** they reduce to the same canonical
+      pair. Then the answer is a dot product:
+
+      `answer = Σ_f  countA[f] · countB[f]`
+
+      over all fractions `f`, where `countA[f]` is how many non-empty subsets of `A` have
+      average `f`, and likewise for `B`.
+
+      If both `n` and `m` are small (≤ 20), enumerate all subsets of each array directly into a
+      fraction→count map. This is clean and exact.
+
+      **Time:** `O(2^n + 2^m)` (enumeration) plus map lookups. **Space:** `O(2^n + 2^m)`.
+
+      :::tip
+      **Interview tip:** "Count pairs (one from each group) with an equal ratio / average /
+      slope / value" collapses to a **fraction normalisation + dot product**. Normalise each
+      item's characteristic to a canonical reduced form, count frequencies in each group, then
+      multiply-and-sum matches. This is the same trick as "count pairs with the same
+      distance ratio" and "number of points on identical lines". When the group sizes push past
+      ~20–22, switch the per-group enumeration to meet-in-the-middle.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Question
+
+      Given two arrays `A` and `B`, count the number of pairs of **non-empty** subsets — one
+      subset of `A` and one subset of `B` — that have the **same average**. A subset's average
+      is the sum of its elements divided by its size. Subsets are counted by their index sets
+      (two subsets containing different positions are distinct), and a pair `(S, T)` is counted
+      once for each combination of an `A`-subset `S` and a `B`-subset `T`.
+
+      **Input.** The first line has `n`; the second line has `n` integers `A[1..n]`. The third
+      line has `m`; the fourth line has `m` integers `B[1..m]`.
+
+      **Output.** Print the number of qualifying pairs.
+
+      **Constraints.**
+      - `1 ≤ n, m ≤ 20`
+      - `−10⁹ ≤ A[i], B[j] ≤ 10⁹`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      2
+      1 3
+      2
+      1 3
+      ```
+
+      **Output:**
+      ```
+      3
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2^n · 2^m).** Enumerate every subset of `A` and of `B`, and for each
+      pair compute and compare both averages directly (e.g. via the cross-product `sA·jB ==
+      sB·jA`). Correct, but quadratic in the number of subsets — infeasible beyond small cases.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      vector<pair<ll,ll>> subsets(const vector<ll>& a){  // all non-empty (size, sum)
+          vector<pair<ll,ll>> v;
+          int n=a.size();
+          for(int mask=1; mask<(1<<n); mask++){
+              ll s=0; int j=0;
+              for(int i=0;i<n;i++) if(mask>>i&1){ s+=a[i]; j++; }
+              v.push_back({j, s});
+          }
+          return v;
+      }
+      int main(){
+          int n; cin>>n; vector<ll> A(n);
+          for(int i=0;i<n;i++) cin>>A[i];
+          int m; cin>>m; vector<ll> B(m);
+          for(int j=0;j<m;j++) cin>>B[j];
+          auto sa=subsets(A); auto sb=subsets(B);
+          ll ans=0;
+          for(auto &x : sa) for(auto &y : sb)
+              if(x.second*y.first == y.second*x.first) ans++;
+          cout<<ans<<"\n";
+      }
+      ```
+      *Complexity: O(2^(n+m)) — too slow once `n+m` grows past ~22–24.*
+
+      **② Optimization — fraction maps + dot product, O(2^n + 2^m) (intended).** Reduce each
+      subset's average to a canonical fraction and count frequencies per array, then multiply
+      matching counts:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      map<pair<ll,ll>,ll> build(const vector<ll>& a){
+          map<pair<ll,ll>,ll> mp;                 // canonical fraction -> count
+          int n=a.size();
+          for(int mask=1; mask<(1<<n); mask++){   // skip empty subset
+              ll s=0; int j=0;
+              for(int i=0;i<n;i++) if(mask>>i&1){ s+=a[i]; j++; }
+              ll g = __gcd(llabs(s), (ll)j);      // canonicalize s/j
+              mp[{s/g, (ll)j/g}]++;
+          }
+          return mp;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n; vector<ll> A(n);
+          for(int i=0;i<n;i++) cin>>A[i];
+          int m; cin>>m; vector<ll> B(m);
+          for(int j=0;j<m;j++) cin>>B[j];
+          auto ma = build(A);
+          auto mb = build(B);
+          ll ans=0;
+          for(auto &kv : ma){
+              auto it = mb.find(kv.first);
+              if(it != mb.end()) ans += kv.second * it->second;
+          }
+          cout<<ans<<"\n";
+      }
+      ```
+      *Complexity: O(2^n + 2^m) time/space — fine for `n, m ≤ 20`.*
+
+      **③ Further optimization — meet in the middle for larger arrays.** If `n` or `m` grows to
+      ~40, enumerate each array's subsets by splitting into halves and combining counts so that
+      each half contributes `2^(size/2)` work; the fraction-key dot product is unchanged. This
+      keeps the same normalisation while trading the `2^n` enumeration for `2^(n/2)`. (The
+      combination reduces to the same key-sum-to-zero pairing as in *Subsets With Fixed
+      Average*.)
+
+      **④ Alternative — equality without reducing.** Instead of reducing fractions, keep
+      subsets keyed by the unabridged pair and rely on the cross-product `sA·jB == sB·jA` at
+      pairing time. Correct, but the map then holds many equivalent-distinct keys, so reducing
+      with `gcd` (as in ②) is strictly better for keeping the dot-product small. No further
+      speed-up exists: the count genuinely depends on the subset values, so enumeration is
+      required.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      - **Canonical fraction.** Every subset’s average `s/j` is reduced to `(s/g, j/g)`,
+        `g = gcd(|s|, j)`. Equal averages collapse to one key; e.g. `{2}` and `{1,3}` both give
+        `2/1`, and `{4,6}` (sum 10, size 2) gives `5/1`.
+      - **Per-array frequency map.** `build` enumerates all non-empty subsets once and counts
+        how often each reduced average appears.
+      - **Dot product.** A pair has equal average exactly when the two canonical fractions are
+        the same key; the total is `Σ countA[f]·countB[f]`.
+      - **Non-empty only.** Both maps skip the empty subset (`mask` starts at 1), so no empty
+        subset is ever paired.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `A = [1, 3]`, `B = [1, 3]`.
+
+      Non-empty subsets of `A` with their reduced averages:
+      - `{1}` → `1/1`
+      - `{3}` → `3/1`
+      - `{1,3}` → `4/2 = 2/1`
+
+      So `countA = {1/1: 1, 3/1: 1, 2/1: 1}`. Array `B` is the same array, so
+      `countB = {1/1: 1, 3/1: 1, 2/1: 1}`.
+
+      Dot product:
+      - `1/1`: `1 × 1 = 1` (pairs `{a1}↔{b1}`)
+      - `3/1`: `1 × 1 = 1` (pairs `{a3}↔{b3}`)
+      - `2/1`: `1 × 1 = 1` (pairs `{a1,a3}↔{b1,b3}`)
+
+      Total **3**, and no other fraction matches:
+      ```
+      3
+      ```
+      which matches the sample. ✓
+
+      *(A non-matching pair for contrast: `{1}` from `A` (average 1) and `{1,3}` from `B`
+      (average 2). Cross-product check: `sA·jB = 1·2 = 2` vs `sB·jA = 4·1 = 4` → `2 ≠ 4`, so
+      they are correctly not counted — the two averages differ.)*
+
+  - type: mcq
+    prompt: "Why does reducing each subset's average to a canonical fraction (dividing sum and size by their gcd) let the answer be computed as a dot product of frequency maps?"
+    options:
+      - "Because two subsets have equal average exactly when their reduced fraction keys are identical, so every matching pair is counted once per shared key and contributions are independent across keys."
+      - "Because dividing by the gcd always makes the sums equal."
+      - "Because after reduction all subsets have the same size."
+      - "Because the empty subset is included and always matches everything."
+    answer: 0
+    explanation: "Equality of averages sA/jA == sB/jB is exactly equality of the reduced fractions (sA/gA, jA/gA) and (sB/gB, jB/gB). Counting how often each array produces each key, then summing the products of matching keys, counts every valid pair exactly once and never mixes different averages."

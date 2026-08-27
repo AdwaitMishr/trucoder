@@ -1,0 +1,227 @@
+---
+id: sum-of-four-squares
+title: "Sum of Four Squares"
+difficulty: easy
+order: 185
+tags:
+  - mathematics
+  - number-theory
+  - lagrange
+  - search
+blocks:
+  - type: markdown
+    content: |
+      # Sum of Four Squares — Lagrange's theorem, constructively
+
+      A famous 1770 theorem of **Lagrange** says:
+
+      > Every non-negative integer `n` is the sum of **four** squares of
+      > non-negative integers: `n = a^2 + b^2 + c^2 + d^2`.
+
+      This problem asks you to *find* such a quadruple `(a,b,c,d)`. Since the
+      theorem guarantees existence, a correct search will always terminate.
+
+      ## Why the naive search is too slow
+
+      A brute-force quadruple loop, `a,b,c,d` each `0 … √n`, checks every
+      combination — `O(n^2)` candidates (four loops of `√n` values). That is fine
+      for small `n` but for `n = 10^7` it means `10^14` checks: never finishes.
+
+      ## The constructive trick: fix three, solve the fourth
+
+      The key observation: instead of *looping* on the fourth value, we can
+      **close it analytically**. If we fix `a, b, c`, then
+      `d^2 = n − a^2 − b^2 − c^2` is determined. We just compute
+      `d = ⌊√⋯⌋` (integer square root) and test whether `d^2` really equals the
+      leftover. If it does, we are done.
+
+      This removes one whole loop level, and in practice the search finishes
+      within the **first few** values of `a` because Lagrange guarantees plenty
+      of representations for every `n`. The loop still visits few candidates
+      before hitting a valid one.
+
+      **Complexity.** Worst case `O(n^{3/2})` (three loops of `√n`), but for the
+      given constraints (`n ≤ 10^7`) the search terminates almost immediately,
+      so it runs in milliseconds. A full-column-scan bound argument shows the
+      answer is reached fast for every `n`.
+
+      :::tip
+      **Interview tip:** "represent a number as a sum of squares" tests two
+      things: knowing the *theorem* (existence — so you never print "impossible")
+      and the *construction* (fix all but one coordinate, then close it with an
+      integer square root instead of a 4th loop). That "solve the last
+      coordinate by formula" move generalises to many search problems.
+      :::
+  - type: markdown
+    content: |
+      # Question — Sum of Four Squares
+
+      A well known result in number theory is that every non-negative integer
+      can be represented as the sum of four squares of non-negative integers.
+
+      You are given a non-negative integer `n`. Find four non-negative integers
+      `a, b, c, d` such that `n = a^2 + b^2 + c^2 + d^2`.
+
+      **Input:** The first line has an integer `t`. Each of the next `t` lines
+      has an integer `n`.
+
+      **Output:** For each test case, print four non-negative integers
+      `a, b, c, d` that satisfy `n = a^2 + b^2 + c^2 + d^2`.
+
+      **Constraints**
+
+      - `1 ≤ t ≤ 1000`
+      - `0 ≤ n ≤ 10^7`
+      - the sum of all `n` is at most `10^7`
+
+      **Example**
+
+      Input:
+
+      ```
+      3
+      5
+      30
+      322266
+      ```
+
+      Output:
+
+      ```
+      2 1 0 0
+      1 2 3 4
+      314 159 265 358
+      ```
+
+      (Check the last one: `314^2 + 159^2 + 265^2 + 358^2 = 322266`.)
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — four nested loops, O(n²)**
+
+      Loop `a, b, c, d` each from `0` up to `√n` and test the sum. Correct by
+      Lagrange, but `(√n)^4 = n^2` combinations — `10^14` for `n = 10^7`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      ll isqrtll(ll x){ ll r=(ll)sqrtl((long double)x); while(r*r>x)r--; while((r+1)*(r+1)<=x)r++; return r; }
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          int t; cin>>t;
+          while(t--){ ll n; cin>>n;
+              ll lim=isqrtll(n); bool found=false;
+              for(ll a=0;a<=lim&&!found;a++)
+                  for(ll b=0;b<=lim&&!found;b++)
+                      for(ll c=0;c<=lim&&!found;c++)
+                          for(ll d=0;d<=lim&&!found;d++)
+                              if(a*a+b*b+c*c+d*d==n){ cout<<a<<" "<<b<<" "<<c<<" "<<d<<"\n"; found=true; }
+          } return 0; }
+      ```
+
+      O(n²) — far too slow.
+
+      **② Optimization — fix three, close the fourth, O(n^(3/2)) worst, fast in practice**
+
+      Loop `a, b, c` descending from `√(remaining)` and *close* `d` with an
+      integer square root. The first valid solution is found almost immediately.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      ll isqrtll(ll x){ ll r=(ll)sqrtl((long double)x); while(r*r>x)r--; while((r+1)*(r+1)<=x)r++; return r; }
+
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          int t; cin>>t;
+          while(t--){ ll n; cin>>n;
+              bool done=false;
+              for(ll a=isqrtll(n); a>=0 && !done; a--){
+                  ll rem1=n-a*a;
+                  for(ll b=isqrtll(rem1); b>=0 && !done; b--){
+                      ll rem2=rem1-b*b;
+                      for(ll c=isqrtll(rem2); c>=0 && !done; c--){
+                          ll d2=rem2-c*c;
+                          ll d=isqrtll(d2);
+                          if(d*d==d2){ cout<<a<<" "<<b<<" "<<c<<" "<<d<<"\n"; done=true; }
+                      }
+                  }
+              }
+              if(!done) cout<<"0 0 0 0\n";  // unreachable by Lagrange's theorem
+          }
+          return 0;
+      }
+      ```
+
+      One loop level is eliminated by analytically solving for `d`. Worst case
+      `O(n^(3/2))`; in practice the answer is reached after the first few `a`.
+
+      **③ Further optimization — arithmetic/structural shortcuts.**
+
+      A small speed-up de-duplicates symmetric squares: since `n ≤ 10^7` is
+      small, we can even precompute all squares once. Another classic trick is
+      to note `n = a² + b² + c² + d²` with `a` the largest square `≤ n` usually
+      works, and the residual `m = n − a²` is a sum of three squares whenever it
+      is *not* of the form `4^k·(8ℓ+7)` (Gauss's three-square theorem). Skipping
+      those rare `a` makes the search near-`O(√n)`. For the stated limits the
+      loop version is already accepted.
+
+      **④ Alternative — proof of existence only.**
+
+      No alternative algorithm is needed: Lagrange's theorem guarantees a
+      solution, and the constructive search in `②` always finds one. A purely
+      proof-based "guaranteed" method (via the two-square theorem after factoring
+      out `4^k·(8ℓ+7)`) is the heavy mathematical route, but the search is far
+      simpler to implement correctly.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`isqrtll`** computes `⌊√x⌋` exactly: start from a floating guess and
+        nudge up/down to correct for rounding error. This is critical — closing
+        the fourth coordinate only works if `d` is the true floor root.
+      - **Descending search.** We start `a` at `⌊√n⌋` and decrement. Making the
+        largest square as big as possible keeps the remainders small and the
+        inner loops short.
+      - **Remainders shrink.** After choosing `a`, `rem1 = n − a²`; after `b`,
+        `rem2 = rem1 − b²`; after `c`, `d2 = rem2 − c²`. Each loop's bound is the
+        floor root of the current remainder, so we never exceed a valid value.
+      - **The exit.** `if (d*d == d2)` means the leftover is a perfect square:
+        we have `a² + b² + c² + d² = n`, print and stop.
+      - **Termination.** Because Lagrange guarantees a representation, the flag
+        `done` always becomes true; the fallback print is defensive only.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 30`.
+
+      **Expected output (sample):** `1 2 3 4` (any valid quadruple is accepted).
+
+      **Actual run** of the `②` search (`a` starts at `⌊√30⌋ = 5`):
+
+      | a | rem1 = 30−a² | trial | result |
+      |----|-------------|-------|--------|
+      | 5 | 5 | b=⌊√5⌋=2, c=⌊√1⌋=1, d²=5−4−1=0 → d=0 | 5²+2²+1²+0²=30 ✓ |
+      | — | — | print `5 2 1 0` | valid |
+      | (alt.) | | b=2,c=0 → d²=1,d=1 | also valid |
+
+      Our search prints `5 2 1 0` (since `25+4+1+0 = 30`). The sample prints the
+      equivalent `1 2 3 4` (`1+4+9+16=30`). The judge accepts any quadruple that
+      sums correctly.
+
+      **Other sample values:** `n=5` → `2 1 0 0` (`4+1+0+0=5`). `n=322266` → our
+      search finds `567 26 10 1` (`321489 + 676 + 100 + 1 = 322266`); the sample's
+      `314 159 265 358` is another valid representation.
+  - type: mcq
+    prompt: Why does closing the fourth coordinate with an integer square root remove an entire loop level?
+    options:
+      - 'Because once a, b, c are fixed, d² is forced to be n−a²−b²−c², so we compute d = ⌊√(n−a²−b²−c²)⌋ and only verify it is a perfect square, instead of scanning all d'
+      - 'Because the fourth square is always zero, so c alone closes the sum'
+      - 'Because we can swap the order of the loops so d is always the largest'
+      - 'Because integer square roots are instantaneous regardless of the value'
+    answer: 0
+    explanation: 'The identity n = a²+b²+c²+d² determines d once a,b,c are chosen. A single floor-root computation tests whether the leftover is a perfect square — that test replaces the entire inner loop over d, cutting one O(√n) factor from the brute force.'
+type: content
+---

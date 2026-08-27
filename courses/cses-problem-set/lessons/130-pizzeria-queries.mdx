@@ -1,0 +1,291 @@
+---
+id: pizzeria-queries
+title: Pizzeria Queries
+type: content
+difficulty: medium
+order: 130
+tags:
+  - range-queries
+  - segment-tree
+  - range-min
+  - split-on-k
+blocks:
+  - type: markdown
+    content: |
+      # Pizzeria Queries — splitting on the absolute value
+
+      There are `n` buildings on a street, numbered `1..n`. Building `k` sells a
+      pizza at price `p_k`; ordering from building `a` to be delivered to
+      building `b` costs `p_a + |a - b|`. You get point price updates
+      (`p_k = x`) and queries: standing in building `k`, what is the cheapest
+      pizza you can order?
+
+      The cost has an absolute value, which is awkward — but the key trick is
+      that the absolute value **splits into two one-sided cases**. For a
+      *source* building `i` delivering to *you* at `k`:
+
+      - if `i <= k`: cost is `p_i + (k - i) = (p_i - i) + k`,
+      - if `i >= k`: cost is `p_i + (i - k) = (p_i + i) - k`.
+
+      So the answer is the minimum of two *independent* range-minimum queries:
+
+      ```
+      answer(k) = min(  min_{i <= k} (p_i - i)  +  k ,
+                       min_{i >= k} (p_i + i)  -  k )
+      ```
+
+      The value `k` is constant for the query; the two parentheses depend only
+      on `i`. This is the "two-phase / min over the split at `k`" idea: because
+      delivery crosses the street, every candidate sits either to your left or
+      to your right, and each side gets its own clean expression.
+
+      ## The two trees
+
+      Build two segment trees:
+
+      - tree `A` at position `i` holds `p_i - i`,
+      - tree `B` at position `i` holds `p_i + i`.
+
+      A type-1 update `p_k = x` updates both trees at position `k` (to `x - k`
+      and `x + k`). A type-2 query asks `min(A[1..k])` and `min(B[k..n])`:
+
+      ```
+      ans = min( minA_left + k , minB_right - k )
+      ```
+
+      Each tree is a plain range-minimum segment tree with a point update —
+      `O(log n)` per operation, `O(n)` memory.
+
+      :::tip
+      **Interview tip:** \"minimize `A_i + |i - k|` (or `A_i + const·|i-k|`)
+      over indices with point updates\" is a recurring pattern — it shows up as
+      travel/delivery costs, weighted distances to facilities, or L1-style
+      nearest-neighbour problems. The reflex to develop is: **split the
+      absolute value into `i <= k` and `i >= k`**, rewrite each as a term
+      depending only on `i` plus a constant in `k`, and build one data structure
+      per side. Named it aloud and you impress.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` buildings on a street, numbered `1, 2, ..., n`. Each
+      building has a pizzeria and an apartment.
+
+      The pizza price in building `k` is `p_k`. If you order a pizza from
+      building `a` to building `b`, its price (with delivery) is `p_a + |a-b|`.
+
+      Process two types of queries:
+
+      1. the pizza price `p_k` in building `k` becomes `x`;
+      2. you are in building `k` and want to order a pizza — what is the minimum
+         price?
+
+      ## Input
+
+      The first input line has two integers `n` and `q`: the number of buildings
+      and queries.
+
+      The second line has `n` integers `p_1, p_2, ..., p_n`: the initial pizza
+      price in each building.
+
+      Finally, there are `q` lines that describe the queries. Each line is
+      either `1 k x` or `2 k`.
+
+      ## Output
+
+      Print the answer for each query of type `2`, one per line.
+
+      ## Constraints
+
+      - `1 <= n, q <= 2 * 10^5`
+      - `1 <= p_i, x <= 10^9`
+      - `1 <= k <= n`
+
+      ## Sample
+
+      **Input:**
+      ```
+      6 3
+      8 6 4 5 7 5
+      2 2
+      1 5 1
+      2 2
+      ```
+      **Output:**
+      ```
+      5
+      4
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n) per query, O(q·n) total**
+
+      For a type-2 query, scan every building `i` and take `min(p_i + |i-k|)`.
+      This is correct but scans up to `n` buildings per query, and with
+      `n,q <= 2*10^5` it is far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<ll> p(n + 1);
+          for (int i = 1; i <= n; i++) cin >> p[i];
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) { int k; ll x; cin >> k >> x; p[k] = x; }
+              else {
+                  int k; cin >> k;
+                  ll best = LLONG_MAX;
+                  for (int i = 1; i <= n; i++) best = min(best, p[i] + (ll)abs(i - k));
+                  cout << best << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`O(q·n)` worst case — correct but `4*10^10` steps at the limit.*
+
+      **② Optimization — two segment trees split on `k` — O((n+q) log n)** — optimal
+
+      Tree `A` stores `p_i - i`, tree `B` stores `p_i + i`. Query `2 k`:
+      `minA = min over A[1..k]`, `minB = min over B[k..n]`, answer `min(minA +
+      k, minB - k)`. Update `1 k x` sets `A[k] = x - k` and `B[k] = x + k`.
+      This is the tier we compile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      struct SegMin {          // range-min, point update
+          int n;
+          vector<ll> t;
+          SegMin(const vector<ll>& a) { n = (int)a.size() - 1; t.assign(4 * n, 0); build(1, 1, n, a); }
+          void build(int v, int l, int r, const vector<ll>& a) {
+              if (l == r) { t[v] = a[l]; return; }
+              int m = (l + r) / 2;
+              build(v * 2, l, m, a); build(v * 2 + 1, m + 1, r, a);
+              t[v] = min(t[v * 2], t[v * 2 + 1]);
+          }
+          void update(int v, int l, int r, int pos, ll val) {
+              if (l == r) { t[v] = val; return; }
+              int m = (l + r) / 2;
+              if (pos <= m) update(v * 2, l, m, pos, val); else update(v * 2 + 1, m + 1, r, pos, val);
+              t[v] = min(t[v * 2], t[v * 2 + 1]);
+          }
+          ll query(int v, int l, int r, int ql, int qr) {
+              if (ql > qr) return LLONG_MAX;            // empty range
+              if (ql <= l && r <= qr) return t[v];
+              int m = (l + r) / 2;
+              ll best = LLONG_MAX;
+              if (ql <= m) best = min(best, query(v * 2, l, m, ql, qr));
+              if (qr > m)  best = min(best, query(v * 2 + 1, m + 1, r, ql, qr));
+              return best;
+          }
+      };
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<ll> p(n + 1), A(n + 1), B(n + 1);
+          for (int i = 1; i <= n; i++) { cin >> p[i]; A[i] = p[i] - i; B[i] = p[i] + i; }
+          SegMin ta(A), tb(B);
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) { int k; ll x; cin >> k >> x; ta.update(1, 1, n, k, x - k); tb.update(1, 1, n, k, x + k); }
+              else {
+                  int k; cin >> k;
+                  ll minA = ta.query(1, 1, n, 1, k);        // i <= k
+                  ll minB = tb.query(1, 1, n, k, n);        // i >= k
+                  cout << min(minA + k, minB - k) << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`O((n+q) log n)` time, `O(n)` space — optimal.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Split on `k`.** Delivery cost is `p_i + |i - k|`. For `i <= k` this is
+        `(p_i - i) + k`; for `i >= k` it is `(p_i + i) - k`. The `k` terms are
+        constant during a query, so we precompute `p_i - i` (tree `A`) and
+        `p_i + i` (tree `B`).
+
+      - **Two range-min queries.** Left candidates (`i <= k`) live in `A` over
+        `[1, k]`; right candidates (`i >= k`) live in `B` over `[k, n]`. Their
+        raw values need `+k` and `-k` respectively before comparison, because a
+        query that lands exactly on a building is counted by both trees (|k-k| =
+        0), which is fine — we only need the minimum.
+
+      - **Update.** Changing `p_k` to `x` changes both derived arrays at `k`:
+        `A[k] = x - k`, `B[k] = x + k`. Two `O(log n)` point updates.
+
+      - **Empty-range guard.** The `if (ql > qr) return LLONG_MAX;` guards stay
+        clean even at boundaries, so the two queries never read garbage.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 6`, `p = [8, 6, 4, 5, 7, 5]`.
+
+      **Build.**
+      ```
+      A: p_i - i :  8-1=7, 6-2=4, 4-3=1, 5-4=1, 7-5=2, 5-6=-1
+      B: p_i + i :  8+1=9, 6+2=8, 4+3=7, 5+4=9, 7+5=12, 5+6=11
+      ```
+
+      **Query `2 2`** (you are in building 2; `k = 2`).
+      - `minA = min(A[1..2]) = min(7, 4) = 4` → left-side cost `4 + k = 4 + 2 = 6`.
+        (That is building 2 itself: `p_2 + 0 = 6`.)
+      - `minB = min(B[2..6]) = min(8, 7, 9, 12, 11) = 7` → right-side cost
+        `7 - k = 7 - 2 = 5`. (Building 3: `p_3 + |3-2| = 4 + 1 = 5`.)
+      - `answer = min(6, 5) = 5`. Expected `5`, answer `5`.
+
+      **Update `1 5 1`** — `p[5] = 1`:
+      ```
+      A[5] = 1 - 5 = -4      B[5] = 1 + 5 = 6
+      ```
+
+      **Query `2 2`** (`k = 2`).
+      - `minA = min(A[1..2]) = min(7, 4) = 4` → `4 + 2 = 6`.
+      - `minB = min(B[2..6]) = min(8, 7, 9, 6, 11) = 6` → `6 - 2 = 4`. (Building
+        5 now: `p_5 + |5-2| = 1 + 3 = 4`.)
+      - `answer = min(6, 4) = 4`. Expected `4`, answer `4`.
+
+      Printed output:
+      ```
+      5
+      4
+      ```
+      Matching the sample exactly.
+  - type: flowchart
+    title: "Pizzeria queries via split on k"
+    nodes: ["query 2 k (user at building k)", "left candidates i<=k: A=(p_i-i)", "right candidates i>=k: B=(p_i+i)", "minA = range-min A[1..k]; cost = minA + k", "minB = range-min B[k..n]; cost = minB - k", "answer = min(cost_left, cost_right)"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 0, to: 2}
+      - {from: 1, to: 3}
+      - {from: 2, to: 4}
+      - {from: 3, to: 5}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "The core reason two separate range-minimum trees solve this problem is that…"
+    options:
+      - "…each building must be stored twice so the delivery price is double-counted."
+      - "…the absolute value |i-k| splits the candidates into i<=k and i>=k, and on each side |i-k| becomes a ±(i-k) whose ki-term is constant for a fixed k, leaving a per-i term (p_i+/-i) that a single range-min can summarize."
+      - "…prices are always positive, so two trees halve the search time trivially."
+      - "…a segment tree cannot store negative values."
+    answer: 1
+    explanation: "For i<=k the cost is (p_i - i) + k and for i>=k it is (p_i + i) - k. For a fixed k both ki-terms are constants, so each side reduces to a range minimum over (p_i-/-i); min over two ranges, adjusted by ±k, gives the answer in O(log n)."
+---

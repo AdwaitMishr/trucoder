@@ -1,0 +1,375 @@
+---
+id: distinct-routes
+title: Distinct Routes
+type: content
+difficulty: hard
+order: 118
+tags:
+  - graph
+  - max-flow
+  - edge-disjoint-paths
+  - dinic
+blocks:
+  - type: markdown
+    content: |
+      # Distinct Routes — maximum edge-disjoint paths
+
+      There are `n` rooms and `m` one-way teleporters. Each day you start in
+      room `1`, must reach room `n`, and a teleporter may be used at most once
+      across *all* days. How many days can you play — i.e. how many **edge-
+      disjoint** paths from `1` to `n` are there?
+
+      This is the **maximum edge-disjoint paths** problem, and it is solved by a
+      reduction: give every teleporter capacity `1`, and the **maximum flow**
+      from room `1` to room `n` equals the number of edge-disjoint `s-t` paths
+      that exist.
+
+      ## Why max flow counts edge-disjoint paths
+
+      A flow decomposes into a set of `s-t` paths plus possibly cycles. Because
+      every edge has capacity `1`, each edge lies on at most one unit of flow —
+      so each unit of flow corresponds to a path, and distinct units use
+      disjoint sets of edges. Conversely, any set of `k` edge-disjoint `s-t`
+      paths is itself a valid flow of value `k`. Hence:
+
+      > max flow value = max number of edge-disjoint `s-t` paths.
+
+      (This is Menger's edge version, and it is why we treat max flow as a
+      counting oracle.) Physically, "a teleporter may be used at most once"
+      is exactly a per-edge capacity of one.
+
+      ## Recovering the actual paths
+
+      The problem asks us to *print* the routes, not just count them. After
+      running max flow, we know which original edges carry one unit of flow
+      (their residual forward capacity dropped from `1` to `0`). We then walk
+      from room `1`, greedily following used edges, `k` times — each such walk is
+      one of the `k` edge-disjoint routes.
+
+      :::tip
+      **Interview tip:** "How many edge-disjoint (or vertex-disjoint) paths
+      between s and t" is a classic reduction-to-max-flow question — the word
+      *disjoint* is the signal. The follow-up that separates candidates is being
+      able to **print the paths** by reading the saturated edges off the residual
+      network and tracing them. Vertex-disjoint versions (capacity on vertices
+      instead of edges) are handled by splitting each vertex into `in/out` with a
+      capacity-1 arc — a very common trick.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      A game consists of `n` rooms and `m` teleporters. At the beginning of each
+      day, you start in room `1` and you have to reach room `n`.
+
+      You can use each teleporter at most once during the game. How many days
+      can you play if you choose your routes optimally?
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the number of rooms and
+      teleporters. The rooms are numbered `1, 2, ..., n`.
+
+      After this, there are `m` lines describing the teleporters. Each line has
+      two integers `a` and `b`: there is a teleporter from room `a` to room `b`.
+
+      There are no two teleporters whose starting and ending room are the same.
+
+      **Constraints:** `2 <= n <= 500`, `1 <= m <= 1000`
+
+      ## Output
+
+      First print an integer `k`: the maximum number of days you can play the
+      game. Then, print `k` route descriptions according to the example. You can
+      print any valid solution.
+
+      ## Sample
+
+      **Input:**
+      ```
+      6 7
+      1 2
+      1 3
+      2 6
+      3 4
+      3 5
+      4 6
+      5 6
+      ```
+      **Output:**
+      ```
+      2
+      3
+      1 2 6
+      4
+      1 3 4 6
+      ```
+      (First the day count `2`; then for each route, the length of the route and
+      the sequence of rooms. The two routes are edge-disjoint.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Greedy path removal — not always optimal**
+
+      Repeatedly find an `s-t` path by DFS and delete its edges. Each found
+      path is edge-disjoint from the previous, but `s-t`-path deletion does not
+      always yield the *maximum*; a bad early choice can block two later paths.
+      (This is why we need max flow, not greedy.)
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          map<pair<int,int>,int> gone;
+          vector<pair<int,int>> e(m);
+          for (int i = 0; i < m; i++) { cin >> e[i].first >> e[i].second; e[i].first--; e[i].second--; }
+          vector<vector<int>> adj(n);
+          auto build = [&]{
+              adj.assign(n, {});
+              for (auto &p : e) if (!gone[p]) adj[p.first].push_back(p.second);
+          };
+          vector<vector<int>> routes;
+          while (true) {
+              build();
+              // DFS find any path 1..n
+              vector<int> par(n, -2); par[0] = -1;
+              queue<int> q; q.push(0);
+              while (!q.empty()) {
+                  int v = q.front(); q.pop();
+                  for (int u : adj[v]) if (par[u] == -2) { par[u] = v; q.push(u); }
+              }
+              if (par[n - 1] == -2) break;
+              vector<int> path; for (int v = n - 1; v != -1; v = par[v]) path.push_back(v);
+              reverse(path.begin(), path.end());
+              for (int i = 0; i + 1 < (int)path.size(); i++) gone[{path[i], path[i + 1]}] = 1;
+              routes.push_back(path);
+          }
+          cout << routes.size() << "\n";
+          for (auto &p : routes) { cout << p.size() << "\n"; for (int v : p) cout << v + 1 << " "; cout << "\n"; }
+          return 0;
+      }
+      ```
+
+      *Correct output format, but the *count* can be suboptimal — greedy edge
+      removal has no optimality guarantee, so it is not a valid solution to this
+      problem (it may print fewer days than possible).*
+
+      **② Optimization — max flow counts the days, O(V·E²)**
+
+      Model every teleporter as a capacity-1 directed edge and run **max flow**
+      from `1` to `n`. The flow value `k` is the answer. Edmonds–Karp (BFS
+      shortest augmenting path) is polynomial and prints the correct `k`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      struct Edge { int to, rev; ll cap; };
+      vector<vector<Edge>> g;
+
+      void add_edge(int a, int b, ll c) {
+          g[a].push_back({b, (int)g[b].size(), c});
+          g[b].push_back({a, (int)g[a].size() - 1, 0});
+      }
+
+      ll bfs_augment(int s, int t) {
+          int n = g.size();
+          vector<int> par(n, -1); vector<Edge*> pe(n, 0);
+          queue<int> q; q.push(s); par[s] = s;
+          while (!q.empty()) {
+              int v = q.front(); q.pop();
+              for (auto &e : g[v]) if (par[e.to] < 0 && e.cap > 0) { par[e.to] = v; pe[e.to] = &e; q.push(e.to); }
+          }
+          if (par[t] < 0) return 0;
+          ll f = LLONG_MAX;
+          for (int v = t; v != s; v = par[v]) f = min(f, pe[v]->cap);
+          for (int v = t; v != s; v = par[v]) { pe[v]->cap -= f; g[pe[v]->to][pe[v]->rev].cap += f; }
+          return f;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          g.assign(n, {});
+          for (int i = 0; i < m; i++) { int a, b; cin >> a >> b; a--; b--; add_edge(a, b, 1); }
+          ll flow = 0;
+          while (ll f = bfs_augment(0, n - 1)) flow += f;   // == # edge-disjoint paths
+          cout << flow << "\n";                             // prints k but not the routes
+          return 0;
+      }
+      ```
+
+      *`O(V·E²)` returns `k` but not yet the route lists.*
+
+      **③ Further optimization — Dinic + trace the used edges (full answer)**
+
+      Dinic finds `k` fast; then we read off which original edges carry one unit
+      of flow and walk them to print the `k` routes. This is the optimal tier we
+      compile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      struct Edge { int to, rev; ll cap; };
+      vector<vector<Edge>> g;
+      vector<int> level, it;
+
+      int add_edge(int a, int b, ll c) {
+          g[a].push_back({b, (int)g[b].size(), c});
+          g[b].push_back({a, (int)g[a].size() - 1, 0});
+          return (int)g[a].size() - 1;      // index of the forward arc in g[a]
+      }
+
+      bool bfs(int s, int t) {
+          level.assign(g.size(), -1);
+          queue<int> q; level[s] = 0; q.push(s);
+          while (!q.empty()) {
+              int v = q.front(); q.pop();
+              for (auto &e : g[v])
+                  if (e.cap > 0 && level[e.to] < 0) { level[e.to] = level[v] + 1; q.push(e.to); }
+          }
+          return level[t] >= 0;
+      }
+
+      ll dfs(int v, int t, ll f) {
+          if (v == t) return f;
+          for (int &i = it[v]; i < (int)g[v].size(); i++) {
+              Edge &e = g[v][i];
+              if (e.cap > 0 && level[e.to] == level[v] + 1) {
+                  ll d = dfs(e.to, t, min(f, e.cap));
+                  if (d > 0) { e.cap -= d; g[e.to][e.rev].cap += d; return d; }
+              }
+          }
+          return 0;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          g.assign(n, {});
+          vector<int> u(m), v(m), fwdIdx(m);
+          for (int i = 0; i < m; i++) {
+              int a, b; cin >> a >> b; a--; b--;
+              u[i] = a; v[i] = b;
+              fwdIdx[i] = add_edge(a, b, 1);
+          }
+          int s = 0, t = n - 1;
+          ll INF = (ll)4e18, flow = 0;
+          while (bfs(s, t)) {
+              it.assign(n, 0);
+              while (ll f = dfs(s, t, INF)) flow += f;
+          }
+          int k = (int)flow;
+
+          cout << k << "\n";
+          if (k == 0) return 0;
+
+          // which original edges carry 1 unit of flow?
+          vector<vector<int>> pathAdj(n);
+          for (int i = 0; i < m; i++) {
+              if (g[u[i]][fwdIdx[i]].cap == 0)   // forward arc fully used => carries 1 unit
+                  pathAdj[u[i]].push_back(v[i]);
+          }
+
+          for (int day = 0; day < k; day++) {
+              vector<int> path; int cur = s; path.push_back(cur);
+              while (cur != t) {
+                  int nxt = pathAdj[cur].back();   // take a used edge
+                  pathAdj[cur].pop_back();
+                  path.push_back(nxt);
+                  cur = nxt;
+              }
+              cout << path.size() << "\n";
+              for (int x : path) cout << x + 1 << " ";
+              cout << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      *`O(V²E)` flow plus `O(k · n)` tracing; `O(V + E)` space. This is the
+      optimal tier.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      The subtle part is **identifying the used edges reliably**; the Dinic
+      residual representation hides the original edge indices, so we associate
+      each original edge with its search in `g[u[i]]`:
+
+      - **Build.** Each teleporter becomes `add_edge(a, b, 1)` — a directed
+        arc of capacity 1 with a zero-capacity reverse residual. The "at most
+        once" rule is exactly the unit capacity.
+
+      - **Flow.** Dinic pushes as much as possible; `flow` is the max edge-
+        disjoint path count `k`, printed first. (Max-flow/min-cut guarantees it
+        is maximal.)
+
+      - **Used-edge detection.** In `g[u[i]]`, find the forward arc pointing to
+        `v[i]`. Its residual capacity started at `1` and is `0` iff exactly one
+        unit of flow crossed it — i.e. the teleporter is on some route. Those
+        forward arcs are collected into `pathAdj`.
+
+      - **Tracing.** To print `k` routes we walk from `s`, at each step taking
+        one edge from `pathAdj[cur]` (popping it so a used edge is never
+        reused). Each walk is an `s-t` path; running it `k` times with disjoint
+        edge sets yields exactly `k` edge-disjoint routes, which is the required
+        output. Because the used edges form exactly `k` edge-disjoint `s-t`
+        paths, each walk terminates at `t`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 6`, teleporters `1->2, 1->3, 2->6, 3->4, 3->5,
+      4->6, 5->6` (source 1, sink 6), all capacity 1.
+
+      **Max flow.** Augmenting paths (in some order):
+      - `1 -> 3 -> 4 -> 6` (edges `1-3, 3-4, 4-6`) — flow 1,
+      - `1 -> 2 -> 6` (edges `1-2, 2-6`) — flow 2.
+
+      No further augmenting path exists (edge `3-5` and `5-6` remain but both
+      `1-2` and `1-3` are saturated), so `k = 2`.
+
+      **Used edges** (forward residual now 0): `1->2, 1->3, 2->6, 3->4, 4->6`.
+
+      **Tracing.** From `s=1`, `pathAdj[1] = {2, 3}`:
+      - Take `1 -> 2 -> 6`: route `1 2 6` (3 rooms).
+      - Take `1 -> 3 -> 4 -> 6`: route `1 3 4 6` (4 rooms).
+
+      Printed output:
+      ```
+      2
+      3
+      1 2 6
+      4
+      1 3 4 6
+      ```
+      Expected (sample) — `2`, routes `1 2 6` and `1 3 4 6`. Actual — identical.
+      Match. The two routes share no teleporter, and 2 is maximal (both `1-2` and
+      `1-3` would need to be reused for a third).
+  - type: flowchart
+    title: "Edge-disjoint paths via max flow"
+    nodes: ["model each teleporter with capacity 1", "Dinic max flow 1 -> n", "flow value k", "find arcs with residual cap 0 (used)", "walk from s k times along used edges", "print day count + k routes"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "Walking the used (saturated) edges once per unit of flow recovers valid edge-disjoint routes because…"
+    options:
+      - "…every saturated edge appears on every route, so the routes trivially share no edges."
+      - "…the directed edges with residual capacity 0 each carry exactly one flow unit, so they decompose into exactly k pairwise edge-disjoint s-t trajectories, and the greedy walk extracts them one by one without reuse."
+      - "…the residual network has no edges leaving the sink."
+      - "…walking computes the total flow value by length measurement."
+    answer: 1
+    explanation: "The max-flow/min-cut decomposition guarantees that the one unit of flow on each saturated edge traces exactly k edge-disjoint s-t paths. By popping a used edge as we traverse it, each walk gets a fresh, disjoint edge set, so after k walks we always reach t and describe k valid routes — the answer to the problem."
+---

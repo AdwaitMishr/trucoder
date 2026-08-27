@@ -1,0 +1,363 @@
+---
+id: bus-companies
+title: "Bus Companies"
+type: content
+difficulty: medium
+order: 317
+tags:
+  - advanced-graph
+  - shortest-paths
+  - dijkstra
+  - virtual-nodes
+blocks:
+  - type: markdown
+    content: |
+      # Bus Companies — shortest paths with a ``ticket'', modelled by virtual nodes
+
+      We want the cheapest travel cost from city `1` (Syrjälä) to every other
+      city. A **bus company** sells tickets at a fixed price and lets you ride
+      between *any two* of the cities it operates in. So one company's city set
+      behaves like a **clique** (every pair is an edge) where every edge has the
+      same weight `c_i`.
+
+      The trap: a clique on `k` cities has `k(k-1)/2` edges, and with `n <= 10^5`
+      cities the sum of all `k` can be `2 * 10^5` — expanding every company into a
+      clique can produce on the order of `10^10` edges. We need a way to encode
+      every edge of a clique with only `O(k)` edges.
+
+      The fix is a **virtual node** (a.k.a. *transit*/*portal* node): for each
+      company `i` create one auxiliary node `V_i`, connect every city `x` in the
+      company to `V_i` **into the company** with weight `c_i` (``buy a ticket''),
+      and connect `V_i` back to every city `x` **coming out** with weight `0`
+      (``step off the bus at any of this company's cities''). Then:
+
+      ```
+      cost( x -> y via company i ) = c_i (buy) + 0 (alight) = c_i
+      ```
+
+      which is exactly the ticket price — and it applies between *any* two cities
+      `x, y` of the company using only `2k` edges instead of `k^2`.
+
+      Because all weights are non-negative we run **Dijkstra** from city `1` over
+      the `n + m` nodes (cities + virtual company nodes). The `m` company nodes
+      are just ordinary graph nodes in that run.
+
+      **Time:** `O((n + m + sum k) log(n + m))`, **Space:** `O(n + m + sum k)`.
+
+      :::tip
+      **Interview tip:** Virtual/portal nodes are the standard trick for turning
+      a clique or a many-to-many "group" relationship into a sparse graph. Anytime
+      you see "you can jump between any two members of a set at a fixed cost",
+      add one helper node with `cost in` and `0` out. It also shows up in 0/1-BFS
+      (bucket nodes), grid BFS shortcuts, and layer-graph problems. The giveaway
+      here is weights are non-negative → Dijkstra; had every `c` been 0/1 the same
+      construction would run as 0/1-BFS.
+      :::
+  - type: markdown
+    content: |
+      # Question
+
+      There are `n` cities and `m` bus companies. Each bus company operates in
+      specific cities and sells tickets for a specific price. Buying a ticket
+      from a bus company allows you to travel between any two cities that the
+      company operates in.
+
+      Determine the cost of the cheapest route from Syrjälä to every city.
+
+      **Input**
+
+      The first line has two integers `n` and `m`: the number of cities and bus
+      companies. The cities are numbered `1, 2, ..., n`, and city `1` is Syrjälä.
+
+      The next line has `m` integers `c_1, c_2, ..., c_m`: the ticket costs for
+      each bus company.
+
+      After that, there are `m` pairs of lines describing the cities for each bus
+      company. The first line of each pair has a single integer `k`: the number
+      of cities the bus company operates in. The second line of each pair has `k`
+      distinct integers `a_1, a_2, ..., a_k`: the cities the bus company operates
+      in.
+
+      You can assume that it is possible to travel from Syrjälä to all other
+      cities.
+
+      **Output**
+
+      Print `n` integers: the cheapest route costs from Syrjälä to cities
+      `1, 2, ..., n`.
+
+      **Constraints**
+
+      - `1 <= n, m <= 10^5`
+      - `1 <= c <= 10^9`
+      - `2 <= k <= n`
+      - `1 <= a <= n`
+      - the sum of all `k` is at most `2 * 10^5`
+
+      **Example**
+
+      Input:
+      ```
+      5 3
+      4 3 2
+      3
+      1 4 3
+      2
+      5 1
+      4
+      2 3 4 5
+      ```
+      Output:
+      ```
+      0 5 4 4 3
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — expand each company into a clique + Dijkstra, O(sum k^2)**
+
+      For every company, add an edge of weight `c_i` between every pair of cities
+      it operates in, then run Dijkstra. Correct (the clique is precisely "you may
+      ride between any two of these cities for `c_i`"), but a single large company
+      already has ~`k^2/2` edges. Summed over companies this is the square of the
+      input size — up to `~10^10` edges at the limits, which nothing in memory or
+      time can handle.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; if(!(cin>>n>>m)) return 0;
+          vector<int> cost(m);
+          for(int i=0;i<m;i++) cin>>cost[i];
+          vector<vector<pair<long long,int>>> adj(n);
+          for(int i=0;i<m;i++){
+              int k; cin>>k;
+              vector<int> cities(k);
+              for(int j=0;j<k;j++){ cin>>cities[j]; --cities[j]; }
+              for(int a=0;a<k;a++) for(int b=a+1;b<k;b++){   // k(k-1)/2 edges
+                  adj[cities[a]].push_back({cost[i],cities[b]});
+                  adj[cities[b]].push_back({cost[i],cities[a]});
+              }
+          }
+          const long long INF=4e18;
+          vector<long long> dist(n,INF);
+          priority_queue<pair<long long,int>,vector<pair<long long,int>>,greater<>> pq;
+          dist[0]=0; pq.push({0,0});
+          while(!pq.empty()){
+              auto [d,u]=pq.top(); pq.pop();
+              if(d!=dist[u]) continue;
+              for(auto [w,v]:adj[u]) if(dist[v]>d+w){ dist[v]=d+w; pq.push({dist[v],v}); }
+          }
+          for(int i=0;i<n;i++){ if(i) cout<<' '; cout<<dist[i]; } cout<<"\n";
+          return 0;
+      }
+      ```
+      *`O(sum_i k_i^2 · log n)` memory and time — blows up on the real constraints.*
+
+      **② Optimization — virtual company node + Dijkstra, O((n+m+sum k) log(n+m))**
+
+      One auxiliary node per company; `city -> V_i` costs `c_i`, `V_i -> city`
+      costs `0`. A single Dijkstra over `n + m` nodes gives every answer. This is
+      the intended solution.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; if(!(cin>>n>>m)) return 0;
+          vector<int> cost(m);
+          for(int i=0;i<m;i++) cin>>cost[i];
+          // Nodes: cities 0..n-1, virtual company nodes n..n+m-1.
+          vector<vector<pair<int,int>>> adj(n+m);
+          for(int i=0;i<m;i++){
+              int k; cin>>k;
+              for(int j=0;j<k;j++){
+                  int a; cin>>a; --a;
+                  adj[a].push_back({n+i, cost[i]});    // buy a ticket at city a
+                  adj[n+i].push_back({a, 0});           // alight at any member city
+              }
+          }
+          const long long INF=4e18;
+          vector<long long> dist(n+m,INF);
+          priority_queue<pair<long long,int>,vector<pair<long long,int>>,greater<>> pq;
+          dist[0]=0; pq.push({0,0});
+          while(!pq.empty()){
+              auto [d,u]=pq.top(); pq.pop();
+              if(d!=dist[u]) continue;
+              for(auto [v,w]:adj[u]) if(dist[v]>d+w){ dist[v]=d+w; pq.push({dist[v],v}); }
+          }
+          for(int i=0;i<n;i++){ if(i) cout<<' '; cout<<dist[i]; } cout<<"\n";
+          return 0;
+      }
+      ```
+      *`O((n + m + sum k) log(n + m))` time, `O(n + m + sum k)` space — the
+      intended solution.*
+
+      **③ Further optimization — activate each company once (no virtual nodes)**
+
+      Notice a company never needs to be "entered" more than once: the first time
+      *any* of its cities is settled, that city has the minimal dist among the
+      company's members, so relaxing the whole company from it is optimal; any
+      later entry only gives `>=` values. So keep an index `company -> cities`
+      and a `done` flag, and when a city is popped, relax all cities of each of
+      its not-yet-done companies in one batch. Saves the `m` virtual nodes and
+      most duplicate heap pushes.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; if(!(cin>>n>>m)) return 0;
+          vector<int> cost(m);
+          for(int i=0;i<m;i++) cin>>cost[i];
+          vector<vector<int>> members(m), belongs(n);
+          for(int i=0;i<m;i++){
+              int k; cin>>k;
+              members[i].resize(k);
+              for(int j=0;j<k;j++){ cin>>members[i][j]; --members[i][j]; belongs[members[i][j]].push_back(i); }
+          }
+          const long long INF=4e18;
+          vector<long long> dist(n,INF);
+          vector<char> companyDone(m,0);
+          priority_queue<pair<long long,int>,vector<pair<long long,int>>,greater<>> pq;
+          dist[0]=0; pq.push({0,0});
+          while(!pq.empty()){
+              auto [d,u]=pq.top(); pq.pop();
+              if(d!=dist[u]) continue;
+              for(int ci : belongs[u]){
+                  if(companyDone[ci]) continue;      // already entered this company
+                  companyDone[ci]=1;
+                  for(int v : members[ci]){
+                      long long nd=d+cost[ci];
+                      if(dist[v]>nd){ dist[v]=nd; pq.push({nd,v}); }
+                  }
+              }
+          }
+          for(int i=0;i<n;i++){ if(i) cout<<' '; cout<<dist[i]; } cout<<"\n";
+          return 0;
+      }
+      ```
+      *Same `O(sum k)` relaxation work, fewer nodes and heap operations.*
+      *(Correct because the first-settled member of a company has the minimum
+      distance of the whole set, so it is the cheapest possible entry point.)*
+
+      **④ Alternative algorithm — same virtual-node graph, solved with SPFA**
+
+      If you don't want to reason about heap order, the same `n+m`-node graph can
+      be solved by **SPFA** (Bellman-Ford with a queue), which is a correct
+      shortest-path method for non-negative weights. It is simpler to state but
+      can be slower in the worst case, so at these limits Dijkstra (tier ②) is the
+      one to submit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; if(!(cin>>n>>m)) return 0;
+          vector<int> cost(m);
+          for(int i=0;i<m;i++) cin>>cost[i];
+          vector<vector<pair<int,long long>>> adj(n+m);            // cities + companies
+          for(int i=0;i<m;i++){
+              int k; cin>>k;
+              for(int j=0;j<k;j++){
+                  int a; cin>>a; --a;
+                  adj[a].push_back({n+i, cost[i]});
+                  adj[n+i].push_back({a, 0});
+              }
+          }
+          const long long INF=4e18;
+          vector<long long> dist(n+m,INF);
+          vector<char> inq(n+m,0);
+          deque<int> q;
+          dist[0]=0; q.push_back(0); inq[0]=1;
+          while(!q.empty()){
+              int u=q.front(); q.pop_front(); inq[u]=0;
+              for(auto [v,w]:adj[u]) if(dist[v]>dist[u]+w){
+                  dist[v]=dist[u]+w;
+                  if(!inq[v]){ inq[v]=1; q.push_back(v); }
+              }
+          }
+          for(int i=0;i<n;i++){ if(i) cout<<' '; cout<<dist[i]; } cout<<"\n";
+          return 0;
+      }
+      ```
+      *Worst case `O((n+m+sum k) * (n+m))` on pathological inputs — correct but
+      riskier than Dijkstra at scale.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      Looking at the `O((n+m+sum k) log(n+m))` virtual-node solution:
+
+      - **Node numbering** — cities occupy `0..n-1`, virtual company nodes `n..n+m-1`.
+        A clean way to keep one `dist[]` for both kinds of nodes.
+      - **`adj[a].push_back({n+i, cost[i]})`** — the "buy a ticket at city `a`"
+        edge. If you have reached `a` with cost `d`, you may spend `c_i` to get
+        onto company `i`'s network (the virtual node).
+      - **`adj[n+i].push_back({a, 0})`** — the "alight" edge. From the company's
+        virtual node you step off at *any* member city `a` for free, which is what
+        "travel between any two cities the company operates in" really means.
+      - **Why two edges per city pair is enough** — `x -> V_i -> y` has total
+        `c_i + 0 = c_i`, identical to adding the direct clique edge `x-y`; but we
+        wrote `2k` edges instead of `k(k-1)/2`, so total edges stay `O(sum k)`.
+      - **Dijkstra lazily deletes** — popping a node whose `d != dist[u]` is an
+        old entry; the `0`-weight alight edges mean one company pop can immediately
+        improve several cities, which the heap propagates normally.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Sample:** `n = 5`, `m = 3`, costs `[4, 3, 2]`.
+
+      - Company A: price 4, cities `{1,4,3}`  → virtual node `V_A`
+      - Company B: price 3, cities `{5,1}`    → virtual node `V_B`
+      - Company C: price 2, cities `{2,3,4,5}`→ virtual node `V_C`
+
+      Dijkstra from city `1` (dist `0`), list of finalized distances:
+
+      ```
+      pop (1,0)  -> buy B (cost 3):  V_B = 3
+                  -> buy A (cost 4):  V_A = 4
+      pop (V_B,3)-> alight: city 5 = 3
+      pop (V_A,4)-> alight: city 3 = 4, city 4 = 4
+      pop (5,3)  -> buy C (cost 2):  V_C = 3+2 = 5
+      pop (V_C,5)-> alight: city 2 = 5, city 3 keeps min(4,5)=4,
+                             city 4 keeps min(4,5)=4, city 5 keeps 3
+      pop (3,4)  -> buy C again: V_C = 4+2 = 6 (no better, 5 already)
+      ```
+
+      Final city distances:
+
+      ```
+      city 1 = 0, city 2 = 5, city 3 = 4, city 4 = 4, city 5 = 3
+      ```
+
+      Output:
+      ```
+      0 5 4 4 3
+      ```
+      which matches the expected output exactly ✔. The cheapest route to city 2
+      is `1 --B(3)--> 5 --C(2)--> 2`, total `5`.
+  - type: flowchart
+    title: "Cheapest routes with virtual company nodes"
+    nodes: ["one virtual node per company", "city -> V_i : c_i (buy)", "V_i -> city : 0 (alight)", "Dijkstra from city 1 over n+m nodes", "dist[] = cheapest route to each city"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+  - type: mcq
+    prompt: "Each bus company's set of cities is replaced in the graph by a virtual node. What is the total weight of the path from city x to city y that both belong to company i (with ticket price c_i)?"
+    options:
+      - "c_i (a c_i edge into the node, then a 0 edge out)."
+      - "0, because both cities are in the same company."
+      - "2 * c_i, because you pay for an inward and an outward edge."
+      - "c_i^2, the square of the ticket price."
+    answer: 0
+    explanation: "The construction adds one edge of weight c_i from each city into the company node (buying the ticket) and one edge of weight 0 from the company node back to each city (alighting). So travelling x -> V_i -> y costs c_i + 0 = c_i, which matches the real rule ``a ticket lets you travel between any two cities the company operates in'' while using only 2k edges instead of a k(k-1)/2 clique."

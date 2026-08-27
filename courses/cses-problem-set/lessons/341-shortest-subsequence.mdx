@@ -1,0 +1,174 @@
+---
+id: shortest-subsequence
+title: "Shortest Non-Subsequence"
+difficulty: easy
+order: 341
+tags:
+  - greedy
+  - strings
+  - subsequence
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — the shortest string you cannot find as a subsequence
+
+      A string `T` is a **subsequence** of `s` if you can pick characters of
+      `s` in order (not necessarily consecutively) to spell `T`. Any string
+      that is not a subsequence is called a **non-subsequence**.
+
+      Given a binary string `s` we want the **shortest binary string that is
+      not a subsequence** of `s`. A short greedy nails the length.
+
+      **Segments that "complete" the alphabet.** Scan `s` left to right,
+      tracking which of the characters `0` and `1` you have seen since the last
+      cut. The moment you have seen *both*, make a cut: that piece is a
+      **complete segment**. Reset the seen-set and keep going.
+
+      **Why the answer is one more than the count of segments.** Suppose you
+      formed `c` complete segments `B1..Bc`. Then *any* string of length `c`
+      is a subsequence — match its i-th character inside `Bi`, which contains
+      both characters. But after those `c` segments, the leftover tail of `s`
+      contains at most one distinct character, so a string of length `c+1`
+      (built from a character that the tail lacks) can never be matched all the
+      way. Hence the shortest non-subsequence has length exactly `c+1`.
+
+      **Time:** `O(n)` for one scan. **Space:** `O(1)`.
+
+      :::tip
+      **Interview tip:** "Shortest string not a subsequence" is a compact
+      greedy favorite: count how many times the alphabet is *completed*, then
+      add one. It generalizes directly — for an alphabet of `k` symbols use a
+      `bool` array of size `k` and reset whenever all `k` are seen.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given a binary string `s`, find the length of the **shortest binary
+      string** (a string over the characters `0` and `1`) that is **not** a
+      subsequence of `s`.
+
+      **Input.** The only input line contains the binary string `s`.
+
+      **Output.** Print the length of the shortest binary string that is not a
+      subsequence of `s`.
+
+      **Constraints.**
+      - `1 ≤ |s| ≤ 10^6`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      001101
+      ```
+
+      **Output:**
+      ```
+      3
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2^L · L · n).** For each candidate length `L`
+      starting at `1`, enumerate every binary string of length `L` (`2^L` of
+      them) and test each with a greedy pointer to see whether it is a
+      subsequence. The first length possessing a string that is not a
+      subsequence is the answer. Correct, but `2^L` explodes immediately.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      bool isSubseq(const string& t, const string& s){
+          int p=0; for(char c:s){ if(p<(int)t.size()&&c==t[p]) p++; }
+          return p==(int)t.size();
+      }
+      int main(){ string s; cin>>s; int n=s.size();
+          for(int L=1; L<=n+1; L++){
+              bool found=false;
+              for(int mask=0; mask<(1<<L); mask++){
+                  string t; for(int b=0;b<L;b++) t+=(mask>>b)&1?'1':'0';
+                  if(!isSubseq(t,s)){ found=true; break; }
+              }
+              if(found){ cout<<L<<"\n"; return 0; }
+          }
+          return 0; }
+      ```
+      *Complexity: `O(2^L·L·n)` where `L` is the answer — only usable for tiny strings.*
+
+      **② Optimization — O(n) greedy segment count (`|s| ≤ 10^6`).** Count the
+      complete segments (pieces containing both `0` and `1`), then answer
+      `segments + 1`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; cin >> s;
+          bool seen0=false, seen1=false;
+          int blocks=0;
+          for(char c : s){
+              if(c=='0') seen0=true; else seen1=true;
+              if(seen0 && seen1){ blocks++; seen0=seen1=false; }
+          }
+          cout << blocks+1 << "\n";
+          return 0;
+      }
+      ```
+      *Complexity: `O(n)` time, `O(1)` space — instant for `n = 10^6`.*
+
+      **④ Alternative — k-letter alphabet.** The same greedy generalizes. For
+      strings over `k` symbols, track seen letters in a `bool` array of size
+      `k`; each time the count of seen letters hits `k`, cut and reset. The
+      answer stays `segments + 1`. The single-symbol case (`s` all zeros) gives
+      `segments = 0`, answer `1` — and indeed `"1"` is not a subsequence.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `answer(s)` — O(n). Key lines:
+
+      1. **`blocks`** — how many complete segments we have cut. `seen0`/`seen1`
+         are reset to false right after each cut so the next segment starts clean.
+      2. **The `+1`.** After `blocks` complete segments, the remaining tail has
+         at most one distinct character, so we can always build a
+         `blocks + 1`-length non-subsequence — hence the answer `blocks + 1`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `s = 001101`.
+
+      Scan left to right:
+      - `0` → seen only `0`.
+      - `0` → still only `0`.
+      - `1` → seen both → **cut, `blocks = 1`**, reset.
+      - `1` → seen only `1`.
+      - `0` → seen both → **cut, `blocks = 2`**, reset.
+      - `1` → seen only `1` (leftover tail).
+
+      Final `blocks = 2`, so the answer is `2 + 1 = 3`. ✓ matches the sample.
+
+      **Why can't it be 2?** Every binary string of length 2 is a subsequence:
+      `"00"` → positions 1,2; `"01"` → 1,3; `"10"` → 3,4; `"11"` → 4,5. But a
+      length-3 string such as `"100"` is **not** (there are only two `0`s, both
+      before the second `1`), so the true minimum is exactly 3.
+
+  - type: mcq
+    prompt: "Why is the shortest non-subsequence length of a binary string equal to (number of complete segments) + 1?"
+    options:
+      - "Because any string of length equal to the segment count matches one character per segment, while a length-one-longer string can exhaust the tail, which holds at most one character type."
+      - "Because every binary string of any length is always a subsequence of s."
+      - "Because the answer equals the total number of characters in s."
+      - "Because only strings starting with the last character of s are non-subsequences."
+    answer: 0
+    explanation: "Each complete segment `B_i` contains both characters, so the i-th character of any length-`c` string can be matched inside `B_i` — no length-`c` string is a non-subsequence. After `c` segments the leftover tail has at most one distinct character, so some string of length `c+1` cannot be matched, making `c+1` the exact minimum."
+
+type: content
+---

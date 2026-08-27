@@ -1,0 +1,208 @@
+---
+id: subarray-sums-i
+title: "Subarray Sums I"
+difficulty: easy
+order: 53
+tags:
+  - sorting-searching
+  - sliding-window
+  - two-pointers
+  - prefix-sum
+blocks:
+  - type: markdown
+    content: |
+      # Subarray Sums I — sliding window on a positive array
+
+      A **subarray** is a contiguous slice `a[l..r]` of an array. This problem
+      asks: out of all `n(n+1)/2` subarrays of an array of **positive**
+      integers, how many sum to exactly `x`?
+
+      ## When you reach for a sliding window
+
+      The array values are all **positive** (`a_i >= 1`). That single fact
+      makes a **sliding window** (two pointers) the natural tool: as you extend
+      the window to the right the running sum can only grow, so whenever it
+      overshoots `x` you can confidently shrink from the left. No element can
+      be "negative" and quietly lower the sum later.
+
+      ## Why it works
+
+      For each right end `r` keep a window `[l, r]` whose sum is as close to
+      `x` as possible **without exceeding it**. Because every value is
+      positive, the window sum is monotone in `l`: moving `l` right only
+      decreases the sum. The loop is therefore deterministic:
+
+      - add `a[r]` to the running sum,
+      - while `sum > x`, drop `a[l]` and move `l` up,
+      - if `sum == x`, the window `[l, r]` is the *unique* subarray ending at
+        `r` with sum `x`, so count one.
+
+      Positivity guarantees uniqueness of the left end for each right end,
+      which is exactly why one pass suffices.
+
+      **Time:** O(n), **Space:** O(1). The running sum can reach
+      `n * 10^9 = 2*10^14`, so use `long long`.
+
+      :::tip
+      **Interview tip:** "positive array + subarray sum equals a target" is the
+      canonical trigger for the two-pointer sliding window, and the expected
+      answer is O(n) time with O(1) space. If the values can be negative the
+      sliding window breaks (removing an element might *raise* the sum) and you
+      must switch to prefix sums + hashing — that is the very next lesson.
+      Naming that trade-off explicitly is a strong signal.
+      :::
+  - type: markdown
+    content: |
+      # Question — Subarray Sums I
+
+      Given an array of `n` positive integers, your task is to count the number
+      of subarrays having sum `x`.
+
+      **Input**
+
+      The first input line has two integers `n` and `x`: the size of the array
+      and the target sum.
+
+      The next line has `n` integers `a_1, a_2, ..., a_n`: the contents of the
+      array.
+
+      **Output**
+
+      Print one integer: the number of subarrays.
+
+      **Constraints**
+
+      - `1 <= n <= 2*10^5`
+      - `1 <= x, a_i <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 7
+      2 4 1 2 7
+      ```
+
+      Output:
+
+      ```
+      3
+      ```
+
+      (The three subarrays are `[2,4,1]`, `[4,1,2]`, and `[7]`.)
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n²) time, O(1) space**
+
+      Enumerate every start `l` and every end `r`, accumulate the sum, and count
+      matches. This is correct but at `n = 2*10^5` the ~`4*10^10` inner steps
+      are far too slow for a 1-second limit.
+
+      ```cpp
+      long long brute(int n, long long x, const vector<long long>& a) {
+          long long count = 0;
+          for (int l = 0; l < n; ++l) {
+              long long s = 0;
+              for (int r = l; r < n; ++r) {
+                  s += a[r];
+                  if (s == x) count++;
+                  if (s > x) break;      // safe to stop: all values positive
+              }
+          }
+          return count;
+      }
+      ```
+
+      **② Optimisation — sliding window, O(n) time, O(1) space**
+
+      Because every `a_i > 0`, concatenating to the right raises the sum and
+      removing from the left lowers it. A single pass therefore finds, for each
+      right end, the unique left end that makes the window sum exactly `x`.
+
+      ```cpp
+      long long solve(int n, long long x, const vector<long long>& a) {
+          long long count = 0, sum = 0;
+          int l = 0;
+          for (int r = 0; r < n; ++r) {
+              sum += a[r];                 // extend the window to the right
+              while (sum > x) sum -= a[l++]; // shrink from the left while too big
+              if (sum == x) count++;       // unique subarray ending at r sums to x
+          }
+          return count;
+      }
+      ```
+
+      **③ Alternative — prefix sums + binary search, O(n log n)**
+
+      Still cheap, and a good habit to know: with all values positive the
+      prefix sums `P[0..n]` are strictly increasing, so for each start `i` you
+      can binary-search for the end `j` with `P[j] - P[i] = x`.
+
+      ```cpp
+      long long alt(int n, long long x, const vector<long long>& a) {
+          vector<long long> P(n + 1, 0);
+          for (int i = 0; i < n; ++i) P[i + 1] = P[i] + a[i];
+          long long count = 0;
+          for (int i = 0; i < n; ++i) {
+              // need P[j] = P[i] + x with j > i; P is strictly increasing
+              auto it = lower_bound(P.begin() + i + 1, P.end(), P[i] + x);
+              if (it != P.end() && *it == P[i] + x) count++;
+          }
+          return count;
+      }
+      ```
+
+      **④ Further optimisation** — there is nothing faster than O(n) here.
+      A prefix-sum + hashmap counting trick (O(n)) also solves it and is the
+      approach that survives negative values — see Subarray Sums II next. For
+      the all-positive case the sliding window in ② is the cleanest and uses
+      O(1) space, so treat it as the intended solution.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The intended solution is the sliding window in **②**:
+
+      - `sum` holds the running sum of the current window `[l, r]`.
+      - After adding `a[r]`, the `while (sum > x)` loop removes elements from
+        the left (`sum -= a[l++]`) until the window no longer overshoots. This
+        is exactly where positivity matters: dropping the left element can only
+        reduce the sum, so once `sum <= x` it stays below until we pull a new
+        element in on the right.
+      - When `sum == x` we have found the unique subarray ending at `r` with
+        sum `x` and increment `count`.
+
+      Each element enters the window exactly once (as `a[r]`) and leaves
+      exactly once (as `a[l]`), so the total amount of work is two passes'
+      worth of increments and decrements — O(n). Use `long long` for `sum`
+      because the window can momentarily hold every element (`n * 10^9`).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(5, 7, [2,4,1,2,7])`:
+
+      | r | add a[r] | sum | while sum > 7 | sum after | count |
+      |---|----------|-----|---------------|-----------|-------|
+      | 0 | 2 | 2 | no | 2 | 0 |
+      | 1 | 4 | 6 | no | 6 | 0 |
+      | 2 | 1 | 7 | no | 7 | 1 |
+      | 3 | 2 | 9 | drop a[0]=2 | 7 | 2 |
+      | 4 | 7 | 14 | drop a[1]=4, a[2]=1, a[3]=2 | 7 | 3 |
+
+      Return `3`, matching the sample output. The three counted windows are
+      `[2,4,1]` (indices 0–2), `[4,1,2]` (1–3) and `[7]` (index 4).
+  - type: mcq
+    prompt: 'Why does the sliding window work here but fail on an array that may contain negative numbers?'
+    options:
+      - 'Because with negatives the array can first be sorted to make it positive'
+      - 'Because with all-positive values, shrinking from the left can only decrease the sum, so overshoot is reversed monotonically; with negatives a shrink could instead increase the sum'
+      - 'Because the sliding window is always the only correct approach regardless of the values'
+      - 'Because negative values make prefix sums undefined'
+    answer: 1
+    explanation: 'Positivity guarantees monotonicity: adding on the right raises the sum and removing on the left lowers it, which is precisely what the two-pointer shrink relies on. With negatives, removing an element could raise the sum so the window oscillates and no unique left end exists — you must switch to prefix sums plus a hashmap.'
+type: content
+---

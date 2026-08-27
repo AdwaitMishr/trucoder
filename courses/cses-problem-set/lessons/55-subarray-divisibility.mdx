@@ -1,0 +1,218 @@
+---
+id: subarray-divisibility
+title: "Subarray Divisibility"
+difficulty: medium
+order: 55
+tags:
+  - sorting-searching
+  - prefix-sum
+  - modular-arithmetic
+  - hashmap
+blocks:
+  - type: markdown
+    content: |
+      # Subarray Divisibility — counting by prefix remainders
+
+      We must count subarrays whose **sum is divisible by `n`**. As in Subarray
+      Sums II, any subarray sum is a difference of two prefix sums:
+
+      ```
+      sum(a[l..r]) = P[r+1] - P[l]
+      ```
+
+      The divisibility condition turns into a congruence. Let
+      `pref = prefix sum mod n` (kept in `[0, n)`). Then:
+
+      ```
+      P[r+1] - P[l]  divisible by n
+        <=>  P[r+1] ≡ P[l]  (mod n)
+        <=>  (P[r+1] mod n) == (P[l] mod n)
+      ```
+
+      So a subarray has a sum divisible by `n` **exactly when its two endpoint
+      prefixes leave the same remainder** when divided by `n`.
+
+      ## Counting pairs with equal remainder
+
+      Sweep the array once, normalising each running prefix into its remainder
+      `rem = ((pref mod n) + n) mod n` (the `+n` handles negative elements).
+      Maintain a bucket `cnt[rem]` = how many previous prefixes had that
+      remainder. Each time we re-encounter a remainder `rem`, every earlier
+      prefix with the same remainder pairs with the current one to form a valid
+      subarray — so we add `cnt[rem]` to the answer, then increment the bucket.
+
+      Seed `cnt[0] = 1` for the empty prefix, which models subarrays that start
+      at index 0.
+
+      **Time:** O(n), **Space:** O(n). The bucket has at most `n` entries
+      because remainders live in `{0, ..., n-1}`.
+
+      :::tip
+      **Interview tip:** "number of subarrays with sum divisible by `m`" (or
+      sum ≢ some constant mod `m`) is a recurring pattern that reduces to
+      counting prefix remainders — the same hashing mindset as subarray sum
+      equals k. The two moves interviewers watch for are normalising negative
+      remainders (`(rem % m + m) % m`) and seeding the empty prefix `cnt[0] = 1`
+      so subarrays beginning at index 0 are not lost.
+      :::
+  - type: markdown
+    content: |
+      # Question — Subarray Divisibility
+
+      Given an array of `n` integers, your task is to count the number of
+      subarrays where the **sum of values is divisible by `n`**.
+
+      **Input**
+
+      The first line has an integer `n`: the size of the array.
+
+      The next line has `n` integers `a_1, a_2, ..., a_n`: the contents of the
+      array.
+
+      **Output**
+
+      Print one integer: the number of subarrays with sum divisible by `n`.
+
+      **Constraints**
+
+      - `1 <= n <= 2*10^5`
+      - `-10^9 <= a_i <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      5
+      3 1 2 7 4
+      ```
+
+      Output:
+
+      ```
+      1
+      ```
+
+      (The only such subarray is `[1,2,7]`, whose sum `10` is divisible by `5`.)
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n²) time, O(1) space**
+
+      Try every `(l, r)`, accumulate the sum, and test divisibility. At
+      `n = 2*10^5` the ~`4*10^10` checks are far too slow.
+
+      ```cpp
+      long long brute(int n, const vector<long long>& a) {
+          long long count = 0;
+          for (int l = 0; l < n; ++l) {
+              long long s = 0;
+              for (int r = l; r < n; ++r) {
+                  s += a[r];
+                  if (s % n == 0) count++;
+              }
+          }
+          return count;
+      }
+      ```
+
+      **② Optimisation — prefix-remainder counting, O(n) time, O(n) space**
+
+      Sweep once, tracking each prefix's remainder mod `n` and adding the
+      number of earlier prefixes that left the same remainder — those pairs are
+      exactly the valid subarrays.
+
+      ```cpp
+      long long solve(int n, const vector<long long>& a) {
+          unordered_map<long long, long long> cnt;
+          cnt[0] = 1;                     // empty prefix -> subarrays starting at 0
+          long long rem = 0, ans = 0;
+          for (long long v : a) {
+              rem = ((rem + v) % n + n) % n; // normalise into [0, n)
+              ans += cnt[rem];            // pair current prefix with each earlier equal
+              cnt[rem]++;
+          }
+          return ans;
+      }
+      ```
+
+      **③ / ④ Further optimisation — combinatorial counting, O(n)**
+
+      An equivalent formulation collects the total frequency `f` of each
+      remainder, then each class of equal remainders contributes
+      `f*(f-1)/2` pairs. Same O(n), just reordered:
+
+      ```cpp
+      long long alt(int n, const vector<long long>& a) {
+          vector<long long> f(n, 0);
+          long long pref = 0;
+          f[0] = 1;
+          for (long long v : a) {
+              pref = ((pref + v) % n + n) % n;
+              f[pref]++;
+          }
+          long long ans = 0;
+          for (long long c : f) ans += c * (c - 1) / 2;
+          return ans;
+      }
+      ```
+
+      The running-count version in **②** is optimal and simplest to write; use
+      a vector of size `n` if the values are dense, or an `unordered_map` if
+      you prefer. Note the memory: remainders are in `[0, n)`, so a plain
+      vector works without hashing.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O(n) running-count solution in **②**:
+
+      - `rem` is the current prefix sum reduced mod `n` and normalised to
+        `[0, n)`. The double-mod `(rem + v) % n + n) % n` is what makes
+        negative `a_i` safe: C++ `%` can return a negative remainder for a
+        negative operand, and the extra `+n` (followed by a final `% n`) maps it
+        into the canonical range.
+      - `cnt[rem]` is how many *earlier* prefixes leave remainder `rem`. Every
+        one of them forms a subarray (from that prefix's index to the current
+        position) whose sum is divisible by `n`, so we add `cnt[rem]` to `ans`.
+      - Then we record the current prefix with `cnt[rem]++` so it can pair with
+        future prefixes.
+
+      Since every valid subarray has one unique right boundary and one unique
+      left boundary, pairing at the current right boundary counts each subarray
+      exactly once. Sums can reach `n * 10^9 = 2*10^14`, and the answer can be
+      quadratic, so `long long` is required throughout.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(5, [3,1,2,7,4])`. `cnt = {0:1}` initially, `rem = 0`,
+      `ans = 0`:
+
+      | i | v | rem (computed) | cnt[rem] added | ans | cnt after |
+      |---|-----|----------------|----------------|-----|-----------|
+      | - | - | 0 | - | 0 | {0:1} |
+      | 0 | 3 | 3 | 0 | 0 | {0:1,3:1} |
+      | 1 | 1 | 4 | 0 | 0 | {0:1,3:1,4:1} |
+      | 2 | 2 | 1 | 0 | 0 | {0:1,3:1,4:1,1:1} |
+      | 3 | 7 | 3 | 1 | 1 | {0:1,3:2,4:1,1:1} |
+      | 4 | 4 | 2 | 0 | 1 | {0:1,3:2,4:1,1:1,2:1} |
+
+      At `i = 3`, prefix sums are `3,4,6,13` and `pref mod 5` becomes `3` a
+      second time (prefix `P[1]` also has remainder 3). The pair
+      `(P[1], P[4])` yields the subarray `a[1..3] = [1,2,7]` with sum `10`,
+      divisible by `5` — hence one count.
+
+      Return `1`, matching the sample output.
+  - type: mcq
+    prompt: 'Which condition guarantees that the subarray a[l..r] has a sum divisible by n?'
+    options:
+      - 'The absolute sum of a[l..r] equals n'
+      - 'The prefix sums P[l] and P[r+1] leave the same remainder mod n'
+      - 'Every element in a[l..r] divides evenly by n'
+      - 'The two endpoint elements have the same parity'
+    answer: 1
+    explanation: 'sum(a[l..r]) = P[r+1] - P[l] is divisible by n iff P[r+1] ≡ P[l] (mod n), i.e. the two endpoint prefix sums have the same remainder mod n. That is why counting prefixes of each remainder gives the number of valid subarrays.'
+type: content
+---

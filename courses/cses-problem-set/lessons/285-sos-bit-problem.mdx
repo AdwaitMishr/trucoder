@@ -1,0 +1,222 @@
+---
+id: sos-bit-problem
+title: "Sum Over Subsets — Zero-AND Pairs"
+difficulty: hard
+order: 285
+tags:
+  - bitwise
+  - sos-dp
+  - sum-over-subsets
+  - counting
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      # Sum over Subsets (SOS DP) — counting zero-AND pairs
+
+      **SOS DP** (Sum Over Subsets) computes, from a frequency array
+      `cnt[mask]` indexed by the `K`-bit masks, the *subset* or *superset* sum
+      of every mask in **O(K · 2^K)** total instead of `O(3^K)`.
+
+      The core transforms are two in-place layered merges over the `2^K`
+      indices:
+      ```
+      // subset sums:   sub[mask] = Σ cnt[sub]   over all  sub ⊆ mask
+      for b in 0..K-1
+        for mask in 0..2^K-1
+          if (mask has bit b set)  sub[mask] += sub[mask ^ (1<<b)]
+
+      // superset sums: sup[mask] = Σ cnt[sup]   over all  sup ⊇ mask
+      for b in 0..K-1
+        for mask in 0..2^K-1
+          if (mask lacks bit b)    sup[mask] += sup[mask | (1<<b)]
+      ```
+      Each integer is touched once per bit, giving `K · 2^K` additions.
+
+      It is used to answer: **how many pairs of values have bitwise AND equal to
+      zero.** Two values `a` and `b` satisfy `a & b == 0` exactly when `b` is a
+      **subset of the bitwise complement of `a`** — every bit set in `b` must be
+      unset in `a`. So *for a fixed value*, the number of compatible partners is
+      a **sum-over-subsets** query evaluated at the complement pattern, and SOS
+      DP lets us answer every such query in O(1).
+
+      :::tip
+      **Interview tip:** SOS DP is the standard tool for the "count pairs/triples
+      that are bit-disjoint, `a & b == 0`, or `a | b` equals a fixed mask"
+      family with `K ≤ 20`. Whenever a bitwise constraint reads "one value is a
+      subset of another's complement", build the subset/superset-sum table and
+      answer every count in constant time instead of re-scanning the array.
+      :::
+  - type: markdown
+    content: |
+      # Question — SOS Bit Problem
+
+      You are given `n` integers `a[0..n-1]`, each in `[0, 2^K)`. Count the
+      number of **unordered pairs** `(i, j)` with `i < j` such that the bitwise
+      AND of the two values is `0`.
+
+      **Input.** The first line has an integer `n`. The second line has `n`
+      integers `a[0..n-1]`. (Here `K = 20`, so every value is `< 2^20`.)
+
+      **Output.** Print the number of such pairs.
+
+      **Constraints**
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ K ≤ 20`, `0 ≤ a[i] < 2^K`
+      - The answer fits in a 64-bit integer.
+
+      **Example**
+      ```
+      Input:
+      3
+      3 1 2
+
+      Output:
+      1
+      ```
+      Explanation: pairs are `(3&1)=1`, `(3&2)=2`, `(1&2)=0`. Only `1 & 2 == 0`,
+      so the answer is `1`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — pairwise AND, O(n²)**
+
+      For every `i < j`, compute `a[i] & a[j]` and count the zeros.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; if(!(cin>>n)) return 0;
+          vector<int> a(n);
+          for(auto &v:a) cin>>v;
+          long long ans = 0;
+          for(int i=0;i<n;i++)
+              for(int j=i+1;j<n;j++)
+                  if((a[i] & a[j]) == 0) ans++;
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n²)** time — with `n = 2·10^5` that is ~2·10^10 checks, far too slow.
+      Correct but unusable.
+
+      **② Optimization — SOS DP over subsets, O(K·2^K + n) (submission)**
+
+      Record each value's frequency in `cnt`. Run the **subset SOS** so
+      `sub[mask]` = how many array elements `x` satisfy `x ⊆ mask` (every bit of
+      `x` is a subset of `mask`'s bits). Then the number of array elements `x`
+      with `x & v == 0` is `sub[FULL ^ v]` — because `x & v == 0` ⟺ `x ⊆ ~v`
+      ⟺ `x ⊆ (FULL ^ v)`.
+
+      Sum over the distinct present values, subtract the self-pair that the
+      value `0` contributes, and halve to convert ordered partners into the
+      unordered pair count:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int K = 20, M = 1 << K, FULL = M - 1;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; if(!(cin>>n)) return 0;
+          vector<int> cnt(M, 0);
+          for(int i=0;i<n;i++){ int v; cin>>v; cnt[v]++; }
+
+          // subset SOS: sub[mask] = number of elements x with x ⊆ mask
+          vector<int> sub = cnt;
+          for(int b=0; b<K; b++)
+              for(int mask=0; mask<M; mask++)
+                  if(mask & (1<<b)) sub[mask] += sub[mask ^ (1<<b)];
+
+          long long total = 0;                       // ordered (i, x) incl. i==x
+          for(int v=0; v<M; v++)
+              if(cnt[v]) total += 1LL * cnt[v] * sub[FULL ^ v]; // partners ⊆ ~v
+
+          long long ans = (total - cnt[0]) / 2;      // self-pairs only for value 0
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **O(K·2^K + n)** time, **O(2^K)** space — with `K = 20` that is ~2·10^7
+      operations, well inside budget. This is the submission.
+  - type: markdown
+    content: |
+      ### Solution — ③/④ further insight
+
+      The `total` sum counts each *unordered* pair twice (once as `(i,x)` and
+      once as `(x,i)`) and, for every position with value `0`, the degenerate
+      self-pair `(i,i)` — because `0 & 0 == 0`. Value `0` is the only value whose
+      AND with itself is zero, so exactly `cnt[0]` self-pairs are present;
+      `ans = (total - cnt[0]) / 2`.
+
+      You can equivalently sum over *positions* instead of distinct values:
+      `total = Σ_i sub[FULL ^ a[i]]`. Both are `O(2^K + n)` given the table.
+
+      A genuinely different algorithm is **meet-in-the-middle hashing**: split
+      `K` bits in half, bucket values by one half, and for each element test the
+      partner pattern in the other half — `O(n·2^(K/2) + n)`. It only wins for
+      very small `K`; for `K = 20` SOS DP is canonical.
+
+      **Corollary:** the same table answers the plain sum-over-subsets query
+      "how many values are subsets of `x`?" in O(1) (`sub[x]` itself) — the most
+      common form of SOS DP in counting and probability problems.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **`cnt[v]++`** loads raw frequencies, and `sub = cnt` seeds the table
+        with order-0 subsets (a value is a subset of itself).
+      - **Subset transform rule:** when `mask` has bit `b` set, `sub[mask]`
+        must also include everything counted by the bucket with bit `b` cleared
+        (`mask ^ (1<<b)`) — any value ⊆ `mask` is either ⊆ that reduced mask or
+        has the pair matched to it.
+      - **`sub[FULL ^ v]` is the zero-AND count.** `FULL ^ v` is the bitwise
+        complement within the `K` bits; an element `x ⊆ (FULL ^ v)` has no set
+        bit in common with `v`, so `x & v == 0`.
+      - **Ordered → unordered.** Summing `cnt[v] · sub[~v]` counts every unordered
+        pair from both endpoints. Only value `0` self-pairs (`0 & 0 == 0`), so
+        subtract `cnt[0]` then divide by two.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 3`, `a = [3, 1, 2]`. (Traced with `K = 3` for
+      readability; the code uses `K = 20` — identical logic.)
+
+      Frequencies: `cnt[1]=1, cnt[2]=1, cnt[3]=1`. Subset SOS over 3 bits gives
+      `sub[mask]` = number of input values contained in `mask`:
+
+      | mask (bin) | values ⊆ mask | `sub[mask]` |
+      |------|---------------|-------------|
+      | 0 (`000`) | — | 0 |
+      | 1 (`001`) | 1 | 1 |
+      | 2 (`010`) | 2 | 1 |
+      | 3 (`011`) | 1, 2, 3 | 3 |
+      | 4 (`100`) | — | 0 |
+      | 5 (`101`) | 1 | 1 |
+      | 6 (`110`) | 2 | 1 |
+      | 7 (`111`) | 1, 2, 3 | 3 |
+
+      Now `FULL = 7` and we iterate the distinct present values:
+      - `v=3` (`011`): `7^3 = 4`, partner count `sub[4] = 0` (no value has only
+        bit 2 set) → contributes `1·0 = 0`
+      - `v=1` (`001`): `7^1 = 6`, `sub[6] = 1` (only value `2 ⊆ 110`) → `1·1 = 1`
+      - `v=2` (`010`): `7^2 = 5`, `sub[5] = 1` (only value `1 ⊆ 101`) → `1·1 = 1`
+
+      `total = 0 + 1 + 1 = 2`. `cnt[0] = 0` (no self-pairs), so
+      `ans = (2 - 0) / 2 = 1`. Output: **1** — matches the expected **1**. Only
+      the pair `(1, 2)` has zero AND, exactly as the sample states.
+  - type: mcq
+    prompt: "Which SOS-DP transform computes, for every mask m, the number of array values that are subsets of m ?"
+    options:
+      - Subset transform with the add rule for bits that are set: dp[mask] += dp[mask ^ (1<<b)]
+      - Superset transform with the add rule for bits that are clear: dp[mask] += dp[mask | (1<<b)]
+      - Bitwise-squaring the frequency array
+      - Sorting the values and binary-searching each mask
+    answer: 0
+    explanation: The subset transform adds, for each set bit b of mask, the bucket with b cleared (dp[mask]+=dp[mask^(1<<b)]), which accumulates into each mask the counts of all its submasks — exactly the table "how many values ⊆ m". The superset transform (option b) builds the mirror-image table of supermask counts, which would answer a different query (how many values ⊇ m).

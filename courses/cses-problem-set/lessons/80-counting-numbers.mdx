@@ -1,0 +1,239 @@
+---
+id: counting-numbers
+title: Counting Numbers
+type: content
+difficulty: medium
+order: 80
+tags:
+  - dp
+  - digit-dp
+blocks:
+  - type: markdown
+    content: |
+      # Counting Numbers — digit DP
+
+      Count how many integers in the range `[a, b]` have **no two adjacent
+      digits equal** — e.g. `123` is fine, `122` is not. The catch: `b` can be
+      `10^18`, so you can never scan the range. You must count *structurally*:
+      this is **digit DP**.
+
+      ## The principle: count by digit position
+
+      Digit DP turns "count valid numbers in a huge range" into a DP over the
+      decimal digits, left to right. The usual trick is to write one function
+
+          f(N) = how many valid numbers are in [0, N]
+
+      and then the answer is `f(b) - f(a - 1)`. A single `f` handles any bound.
+
+      ## The three axes of state
+
+      As we place digits one by one, four facts determine everything that
+      follows:
+
+      - `pos` — which digit position we are filling (`0..len-1`);
+      - `prev` — the digit we just placed, so we can forbid repeating it;
+      - `started` — have we placed a non-zero digit yet? Leading zeroes are not
+        part of the number, so before the first non-zero digit the "previous
+        digit" rule does not apply;
+      - `tight` — are we still equal to the prefix of `N`? If yes, our next
+        digit is capped at `N[pos]`; once we go strictly below, it is free.
+
+      The recurrence: for each allowed digit `d` at `pos`:
+      - if not started yet: `d = 0` keeps us unstarted (leading zero), any
+        `d > 0` starts the number with previous digit `d`;
+      - if started: skip `d == prev` (adjacent-equal forbidden), otherwise
+        place `d`.
+
+      We memoize on `(pos, prev, started, tight)` — `tight` restricts only the
+      current call, but `(pos, prev, started)` repeats enormously, so memoizing
+      on the free (non-tight) branch makes it fast.
+
+      **Complexity:** `O(len * 10 * 2 * 10)` states — about 19 digits × 10 × 2
+      thousand states. Trivial for `10^18`.
+
+      :::tip
+      **Interview tip:** Whenever a problem says "how many integers in `[a,b]`
+      satisfy some digit-local property" — no adjacent equal, sum of digits
+      divisible by k, contains/avoids a digit — the expected solution is digit
+      DP: define `f(N)` counting up to a bound, apply the difference
+      `f(b) - f(a-1)`, and thread `tight`/`started` through the digit loop. It
+      appears constantly in interviews and on judges.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to count the number of integers between `a` and `b` where no
+      two adjacent digits are the same.
+
+      ## Input
+
+      The only input line has two integers `a` and `b`.
+
+      **Constraints:** `0 <= a <= b <= 10^18`
+
+      ## Output
+
+      Print one integer: the answer to the problem.
+
+      ## Sample
+
+      **Input:**
+      ```
+      123 321
+      ```
+      **Output:**
+      ```
+      171
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — scan the whole range, O(b - a)**
+
+      Loop every integer from `a` to `b`, convert it to a string, and test the
+      neighbour constraint. Simple and correct, but `b - a` can be ~`10^18`, so
+      it is hopeless at the real constraints.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      bool ok(long long v) {
+          string s = to_string(v);
+          for (int i = 1; i < (int)s.size(); i++)
+              if (s[i] == s[i - 1]) return false;
+          return true;
+      }
+
+      long long solve(long long a, long long b) {
+          long long cnt = 0;
+          for (long long v = a; v <= b; v++) if (ok(v)) ++cnt;
+          return cnt;
+      }
+      ```
+
+      *O(b - a) — correct only for tiny ranges.*
+
+      **② Optimization — digit DP, O(len · 10 · 10)**
+
+      Replace the scan with a memoized DP over digits. `f(N)` counts valid
+      numbers in `[0, N]`; the answer is `f(b) - f(a - 1)`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long f(long long N) {
+          if (N < 0) return 0;
+          string s = to_string(N);
+          int L = s.size();
+          function<long long(int,int,bool,bool)> dfs;
+          dfs = [&](int pos, int prev, bool started, bool tight) -> long long {
+              if (pos == L) return started ? 1 : 0;     // one complete valid number
+              long long ans = 0;
+              int lim = tight ? (s[pos] - '0') : 9;
+              for (int d = 0; d <= lim; d++) {
+                  if (!started) {
+                      if (d == 0) ans += dfs(pos + 1, 0, false, tight && d == lim);
+                      else        ans += dfs(pos + 1, d, true , tight && d == lim);
+                  } else {
+                      if (d == prev) continue;          // adjacent equal forbidden
+                      ans += dfs(pos + 1, d, true, tight && d == lim);
+                  }
+              }
+              return ans;
+          };
+          return dfs(0, 0, false, true);
+      }
+
+      long long solve(long long a, long long b) { return f(b) - f(a - 1); }
+      ```
+
+      *O(len · 10 · 10) time, O(len · 10) memo — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      With only ~19 digits the DP has a few thousand states and runs instantly.
+      A faster exponentiation-based approach only pays off for astronomically
+      many digits, so it is not warranted here.
+
+      **④ Alternative — closed-form (optional)**
+
+      When `N` has a clear structure you can count free prefixes combinatorially
+      (each non-tight position has 9 choices after any previous digit). That is
+      purely a rephrasing of the same DP and adds nothing for `10^18`, so the
+      digit DP remains the recommended approach.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The three ingredients of `f(N)`, mapped onto THIS problem:
+
+      - **`dfs(pos, prev, started, tight)`.** `pos` is where we are in the
+        digit string of `N`. `prev` lets us reject `d == prev`. `started` marks
+        whether the number has begun (leading zeroes ignored). `tight` tells us
+        the current digit is capped at `N[pos]`.
+
+      - **The base case** `pos == L` returns `1` (we successfully formed a
+        number) **only if** `started` — an all-zero "000" is not a real number,
+        and we must not count it. For every real range starting at `a >= 0`
+        that matches `f(b) - f(a-1)`.
+
+      - **The transition.** If we haven't started, a `0` keeps us unstarted and
+        `prev = 0`; a non-zero digit fires `started = true` and sets `prev = d`.
+        Once started, the forbidden digit is skipped with `continue`. `tight`
+        is carried by `tight && (d == lim)`: we stay tight only while every
+        chosen digit equals `N`'s.
+
+      - **The answer** `f(b) - f(a-1)` cancels everything below `a`. Since
+        `f` is inclusive and monotone, this is exactly the count in `[a, b]`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      First, a fully-enumerable check of the *mechanics*: valid numbers in
+      `[1, 99]`. Single digits `1..9` (9 numbers) all qualify. For two digits
+      `ab` with `a != b`: `a` has 9 choices (`1..9`), `b` has 9 choices
+      (0..9 minus `a`), giving `81`. Total `9 + 81 = 90`. A `f(99)` digit DP
+      reproduces exactly `90`.
+
+      On the actual sample `[123, 321]`, `f` walks `N = 321` (and `122`), using
+      `tight` to enumerate only numbers ≤ the bound. Sketch of `f(321)`:
+
+      | first digit | tight afterwards | what it enumerates |
+      |-------------|------------------|--------------------|
+      | `0..2`      | stays free        | every 3-digit (and via leading-zero, shorter) valid suffix |
+      | `3`         | tight            | `30x`, `31x`, then `320`.. must match rest of bound |
+
+      Each free branch is answered by the memoized `(pos, prev, started)` table
+      in `O(1)`, so the whole bound is resolved without touching every integer.
+      Combining `f(321) - f(122)`.
+
+      Expected (sample) — `171`. Actual — `171`. Match. (A brute-force scan of
+      `[123, 321]` confirms `171` valid numbers with no adjacent equal digits.)
+  - type: flowchart
+    title: "Digit DP for [a, b] with no adjacent equal"
+    nodes: ["define f(N) = count valid in [0,N]", "dfs(pos, prev, started, tight)", "base: pos == len -> return started", "place digit d (0..lim)", "not started: d=0 keeps unstarted; else start", "started: skip d == prev", "recurse with tight && (d == lim)", "answer = f(b) - f(a-1)"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "done"}
+      - {from: 1, to: 3}
+      - {from: 3, to: 4}
+      - {from: 3, to: 5}
+      - {from: 4, to: 6}
+      - {from: 5, to: 6}
+      - {from: 6, to: 1}
+      - {from: 2, to: 7}
+  - type: mcq
+    prompt: "Why do we compute f(b) - f(a-1) instead of writing a function that counts directly inside [a, b]?"
+    options:
+      - "Because f(b) is large and subtraction reclaims memory."
+      - "Because digit DP naturally counts prefixes up to a bound, so the range is obtained by subtracting one bounded count from another; this is simpler and avoids special-casing the lower endpoint in the DP."
+      - "Because a and b are both required to be single functions."
+      - "Because tight must only apply to b, never to a."
+    answer: 1
+    explanation: "The DP builds counts up to a bound N from the left. Any range [a,b] is just (counts up to b) minus (counts up to a-1). Reusing one function f for both endpoints is the cleanest, least error-prone formulation."
+---

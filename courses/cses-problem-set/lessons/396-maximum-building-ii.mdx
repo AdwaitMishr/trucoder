@@ -1,0 +1,257 @@
+---
+id: maximum-building-ii
+title: "Maximum Building II"
+type: content
+difficulty: medium
+order: 396
+tags:
+  - monotonic-stack
+  - histogram
+  - dynamic-programming
+  - two-dimensional-grid
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — the largest rectangle of free cells
+
+      "Maximum Building" problems ask for the biggest axis-aligned rectangle
+      (a maximal orthogonal rectangle) inside a grid whose cells are either **free**
+      or **blocked**. This is one of the most reused "squeeze a 2D problem into a
+      1D technique" ideas in interviews: for every baseline row, the free cells above
+      it form a per-column **histogram**, and the largest building in that grid strip
+      is exactly the **largest rectangle in a histogram** — computed with a monotonic
+      stack.
+
+      **Why a histogram?** Define `height[j]` = number of consecutive free cells in
+      column `j` ending at (and including) the current row. Scanning rows top to
+      bottom, when a cell is blocked its `height` resets to `0`; when free it grows
+      by `1`. Any all-free rectangle whose bottom edge sits on the current row has
+      width `w` and height `min(height[])` over `w` consecutive columns — the classic
+      histogram problem.
+
+      **Largest rectangle in a histogram.** For a fixed array `h[0..m-1]`, the best
+      rectangle containing bar `j` as its shortest bar has height `h[j]` and spans
+      between the *nearest* smaller bars left and right of `j`. A monotonic
+      (increasing) stack finds those nearest-smaller bounds for every bar in `O(m)`.
+
+      :::tip
+      **Interview tip:** "Maximal rectangle"/"largest all-ones rectangle in a binary
+      matrix" is an extremely common screen-question. The two-step template —
+      *reduce 2D to per-row histograms, then solve 1D largest-histogram with a
+      monotonic stack* — is a strong signal of a systematic candidate.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      :::note
+      **Concrete formulation.** The set labels this problem "Maximum Building II".
+      We adopt the standard coherent reading: the largest *any-shape* rectangular
+      building of free cells (the classic maximal-rectangle problem). A companion
+      problem in the set restricts the building to a square; here the rectangle may
+      be any width and height.
+      :::
+
+      The map is an `n × m` grid. A free cell is marked with `.` and a blocked cell
+      (rock/water that cannot be built on) is marked with `*`. The city council wants
+      to build one rectangular building made **entirely of free cells**. Determine
+      the largest possible area.
+
+      **Input.** The first line has two integers `n` and `m`. The next `n` lines
+      each have a string of length `m` over `{. , *}`.
+
+      **Output.** Print a single integer: the largest area of a rectangle of free
+      cells.
+
+      **Constraints.**
+      - `1 ≤ n, m ≤ 2000`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      4 5
+      ....*
+      .*...
+      ..*..
+      *....
+      ```
+
+      **Output:**
+      ```
+      6
+      ```
+
+      (The free rectangle using rows 2–4 and columns 4–5 has area `3 × 2 = 6`.)
+
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²m² · area).** Try every pair of rows and every pair of
+      columns (every candidate rectangle), and check whether all its cells are free.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n,m; cin>>n>>m; vector<string> g(n);
+          for(int i=0;i<n;i++) cin>>g[i];
+          int best=0;
+          for(int r1=0;r1<n;r1++)for(int r2=r1;r2<n;r2++)
+          for(int c1=0;c1<m;c1++)for(int c2=c1;c2<m;c2++){
+              bool ok=true;
+              for(int i=r1;i<=r2&&ok;i++)for(int j=c1;j<=c2&&ok;j++)
+                  if(g[i][j]!='.') ok=false;
+              if(ok) best=max(best,(r2-r1+1)*(c2-c1+1));
+          }
+          cout<<best<<"\n";
+      }
+      ```
+      *Complexity: O(n²m²) rectangles, each O(n·m) to verify = O(n³m³) worst — a
+      non-starter for `n,m` up to 2000.*
+
+      **② Optimization — O(n²·m): pin a row pair, then 1D longest run.** For each
+      pair `(top, bot)` of rows, mark a column "usable" if *every* cell in that column
+      between `top` and `bot` is free; the best rectangle with this row span is the
+      longest run of usable columns, times the row span. Growing `bot` one row at a
+      time lets us update usability incrementally.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n,m; cin>>n>>m; vector<string> g(n);
+          for(int i=0;i<n;i++) cin>>g[i];
+          int best=0;
+          for(int top=0;top<n;top++){
+              vector<int> ok(m,1);
+              for(int bot=top;bot<n;bot++){
+                  for(int j=0;j<m;j++) ok[j] = ok[j] && (g[bot][j]=='.');
+                  int run=0;
+                  for(int j=0;j<m;j++){
+                      if(ok[j]){ run++; best=max(best,(bot-top+1)*run); }
+                      else run=0;
+                  }
+              }
+          }
+          cout<<best<<"\n";
+      }
+      ```
+      *Complexity: O(n²·m) time, O(m) memory — fine for roughly equal `n,m` but still
+      quadratic in `n`.*
+
+      **③ Further optimization — O(n·m): histogram + monotonic stack (the
+      solution).** Track `height[j]` across rows and, on each row, find the largest
+      rectangle in the histogram with a monotonic increasing stack that reports the
+      nearest smaller bar on each side.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n,m; cin>>n>>m; vector<string> g(n);
+          for(int i=0;i<n;i++) cin>>g[i];
+          vector<int> h(m,0);
+          int best=0;
+          auto hist = [&](vector<int>& a){
+              vector<int> st; int b=0;
+              for(int i=0;i<=(int)a.size();i++){
+                  int cur = (i<(int)a.size())?a[i]:0;
+                  while(!st.empty() && a[st.back()]>=cur){
+                      int hh=a[st.back()]; st.pop_back();
+                      int l=st.empty()?-1:st.back();
+                      b=max(b, hh*(i-l-1));
+                  }
+                  if(i<(int)a.size()) st.push_back(i);
+              }
+              return b;
+          };
+          for(int i=0;i<n;i++){
+              for(int j=0;j<m;j++) h[j] = (g[i][j]=='.') ? h[j]+1 : 0;
+              best=max(best, hist(h));
+          }
+          cout<<best<<"\n";
+      }
+      ```
+      *Complexity: O(n·m) time, O(m) memory — optimal; each histogram pass is a
+      single linear sweep.* (Only the inline lambda differs from a free function
+      `largestHist`; it returns the max rectangle area for the row's histogram.)
+
+      **④ Alternative — largest square via DP, O(n·m).** If the building may only be
+      a **square** (a common sibling problem), use `dp[i][j]` = side of the largest
+      all-free square with bottom-right corner at `(i,j)`:
+      `dp[i][j] = 1 + min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])` when free, else `0`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n,m; cin>>n>>m; vector<string> g(n);
+          for(int i=0;i<n;i++) cin>>g[i];
+          vector<vector<int>> dp(n+1, vector<int>(m+1,0));
+          int best=0;
+          for(int i=1;i<=n;i++)for(int j=1;j<=m;j++){
+              if(g[i-1][j-1]=='.'){
+                  dp[i][j]=1+min({dp[i-1][j],dp[i][j-1],dp[i-1][j-1]});
+                  best=max(best,dp[i][j]);
+              }
+          }
+          cout<<best*best<<"\n";
+      }
+      ```
+      *Complexity: O(n·m) time, O(n·m) memory, but answers a strictly smaller
+      (square-only) question — so it is a genuine alternative only when the shape is
+      fixed to a square.*
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n·m). Key lines of tier ③:
+
+      1. **`h[j] = free ? h[j]+1 : 0`** — carries the per-column bar height across
+         rows; a blocked cell zeroes its column, a free cell extends it. This is what
+         turns the whole grid into a sequence of `m`-bar histograms.
+      2. **The monotonic stack `st`** holds indices with strictly increasing heights.
+         When bar `i` arrives with `a[st.back()] >= cur`, bar `st.back()` has found
+         its **right** nearest-smaller bound at `i`; the bound on the **left** is the
+         new top `st.back()`. So its best rectangle is `height × (right − left − 1)`.
+      3. **`cur = 0` sentinel at `i == n`** forces the stack to drain, processing
+         every remaining bar against a right bound — no bar is left unprocessed.
+      4. Repeating for all `n` rows and taking the max over `best` collects the global
+         answer.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** the `4 × 5` sample grid. Track `h = heights` and `best` row by row:
+
+      - **Row 1 `....*`:** heights `[1,1,1,1,0]` → best rect in histogram = `4`.
+      - **Row 2 `.*...`:** heights `[2,0,2,2,1]` → still `4`.
+      - **Row 3 `..*..`:** heights `[3,1,0,3,2]` → still `4`.
+      - **Row 4 `*....`:** heights `[0,2,1,4,3]`:
+        - bar `h[3]=4`: nearest smaller left is at `0` (height `0`), right sentinel —
+          rectangle `4 × 1 = 4`.
+        - bar `h[4]=3`: nearest smaller left is at `2` (height `1`), right sentinel →
+          width `5−2−1 = 2`, area `3 × 2 = 6`.
+
+      ✓ `best = 6`, matching the sample output. Concretely the `6` is the rectangle
+      over rows 2–4 and columns 4–5 (every cell `.`), which is precisely the
+      `3 × 2` building the sample comment points to.
+
+      The brute tier (①) enumerates all rectangles and reports the same `6`; tiers ②
+      and ③ return identical answers for every grid.
+
+  - type: mcq
+    prompt: "In tier ③, what does the 'nearest smaller bar' on each side of bar j tell us?"
+    options:
+      - "The farthest horizontal extent over which bar j can be the shortest (so it bounds the height of a maximal rectangle through j)."
+      - "The number of cells above bar j in its column."
+      - "The total area of the whole histogram."
+      - "The width of the tallest single bar."
+    answer: 0
+    explanation: "The best rectangle whose shortest bar is h[j] can extend right up to (but not past) the nearest bar with height < h[j] on the left and on the right. The monotonic stack computes both nearest-smaller bounds for every bar in one linear pass, so each bar's best rectangle is height × (right − left − 1)."
+---

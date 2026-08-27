@@ -1,0 +1,237 @@
+---
+id: point-location-test
+title: Point Location Test
+difficulty: easy
+order: 218
+tags:
+  - geometry
+  - cross-product
+  - orientation
+blocks:
+  - type: markdown
+    content: |
+      # Point Location Test — which side of a line is the point on?
+
+      This is the **birthplace of the cross product** in competitive geometry.
+      Given a directed line through `A` and `B` (direction *from A to B*), and a
+      third point `P`, we want to know whether `P` is to the **left**, to the
+      **right**, or exactly **on** that line — the classic three-way *point
+      location test*.
+
+      **The signed cross product.** Define, for vectors `u = B−A` and `v = P−A`:
+
+      ```
+      cross = u.x * v.y − u.y * v.x
+      ```
+
+      The *sign* of `cross` tells us the side:
+
+      - `cross > 0` → `P` is **left** of the directed line `A → B` (`u` to `v`
+        is a counter-clockwise turn);
+      - `cross < 0` → `P` is **right** (clockwise turn);
+      - `cross == 0` → `A`, `B`, `P` are **collinear** — `P` touches the line.
+
+      With `A`'s coordinates subtracted out as above (so we work with `B−A` and
+      `P−A`), the whole test is one integer multiplication and subtraction.
+
+      **Why `__int128_t`?** Coordinates reach `±10^9`, so the differences
+      `u.x`, `v.y` each reach `2·10^9`, and a product reaches `4·10^18`. Two such
+      terms subtracted can approach `8·10^18` — just under the `long long` ceiling
+      but uncomfortably close, and different sub-expressions can exceed it. Using
+      `__int128_t` (128-bit) for the product makes the sign **exact** with no
+      overflow worry, at negligible cost.
+
+      **Complexity.** Each test is a constant number of arithmetic ops, so with
+      `t` tests the solution runs in **O(t)** time and **O(1)** extra space. You
+      must read every test, so `O(t)` is information-theoretically optimal.
+
+      :::tip
+      **Interview tip:** the three-valued orientation test (negative / zero /
+      positive cross product) is the single most reused primitive in all of
+      computational geometry. It appears directly in line-segment intersection,
+      polygon area, point-in-polygon, convex hull, and polygon triangulation —
+      master its sign convention once and reuse it everywhere.
+      :::
+  - type: markdown
+    content: |
+      # Question — Point Location Test
+
+      There is a line that goes through the points `p1 = (x1, y1)` and
+      `p2 = (x2, y2)`. There is also a point `p3 = (x3, y3)`.
+
+      Your task is to determine whether `p3` is located on the **left** or
+      **right** side of the line or whether it **touches** the line, when you
+      look from `p1` to `p2`.
+
+      **Input.** The first input line has an integer `t`: the number of tests.
+      After this, there are `t` lines that describe the tests. Each line has six
+      integers `x1, y1, x2, y2, x3, y3`.
+
+      **Output.** For each test, print `"LEFT"`, `"RIGHT"` or `"TOUCH"`.
+
+      **Constraints**
+
+      - `1 ≤ t ≤ 10^5`
+      - `-10^9 ≤ x1, y1, x2, y2, x3, y3 ≤ 10^9`
+      - `(x1, y1) ≠ (x2, y2)`
+
+      Sample input:
+
+      ```
+      3
+      1 1 5 3 2 3
+      1 1 5 3 4 1
+      1 1 5 3 3 2
+      ```
+
+      Sample output:
+
+      ```
+      LEFT
+      RIGHT
+      TOUCH
+      ```
+
+      (Looking from `(1,1)` toward `(5,3)`, the point `(2,3)` is on the left,
+      `(4,1)` is on the right, and `(3,2)` lies exactly on the line.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — floating-point cross product, O(t)**
+
+      The first instinct is to compute the cross product in `double`. It is
+      conceptually right, but floats lose exactness: with coordinates of `10^9`
+      the true result can be a value like `2` while the double product rounds to
+      `0` (or vice-versa), turning a genuine `LEFT`/`RIGHT` into a bogus `TOUCH`.
+      It is correct in spirit but not reliable on the real constraints.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using d = double;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int t; cin >> t;
+          while(t--){
+              d x1,y1,x2,y2,x3,y3; cin >> x1>>y1>>x2>>y2>>x3>>y3;
+              d cross = (x2-x1)*(y3-y1) - (y2-y1)*(x3-x1);
+              if(cross > 0) cout << "LEFT\n";
+              else if(cross < 0) cout << "RIGHT\n";
+              else cout << "TOUCH\n";
+          }
+      }
+      ```
+
+      **O(t)** time — but the floating point can misclassify near-zero results,
+      so it is not robust for judging.
+
+      **② Optimization — exact integer cross product, O(t) (submission)**
+
+      Use integer arithmetic and a 128-bit accumulator for the product so the
+      sign is exact. This is both the simplest *and* the optimal solution here.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using i128 = __int128_t;
+
+      // cross product: (B-A) x (C-A); >0 = LEFT, <0 = RIGHT, ==0 = collinear
+      i128 cross(long long ax,long long ay,long long bx,long long by,
+                 long long cx,long long cy){
+          return (i128)(bx-ax)*(cy-ay) - (i128)(by-ay)*(cx-ax);
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          long long t; cin >> t;
+          while(t--){
+              long long x1,y1,x2,y2,x3,y3;
+              cin >> x1 >> y1 >> x2 >> y2 >> x3 >> y3;
+              i128 c = cross(x1,y1,x2,y2,x3,y3);
+              if(c > 0) cout << "LEFT\n";
+              else if(c < 0) cout << "RIGHT\n";
+              else cout << "TOUCH\n";
+          }
+          return 0;
+      }
+      ```
+
+      **O(t)** time, **O(1)** space. This is the submission tier — compile with
+      `g++ -std=c++17 -O2`. Because every test must be read, `O(t)` is optimal;
+      there is no faster approach to seek.
+
+      **③ Alternative — orientation as an enum, O(t)**
+
+      The same cross product, reframed as a three-way *orientation* function that
+      returns `+1 / -1 / 0`. This is the reusable building block used by later
+      geometry lessons (segments, polygons, hulls), so it is worth writing as a
+      named helper:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using i128 = __int128_t;
+      long long sx, sy;
+      int orient(long long ax,long long ay,long long bx,long long by,
+                 long long cx,long long cy){
+          i128 v = (i128)(bx-ax)*(cy-ay) - (i128)(by-ay)*(cx-ax);
+          return (v>0) - (v<0);     // +1 CCW/left, -1 CW/right, 0 collinear
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int t; cin >> t;
+          while(t--){
+              long long x1,y1,x2,y2,x3,y3;
+              cin >> x1>>y1>>x2>>y2>>x3>>y3;
+              int o = orient(x1,y1,x2,y2,x3,y3);
+              cout << (o>0 ? "LEFT" : o<0 ? "RIGHT" : "TOUCH") << "\n";
+          }
+      }
+      ```
+
+      Same **O(t)** complexity; the point of this variant is naming the building
+      block you will reuse in every later lesson.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **Subtract the base point.** The cross product needs vectors rooted at
+        `A`, so compute `(bx-ax, by-ay)` and `(cx-ax, cy-ay)` before the product.
+      - **One expression, three outcomes.** The sign of
+        `(bx-ax)*(cy-ay) − (by-ay)*(cx-ax)` is the entire answer: positive →
+        left, negative → right, zero → touch.
+      - **`__int128_t` guards the product.** Each of the two products is at most
+        `(2·10^9)² = 4·10^18`; the subtraction of two such terms can reach
+        ≈`8·10^18`. `long long` tops out near `9.2·10^18`, so 128-bit is the
+        safe choice and costs nothing at these sizes.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `t = 3`.
+
+      | test | A | B | P | u = B−A | v = P−A | u.x·v.y − u.y·v.x | side |
+      |------|---|---|---|---------|---------|-------------------|------|
+      | 1 | (1,1) | (5,3) | (2,3) | (4,2) | (1,2) | 4·2 − 2·1 = **6** | LEFT |
+      | 2 | (1,1) | (5,3) | (4,1) | (4,2) | (3,0) | 4·0 − 2·3 = **−6** | RIGHT |
+      | 3 | (1,1) | (5,3) | (3,2) | (4,2) | (2,1) | 4·1 − 2·2 = **0** | TOUCH |
+
+      All six coordinates fit comfortably in `long long`, and each cross product
+      is computed exactly in `__int128_t`. The program prints each verdict on its
+      own line.
+
+      Output: `LEFT`, `RIGHT`, `TOUCH`.
+
+      **Expected `LEFT / RIGHT / TOUCH` — Actual `LEFT / RIGHT / TOUCH`
+      (from the compiled `g++ -std=c++17 -O2` submission). Match.**
+  - type: mcq
+    prompt: 'What does the sign of the cross product (B−A) × (P−A) tell you in the point location test?'
+    options:
+      - Positive means the point is to the right of the directed line A→B
+      - Positive means the point is to the left of the directed line A→B; negative means right; zero means collinear
+      - The magnitude gives the distance from the line, not the side
+      - It only works when the line is axis-aligned
+    answer: 1
+    explanation: The sign of (B−A)×(P−A) is +1 for a counter-clockwise turn (point left of the directed vector), −1 for clockwise (right), and 0 for collinear (touch). The magnitude is the parallelogram area, not the side; and the formula works for any orientation, not just axis-aligned lines. Using the exact integer form avoids the float misclassification near zero.
+type: content
+---

@@ -1,0 +1,275 @@
+---
+id: line-segments-trace-ii
+title: Line Segments Trace II
+type: content
+difficulty: hard
+order: 229
+tags:
+  - geometry
+  - line-segments
+  - li-chao-tree
+  - range-update
+blocks:
+  - type: markdown
+    content: |
+      # Line Segments Trace II — Li Chao with range-restricted lines
+
+      As in Trace I, every segment has an **integer slope**, but now a segment goes
+      from `(x1, y1)` to `(x2, y2)` with `0 <= x1 < x2 <= m`. For each integer
+      `x = 0 .. m` print the maximum point among the segments covering `x` — or
+      **`-1`** if no segment covers `x`.
+
+      ## What changed vs Trace I
+
+      - A segment is no longer a full line: it is a line **valid only on `[x1, x2]`**.
+      - Its line is
+        ```
+        a = slope = (y2 - y1) / (x2 - x1)     (integer)
+        b = y1 - a * x1
+        ```
+      - Query points outside every interval must answer `-1` (there can be gaps).
+
+      The Li Chao "keep the best at the midpoint" logic is unchanged; what is new is
+      that a line may only participate inside its own `x`-interval.
+
+      ## The range-restricted Li Chao tree
+
+      The `add` operation becomes **`addRange(ql, qr, line)`**:
+
+      ```
+      if [l,r] has no overlap with [ql,qr]: return
+      if [l,r] is fully inside [ql,qr]:     do the normal Li Chao insert here (descend
+                                            only within [l,r])
+      else:                                 recurse into both children
+      ```
+
+      A `[ql, qr]` decomposes into `O(log m)` "fully-inside" canonical nodes, and each
+      needs `O(log m)` work for its own local insert, so one insert is
+      `O(log^2 m)`. A query is unchanged: walk the root-to-leaf path, maximum of the
+      stored lines.
+
+      - Build: `O(n log^2 m)`.
+      - Queries: `O(m log m)`.
+      - Total `O(n log^2 m + m log m)`, `O(m)` space.
+
+      Because queries outside every interval see no line (the sentinel `LLONG_MIN`),
+      we print `-1` for those.
+
+      ## Complexity
+
+      - Brute force: `O(n * m)`.
+      - **Range-restricted Li Chao: `O(n log^2 m + m log m)` time, `O(m)` space.**
+
+      :::tip
+      **Interview tip:** "Same upper envelope, but each line is only active on an
+      interval — so I make the Li Chao insertion range-aware by first decomposing the
+      interval into canonical segment-tree nodes and doing a local Li Chao insert on
+      each." The phrase *range-restricted Li Chao / segment-tree-of-LiChao* is a
+      strong intermediate-data-structure signal.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` line segments whose endpoints have integer coordinates. Each
+      x-coordinate is between `0` and `m`. The slope of each segment is an integer.
+      For each x-coordinate `0, 1, ..., m`, find the maximum point in any line
+      segment. If there is no segment at some point, the maximum is `-1`.
+
+      ## Input
+
+      The first line has two integers `n` and `m`: the number of line segments and
+      the maximum x-coordinate. The next `n` lines describe the line segments. Each
+      line has four integers `x1, y1, x2, y2`: there is a line segment between points
+      `(x1, y1)` and `(x2, y2)`.
+
+      ## Output
+
+      Print `m + 1` integers: the maximum points for `x = 0, 1, ..., m`.
+
+      ## Constraints
+
+      - `1 <= n, m <= 10^5`
+      - `0 <= x1 < x2 <= m`
+      - `0 <= y1, y2 <= 10^9`
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 5
+      1 1 3 3
+      1 2 4 2
+      2 4 5 7
+      2 8 5 2
+      ```
+      **Output:**
+      ```
+      -1 2 8 6 6 7
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — evaluate all segments at every x, O(n * m)**
+
+      For each `x`, scan every segment whose interval `[x1, x2]` contains `x`, take
+      the max (or `-1` if none). `n, m <= 10^5` ⇒ `10^10` operations — too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          struct S { long long a, b, l, r; };
+          vector<S> seg;
+          for(int i=0;i<n;i++){
+              long long x1,y1,x2,y2; cin >> x1 >> y1 >> x2 >> y2;
+              long long a = (y2-y1)/(x2-x1);
+              long long b = y1 - a*x1;
+              seg.push_back({a, b, x1, x2});
+          }
+          for(int x=0;x<=m;x++){
+              if(x) cout << " ";
+              bool has=false; long long best=-9e18;
+              for(auto &s : seg)
+                  if(s.l <= x && x <= s.r){ has=true; best=max(best, s.a*x + s.b); }
+              cout << (has ? best : -1);
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n * m)` time. Correct; far too slow.*
+
+      **② Range-restricted Li Chao — O(n log^2 m + m log m) (optimal)**
+
+      Insert each segment's line only into its `[x1, x2]` interval, query all `x`,
+      and print `-1` where the sentinel survives. Compiled and run: prints
+      `-1 2 8 6 6 7` on the sample below.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct Line { long long m, b; long long eval(long long x) const { return m*x + b; } };
+      Line DEF(){ return {0, LLONG_MIN}; }
+      struct Node { int l, r; Line line; Node *L, *R;
+          Node(int l, int r): l(l), r(r), line(DEF()), L(nullptr), R(nullptr) {}
+          void addLine(Line nw){                      // plain Li Chao insert at this node
+              int mid = (l + r) >> 1;
+              bool lef   = nw.eval(l)   > line.eval(l);
+              bool midok = nw.eval(mid) > line.eval(mid);
+              if(midok) swap(nw, line);
+              if(l == r) return;
+              if(lef != midok){ if(!L) L = new Node(l, mid);     L->addLine(nw); }
+              else          { if(!R) R = new Node(mid+1, r);     R->addLine(nw); }
+          }
+          void addRange(int ql, int qr, Line nw){     // insert only over [ql, qr]
+              if(qr < l || r < ql) return;
+              if(ql <= l && r <= qr){ addLine(nw); return; }
+              int mid = (l + r) >> 1;
+              if(!L) L = new Node(l, mid);
+              if(!R) R = new Node(mid+1, r);
+              L->addRange(ql, qr, nw);
+              R->addRange(ql, qr, nw);
+          }
+          long long query(int x){
+              long long res = line.eval(x);
+              int mid = (l + r) >> 1;
+              if(x <= mid && L) res = max(res, L->query(x));
+              if(x >  mid && R) res = max(res, R->query(x));
+              return res;
+          }
+      };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          Node root(0, m);
+          for(int i=0;i<n;i++){
+              long long x1,y1,x2,y2; cin >> x1 >> y1 >> x2 >> y2;
+              long long a = (y2-y1)/(x2-x1);
+              long long b = y1 - a*x1;
+              root.addRange((int)x1, (int)x2, {a, b});
+          }
+          for(int x=0;x<=m;x++){
+              if(x) cout << " ";
+              long long v = root.query(x);
+              cout << (v == LLONG_MIN ? -1 : v);
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n log^2 m + m log m)` time, `O(m)` space. The recommended solution. An
+      alternative is a **convex-hull-trick stored per segment-tree node** (a
+      "segment tree of Li Chao"), which is the same idea reorganized — no strictly
+      faster independent algorithm exists at these constraints.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Line from interval.** Slope `a = (y2-y1)/(x2-x1)` (integer by the
+        statement); intercept `b = y1 - a*x1` so that `a*x1 + b = y1`.
+      - **Range-aware insert.** `addRange` ignores disjoint intervals, performs a
+        normal Li Chao insert once `[l, r]` is fully inside the target (so the line
+        is never placed outside its legal `[x1, x2]`), and otherwise recurses into
+        both children. The target interval splits into `O(log m)` canonical nodes.
+      - **Sentinel = "no line here".** Nodes default to `DEF()`; a query point with
+        no covering segment returns `LLONG_MIN`, which we map to `-1`.
+      - **Query stays bottom-up-max.** Same as Trace I: max of the lines stored on
+        the root-to-leaf path.
+      - **Lazy child creation.** Nodes are created on first use (`addRange`/`query`
+        may touch paths that `addLine` never created).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 4, m = 5`.
+
+      | segment | slope `a` | intercept `b` | interval | line |
+      |---------|-----------|---------------|----------|------|
+      | (1,1)-(3,3) | 1 | 0 | [1,3] | `y = x` |
+      | (1,2)-(4,2) | 0 | 2 | [1,4] | `y = 2` |
+      | (2,4)-(5,7) | 1 | 2 | [2,5] | `y = x + 2` |
+      | (2,8)-(5,2) | -2 | 12 | [2,5] | `y = -2x + 12` |
+
+      Evaluate at each `x` (only active lines):
+
+      | x | active lines & values | best |
+      |---|----------------------|------|
+      | 0 | none | -1 |
+      | 1 | `y=x`→1, `y=2`→2 | 2 |
+      | 2 | `1·(=x)`, `2`, `4`, `8` → 1,2,4,8 | 8 |
+      | 3 | `x=3`, `2`, `x+2=5`, `-2·3+12=6` → 3,2,5,6 | 6 |
+      | 4 | `2`, `x+2=6`, `-2·4+12=4` | 6 |
+      | 5 | `x+2=7`, `-2·5+12=2` | 7 |
+
+      Printed:
+      ```
+      -1 2 8 6 6 7
+      ```
+      Expected `-1 2 8 6 6 7` — match. (`x=0` is inside no interval, hence `-1`.)
+  - type: flowchart
+    title: "Range-restricted Li Chao insert"
+    nodes: ["addRange([ql,qr], line) at node [l,r]", "overlap?  (qr<l or r<ql)", "node fully inside [ql,qr]?", "local Li Chao addLine(line)", "recurse addRange into left and right child", "done"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 5, label: "disjoint → return"}
+      - {from: 1, to: 2, label: "overlaps"}
+      - {from: 2, to: 3, label: "yes"}
+      - {from: 2, to: 4, label: "partial"}
+      - {from: 3, to: 5}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "Why does decomposing a segment's interval into O(log m) canonical segment-tree nodes allow a line to be inserted only where it is actually active?"
+    options:
+      - "Because the interval [x1, x2] is covered exactly by O(log m) fully-contained tree nodes; a local Li Chao insert happens only on those, so the line never reaches query paths outside its valid range, and the root-to-leaf max remains correct inside it."
+      - "Because we must copy the line into every node along the whole path from root to leaf."
+      - "Because intervals must be rounded to powers of two to be stored."
+      - "Because the line is only usable at x1 and x2, its two endpoints."
+    answer: 0
+    explanation: "A segment tree covers any range with O(log m) disjoint canonical nodes. Placing the line only into those (via addRange) confines it to its legal interval, and the standard Li Chao insert on each such node keeps each query's root-to-leaf max correct without the line leaking outside [x1, x2]."
+---

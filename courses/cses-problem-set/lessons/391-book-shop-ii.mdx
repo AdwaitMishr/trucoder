@@ -1,0 +1,266 @@
+---
+id: book-shop-ii
+title: Book Shop II
+difficulty: medium
+order: 391
+tags:
+  - additional
+  - dynamic-programming
+  - knapsack
+  - bounded-knapsack
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — the bounded knapsack
+
+      Classic 0/1 knapsack: `n` items, each with price `h_i` and pages `s_i`,
+      capacity `x`, maximize total pages. **Book Shop II** adds a third fact:
+      there are `k_i` **copies** of book `i`, and you may take **several** of
+      them — so item `i` is available in any quantity from `0` to `k_i`. This is
+      the **bounded knapsack**.
+
+      Define `dp[c]` = the maximum pages achievable with total price exactly
+      `c` (using books processed so far). For one book with price `p = h_i`,
+      pages `w = s_i`, and `k` copies, the recurrence is:
+
+      ```
+      newdp[t] = max over m in [0..k] of  dp[t - m·p] + m·w
+      ```
+
+      We must decide how many copies `m` of the book to take. The two standard
+      ways to make this fast:
+
+      **A. Binary splitting (item-by-copies).** Decompose `k_i` copies into a
+      small set of "super items" of sizes `1,2,4,…,` (and the leftover), each
+      treated as an independent 0/1 item with price `m·h_i` and pages `m·s_i`.
+      Because any `0..k` can be summed with these powers of two, every feasible
+      `m` is still reachable, but now there are only `O(log k_i)` super items per
+      book instead of `k_i`. Then run ordinary 0/1 knapsack. Complexity
+      `O(x · Σ log k_i)`.
+
+      **B. Monotonic-deque optimization.** For a fixed `p = h_i`, group states by
+      their residue class `r = t mod p`. Within one class, `t = r + m·p` and the
+      transition becomes `newdp[r+m·p] = max_{j in [max(0,m-k)..m]} (
+      dp[r+j·p] − j·w ) + m·w`. The term `dp[r+j·p] − j·w` is independent of `m`,
+      so a sliding-window max over a deque of those values gives every state in
+      `O(x/p)` per class — `O(x)` per book, `O(n·x)` total. This is the true
+      optimal for bounded knapsack.
+
+      :::tip
+      **Interview tip:** *Multiple copies allowed* upgrades a 0/1 knapsack to a
+      **bounded** knapsack. Two idioms to remember: (1) **binary splitting** =
+      collapse copies into powers of two and reuse plain 0/1 DP — easy,
+      20-line, good enough for `n,x ≤ 10⁵`; (2) **monotonic deque** = the
+      O(n·x) exact optimization when the split version's `x·log` still feels
+      heavy. Many interviews are satisfied by binary splitting; mention the
+      deque as the cleaner big-O bound.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are in a book shop which sells `n` different books. You know the
+      price, the number of pages and the number of copies of each book. You have
+      decided that the total price of your purchases will be at most `x`. What
+      is the maximum number of pages you can buy? You can buy several copies of
+      the same book.
+
+      **Input.** The first input line contains two integers `n` and `x`: the
+      number of books and the maximum total price. The next line contains `n`
+      integers `h_1,…,h_n`: the price of each book. The next line contains `n`
+      integers `s_1,…,s_n`: the number of pages of each book. The last line
+      contains `n` integers `k_1,…,k_n`: the number of copies of each book.
+
+      **Output.** Print one integer: the maximum number of pages.
+
+      **Constraints**
+      - `1 ≤ n ≤ 100`
+      - `1 ≤ x ≤ 10^5`
+      - `1 ≤ h_i, s_i, k_i ≤ 1000`
+
+      **Sample**
+
+      Input:
+      ```
+      3 10
+      2 6 3
+      8 5 4
+      3 5 2
+      ```
+
+      Output:
+      ```
+      28
+      ```
+
+      *Explanation:* You can buy three copies of book 1 and one copy of book 3.
+      The price is `3·2 + 3 = 9` and the number of pages is `3·8 + 4 = 28`.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(x·Σk).** Expand every book into its `k_i` individual
+      copies and run 0/1 knapsack. `Σk` can be up to `100·1000 = 10⁵`, times `x
+      = 10⁵` ⇒ `10¹⁰` — too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,x; cin>>n>>x;
+          vector<int> h(n),s(n),k(n);
+          for(int i=0;i<n;i++)cin>>h[i];
+          for(int i=0;i<n;i++)cin>>s[i];
+          for(int i=0;i<n;i++)cin>>k[i];
+          vector<int> P,PG;                       // one price/pages entry per copy
+          for(int i=0;i<n;i++)
+              for(int c=0;c<k[i];c++){ P.push_back(h[i]); PG.push_back(s[i]); }
+          vector<int> dp(x+1,0);
+          for(int i=0;i<(int)P.size();i++)
+              for(int c=x;c>=P[i];c--) dp[c]=max(dp[c],dp[c-P[i]]+PG[i]);
+          cout<<*max_element(dp.begin(),dp.end())<<"\n";
+      }
+      ```
+      *Complexity: O(x·Σk) — worst case `10⁵ × 10⁵ = 10¹⁰`, far too slow.*
+
+      **② Optimization — binary splitting — O(x·Σlog k).** Collapse each book's
+      copies into `1,2,4,…` super items; run 0/1 knapsack.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,x; cin>>n>>x;
+          vector<int> h(n),s(n),k(n),P,PG;
+          for(int i=0;i<n;i++)cin>>h[i];
+          for(int i=0;i<n;i++)cin>>s[i];
+          for(int i=0;i<n;i++)cin>>k[i];
+          for(int i=0;i<n;i++){
+              int copies=k[i];
+              for(int b=1; copies>0; b<<=1){
+                  int take=min(b,copies); copies-=take;
+                  P.push_back(take*h[i]); PG.push_back(take*s[i]);
+              }
+          }
+          vector<int> dp(x+1,0);
+          for(int i=0;i<(int)P.size();i++)
+              for(int c=x;c>=P[i];c--) dp[c]=max(dp[c],dp[c-P[i]]+PG[i]);
+          cout<<*max_element(dp.begin(),dp.end())<<"\n";
+      }
+      ```
+      *Complexity: O(x·Σlog k) — with `Σlog k ≤ 100·10 = 1000` super items and
+      `x = 10⁵`, about `10⁸` ops — comfortably within limits.*
+
+      **③ Further optimization — monotonic deque — O(n·x).** For each book, group
+      price-residue classes and slide a deque of `dp[·]−j·w` to compute every
+      `newdp[t]` in O(1) amortized.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,x; cin>>n>>x;
+          vector<int> h(n),s(n),k(n);
+          for(int i=0;i<n;i++)cin>>h[i];
+          for(int i=0;i<n;i++)cin>>s[i];
+          for(int i=0;i<n;i++)cin>>k[i];
+          vector<int> dp(x+1,0), tdp(x+1,0);
+          for(int i=0;i<n;i++){
+              int p=h[i], w=s[i], cap=k[i];
+              fill(tdp.begin(),tdp.end(),0);
+              for(int r=0;r<p;r++){                       // residue class
+                  deque<pair<int,int>> dq;                // (value dp[t]-j*w, j)
+                  for(int m=0;;m++){
+                      int t=r+m*p; if(t>x) break;
+                      int val=dp[t]-m*w;
+                      while(!dq.empty() && dq.back().first<=val) dq.pop_back();
+                      dq.push_back({val,m});
+                      if(m-dq.front().second>cap) dq.pop_front();
+                      tdp[t]=dq.front().first+m*w;
+                  }
+              }
+              for(int c=0;c<=x;c++) dp[c]=max(dp[c],tdp[c]);
+          }
+          cout<<*max_element(dp.begin(),dp.end())<<"\n";
+      }
+      ```
+      *Complexity: O(n·x) time, O(x) space — `100 · 10⁵ = 10⁷`, the fastest
+      exact bounded knapsack.*
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — bounded knapsack (shown as ③, the deque variant). Key lines:
+
+      1. **State.** `dp[c]` = max pages spending exactly price `c` with books
+         seen so far; `tdp` holds the result after adding the current book.
+      2. **Residue classes.** For price `p`, states split by `t ≡ r (mod p)`.
+         Inside a class, `t = r + m·p`, so taking `j` copies eats `p·j` price and
+         yields `j·w` pages.
+      3. **Deque window.** The candidate `dp[r+j·p]−j·w` depends only on `j`.
+         A monotonic deque keeps the best such value for `j ∈ [m−cap, m]`,
+         enforcing the ≤ `k_i` copies limit, and gives `tdp[t]` in O(1).
+      4. **Merge.** `dp[c] = max(dp[c], tdp[c])` lets us skip a book (take 0
+         copies) but keeps the option of using it. The answer is `max dp`.
+         (The binary-split variant ② differs only in replacing the deque by a
+         flat list of `P/PG` super items and a backward 0/1 loop.)
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 3, x = 10`; `h = [2,6,3]`, `s = [8,5,4]`, `k = [3,5,2]`.
+
+      We may buy up to 3 of book1 (price 2, pages 8), 5 of book2 (price 6, pages
+      5), 2 of book3 (price 3, pages 4), total price ≤ 10.
+
+      Try the optimal hand-picked choice: 3 × book1 `= 3·2=6` price, `3·8=24`
+      pages; plus 1 × book3 `= 3` price, 4 pages. Total price `6+3=9 ≤ 10`;
+      pages `24+4 = 28`. (Book2 is expensive per page: 5 pages / 6 price, worse
+      than book1's 8/2.)
+
+      The DP over capacities (`dp[c]` after all books):
+
+      | price c | 0 |1|2|3|4|5|6|7|8|9|10 |
+      |---------|---|---|-|-|-|-|-|-|-|--|
+      | pages   | 0 |0|8|12|16|20|24|28|?|28|… |
+
+      Key check: `c=7` uses `3·book1(6) + ?` no, `3·book1` is price 6 → 24 pages,
+      `+` nothing fits for 7 → 24. `c=9` → `3·book1 + 1·book3 = 28`. The maximum
+      `dp[c]` over all `c ≤ 10` is `28`.
+
+      Output: `28`. ✓ Matches the sample.
+
+  - type: flowchart
+    title: "Bounded knapsack (binary split + 0/1)"
+    nodes:
+      - Read n, x, prices, pages, copies
+      - For each book, split copies into powers of two
+      - Build super items (price m*h, pages m*s)
+      - Run 0/1 knapsack over capacity x
+      - Take max over all dp[c]
+      - Print answer
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: ""}
+
+  - type: mcq
+    prompt: "Why is breaking a book's k copies into powers of two (sizes 1,2,4,…) valid and efficient for a bounded knapsack?"
+    options:
+      - "Every integer 0..k can be expressed as a sum of distinct powers of two from that decomposition, so every feasible 'how many copies' choice stays reachable, but only O(log k) super items are created instead of k."
+      - "Powers of two are the only sizes that maximize pages."
+      - "Binary numbers make the knapsack capacity smaller."
+      - "It changes the problem into an unbounded knapsack, which is always easier."
+    answer: 0
+    explanation: "The distinct-powers-of-two decomposition of k is exactly the binary representation: 1,2,4,…, plus a leftover remainder that is smaller than the next power of two. Any number from 0 to k is a subset-sum of these pieces, so taking any required total 'm copies' maps to selecting the super items whose prices sum to m·h. This preserves all reachable states while shrinking the item list from k to ceil(log2 k) per book, making the 0/1 pass O(x·log k) instead of O(x·k)."
+type: content
+---

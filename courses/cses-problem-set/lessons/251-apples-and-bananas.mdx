@@ -1,0 +1,316 @@
+---
+id: apples-and-bananas
+title: "Apples and Bananas"
+type: content
+difficulty: hard
+order: 251
+tags:
+  - advanced-techniques
+  - fft
+  - convolution
+  - two-pointers
+blocks:
+  - type: markdown
+    content: |
+      # Apples and Bananas — counting fruit pairs with the Fast Fourier Transform
+
+      There are `n` apples and `m` bananas, each with a weight in `[1, k]`. For
+      every possible combined weight `w` in `[2, 2k]`, you must count how many
+      apples-and-a-banana pairs sum to `w`.
+
+      This is a **convolution problem**: if `A[a]` is the number of apples of
+      weight `a` and `B[b]` the number of bananas of weight `b`, the number of
+      pairs with combined weight `w` is
+
+      ```
+      count[w] = Σ over a  of  A[a] · B[w - a]
+      ```
+
+      That sum is exactly the coefficient of `x^w` in the product of the two
+      *polynomials* whose coefficients are `A` and `B`. Computing that product
+      directly is `O(k²)`; the **FFT** does it in `O(k log k)`.
+
+      ## Counting the pair types
+
+      - If apples can repeat (multiple apples share a weight), `A[a]` is a
+        **multiplicity**, and two apples of weight `5` give a factor `2` when
+        counting, which is exactly what multiplying by the raw frequency array
+        captures.
+      - Every pair is counted by choosing a concrete apple weight `a` and a
+        concrete banana weight `b = w - a`; the product `A[a]·B[w-a]` is the
+        number of ways to pick such a pair. Summing over all `a` gives
+        `count[w]`.
+
+      ## The FFT in one paragraph
+
+      Evaluate both polynomials at the complex `2^m`-th roots of unity, multiply
+      the evaluations point-wise, then interpolate back. The convolution theorem
+      says point-wise multiplication in the frequency domain equals the
+      (circular) convolution in the time domain; with a power-of-two size at
+      least `2k+1` the circular convolution is the ordinary one we need.
+
+      **Complexity:** brute `O(k²)`; FFT `O(k log k)` time and `O(k)` space —
+      for `k = 2·10^5`, about `10^11` vs `~4·10^6` operations.
+
+      :::tip
+      **Interview tip:** "for every possible sum, count the pairs over two
+      multisets of bounded weights" is *always* a convolution. Whenever the
+      answer for all target sums is `Σ_a freq1[a]·freq2[t-a]`, use the FFT (or an
+      NTT for exact integer arithmetic). The two-pointer is only a shortcut when
+      you need a *single* threshold (count of pairs summing to at most `T`), not
+      all `2k` exact sums — know which one you're facing before you code.
+      :::
+  - type: markdown
+    content: |
+      # Question — Apples and Bananas
+
+      There are `n` apples and `m` bananas, and each of them has an integer weight
+      between `1 ... k`. Your task is to calculate, for each weight `w` between
+      `2 ... 2k`, the **number of ways** we can choose an apple and a banana whose
+      combined weight is `w`.
+
+      **Input**
+
+      The first input line contains three integers `k`, `n` and `m`: the number
+      `k`, the number of apples and the number of bananas.
+      The next line contains `n` integers `a_1, a_2, ..., a_n`: weight of each
+      apple.
+      The last line contains `m` integers `b_1, b_2, ..., b_m`: weight of each
+      banana.
+
+      **Output**
+
+      For each integer `w` between `2 ... 2k`, print the number of ways to choose
+      an apple and a banana whose combined weight is `w`.
+
+      **Constraints**
+
+      - `1 <= k, n, m <= 2·10^5`
+      - `1 <= a_i <= k`
+      - `1 <= b_i <= k`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 3 4
+      5 2 5
+      4 3 2 3
+      ```
+
+      Output:
+
+      ```
+      0 0 1 2 1 2 4 2 0
+      ```
+
+      Explanation: for example for `w = 8` there are 4 different ways: we can pick
+      an apple of weight 5 in two different ways and a banana of weight 3 in two
+      different ways.
+  - type: markdown
+    content: |
+      ### Solution — Apples and Bananas
+
+      **① Brute force — O(k²) ramp, O(k) space**
+
+      Build the frequency arrays, then loop over every possible apple weight `a`
+      for each target `w`, adding `A[a]·B[w-a]`:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int k, n, m; cin >> k >> n >> m;
+          vector<ll> A(k + 1), B(k + 1);
+          for (int i = 0; i < n; ++i) { int w; cin >> w; A[w]++; }
+          for (int i = 0; i < m; ++i) { int w; cin >> w; B[w]++; }
+          for (int w = 2; w <= 2 * k; ++w) {
+              ll cnt = 0;
+              for (int a = 1; a <= k; ++a) {
+                  int b = w - a;
+                  if (1 <= b && b <= k) cnt += A[a] * B[b];
+              }
+              if (w > 2) cout << ' ';
+              cout << cnt;
+          }
+          cout << '\n';
+      }
+      ```
+
+      That is `O(k²)` (or `O(n·m)` if we iterate actual fruits). At
+      `k = 2·10^5` that is `4·10^10` — far too slow.
+
+      **② Optimisation — FFT convolution, O(k log k) time, O(k) space**
+
+      Build the frequency polynomials `A` and `B` and convolve them with the
+      Cooley–Tukey FFT:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      using cd = complex<double>;
+      const double PI = acos(-1.0);
+
+      void fft(vector<cd>& a, bool invert) {
+          int n = (int)a.size();
+          for (int i = 1, j = 0; i < n; ++i) {          // bit-reversal permutation
+              int bit = n >> 1;
+              for (; j & bit; bit >>= 1) j ^= bit;
+              j ^= bit;
+              if (i < j) swap(a[i], a[j]);
+          }
+          for (int len = 2; len <= n; len <<= 1) {
+              double ang = 2 * PI / len * (invert ? -1 : 1);
+              cd wlen(cos(ang), sin(ang));
+              for (int i = 0; i < n; i += len) {
+                  cd w(1);
+                  for (int j = 0; j < len / 2; ++j) {
+                      cd u = a[i + j], v = a[i + j + len / 2] * w;
+                      a[i + j] = u + v;
+                      a[i + j + len / 2] = u - v;
+                      w *= wlen;
+                  }
+              }
+          }
+          if (invert) for (cd& x : a) x /= n;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int k, n, m; cin >> k >> n >> m;
+          vector<ll> A(k + 1, 0), B(k + 1, 0);
+          for (int i = 0; i < n; ++i) { int w; cin >> w; A[w]++; }
+          for (int i = 0; i < m; ++i) { int w; cin >> w; B[w]++; }
+
+          int need = 2 * k + 1, sz = 1;
+          while (sz < need) sz <<= 1;                   // power of two >= 2k+1
+          vector<cd> fa(sz, 0), fb(sz, 0);
+          for (int i = 1; i <= k; ++i) { fa[i] = A[i]; fb[i] = B[i]; }
+          fft(fa, false); fft(fb, false);
+          for (int i = 0; i < sz; ++i) fa[i] *= fb[i];
+          fft(fa, true);
+
+          for (int w = 2; w <= 2 * k; ++w) {
+              if (w > 2) cout << ' ';
+              cout << llround(fa[w].real());
+          }
+          cout << '\n';
+      }
+      ```
+
+      **③ Further optimisation — NTT instead of FFT, O(k log k), exact integers**
+
+      Floating-point FFT is fine here (`count[w] <= n·m <= 4·10^10`, parsed with
+      `llround`). If you want *exact* integer arithmetic with no rounding, replace
+      `complex<double>` with modular arithmetic in a Number-Theoretic Transform
+      (NTT) using a prime like `998244353` (`2^23·7 + 1`, ideal for NTT). The
+      transform/pointwise-multiply/inverse structure is identical; only the twiddle
+      factors become modular powers of a primitive root. Same `O(k log k)`.
+
+      **④ Alternative — two pointers, O((n+m) log) for a *single* threshold.**
+
+      If the task were "count pairs with combined weight **at most** some `T`",
+      you could sort the distinct weights and use two pointers in `O(n + m)`. But
+      the problem asks for **all `2k` exact sums**, which the two-pointer cannot
+      enumerate in sub-quadratic time — that is precisely why the convolution
+      (FFT/NTT) is required. Code the linear-time threshold variant only when the
+      question is genuinely about a bound, not about every exact sum.
+  - type: markdown
+    content: |
+      # Code logic — Apples and Bananas
+
+      Focus on **②**:
+
+      - `A[w]++` and `B[w]++` build *frequency* polynomials: coefficient `A[a]`
+        is the number of apples of weight `a`. Counting repeats as multiplicities
+        is what makes `count[w]` count *pairs of individual fruits*, not just
+        distinct weight combinations.
+      - We need the ordinary (non-cyclic) convolution, whose non-zero terms live
+        at exponents `2 .. 2k`. Using a transform size `sz` that is a power of two
+        and `>= 2k+1` guarantees the circular wrap-around never corrupts those
+        terms (the FFT's circular convolution equals the linear one when the size
+        exceeds the result length).
+      - `fft(fa, false); fft(fb, false);` evaluates both polynomials at all the
+        roots of unity. Multiplying element-wise and inverse-transforming
+        (`fft(fa, true)`) interpolates back: `fa[w].real()` is the coefficient of
+        `x^w` in `A(x)·B(x)`, i.e. `count[w]`.
+      - `llround` snaps the small floating error from the inverse transform back
+        to the integer answer.
+      - The loop prints `count[2], count[3], ..., count[2k]` with single spaces.
+
+      :::tip
+      **Interview question:** What is the risk of using floating-point FFT for the
+      convolution, and how do you fix it? — Rounding error near integer boundaries
+      can flip a coefficient. Here counts are small (`<= n·m`) and `llround` is
+      safe, but in the general case (or with huge coefficients) switch to an NTT
+      under a prime like `998244353`, which gives exact integer convolution with
+      the same `O(k log k)` complexity.
+      :::
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace on the sample: `k = 5, n = 3, m = 4`, apples `5 2 5`, bananas
+      `4 3 2 3`.
+
+      Frequency arrays:
+
+      ```
+      A = [0, 0, 1, 0, 0, 2]     # weight 2 -> 1 apple; weight 5 -> 2 apples
+      B = [0, 0, 1, 2, 1, 0]     # weight 2 -> 1; weight 3 -> 2; weight 4 -> 1
+      ```
+
+      `count[w] = Σ_a A[a]·B[w-a]`:
+
+      | w | contributing (a, b) pairs            | count[w] |
+      |---|--------------------------------------|----------|
+      | 2 | —                                    | 0 |
+      | 3 | —                                    | 0 |
+      | 4 | (2,2): `1·1`                         | 1 |
+      | 5 | (2,3): `1·2`                         | 2 |
+      | 6 | (2,4): `1·1`                         | 1 |
+      | 7 | (5,2): `2·1`                         | 2 |
+      | 8 | (5,3): `2·2`                         | 4 |
+      | 9 | (5,4): `2·1`                         | 2 |
+      | 10 | —                                    | 0 |
+
+      This produces the row `0 0 1 2 1 2 4 2 0` — exactly the sample output. In
+      the FFT, these come out as the coefficients of `(x^2 + 2x^5)(x^2 + 2x^3 +
+      x^4)`:
+
+      ```
+      x^4 + 2x^5 + x^6 + 2x^7 + 4x^8 + 2x^9   (exponents 2..2k printed)
+      ```
+
+      `x^8`'s coefficient `4 = A[5]·B[3] = 2·2`, matching the sample's explanation
+      (weight-5 apple chosen 2 ways, weight-3 banana chosen 2 ways → 4 pairs).
+  - type: flowchart
+    title: "Apples and Bananas — convolution route"
+    nodes:
+      - "Read k, apples, bananas"
+      - "Build frequency polys A, B"
+      - "Need all 2k exact sums?"
+      - "yes -> FFT/NTT convolution, O(k log k)"
+      - "no (one threshold) -> two pointers, O(n+m)"
+      - "coeff[w] = count of pairs summing to w"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "yes"}
+      - {from: 2, to: 4, label: "no"}
+      - {from: 3, to: 5}
+  - type: mcq
+    prompt: "A problem asks for the count of pairs from two multisets summing to every value in some range. Why is a convolution (FFT/NTT) needed instead of a two-pointer?"
+    options:
+      - "Because a two-pointer can count pairs under one threshold in O(n+m), but enumerating every exact sum needs the per-coefficient aggregate Σ_a A[a]·B[w-a], which is a convolution — two pointers cannot produce all these sums sub-quadratically."
+      - "Because two pointers require the arrays to be unsorted."
+      - "Because convolution only works for odd k."
+      - "Because the input weights can be equal, which two pointers cannot handle."
+    answer: 0
+    explanation: "The exact-sum counts are the coefficients of A(x)·B(x): count[w] = Σ_a A[a]·B[w-a]. Computing all of these is a convolution (polynomial product). The two-pointer only answers a single threshold query (pairs with sum <= T) in linear time; it cannot emit all O(k) exact cross-correlation sums sub-quadratically, so the FFT/NTT convolution is the intended tool when every sum is needed."
+---

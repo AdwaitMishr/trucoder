@@ -1,0 +1,250 @@
+---
+id: water-containers-moves
+title: "Water Containers Moves"
+type: content
+difficulty: medium
+order: 356
+tags:
+  - graphs
+  - shortest-path
+  - dijkstra
+  - bfs
+  - constructive
+blocks:
+  - type: markdown
+    content: |
+      # Water Containers Moves — measure x units with two jugs, minimum water moved
+
+      ## Theory
+
+      Two jugs of capacities `a` and `b`; a state is the pair `(A, B)` of amounts in
+      each jug. There are six moves — fill a jug, empty a jug, or pour one jug into the
+      other until either the source is empty or the destination is full. A move "moves"
+      a specific amount of water:
+
+      - `FILL A` moves `a − A` (to capacity),
+      - `EMPTY A` moves `A`,
+      - `MOVE A B` moves `min(A, b − B)`, and symmetrically for `B`.
+
+      **State graph.** The reachable world is a directed graph whose vertices are
+      `(a+1)·(b+1)` states and whose edges are the six moves, each with a **cost = the
+      amount of water moved**. Because `a, b ≤ 1000`, there are at most ~`10⁶` states —
+      big enough that we must be careful, but small enough for a proper shortest-path
+      algorithm.
+
+      **Objective.** We need the sequence of moves (ending with `A == x`) that
+      minimises the *total* water moved. Costs are not `0/1` (they vary by move and
+      state), so uniform BFS does **not** work — this is a **weighted shortest-path** /
+      uniform-cost search problem, solved with **Dijkstra**. We also minimise the number
+      of moves as a tie-break.
+
+      **Impossibility (quick prune).** Container A holds `x` only if `x ≤ a`; and every
+      reachable state has both amounts divisible by `g = gcd(a, b)`. So if `x > a` or
+      `x ∤/g`, the answer is `-1` immediately (see the sibling problem *Water Containers
+      Queries*). Otherwise Dijkstra finds a path.
+
+      **Time:** `O((a+1)(b+1) · 6 · log((a+1)(b+1)))`. **Space:** `O((a+1)(b+1))`.
+
+      :::tip
+      **Interview tip:** The *water-jug / measuring* problem is a classic disguise for
+      shortest path on the state cross-product `(0..a)×(0..b)`. When a move's cost is
+      non-uniform, reach for **Dijkstra** rather than plain BFS; always encode the state
+      as one integer (here `A·(b+1)+B`) to make the graph cheap. The two-jug reachability
+      invariant (`everything is a multiple of gcd(a,b)`) is also a frequent stand-alone
+      question.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Question
+
+      There are two water containers: container `A` has volume `a` and container `B`
+      has volume `b`. You want to measure `x` units of water. Initially both containers
+      are empty. On each move you fill, empty, or transfer water; when you transfer, you
+      must always fill or empty at least one container. After the moves, container `A`
+      must have `x` units.
+
+      Find a sequence of moves where the **total amount of water moved is minimum**, or
+      state that it is impossible.
+
+      **Input.** The only line has three integers `a`, `b`, `x`.
+
+      **Output.** First print two integers `n` and `m`: the number of moves and the total
+      amount of water moved. Then print `n` moves, each one of `FILL A`, `FILL B`,
+      `EMPTY A`, `EMPTY B`, `MOVE A B`, `MOVE B A`. Each move must move at least one unit
+      of water. If impossible, print only `-1`.
+
+      **Constraints.**
+      - `1 ≤ a, b, x ≤ 1000`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      5 3 4
+      ```
+
+      **Output:**
+      ```
+      6 19
+      FILL A
+      MOVE A B
+      EMPTY B
+      MOVE A B
+      FILL A
+      MOVE A B
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — exhaustive search, O((a·b)^L) worst case.** DFS every move
+      sequence, tracking the best (smallest-total-water-moved) path that ends with
+      `A == x`. Correct for the stated objective, but explores all paths cyclically, so
+      it explodes even for modest `a, b`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int a,b,x,best=1e9; deque<string> cur,ans;
+      void dfs(int A,int B,int moved){
+          if(moved>=best) return;                 // prune: can't beat current best
+          if(A==x && moved<best){ best=moved; ans=cur; return; }
+          auto go=[&](int nA,int nB,int w,string nm){
+              if(w<=0) return;                    // each move must move >= 1 unit
+              cur.push_back(nm); dfs(nA,nB,moved+w); cur.pop_back();
+          };
+          go(a,B,a-A,"FILL A");   go(A,b,b-B,"FILL B");
+          go(0,B,A,"EMPTY A");    go(A,0,B,"EMPTY B");
+          go(A-min(A,b-B), B+min(A,b-B), min(A,b-B),"MOVE A B");
+          go(A+min(B,a-A), B-min(B,a-A), min(B,a-A),"MOVE B A");
+      }
+      int main(){
+          cin>>a>>b>>x;
+          if(x>a || x%__gcd(a,b)){ cout<<-1<<"\n"; return 0; }
+          dfs(0,0,0);
+          if(best==1e9){ cout<<-1<<"\n"; return 0; }
+          cout<<ans.size()<<" "<<best<<"\n";
+          for(auto &m: ans) cout<<m<<"\n";
+      }
+      ```
+      *Complexity: exponential — only tiny `a, b`.*
+
+      **② Optimization — Dijkstra minimising total water moved (intended).** Same state
+      graph, but edge cost = amount of water moved by that move; priority queue pops the
+      state with the smallest total moved (ties broken by fewer moves). This yields the
+      minimum total water moved:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const int INF=1e9;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int a,b,x; cin>>a>>b>>x;
+          if(x>a || x%__gcd(a,b)){ cout<<-1<<"\n"; return 0; }
+          int W=(a+1)*(b+1);
+          auto enc=[&](int A,int B){ return A*(b+1)+B; };
+          vector<int> dist(W,INF), moves(W,INF);
+          vector<pair<int,int>> par(W,{-1,-1}); // (prevIdx, moveType)
+          priority_queue<pair<int,pair<int,int>>, vector<pair<int,pair<int,int>>>, greater<>> pq;
+          dist[0]=0; moves[0]=0; pq.push({0,{0,0}});
+          vector<string> name{"FILL A","FILL B","EMPTY A","EMPTY B","MOVE A B","MOVE B A"};
+          int finalIdx=-1;
+          while(!pq.empty()){
+              auto [tot, p2]=pq.top(); pq.pop();
+              int mv=p2.first, idx=p2.second;
+              if(tot!=dist[idx] || mv!=moves[idx]) continue;
+              int A=idx/(b+1), B=idx%(b+1);
+              if(A==x){ finalIdx=idx; break; }
+              auto relax=[&](int nA,int nB,int moved,int t){
+                  if(moved<=0) return; int ni=enc(nA,nB);
+                  if(dist[ni]>tot+moved || (dist[ni]==tot+moved && moves[ni]>mv+1)){
+                      dist[ni]=tot+moved; moves[ni]=mv+1; par[ni]={idx,t};
+                      pq.push({dist[ni],{moves[ni],ni}});
+                  }
+              };
+              relax(a,B,a-A,0);            // FILL A
+              relax(A,b,b-B,1);            // FILL B
+              relax(0,B,A,2);              // EMPTY A
+              relax(A,0,B,3);              // EMPTY B
+              relax(A-min(A,b-B), B+min(A,b-B), min(A,b-B), 4); // MOVE A B
+              relax(A+min(B,a-A), B-min(B,a-A), min(B,a-A), 5); // MOVE B A
+          }
+          if(finalIdx==-1){ cout<<-1<<"\n"; return 0; }
+          vector<int> seq; for(int c=finalIdx;par[c].first!=-1;c=par[c].first) seq.push_back(par[c].second);
+          reverse(seq.begin(), seq.end());
+          cout<<seq.size()<<" "<<dist[finalIdx]<<"\n";
+          for(int t: seq) cout<<name[t]<<"\n";
+      }
+      ```
+      *Complexity: O((a+1)(b+1)·6·log) time, O((a+1)(b+1)) space — solves `a,b ≤ 1000`.*
+
+      **③ Further optimization — prune obvious impossibilities.** Before Dijkstra, the
+      `x > a` and `x % gcd(a,b) != 0` checks reject infeasible cases with zero search —
+      this alone handles a large fraction of inputs, and makes `-1` answers instant.
+
+      **④ Alternative — uniform-cost search / A***. Dijkstra here is literally
+      uniform-cost search; if you have a heuristic (e.g. `|current−x|` style) you could
+      run A*, but no admissible heuristic beats the plain search for these small state
+      spaces, so Dijkstra is the practical choice. No separate faster combinatorial
+      route exists for *generating the actual moves* (the gcd test only answers
+      *reachability*, not the move list).
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      - **Encoding.** State `(A,B) → A·(b+1)+B` makes paranoia-free 1-D arrays
+        (`dist`, `moves`, `par`).
+      - **`relax`** takes the six possibilities; `moved <= 0` guards the rule *"each
+        move must move at least one unit"* (e.g. `MOVE A B` with `A = 0` or `B` full would
+        move nothing and is skipped).
+      - **Costs.** `FILL A` costs `a−A`; `EMPTY A` costs `A`; `MOVE A B` costs
+        `min(A, b−B)`. The key loop pops the smallest `(totalMoved, numMoves)`; ties on
+        cost go to the shorter sequence.
+      - **Reconstruction** follows `par` from the goal back to `(0,0)` and prints the
+        move names in order, then the header `n m`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **`a=5, b=3, x=4`.** `x=4 ≤ 5`, `gcd(5,3)=1` → feasible. Dijkstra produces the
+      minimum-total path (6 moves, 19 units moved):
+
+      ```
+      FILL A      A=5 B=0   moves +5 (total 5)
+      MOVE A B    A=2 B=3   moves +3 (total 8)   pour 3 into B (fills it)
+      EMPTY B     A=2 B=0   moves +2 (total 11)
+      MOVE A B    A=0 B=2   moves +2 (total 13)
+      FILL A      A=5 B=2   moves +5 (total 18)
+      MOVE A B    A=4 B=3   moves +1 (total 19)  B has room for 1; A becomes 4
+      ```
+
+      Ends with `A = 4 = x`, total water moved `19`. Prints:
+      ```
+      6 19
+      FILL A
+      MOVE A B
+      EMPTY B
+      MOVE A B
+      FILL A
+      MOVE A B
+      ```
+      which matches the sample exactly. ✓
+
+      (Plain minimum-moves BFS would also reach `x` but can exceed 19 units of moved
+      water — the whole point of using Dijkstra for the objective.)
+
+  - type: mcq
+    prompt: "Why is plain BFS (uniform cost) not the right tool when the goal is to minimise the total amount of water moved?"
+    options:
+      - "Because each move has a different cost (amount of water moved), so a path with fewer moves can still move strictly more water total."
+      - "Because BFS cannot explore a state graph at all."
+      - "Because the water jug graph is infinite and BFS would not terminate."
+      - "Because BFS can only handle edges with negative weights."
+    answer: 0
+    explanation: "MOVE/FILL/EMPTY moves cost different amounts (a−A, A, min(A,b−B), etc.), so the graph is edge-weighted and the optimal path is not necessarily the shortest in edge count. Minimising total water moved therefore requires a weighted shortest-path algorithm (Dijkstra / uniform-cost search), not a breadth-first traversal that treats every edge as cost 1."

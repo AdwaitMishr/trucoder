@@ -1,0 +1,211 @@
+---
+id: swap-round-sorting
+title: Swap Round Sorting
+difficulty: medium
+order: 378
+tags:
+  - additional
+  - permutation
+  - cycles
+  - construction
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — sorting a permutation by parallel swap rounds
+
+      We have a permutation of `1..n` and, in each **round**, we may swap
+      *any number of disjoint pairs* simultaneously. We want the fewest rounds.
+      The key insight: a single round is exactly a product of **disjoint
+      transpositions** — an operator that swaps pairs whose indices are all
+      mutually distinct. Call such a thing a *matching*.
+
+      **What one matching can do.** A matching swaps only disjoint pairs, so the
+      permutation it applies is an **involution** (every cycle has length 1 or 2).
+      It can fix all elements of a 2-cycle in one round, and a single fixed point
+      in zero rounds. But a cycle of length `≥ 3` cannot be fixed by one matching
+      — it is not an involution, so it needs multiple rounds.
+
+      **Every permutation is a product of two involutions.** Conditioned on that
+      classical fact, sorting is always possible in at most **two** rounds.
+      Combined with the observation above:
+
+      - **0 rounds** if the array is already sorted (all fixed points);
+      - **1 round** if the permutation is an **involution** (all cycles have
+        length `≤ 2`) — one matching finishes it;
+      - **2 rounds** otherwise.
+
+      **Construction.** For each cycle, the first round pairs the *outermost*
+      elements and swaps them, walking inward (`cycle[0]↔cycle[last]`,
+      `cycle[1]↔cycle[last-1]`, …). This reverses the cycle into a product of
+      transpositions (an involution). A short second round then swaps each
+      remaining out-of-place element into position.
+
+      :::tip
+      **Interview tip:** Recognise "permutation + round/parallel operations" as
+      **cycle decomposition** problems. Cycle length and count drive the answer
+      (here, the involution test). The "product of two involutions" fact is the
+      hammer that bounds round counts to 2 — useful in array-sorting and
+      parallel-swap puzzles.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given an array containing a permutation of the numbers
+      `1, 2, …, n`, and your task is to sort the array using swap rounds. On
+      each swap round, you can choose any number of **distinct pairs** of
+      elements and swap each pair. Find the minimum number of rounds and show
+      how to choose the pairs in each round.
+
+      **Input.** The first input line has an integer `n`. The second line has
+      `n` integers `x_1, x_2, …, x_n`: the initial permutation.
+
+      **Output.** First print an integer `k`: the minimum number of rounds. Then
+      for each round, print the number of swaps and the indices of each swap. Any
+      valid solution is accepted.
+
+      **Constraints**
+      - `1 ≤ n ≤ 2·10^5`
+
+      **Sample**
+
+      Input:
+      ```
+      5
+      5 2 1 3 4
+      ```
+
+      Output:
+      ```
+      2
+      2
+      1 3
+      4 5
+      1
+      3 5
+      ```
+
+      *Explanation:* the initial array is `[5,2,1,3,4]`. After round 1 it becomes
+      `[1,2,5,4,3]`; after round 2 it becomes `[1,2,3,4,5]`.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — BFS over the permutation graph.** Each round = apply one
+      matching (any permutation that is an involution). Treat permutations as
+      states and matchings as unit-cost transitions; BFS finds the shortest path
+      to the identity. Correct but the state space is `n!` and the transition
+      set per state is huge.
+
+      ```cpp
+      // Idea only — BFS over n! states with n huge is not realisable in code;
+      // this is the conceptual brute-force used to validate small cases.
+      ```
+      *Complexity: O(n! · #matchings) — only meaningful for `n ≤ 5` or so.*
+
+      **② Optimization — O(n) cycle-decomposition construction.** Decompose the
+      permutation into cycles; the answer is `0` (sorted), `1` (every cycle
+      length `≤ 2`), else `2`. Round 1 reverses each cycle by swapping symmetrical
+      pairs (`cycle[l] ↔ cycle[r]` for `l` rising and `r` falling); round 2 fixes
+      any remaining out-of-place element by a single swap.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long LL;
+      int main(){
+          ios_base::sync_with_stdio(false); cin.tie(0); cout.tie(0);
+          int n; cin>>n;
+          vector<int> v(n);
+          for(int i=0;i<n;i++){ cin>>v[i]; v[i]--; }
+          vector<vector<pair<int,int>>> res;
+          vector<pair<int,int>> ans;
+          vector<bool> odw(n,false);
+          for(int i=0;i<n;i++){
+              vector<int> cycle;
+              for(int j=i; !odw[j]; j=v[j]){ cycle.push_back(j); odw[j]=true; }
+              for(int l=0,r=(int)cycle.size()-1; l<r; l++,r--){
+                  ans.emplace_back(cycle[l]+1, cycle[r]+1);
+                  swap(v[cycle[l]], v[cycle[r]]);
+              }
+          }
+          res.push_back(ans); ans.clear();
+          for(int i=0;i<n;i++){
+              if(v[i]!=i){ ans.emplace_back(i+1, v[i]+1); swap(v[i], v[v[i]]); }
+          }
+          res.push_back(ans);
+          if(res[1].size()){
+              cout<<"2\n";
+              cout<<res[0].size()<<"\n";
+              for(auto& pr:res[0]) cout<<pr.first<<" "<<pr.second<<"\n";
+              cout<<res[1].size()<<"\n";
+              for(auto& pr:res[1]) cout<<pr.first<<" "<<pr.second<<"\n";
+          } else if(res[0].size()){
+              cout<<"1\n";
+              cout<<res[0].size()<<"\n";
+              for(auto& pr:res[0]) cout<<pr.first<<" "<<pr.second<<"\n";
+          } else {
+              cout<<"0\n";
+          }
+          return 0;
+      }
+      ```
+      *Complexity: O(n) time and memory — trivially fast for `n ≤ 2·10^5`.*
+
+      **④ Alternative / note.** The construction works because a reversal of a
+      cycle is an involution, and the second round untwists the remaining
+      transpositions. If the input is already an involution the first round alone
+      suffices (answer `1`), and the equal-index-free sum of cycle lengths gives
+      the classic "minimum swaps to sort" analogue when rounds are unrestricted.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n). Key lines:
+
+      1. **0-index & cycle walk.** `v[i]--` maps values to 0-based; the inner
+         loop `for(j=i; !odw[j]; j=v[j])` follows the functional graph and labels
+         each cycle.
+      2. **Round 1 (reverse each cycle).** Swap `cycle[l]` with `cycle[r]` for
+         `l` from 0 and `r` from the end moving inward — this reverses the cycle,
+         turning the permutation into an involution (each element either fixed or
+         in a transposition).
+      3. **Round 2 (untwist).** For every `i` still hosting the wrong value,
+         swap `i` with `v[i]`; each such swap places at least one element and is
+         disjoint from the others, so it all happens in a single round.
+      4. **Format.** Print `2`, `1`, or `0` rounds based on whether each round's
+         swap list is empty.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5`, `x = 5 2 1 3 4` → 0-based `v = [4,1,0,2,3]`.
+
+      `v` as a mapping `i → v[i]`: `0→4, 1→1, 2→0, 3→2, 4→3`. Cycles:
+      `[0,4,3,2]` (length 4) and `[1]` (fixed).
+
+      | step | action | array before → after |
+      |------|--------|----------------------|
+      | round 1 | swap cycle[0]=0 ↔ cycle[3]=2 (print `1 3`) | `[4,1,0,2,3] → [0,1,4,2,3]` |
+      | round 1 | swap cycle[1]=4 ↔ cycle[2]=3 (print `5 4`) | `[0,1,4,2,3] → [0,1,4,3,2]` |
+      | round 2 | `v[2]=4 ≠ 2`, swap 2↔4 (print `3 5`)       | `[0,1,4,3,2] → [0,1,2,3,4]` |
+
+      Final array `[0,1,2,3,4]` = one-indexed `[1,2,3,4,5]` ✓, sorted in 2
+      rounds. (The sample prints the same two rounds; the `4 5` vs `5 4` order of
+      a symmetric swap — and the order inside a pair — is irrelevant.) The long
+      cycle (length 4) forces `2` rounds since it is not an involution.
+
+  - type: mcq
+    prompt: "A permutation all of whose cycles have length at most 2 can always be sorted in one round. Why?"
+    options:
+      - "Each length-2 cycle is one disjoint transposition and fixed points need no swap, so the whole permutation is one matching, which can be applied simultaneously in a single round."
+      - "Because the permutation has exactly n elements so one round always fixes everything."
+      - "Because sorting is only ever possible in one round regardless of the permutation."
+      - "Because 2-cycles always lie adjacent to each other in the array."
+    answer: 0
+    explanation: "A one-round operation is a product of pairwise-disjoint transpositions = an involution. A permutation that is already an involution (all cycles length 1 or 2) IS such a product, so applying it directly sorts the array in one round. Any cycle of length ≥ 3 disrupts this and forces a second round."
+type: content
+---

@@ -1,0 +1,269 @@
+---
+id: static-range-minimum-queries
+title: Static Range Minimum Queries
+difficulty: medium
+order: 120
+tags:
+  - sparse-table
+  - range-minimum
+  - static-array
+  - binary-lifting
+blocks:
+  - type: markdown
+    content: |
+      # Static Range Minimum Queries
+
+      **The technique: the sparse table.** For a **static** array, we precompute
+      the minimum of every length-`2^k` block and store it in a table
+      `st[k][i] = min of a[i .. i+2^k−1]`. Because `min` is **idempotent**
+      (`min(x, x) = x`), any range — whatever its length — is covered exactly by
+      **two** overlapping blocks whose lengths are powers of two:
+
+      ```
+      len = r - l + 1
+      k   = floor(log2(len))
+      min(l, r) = min( st[k][l] , st[k][ r - 2^k + 1 ] )
+      ```
+
+      **Why it works.** The two blocks start at `l` and end at `r`, each of
+      length `2^k ≤ len`, and together they overlap and span `[l, r]`. Taking
+      the min of their two precomputed minima is correct precisely because
+      double-counting is harmless for `min` (unlike `sum`). This is why a sparse
+      table gives **O(1)** queries while needing only O(n log n) preprocessing.
+
+      **When you reach for it.** A static array with many minimum/maximum range
+      queries — LCA on trees (CSES "Distance Queries"), RMQ, and the offline
+      steps of several divide-and-conquer optimizations. If the array is *static*
+      and you only need the fused answer, nothing beats O(1) per query.
+
+      **Worked mini-example.** `[3, 2, 4, 5, 1, 1, 5, 3]`, query `[2, 4]`
+      (1-indexed → `l=1, r=3`). `len=3`, `k=1`, so:
+
+      ```
+      min(st[1][1], st[1][2]) = min(min(2,4), min(4,5)) = min(2, 4) = 2   ✓
+      ```
+
+      **Complexity.** Build O(n log n), each query O(1), memory O(n log n) —
+      about `n·17 ≈ 3.4·10^6` entries at `n = 2·10^5`.
+
+      :::tip
+      **Interview tip:** A sparse table is the classic O(1)-query structure for
+      *idempotent* range operations (min, max, gcd, bitwise AND/OR) over a fixed
+      array. Interviewers probe whether you know the two-block overlap trick and
+      can derive `k = floor(log2(len))`. The usual follow-up: "why not use it for
+      range sum?" — because `+` is not idempotent; two overlapping blocks would
+      double-count their intersection, so sum/sum-xor LMQ-style queries instead
+      use prefix sums (O(1)) or a segment tree. Mention that the sparse table is
+      also the foundation of O(1)-LCA via Euler tour + RMQ.
+      :::
+  - type: markdown
+    content: |
+      # Question — Static Range Minimum Queries
+
+      Given an array of `n` integers, your task is to process `q` queries asking
+      for the **minimum value in the range** `[a, b]`. The array never changes.
+
+      **Constraints:**
+      - `1 ≤ n, q ≤ 2·10^5`
+      - `1 ≤ x[i] ≤ 10^9`
+      - `1 ≤ a ≤ b ≤ n`
+
+      **Input:** the first line has two integers `n` and `q`. The second line
+      has `n` integers `x[1], …, x[n]`. Then there are `q` lines, each with two
+      integers `a b`.
+
+      **Output:** for each query, print the minimum value in the range `[a, b]`.
+
+      Sample input:
+
+      ```
+      8 4
+      3 2 4 5 1 1 5 3
+      2 4
+      5 6
+      1 8
+      3 3
+      ```
+
+      Sample output:
+
+      ```
+      2
+      1
+      1
+      4
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·q)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<long long> a(n + 1);
+          for (int i = 1; i <= n; ++i) cin >> a[i];
+          while (q--) {
+              int l, r; cin >> l >> r;
+              long long mn = LLONG_MAX;
+              for (int i = l; i <= r; ++i) mn = min(mn, a[i]);
+              cout << mn << '\n';
+          }
+          return 0;
+      }
+      ```
+      O(n) per query → O(n·q) ≈ `4·10^10` comparisons at `n = q = 2·10^5`.
+      Correct, far too slow.
+
+      **② Optimization — sparse table, O(1) query** (the chosen solution)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          int K = 31 - __builtin_clz(n) + 1;          // floor(log2(n)) + 1
+          vector<vector<long long>> st(K, vector<long long>(n));
+          for (int i = 0; i < n; ++i) cin >> st[0][i];
+          for (int k = 1; k < K; ++k)
+              for (int i = 0; i + (1 << k) <= n; ++i)
+                  st[k][i] = min(st[k - 1][i], st[k - 1][i + (1 << (k - 1))]);
+          while (q--) {
+              int a, b; cin >> a >> b; --a; --b;       // to 0-indexed
+              int len = b - a + 1;
+              int k = 31 - __builtin_clz(len);          // floor(log2(len))
+              cout << min(st[k][a], st[k][b - (1 << k) + 1]) << '\n';
+          }
+          return 0;
+      }
+      ```
+      Build O(n log n), query O(1), memory O(n log n). Optimal query time.
+
+      **③ Further optimization — none needed**
+      O(1) per query is the best any comparison-based RMQ can do on a static
+      array, and the O(n log n) build is at the cost scale of reading the data
+      once. There is nothing faster to reach for.
+
+      **④ Alternative — segment tree, O(log n) query**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<ll> a(n);
+          for (int i = 0; i < n; ++i) cin >> a[i];
+          vector<ll> st(4 * n);
+          function<ll(int,int,int)> build = [&](int node, int lo, int hi) {
+              if (lo == hi) return st[node] = a[lo];
+              int mid = (lo + hi) / 2;
+              return st[node] = min(build(2*node, lo, mid), build(2*node+1, mid+1, hi));
+          };
+          function<ll(int,int,int,int,int)> qry = [&](int node, int lo, int hi, int l, int r) {
+              if (r < lo || hi < l) return LLONG_MAX;
+              if (l <= lo && hi <= r) return st[node];
+              int mid = (lo + hi) / 2;
+              return min(qry(2*node, lo, mid, l, r), qry(2*node+1, mid+1, hi, l, r));
+          };
+          build(1, 0, n - 1);
+          while (q--) { int a, b; cin >> a >> b; cout << qry(1, 0, n-1, a-1, b-1) << '\n'; }
+          return 0;
+      }
+      ```
+      O(log n) per query, O(n) build. Slower than a sparse table for the pure
+      static case, but it becomes the *better* choice the moment the array can
+      change (see the Dynamic Range Minimum lesson).
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② sparse table**. Key parts:
+
+      - **`K = floor(log2(n)) + 1` rows** via `__builtin_clz`. `31 - clz(n)` is
+        exactly `floor(log2(n))`, the largest block length needed.
+      - **Build:** row `k` covers blocks of length `2^k`; each is the min of two
+        halved blocks from row `k−1`:
+        `st[k][i] = min(st[k-1][i], st[k-1][i + 2^(k-1)])`.
+      - **Query:** `k = floor(log2(len))` picks the biggest power-of-two block.
+        `min(st[k][l], st[k][r-2^k+1])` covers `[l, r]` with **two** overlapping
+        blocks — valid only because `min` tolerates overlap (idempotent).
+      - The indices are converted to 0-based (`--a; --b`) so they line up with
+        the table.
+
+      The `min` overlap is the entire trick: the same code with `+` in place of
+      `min` would be wrong for sums, because the intersection would be counted
+      twice.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      8 4
+      3 2 4 5 1 1 5 3
+      2 4
+      5 6
+      1 8
+      3 3
+      ```
+
+      0-indexed array = `3 2 4 5 1 1 5 3`.
+
+      | k | block length | st[k] rows (only valid starts shown) |
+      |---|-------------|--------------------------------------|
+      | 0 | 1 | 3 2 4 5 1 1 5 3 |
+      | 1 | 2 | 2 2 4 1 1 1 3 |
+      | 2 | 4 | 2 1 1 1 1 |
+      | 3 | 8 | 1 |
+
+      Now each query (`a b` are 1-indexed in input; converted here):
+
+      | Query | l,r (0-idx) | len | k | st[k][l], st[k][r-2^k+1] | Answer |
+      |-------|-------------|-----|---|--------------------------|--------|
+      | `2 4` | 1,3 | 3 | 1 | min(2,4), min(4,5) → min(2,4) | **2** ✓ |
+      | `5 6` | 4,5 | 2 | 1 | min(1,1)=1, min(1,1)=1 | **1** ✓ |
+      | `1 8` | 0,7 | 8 | 3 | st[3][0] = 1 | **1** ✓ |
+      | `3 3` | 2,2 | 1 | 0 | st[0][2] = 4 | **4** ✓ |
+
+      Result: `2 1 1 4` ✓.
+
+      **Edge cases:** a single-element range (`len=1`, `k=0`) reads `st[0][pos]`
+      directly; a full-array query (`len=8`) uses the single `k=3` block. Both
+      handle boundary positions without special-casing.
+  - type: flowchart
+    title: "Sparse table query with two overlapping blocks"
+    nodes:
+      - "len = r - l + 1"
+      - "k = floor(log2(len))"
+      - "Block A = st[k][l]"
+      - "Block B = st[k][r - 2^k + 1]"
+      - "min(A, B)"
+      - "Print answer"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 1, to: 3}
+      - {from: 2, to: 4, label: "both now"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: 'Why does a sparse table answer a minimum range query with just two overlapping power-of-two blocks, instead of decomposing the range into many disjoint blocks?'
+    options:
+      - Because it stores every possible range explicitly
+      - Because min is idempotent — overlapping is free (min(x,x)=x), so two blocks of length 2^k that overlap and span [l,r] are enough to report the global min, making each query O(1)
+      - Because the array is sorted
+      - Because a block covers exactly half the array
+    answer: 1
+    explanation: For min/max/gcd/AND the same element appearing in both blocks does not change the result, so overlapping coverage is correct. Any range of length len fits inside two length-2^k blocks (k=floor(log2 len)), one anchored at l, one at r. This overlap trick is what buys O(1) queries. It fails for sum, where the intersection would be double-counted — hence prefix sums instead.
+type: content
+---

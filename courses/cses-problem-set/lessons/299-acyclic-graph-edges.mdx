@@ -1,0 +1,252 @@
+---
+id: acyclic-graph-edges
+title: Acyclic Graph Edges (Orientation)
+difficulty: hard
+order: 299
+tags:
+  - graph-algorithms
+  - topological-sort
+  - dag
+  - orientation
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — orienting edges so the graph stays acyclic
+
+      Some problems hand you a graph that is **partly fixed**: a set of already
+      directed edges known to form a DAG, plus a set of **undirected** edges whose
+      direction you get to choose. The goal is to pick a direction for every
+      undirected edge so that the result is **still a DAG**. Intuitively this
+      feels hard (we could accidentally close a cycle), but there is a clean,
+      always-works rule.
+
+      **Key insight — a topological order linearises everything.** Compute a
+      topological order `pos` of the fixed DAG (`a` before `b` whenever edge
+      `a → b` exists). Now every undirected edge `{u, v}` connects two positions
+      in that order; orient it **from the earlier position to the later one**:
+      `u → v` if `pos[u] < pos[v]`, else `v → u`.
+
+      **Why this always stays acyclic.** After orienting every edge this way,
+      *every* edge of the resulting digraph points from a smaller `pos` value to a
+      larger one. A directed cycle would have to point "backwards" at some point,
+      but an edge can never go from a later position to an earlier one. So no
+      cycle can form — the topological order we computed is still a topological
+      order of the finished graph. Better: **a solution always exists**, and this
+      greedy constructs one deterministically.
+
+      **Complexity.** One topological sort of the DAG, `O(n + m)`; each of the `k`
+      undirected edges is answered in `O(1)` → total `O(n + m + k)`.
+
+      :::tip
+      **Interview tip:** "Choose a direction to avoid creating a cycle" is a
+      recurring trick. The mental model interviewers reward: *fix an order (the
+      DAG's topological order), then orient every free edge forward in that
+      order*. It also appears as "assign each undirected edge a head so the
+      directed graph has a valid ranking/round schedule". Always name the
+      invariant — after orienting, every edge points along `pos`.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given a DAG (a directed graph with no cycles) that is **partly
+      pre-oriented**: the first `m` lines of input are fixed directed edges.
+      After them come `k` **undirected** edges whose direction you must choose.
+
+      Assign a direction to each of the `k` undirected edges so that the
+      **whole** resulting graph is still acyclic (a DAG). A solution always
+      exists; print any one.
+
+      **Input.** The first line has `n` and `m` (vertices and fixed directed
+      edges). Then `m` lines `a b` — a fixed edge `a → b` (jointly, these form a
+      DAG). Next a line with `k`, then `k` lines `u v` describing the undirected
+      edges.
+
+      **Output.** For each undirected edge #`i`, print the direction you chose as
+      two integers `x y` meaning edge `x → y`. The printed set must make the whole
+      graph acyclic.
+
+      **Constraints** `1 ≤ n, m ≤ 2·10^5`, `0 ≤ k ≤ 2·10^5`.
+
+      **Sample**
+      ```
+      Input:
+      4 3
+      1 2
+      2 4
+      3 4
+      3
+      1 3
+      2 3
+      1 4
+
+      Output:
+      1 3
+      3 2
+      1 4
+      ```
+      Explanation: the fixed edges are `1→2, 2→4, 3→4` (a DAG). One topo order is
+      `1,2,3,4`. Answer `1 3` (pos 1 < pos 3), `3 2` (pos 3 > pos 2 changed to
+      point forward), `1 4` (pos 1 < pos 4). Every edge now points along that
+      order, so the result is acyclic.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2^k·(n+m)).** Enumerate every assignment of directions
+      (each undirected edge has 2 choices), build the resulting digraph, and check
+      acyclicity (DFS / Kahn) for each. Correct but exponential in `k` — hopeless
+      at `k = 2·10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n,m,k;
+      vector<pair<int,int>> fixedEdges, freeEdges;
+      bool hasCycle(vector<pair<int,int>> dir){
+          vector<vector<int>> adj(n+1); vector<int> indeg(n+1,0);
+          for(auto [a,b]: fixedEdges){ adj[a].push_back(b); indeg[b]++; }
+          for(auto [a,b]: dir){ adj[a].push_back(b); indeg[b]++; }
+          queue<int> q; int cnt=0;
+          for(int v=1; v<=n; v++) if(indeg[v]==0) q.push(v);
+          while(!q.empty()){ int u=q.front(); q.pop(); cnt++;
+              for(int to: adj[u]) if(--indeg[to]==0) q.push(to); }
+          return cnt<n;   // fewer than n placed => cycle
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin>>n>>m; fixedEdges.resize(m);
+          for(int i=0;i<m;i++) cin>>fixedEdges[i].first>>fixedEdges[i].second;
+          cin>>k; freeEdges.resize(k);
+          for(int i=0;i<k;i++) cin>>freeEdges[i].first>>freeEdges[i].second;
+          for(int mask=0; mask<(1<<k); mask++){
+              vector<pair<int,int>> dir;
+              for(int i=0;i<k;i++){
+                  auto [u,v]=freeEdges[i];
+                  dir.push_back((mask>>i & 1) ? make_pair(u,v) : make_pair(v,u));
+              }
+              if(!hasCycle(dir)){ for(auto [x,y]:dir) cout<<x<<" "<<y<<"\n"; return 0; }
+          }
+          // unreachable because a solution always exists
+      }
+      ```
+
+      **② Optimization — orient along a topological order, O(n+m+k) (submission).**
+      Topologically sort the fixed DAG (Kahn), record `pos[v]` for each vertex,
+      then orient each free edge from the smaller `pos` to the larger one.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; cin>>n>>m;
+          vector<vector<int>> adj(n+1);
+          vector<int> indeg(n+1,0);
+          for(int i=0;i<m;i++){ int a,b; cin>>a>>b; adj[a].push_back(b); indeg[b]++; }
+          queue<int> q;
+          for(int v=1; v<=n; v++) if(indeg[v]==0) q.push(v);
+          vector<int> topo;   // topological order of the fixed DAG
+          while(!q.empty()){
+              int u=q.front(); q.pop();
+              topo.push_back(u);
+              for(int to: adj[u]) if(--indeg[to]==0) q.push(to);
+          }
+          vector<int> pos(n+1);
+          for(int i=0;i<(int)topo.size(); i++) pos[topo[i]]=i;
+          int k; cin>>k;
+          while(k--){
+              int u,v; cin>>u>>v;
+              if(pos[u] < pos[v]) cout<<u<<" "<<v<<"\n";
+              else                cout<<v<<" "<<u<<"\n";
+          }
+      }
+      ```
+
+      **③ Note — the impossibility question never arises.** Unlike Course
+      Schedule, acyclic orientation is *always* feasible: the fixed part is a DAG,
+      and orienting free edges along any of its topological orders provably cannot
+      create a cycle. So there is no "IMPOSSIBLE" branch to add.
+
+      **④ Alternative — DFS finish-time order, O(n+m+k).** Instead of Kahn's
+      source-side order, run DFS on the fixed DAG and use its **finish-time" order
+      (decreasing finish = topological). Identical logic for orienting free edges,
+      a different way to obtain `pos`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      vector<vector<int>> adj;
+      vector<int> state, fin;
+      void dfs(int v){
+          state[v]=1;
+          for(int to: adj[v]) if(state[to]==0) dfs(to);
+          fin.push_back(v);
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; cin>>n>>m;
+          adj.assign(n+1,{});
+          for(int i=0;i<m;i++){ int a,b; cin>>a>>b; adj[a].push_back(b); }
+          state.assign(n+1,0);
+          for(int v=1; v<=n; v++) if(state[v]==0) dfs(v);
+          vector<int> pos(n+1);
+          for(int i=0;i<n;i++) pos[fin[i]]=n-1-i;   // larger finish = earlier in topo
+          int k; cin>>k;
+          while(k--){ int u,v; cin>>u>>v;
+              if(pos[u] < pos[v]) cout<<u<<" "<<v<<"\n";
+              else                cout<<v<<" "<<u<<"\n"; }
+      }
+      ```
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The submission (② ) is Kahn + a position array + a comparison.
+
+      1. **Build the fixed DAG** (`m` directed edges), compute in-degrees.
+      2. **Kahn** produces `topo` — any topological order of the fixed part. The
+         order is stored in `pos[v]`.
+      3. **For each undirected edge `{u,v}`:** if `pos[u] < pos[v]` the edge
+         `u → v` points forward in the order → print it; otherwise print the
+         reverse.
+      4. **Outcome:** every printed edge (and every fixed edge) points from a
+         smaller to a larger `pos`, which by construction cannot build a cycle.
+
+      The guarantee lives entirely in the invariant "all edges follow `pos`" —
+      the same fact Kahn relies on for existence.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 4`, fixed edges `1→2, 2→4, 3→4`; free edges
+      `{1,3}, {2,3}, {1,4}`.
+
+      1. **Kahn:** in-degrees `[1:0,2:1,3:0,4:2]`. Queue `{1,3}`. Pop 1 (relax
+         2→0, enqueue), pop 3 (relax 4→1), pop 2 (relax 4→0, enqueue), pop 4.
+         `topo = [1,3,2,4]`; `pos = {1:0, 3:1, 2:2, 4:3}`.
+      2. **Orient free edges:**
+         - `{1,3}`: `pos1=0 < pos3=1` → `1 3`.
+         - `{2,3}`: `pos2=2 > pos3=1` → `3 2`.
+         - `{1,4}`: `pos1=0 < pos4=3` → `1 4`.
+      3. **All edges now follow `pos`** → acyclic.
+
+      **Printed:** `1 3 / 3 2 / 1 4` — exactly the sample.
+
+      **Actual vs expected:** identical ✓.
+
+  - type: mcq
+    prompt: "After orienting every undirected edge along the fixed DAG’s topological order, why can no directed cycle form?"
+    options:
+      - "Because every edge (fixed and new) points from a smaller to a larger position, and a cycle would need an edge pointing backward."
+      - "Because the undirected edges are always between non-adjacent vertices."
+      - "Because orienting edges never affects reachability between existing vertices."
+      - "Because the fixed DAG was chosen to have exactly one topological order."
+    answer: 0
+    explanation: "We assign pos[v] a topological order of the fixed DAG. Orienting each free edge from the smaller pos to the larger one means every edge in the finished graph points strictly forward in pos. For a directed cycle to exist, following edges would have to return to a smaller position, which is impossible — so the graph stays acyclic. This is exactly why a solution is guaranteed and why the greedy is both fast and correct."
+type: content
+---

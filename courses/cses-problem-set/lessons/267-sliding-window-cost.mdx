@@ -1,0 +1,238 @@
+---
+id: sliding-window-cost
+title: "Sliding Window Cost"
+type: content
+difficulty: medium
+order: 267
+tags:
+  - sliding-window
+  - median
+  - absolute-value-cost
+  - multiset
+blocks:
+  - type: markdown
+    content: |
+      # Sliding Window Cost — minimum total change to equalise a window
+
+      In each window of length `k` we may increase or decrease the numbers
+      (costing `1` per unit of change) so that **all values inside the window
+      become equal**. We want the minimum total cost for each window as the
+      window slides right.
+
+      If the window's values are `x_1, …, x_k` and we make them all equal to a
+      target `t`, the cost is
+
+      ```
+      cost(t) = sum_i | x_i - t |
+      ```
+
+      The central fact of this problem is a classic one-dimensional fact:
+
+      > The `t` that minimises `sum |x_i - t|` is **any median** of the values.
+
+      (Intuition: moving `t` toward a median shrinks more gaps than it grows,
+      so the cheapest target is a median.) We therefore need, per window, the
+      median *and* enough info to compute the two sums of absolute deviations
+      around it in O(1) — which is where the two-heap structure with running
+      sums comes in.
+
+      ## Computing the cost from two halves
+
+      Split the window into the `ceil(k/2)` smallest values (the "low" half,
+      `L`) and the rest (`R`). The median is `m = *L.rbegin()`. Elements in
+      `L` are `<= m` (they must be **raised** to `m`), elements in `R` are
+      `>= m` (they must be **lowered**). Track `sumL` and `sumR`. Then:
+
+      ```
+      cost = ( |L| * m - sumL )  +  ( sumR - |R| * m )
+              change low half up         change high half down
+      ```
+
+      Maintaining `|L|`, `|R|`, `sumL`, `sumR` as we slide is exactly the
+      two-multiset median structure from the *Sliding Window Median* lesson,
+      with the two sums updated alongside every insert/erase.
+
+      :::tip
+      **Interview tip:** "minimise total absolute deviation" is the signature
+      of a **median** problem (the *Stick Lengths* / *Sliding Cost* family).
+      Ask yourself which statistic minimises an absolute-sum objective — the
+      answer is the median, not the mean (a squared objective would pick the
+      mean). State that distinction; interviewers test it directly.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given an array of `n` integers and a window length `k`. In each
+      window you may increase or decrease the numbers, and a change of
+      magnitude `1` costs `1`. You want to change the numbers of the window so
+      that they are **all equal**. What is the minimum total cost for each of
+      the `n - k + 1` windows?
+
+      ## Input
+
+      The first input line has two integers `n` and `k`. The next line has `n`
+      integers `a_1, a_2, …, a_n`.
+
+      **Constraints:** `1 <= k <= n <= 2*10^5`, `1 <= a_i <= 10^9`
+
+      ## Output
+
+      Print `n - k + 1` integers separated by spaces: the minimum total cost
+      for each window in order.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 3
+      2 4 3 5 8
+      ```
+      **Output:**
+      ```
+      2 2 5
+      ```
+      Window `[2,4,3]`: median `3`, cost `|2-3|+|3-3|+|4-3| = 2`. Window
+      `[4,3,5]`: median `4`, cost `2`. Window `[3,5,8]`: median `5`, cost
+      `|3-5|+|5-5|+|8-5| = 5`. (This is CSES problem 1077 "Sliding Cost";
+      the sample matches its format.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·k²)**
+
+      For each window, sort its values, then for every candidate target `t`
+      (a window value is always optimal) compute the sum of absolute
+      deviations. Correct but quadratic per window.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k; vector<int> a(n); for(auto&x:a) cin>>x;
+          for(int l=0; l<n-k+1; l++){
+              vector<int> w(a.begin()+l, a.begin()+l+k);
+              long long best=LLONG_MAX;
+              for(int t:w){ long long c=0; for(int v:w) c+=abs((long long)v-t); best=min(best,c); }
+              cout<<(l?" ":"")<<best;
+          }
+          cout<<"\n"; return 0;
+      }
+      ```
+
+      *`O(n·k²)` — far too slow for `n = 2*10^5`.*
+
+      **② Optimization — two multisets with sums, O(n log k) (optimal)**
+
+      The median minimises absolute deviation. Keep the two-heap split with
+      running sums so the cost is O(1) once the median is known. This is the
+      tier we compile and verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<int> a(n); for(auto&x:a) cin>>x;
+          multiset<int> L,R; long long sumL=0, sumR=0;
+          auto balance=[&](void){ // |L| is ceil(k/2); L holds the smaller half
+              while((int)L.size()>(int)R.size()+1){ int x=*L.rbegin(); R.insert(x); sumR+=x; sumL-=x; L.erase(prev(L.end())); }
+              while((int)L.size()<(int)R.size()){ int y=*R.begin(); L.insert(y); sumL+=y; sumR-=y; R.erase(R.begin()); }
+              while(!L.empty() && !R.empty() && *L.rbegin()>*R.begin()){
+                  int x=*L.rbegin(), y=*R.begin();
+                  L.erase(prev(L.end())); R.erase(R.begin());
+                  L.insert(y); R.insert(x);
+                  sumL += y - x; sumR += x - y;
+              }
+          };
+          auto add=[&](int v){ L.insert(v); sumL+=v; balance(); };
+          auto del=[&](int v){
+              auto it=L.find(v); if(it!=L.end()){ L.erase(it); sumL-=v; }
+              else { it=R.find(v); if(it!=R.end()){ R.erase(it); sumR-=v; } }
+              balance();
+          };
+          for(int i=0;i<k;i++) add(a[i]);
+          auto cost=[&](){ long long m=*L.rbegin(); return (long long)L.size()*m - sumL + sumR - (long long)R.size()*m; };
+          vector<long long> out; out.push_back(cost());
+          for(int r=k;r<n;r++){ del(a[r-k]); add(a[r]); out.push_back(cost()); }
+          for(int i=0;i<(int)out.size();i++) cout<<(i?" ":"")<<out[i];
+          cout<<"\n"; return 0;
+      }
+      ```
+
+      *`O(n log k)` time, `O(k)` space. Use `long long`: with `k` values of
+      magnitude up to `10^9`, a cost can reach ~`10^14`.*
+
+      **③ Note** — there is no separate third algorithm worth a full tier: the
+      two-multiset-with-sums approach is the canonical solution, and any Fenwick
+      / segment-tree reformulation gives the same `O(log k)` per slide. We skip
+      a further tier; the crux is the median minimising absolute deviation and
+      the O(1) cost from running sums.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Median is the optimal target.** `cost()` reads `m = *L.rbegin()`, the
+        median, because a median minimises the sum of absolute deviations — so
+        the minimum total change equals the cost of moving every window value
+        to `m`.
+      - **`cost = (|L|·m − sumL) + (sumR − |R|·m)`.** The left term raises every
+        low-half value (< m) up to `m`: `|L|` values, each costing
+        `m − x_i`, summed as `|L|·m − sumL`. The right term lowers every
+        high-half value (> m) down to `m`, `sumR − |R|·m`. Total = minimum
+        equalisation cost. O(1) per window.
+      - **Sums travel with every move.** `balance`, `add`, and `del` update
+        `sumL`/`sumR` in lockstep with each `insert`/`erase`, so the invariant
+        "`sumX` = sum of multiset `X`" never drifts.
+      - **64-bit arithmetic.** `|L|·m` alone can be `10^5·10^9 = 10^14`, so the
+        cost is computed in `long long`.
+
+      Example on window `[2,4,3]`: `L = {2,3}`, `R = {4}`, `sumL = 5`,
+      `sumR = 4`, `m = 3` → cost `= (2·3 − 5) + (4 − 1·3) = 1 + 1 = 2`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5, k = 3`, `a = [2, 4, 3, 5, 8]`.
+
+      **Window [2,4,3]:**
+      `L = {2,3}` (ceil(3/2)=2 smallest), `R = {4}`, `sumL = 5, sumR = 4`,
+      `m = 3`.
+      cost `= (2·3 − 5) + (4 − 1·3) = 1 + 1 = 2`. **Output 2.**
+
+      **Slide → [4,3,5]** (remove `2`, add `5`):
+      - remove `2` (in L): `L = {3}`, `sumL = 3`; |L|=|R|=1.
+      - add `5`: `L = {3,5}` → |L|=2 ✓; order 5 vs R.begin `4`? after inserting,
+        `L={3,5}`, `R={4}` → `*L.rbegin()=5 > *R.begin()=4`, swap → `L={3,4}`,
+        `R={5}`, `sumL=7, sumR=5`. `m = 4`.
+      cost `= (2·4 − 7) + (5 − 1·4) = 1 + 1 = 2`. **Output 2.**
+
+      **Slide → [3,5,8]** (remove `4`, add `8`):
+      - remove `4` (in L): `L = {3}`, `sumL = 3`; `R = {5}`.
+      - add `8`: `L = {3,8}` → |L|=2 ✓; `R={5}`; order 8 > 5 → swap → `L={3,5}`,
+        `R={8}`, `sumL=8, sumR=8`. `m = 5`.
+      cost `= (2·5 − 8) + (8 − 1·5) = 2 + 3 = 5`. **Output 5.**
+
+      Final output: `2 2 5` — matches the sample.
+  - type: flowchart
+    title: "Sliding-window equalisation cost"
+    nodes: ["split window: low half L, high half R, with sums sumL, sumR", "median m = largest of L", "cost = (|L|*m - sumL) + (sumR - |R|*m)", "slide: remove element, update sums", "add element, rebalance L/R", "next window"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 1}
+  - type: mcq
+    prompt: "To equalise a window at minimum cost, the optimal target value is chosen from which statistic, and why?"
+    options:
+      - "The mean, because it minimises the sum of squared deviations."
+      - "A median, because a median minimises the sum of absolute deviations |x_i - t|."
+      - "The maximum, because it is always reachable."
+      - "Any value, since the cost does not depend on the target."
+    answer: 1
+    explanation: "The cost is sum_i |x_i - t|, an absolute-value objective. For absolute deviations the minimiser is the median; the mean minimises the squared objective sum (x_i - t)². So the correct target is a median of the window's values."
+---

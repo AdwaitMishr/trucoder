@@ -1,0 +1,246 @@
+---
+id: exponentiation
+title: "Exponentiation"
+type: content
+difficulty: easy
+order: 161
+tags:
+  - modular-arithmetic
+  - binary-exponentiation
+  - fast-pow
+blocks:
+  - type: markdown
+    content: |
+      # Exponentiation — modular exponentiation by squaring
+
+      We need `a^b mod 10^9+7` for up to `2*10^5` queries, where both `a` and
+      `b` can be as large as `10^9`. Multiplying `a` by itself `b` times is
+      hopeless — `b` alone can be a billion, times `2*10^5` queries.
+
+      The trick is **exponentiation by squaring** (binary exponentiation).
+      Repeated squaring lets us square `a` and halve the exponent at every
+      step. Since `(x*y) mod m = (x mod m)*(y mod m) mod m`, we can keep every
+      intermediate value in a 64-bit range by reducing modulo `m` at each
+      multiply:
+
+      ```
+      a^b = / (a^(b/2))^2            if b is even
+            \ a * (a^(b/2))^2        if b is odd
+      ```
+
+      Reading it another way: write `b` in binary. Only the bits that are `1`
+      contribute — those are exactly the powers `a`, `a^2`, `a^4`, `a^8`, ...
+      — and we build those powers by repeated squaring while scanning `b`.
+      This replaces `O(b)` multiplications with `O(log b)`.
+
+      It generalizes directly: the same loop computes `b^c mod m` with the
+      exponent `c` and modulus `m`, which is exactly the building block used
+      by the next lesson (Exponentiation II).
+
+      **Time:** `O(log b)` per query. **Space:** `O(1)`.
+
+      :::tip
+      **Interview tip:** binary exponentiation is a top-10 "always reach for
+      it" primitive. Its real value is that you can plug *any* modulus and any
+      exponent in, so it shows up everywhere: matrix powers, the Fibonacci
+      numbers, counting `a^b` modulo primes, and inside almost every
+      cryptography/DP recurrence. Get comfortable with the squaring loop — it
+      is the most common "one-log-factor" optimization in number theory.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to efficiently calculate values `a^b` modulo `10^9+7`.
+
+      Note that in this task we assume that `0^0=1`.
+
+      ## Input
+
+      The first input line contains an integer `n`: the number of calculations.
+
+      After this, there are `n` lines, each containing two integers `a` and `b`.
+
+      **Constraints**
+
+      - `1 <= n <= 2 * 10^5`
+      - `0 <= a,b <= 10^9`
+
+      ## Output
+
+      Print each value `a^b` modulo `10^9+7`.
+
+      ## Example
+
+      Input:
+
+      ```
+      3
+      3 4
+      2 8
+      123 123
+      ```
+
+      Output:
+
+      ```
+      81
+      256
+      921450052
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — loop b times, O(b) per query**
+
+      Multiply `a` into the answer `b` times, reducing modulo `P` each step.
+      Correct, but needs `b` multiplications — up to `10^9` per query. With
+      `2*10^5` queries that is far beyond any time limit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll P = 1000000007;
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          while(n--){ ll a,b; cin>>a>>b;
+              ll r = 1 % P; a %= P;
+              for(ll i=0;i<b;i++) r = r*a % P;
+              cout << r << "\n";
+          }
+      }
+      ```
+
+      *`O(b)` per query — up to `10^9` iterations. Too slow.*
+
+      **② Optimization — binary exponentiation, O(log b) per query**
+
+      Scan the bits of `b`. Keep `base = a^(2^i)`; whenever the current bit of
+      `b` is `1`, fold it into the result, and always square `base` for the
+      next bit. This is the optimal tier.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll P = 1000000007;
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          while(n--){
+              ll a,b; cin>>a>>b;
+              ll result = 1, base = a % P;
+              while(b){
+                  if(b & 1) result = result * base % P;  // this bit of b contributes
+                  base = base * base % P;                 // a, a^2, a^4, ...
+                  b >>= 1;
+              }
+              cout << result << "\n";
+          }
+      }
+      ```
+
+      *`O(log b)` per query — at most ~30-31 iterations even for `b = 10^9`.*
+
+      **③ Further optimization — already optimal**
+
+      `O(log b)` is asymptotically minimal for a single power. The loop only
+      varies cosmetically (e.g. early-exit when `result == 0` or `base == 1`),
+      none of which changes the big-O.
+
+      **④ Alternative algorithm — recursive divide and conquer, O(log b)**
+
+      The same identity applied top-down gives a recursive fast power. It is
+      mathematically identical and equally fast; the iterative version (②) is
+      usually preferred for clarity and to avoid stack overhead.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll P = 1000000007;
+      ll power(ll a, ll b){
+          if(b == 0) return 1 % P;
+          ll half = power(a, b / 2);
+          half = half * half % P;
+          if(b & 1) half = half * (a % P) % P;
+          return half;
+      }
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n; while(n--){ ll a,b; cin>>a>>b; cout<<power(a,b)<<"\n"; } }
+      ```
+
+      *`O(log b)` per query, `O(log b)` stack.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on **②**:
+
+      - **`result` vs `base`.** `base` holds `a^(2^i)` for the current bit
+        position — built by squaring itself once per loop iteration
+        (`a`, `a^2`, `a^4`, `a^8`, ...). `result` accumulates only the powers
+        whose bit in `b` is `1`.
+
+      - **The parity test.** `if (b & 1)` picks out the least-significant bit
+        of `b` and, if set, multiplies it into `result`. Then `b >>= 1` drops
+        that bit — exactly like reading `b` in binary from low to high.
+
+      - **`1 % P` never appears here** because `P` is large and `1 < P`, but
+        `result = 1` covers the `b = 0` case (`a^0 = 1`, and the problem wants
+        `0^0 = 1` too — `1` is correct for that).
+
+      - **Modulo safety.** Every multiplication is `% P`; since both factors
+        are `< P < 2^31`, their product fits in a signed 64-bit `long long`.
+        No overflow.
+
+      For `123^123`, the loop iterates over the bits of `123 =
+      0b1111011`, squaring `123` a bit at a time and folding in the set bits,
+      eventually producing `921450052 mod 10^9+7`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace **②** on the second sample, `a = 2, b = 8` (expect `2^8 = 256`):
+
+      | iteration | b (binary) | b&1 | base   | result |
+      |-----------|-----------|-----|--------|--------|
+      | start     | 8 (1000)  | -   | 2      | 1      |
+      | 1         | 8 (1000)  | 0   | 2→4    | 1 (shift: 8→4) |
+      | 2         | 4 (100)   | 0   | 4→16   | 1 (4→2)        |
+      | 3         | 2 (10)    | 0   | 16→256 | 1 (2→1)        |
+      | 4         | 1 (1)     | 1   | 256→…  | 1*256 = **256** (1→0) |
+
+      `b` becomes `0`, loop ends, `result = 256`. ✓
+
+      Full sample: `3 4 → 3^4 = 81`, `2 8 → 256`,
+      `123 123 → 921450052 mod 10^9+7`.
+
+      Expected (sample) — `81 256 921450052`. Actual — `81 256 921450052`.
+      Match.
+  - type: flowchart
+    title: "Compute a^b mod P by squaring"
+    nodes: ["read a, b", "result = 1, base = a % P", "b == 0? (loop done)", "b & 1 set?", "result = result * base % P", "base = base * base % P", "b = b >> 1", "print result"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 7, label: "yes"}
+      - {from: 2, to: 3, label: "no"}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 3, to: 5, label: "no"}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6}
+      - {from: 6, to: 2}
+  - type: mcq
+    prompt: "Why does binary exponentiation only need O(log b) multiplications instead of O(b)?"
+    options:
+      - "Because modulo arithmetic lets us skip every other multiplication."
+      - "Because it multiplies the result only for the set bits of b, building each needed power a^(2^i) by repeated squaring — at most ceil(log2(b)+1) squarings, one per bit."
+      - "Because b is always small in this problem."
+      - "Because squaring is an O(1) operation in the first place."
+    answer: 1
+    explanation: "Every bit of b is processed exactly once (about log2(b) bits). For each bit we do one squaring and, conditionally, one multiply — so total work is O(log b) = O(log2(10^9)) ~ 30 steps, versus b = 10^9 multiplies for the naive loop."
+---

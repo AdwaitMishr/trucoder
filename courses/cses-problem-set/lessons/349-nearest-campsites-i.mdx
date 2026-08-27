@@ -1,0 +1,189 @@
+---
+id: nearest-campsites-i
+title: Nearest Campsites I
+difficulty: easy
+order: 349
+tags:
+  - binary-search
+  - sorting
+  - two-pointers
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — nearest point on a line via binary search
+
+      Say you have **campsites** at fixed positions along one straight road, and
+      you want, for many query positions (e.g. where a hiker jumps onto the
+      road), the **distance to the nearest campsite**. This is the 1-D nearest
+      neighbour problem.
+
+      **Sorting unlocks binary search.** If the campsite coordinates are sorted
+      ascending, then for any query position `x`, the nearest campsite must be
+      one of the two campsites *immediately bracketing* `x`:
+      - the leftmost campsite `≥ x` (the first one at or to the right), and
+      - the last campsite `< x` (just to the left).
+
+      The true nearest campsite is whichever of those two is closer. There is no
+      need to inspect all `n` campsites.
+
+      **Finding the bracket.** `lower_bound(a, x)` returns an iterator to the
+      first element `≥ x`. That element (if it exists) is the right neighbour;
+      the one just before it is the left neighbour. Measure both distances and
+      take the minimum. If a bracket side doesn't exist (query left of everything
+      or right of everything), only the existing side matters.
+
+      This turns each query from an O(n) scan into an O(log n) lookup, after a
+      one-time O(n log n) sort.
+
+      :::tip
+      **Interview tip:** "For each query, find the nearest point from a static
+      set" is the *classic* prompt for **sort + binary search** — the bread and
+      butter of coordinate problems. Watch for the variant where the same
+      "query the two neighbours around me" idea generalises to 2-D and to
+      *closest pair* (see Nearest Campsites II).
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Along a straight road there are `n` campsites, each at a distinct integer
+      coordinate. A visitor appears at each of `q` query positions and wants to
+      reach the **nearest** campsite.
+
+      Your task: for each query position `x`, output the distance to the nearest
+      campsite.
+
+      **Input.** The first line has `n`. The second line has `n` distinct
+      integers, the campsite coordinates. The third line has `q`. The fourth
+      line has `q` integers, the query positions.
+
+      **Output.** `q` lines, one per query: the distance from that query
+      position to the nearest campsite.
+
+      **Constraints.**
+      - `1 ≤ n, q ≤ 2·10^5`
+      - coordinates and queries are integers in `[−10^9, 10^9]`
+
+      **Sample.** (campsites `1 5 9`; queries `3 0 10 5`)
+
+      **Input:**
+      ```
+      3
+      1 5 9
+      4
+      3 0 10 5
+      ```
+
+      **Output:**
+      ```
+      2
+      1
+      1
+      0
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — scan every campsite per query — O(n·q).** For each query
+      loop over all `n` campsites and keep the minimum distance.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; if(!(cin>>n)) return 0;
+          vector<long long> a(n); for(auto&x:a) cin>>x;
+          int q; cin>>q;
+          while(q--){
+              long long x; cin>>x;
+              long long best = LLONG_MAX;
+              for(auto&y:a) best = min(best, llabs(y-x));
+              cout << best << "\n";
+          }
+      }
+      ```
+      *Complexity: O(n·q) — with `n,q ≤ 2·10^5` that is ≈ 4·10^10 steps, far too
+      slow.*
+
+      **② Optimization — sort + binary search — O((n+q) log n) (`n,q ≤ 2·10^5`).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; if(!(cin>>n)) return 0;
+          vector<long long> a(n); for(auto&x:a) cin>>x;
+          sort(a.begin(), a.end());
+          int q; cin>>q;
+          while(q--){
+              long long x; cin>>x;
+              auto it = lower_bound(a.begin(), a.end(), x); // first campsite >= x (right neighbour)
+              long long best = LLONG_MAX;
+              if(it != a.end())     best = min(best, llabs(*it - x));
+              if(it != a.begin())   { --it; best = min(best, llabs(*it - x)); }
+              cout << best << "\n";
+          }
+      }
+      ```
+      *Complexity: O(n log n) sort + O(q log n) queries; O(1) extra space. The
+      nearest campsite is always one of the two that bracket `x`.*
+
+      **④ Alternative — two pointers with sorted queries.** If queries can be
+      sorted too, advance a single pointer as `x` climbs, always keeping the
+      best left/right pair — O(n + q) after sorting both arrays. Handy when many
+      queries are processed offline; binary search is simpler when each query
+      must be answered independently.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n, a, q, queries)` — O((n+q) log n). Key lines:
+
+      1. **`sort(a.begin(), a.end())`** — campsites ordered ascending so we can
+         binary-search neighbours.
+      2. **`lower_bound(a.begin(), a.end(), x)`** returns the *first campsite
+         at or to the right* of `x`.
+      3. **Right side:** if it exists, candidate distance `|*it − x|`.
+      4. **Left side:** step `--it` to the previously-found element (the largest
+         campsite `< x`), candidate `|*it − x|`.
+      5. **`min`** of the two candidates is the nearest-campsite distance.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** campsites `{1, 5, 9}` (sorted: `1 5 9`); queries `3, 0, 10, 5`.
+
+      - **Query `3`:** `lower_bound` on `3` → `5` (dist `|5−3|=2`); left
+        neighbour `1` (dist `|1−3|=2`). Best = **2**.
+      - **Query `0`:** `lower_bound` → `1` (dist 1); no left neighbour (it's the
+        first). Best = **1**.
+      - **Query `10`:** `lower_bound` → end; step back to `9` (dist 1). Best =
+        **1**.
+      - **Query `5`:** `lower_bound` → `5` itself (dist 0). Best = **0**.
+
+      Output:
+      ```
+      2
+      1
+      1
+      0
+      ```
+      ✓ matches the sample. No campsite was ever fully scanned for a query.
+
+  - type: mcq
+    prompt: "Why is it sufficient to check only the two campsites that bracket the query position x?"
+    options:
+      - "Because the nearest campsite to x must be either the first one at/right of x or the last one strictly left of x; any farther campsite is strictly farther both left and right."
+      - "Because there are exactly two campsites in total."
+      - "Because campsites must be at consecutive integer coordinates."
+      - "Because binary search always returns exactly two indices no matter what."
+    answer: 0
+    explanation: "Sort the campsites. Whatever campsite is closest to x, walking from it toward x along the line reaches x without passing any campsite between them — so it must be x's immediate left or right neighbour in the sorted order. Checking those two candidates (via lower_bound and its predecessor) is therefore both necessary and sufficient."
+type: content
+---

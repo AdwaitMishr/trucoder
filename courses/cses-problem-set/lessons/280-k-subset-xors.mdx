@@ -1,0 +1,276 @@
+---
+id: k-subset-xors
+title: "XOR of k-Element Subsets"
+type: content
+difficulty: hard
+order: 280
+tags:
+  - xor
+  - meet-in-the-middle
+  - counting
+  - subset
+blocks:
+  - type: markdown
+    content: |
+      # XOR of k-Element Subsets — counting, with a size constraint
+
+      The previous lesson counted subsets of *any* size with a target xor. Now we
+      add a twist that breaks the clean `2^(n−r)` formula: we require the subset
+      to contain **exactly `k` elements**. This is the "k-subset XOR" variant.
+
+      ## Why the rank formula no longer applies
+
+      The rank-nullity argument relied on the map being a plain linear map from
+      the whole choice-space. Once we fix the size, the constraint "exactly `k`
+      elements chosen" is *not* a linear condition (cardinality is not linear
+      over GF(2)), so the uniform `2^(n−r)` distribution collapses: values in the
+      span are still reachable, but by *different* numbers of `k`-subsets.
+
+      So counting k-subsets with a target xor requires a genuinely different,
+      exact approach.
+
+  - type: markdown
+    content: |
+      # Preprocessing: fold every number into basis coordinates
+
+      A useful first step (used by the fancier tiers) is to **project each input
+      number onto the linear basis**. After building a basis of rank `r`, write
+      every number as its `r`-bit *coordinate vector* in that basis (it is a
+      bijection on the span: xor of numbers ↔ xor of their coordinate vectors).
+      This never changes any answer, but it *shrinks* the value space from 31
+      bits to `r ≤ 31` bits and gives us a canonical handle on all reachable
+      xors. Combined with meet-in-the-middle (below) it keeps the enumeration
+      exact while cutting work.
+
+      # The practical, exact algorithm: meet in the middle
+
+      Meet-in-the-middle is the workhorse for counting k-subsets with a target
+      xor, because `n` is the thing we cannot afford to be exponential in. Split
+      the array into a left half and a right half of about `n/2` each. For each
+      half, enumerate **all** subsets, recording a map of `xor → counts-by-size`
+      (how many subsets of that half of each size produce each xor). Then combine:
+      a left subset of size `sL` and xor `yL` pairs with a right subset of size
+      `k − sL` and xor `yR = yL ^ x` — summing `countL[yL][sL] · countR[yR][k−sL]`
+      over all valid `sL` and `yL`.
+
+      Because the two halves are independent, this counts each global subset
+      exactly once (its left part and right part are determined uniquely). It is
+      exact — it enumerates real subsets, just in two halves — so it is a
+      **correct labeled counting** method, not an approximation.
+
+      :::tip
+      **Interview tip:** for "count subsets of size exactly k with a given xor",
+      meet-in-the-middle is the go-to correct method (`O(2^(n/2)·n)`). Some
+      candidates try to reuse the `2^(n−r)` formula and silently get the wrong
+      answer precisely because the size condition is not linear — call that out.
+      If pressed for the deeper variant, mention projecting onto the basis first
+      (shrinks the value space) and, when the rank is small, a `dp[size][xor]`
+      over the reduced values.
+      :::
+
+      Time: `O(2^(n/2) · n/2)` enumeration + combine. Space: `O(2^(n/2))`.
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given `n` integers and two integers `k` and `x`. Count the number
+      of subsets containing **exactly `k` elements** whose xor equals `x`.
+
+      ## Input
+
+      The first line contains `n` and `k`. The second line contains `n` integers
+      `a1, a2, …, an`. The third line contains the target `x`.
+
+      **Constraints:** `1 ≤ n ≤ 40`, `0 ≤ k ≤ n`, `0 ≤ ai, x ≤ 10^9`.
+
+      ## Output
+
+      Print one integer: the number of `k`-element subsets whose xor equals `x`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 3
+      1 2 4 7
+      1
+      ```
+      **Output:**
+      ```
+      1
+      ```
+      The only 3-element subset with xor `1` is `{2, 4, 7}` (`2^4^7 = 1`). The
+      other 3-subsets xors are `{1,2,4}=7`, `{1,2,7}=4`, `{1,4,7}=2`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(C(n, k))**
+
+      Generate every combination of `k` indices and count those with xor `x`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int n, k, x; vector<int> a; ll ans = 0;
+      void rec(int idx, int chosen, int xr){
+          if (chosen == k){ if (xr == x) ++ans; return; }
+          if (idx == n) return;
+          rec(idx + 1, chosen, xr);                 // skip a[idx]
+          rec(idx + 1, chosen + 1, xr ^ a[idx]);    // take a[idx]
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          cin >> n >> k; a.resize(n); for (int &v : a) cin >> v; cin >> x;
+          rec(0, 0, 0);
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      *Correct, but `C(40, 20) ≈ 1.4·10^11` k-subsets in the worst case — far too
+      slow at `n = 40`.*
+
+      **② Optimization — meet in the middle, O(2^(n/2) · n) (optimal)**
+
+      Split the array, enumerate each half (xor and size distribution), combine
+      by matching sizes.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, k, x;
+          cin >> n >> k; vector<int> a(n);
+          for (int &v : a) cin >> v; cin >> x;
+
+          auto enumerate = [&](const vector<int>& arr){
+              unordered_map<int, vector<ll>> mp;      // xor -> count by size
+              int m = (int)arr.size();
+              for (int mask = 0; mask < (1 << m); ++mask){
+                  int xr = 0;
+                  for (int j = 0; j < m; ++j) if ((mask >> j) & 1) xr ^= arr[j];
+                  auto& vec = mp[xr];
+                  if (vec.empty()) vec.assign(m + 1, 0);
+                  ++vec[__builtin_popcount(mask)];
+              }
+              return mp;
+          };
+
+          int half = n / 2;
+          auto L = enumerate(vector<int>(a.begin(), a.begin() + half));
+          auto R = enumerate(vector<int>(a.begin() + half, a.end()));
+          int nL = half, nR = n - half;
+          ll ans = 0;
+          for (auto& pr : L){
+              int yL = pr.first; auto& cl = pr.second;
+              for (int sL = 0; sL <= nL; ++sL) if (cl[sL]){
+                  int sR = k - sL;                       // right subset size needed
+                  if (sR < 0 || sR > nR) continue;
+                  auto it = R.find(yL ^ x);              // yR must satisfy yL ^ yR = x
+                  if (it == R.end()) continue;
+                  ans += (ll)cl[sL] * it->second[sR];
+              }
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(2^(n/2) · n/2)` per half, `O(2^(n/2))` memory — the tier we compile and
+      verify. At `n = 40` each half has `2^20 ≈ 10^6` subsets.*
+
+      **③ Further optimization — basis coords + small-rank DP**
+
+      First project every number onto its `r`-bit basis coordinate vector
+      (reduces the xor space to `2^r`). If the rank `r` is small enough that
+      `(k+1)·2^r` is manageable, a DP over the reduced values is exact and no
+      longer exponential in `n`:
+
+      ```cpp
+      // after computing coords[] (each in [0, 2^r)), with total 2^r states S:
+      vector<vector<ll>> dp(k + 1, vector<ll>(S, 0));
+      dp[0][0] = 1;
+      for (int c : coords)
+          for (int used = k; used >= 1; --used)      // destination layer; descending stops reuse
+              for (int v = 0; v < S; ++v)
+                  if (dp[used - 1][v]) dp[used][v ^ c] += dp[used - 1][v];
+      cout << dp[k][x_coord] << "\n";
+      ```
+
+      *`O(n · k · 2^r)`; useful when `r` is small (values fit a few bits). Handles
+      large `n` where MITM would explode.*
+
+      **④ Alternative algorithm — none that beats MITM generally**
+
+      There is no known simpler closed form for general `n`; MITM (tier ②) and the
+      basis-rank DP (tier ③) are the two standard exact approaches. We stop here.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`enumerate(arr)` builds `mp[xor][size]`.** For every subset mask of a
+        half it computes the xor and its size (`__builtin_popcount`), then bumps
+        `mp[xor][size]`. The result records, per xor, how many subsets of each
+        exact size produce it.
+      - **Independent halves.** The left map and right map are built from disjoint
+        index ranges, so pairing a left subset with a right subset always
+        reconstructs a valid global subset, and each global subset corresponds to
+        exactly one `(yL, sL)` entry.
+      - **Matching sizes.** For a left subset of size `sL` and xor `yL`, the only
+        right subsets that can extend it to a valid `k`-subset need size
+        `sR = k − sL` and xor `yR = yL ^ x` (since `yL ^ yR` must equal `x`).
+        That is exactly the lookup `R.find(yL ^ x)`.
+      - **Multiply counts.** Every choice of left subset independently combines
+        with every choice of right subset, so the pair contributes
+        `cl[sL] · cr[sR]`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 4, k = 3`, array `1 2 4 7`, target `x = 1`.
+
+      Split: left `[1, 2]`, right `[4, 7]`.
+
+      Left subsets (`mp`):
+      | xor | size 0 | size 1 | size 2 |
+      |-----|--------|--------|--------|
+      | 0   | 1      | 0      | 0      |
+      | 1   | 0      | 1      | 0      |
+      | 2   | 0      | 1      | 0      |
+      | 3   | 0      | 0      | 1      |
+
+      Right subsets: xor `4` (size 1), `7` (size 1), `3` (size 2), `0` (size 0).
+
+      Combine (`k = 3`, so `sL + sR = 3`):
+      - `sL=1`: needs `sR = 2`. From `L`, xors with size-1 count `>0` are `1` and
+        `2`. For xor `2`: look up `R[2 ^ 1 = 3]` → right xor `3` has size-2 count
+        `1` → contributes `1·1 = 1`.
+      - All other `sL` values give `sR` out of range or a missing right xor.
+
+      Total `ans = 1`, matching the sample: the single 3-subset `{2,4,7}` with
+      xor `1`.
+  - type: flowchart
+    title: "Count k-subsets with target XOR via meet-in-the-middle"
+    nodes: ["split array into L and R", "enumerate all subsets of L: xor -> count by size", "enumerate all subsets of R: xor -> count by size", "for each (yL,sL): need sR=k-sL, yR=yL^x", "look up countR[yR][sR]", "sum countL*countR over all pairs", "print total"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 0, to: 2}
+      - {from: 1, to: 3}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6}
+  - type: mcq
+    prompt: "Why is the answer NOT simply 2^(n-r) (like the any-size version) when the subset size must be exactly k?"
+    options:
+      - "It is still 2^(n-r); fixing k never changes the count."
+      - "Fixing the size is not a linear condition over GF(2) (cardinality is not linear), so the rank-nullity symmetry that made every reachable value have equal count 2^(n-r) breaks down — different reachable values can be formed by different numbers of k-element subsets."
+      - "Because the target x must be prime."
+      - "Because meet-in-the-middle never counts k-subsets correctly."
+    answer: 1
+    explanation: "The closed form came from a linear map on the full choice-vector space; equal-preimage-size followed from rank-nullity. Requiring exactly k chosen elements is a non-linear cardinality constraint, so it slices the domain unevenly: some reachable xors are attainable by many k-subsets, others by few or none. That is why we must actually count subsets (e.g. meet-in-the-middle or a rank-reduced DP) rather than apply 2^(n-r)."
+---

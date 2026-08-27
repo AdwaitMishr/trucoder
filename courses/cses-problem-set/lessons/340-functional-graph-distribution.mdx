@@ -1,0 +1,209 @@
+---
+id: functional-graph-distribution
+title: Functional Graph Distribution
+difficulty: medium
+order: 340
+tags:
+  - counting
+  - combinatorics
+  - stirling-numbers
+  - functional-graphs
+  - generating-functions
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting functional graphs by number of components
+
+      A **functional graph** is a directed graph where every node has outdegree
+      exactly 1 (each node points at one successor). There are exactly `nⁿ`
+      functional graphs on `n` labelled nodes. Every weak component contains
+      exactly **one directed cycle** with (possibly) in-trees feeding into it, so
+      the number of components equals the number of cycles.
+
+      **The clean decomposition.** To build a functional graph with `k`
+      components:
+
+      1. Mark the nodes that lie **on cycles** — say `j` of them — pick which
+         nodes: `C(n,j)`.
+      2. On those `j` cyclic nodes, choose how they form `k` directed cycles.
+         The number of permutations of `j` labelled elements with exactly `k`
+         cycles is the **unsigned Stirling number of the first kind**
+         `[j over k]`.
+      3. Attach the remaining `n−j` transient nodes as a *rooted forest feeding
+         into the `j` cycle vertices*. By Cayley's forest theorem, the number of
+         forests on `n` labelled vertices with a prescribed set of `j` roots is
+         `j · n^(n−j−1)`.
+
+      Therefore
+
+      ```
+      ans(n,k) = Σ_{j=k}^{n} C(n,j) · [ j over k ] · j · n^(n−j−1)
+      ```
+
+      All quantities are computed modulo `10^9+7`; for the corner `j=n` the
+      exponent `n−j−1 = −1` means the modular inverse `n^{-1}`.
+
+      :::tip
+      **Interview tip:** A functional graph (a.k.a. a *mapping*, an endofunction
+      `f:[n]→[n]`) is one of the most common "hidden structure" objects in
+      combinatorics — every node has outdegree one, so it decomposes into cycles
+      plus in-forests. Counting "with exactly k components" is exactly a Stirling
+      + rooted-forest count. Knowing **Cayley's forest formula**
+      (forests with `r` fixed roots on `n` nodes = `r·n^(n−r−1)`) is a strong
+      interview flex and the key to this problem.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      A *functional graph* is a directed graph where each node has outdegree 1.
+      Given `n`, your task is to calculate for each `k = 1 … n` the number of
+      functional graphs that have `n` nodes and `k` components.
+
+      **Input.** The only input line has an integer `n`.
+
+      **Output.** Print `n` lines: for each `k = 1 … n` the number of graphs
+      modulo `10^9+7`.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 5000`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      3
+      ```
+
+      **Output:**
+      ```
+      17
+      9
+      1
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(nⁿ·n).** Enumerate every function `f:[n]→[n]`
+      (`nⁿ` of them), union each node with its successor, count the weak
+      components via DSU.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct D{vector<int>p; D(int n){p.resize(n);iota(p.begin(),p.end(),0);} int F(int x){return p[x]==x?x:p[x]=F(p[x]);} void U(int a,int b){p[F(a)]=F(b);}};
+      int main(){
+          int n; cin>>n; vector<int> f(n,0); vector<long long> dist(n+1,0);
+          long long total=1; for(int i=0;i<n;i++) total*=n;
+          for(long long mask=0;mask<total;mask++){
+              long long m=mask; for(int i=0;i<n;i++){f[i]=m%n;m/=n;}
+              D d(n); for(int v=0;v<n;v++) d.U(v,f[v]);
+              set<int> s; for(int v=0;v<n;v++) s.insert(d.F(v));
+              dist[s.size()]++;
+          }
+          for(int k=1;k<=n;k++) cout<<dist[k]<<"\n";
+      }
+      ```
+      *Complexity: O(nⁿ·n) — only for tiny `n`.*
+
+      **② Optimization — O(n²) Stirling + rooted-forest formula (`n ≤ 5000`).**
+      Precompute unsigned Stirling first-kind numbers `c[j][k]`, then evaluate
+      `ans(k) = Σ_j C(n,j)·c[j][k]·(j·n^(n−j−1))`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+      long long modpow(long long b,long long e){long long r=1;while(e){if(e&1)r=r*b%MOD;b=b*b%MOD;e>>=1;}return r;}
+      int main(){
+          int n; if(!(cin>>n)) return 0;
+          vector<long long> f(n+1,1), fi(n+1,1);
+          for(int i=1;i<=n;i++) f[i]=f[i-1]*i%MOD;
+          fi[n]=modpow(f[n],MOD-2); for(int i=n;i>0;i--) fi[i-1]=fi[i]*i%MOD;
+          auto C=[&](int a,int b)->long long{ if(b<0||b>a)return 0; return f[a]*fi[b]%MOD*fi[a-b]%MOD; };
+          // c[j][k] = permutations of j labelled elements with exactly k cycles (unsigned Stirling 1st kind)
+          vector<vector<long long>> c(n+1, vector<long long>(n+1,0));
+          c[0][0]=1;
+          for(int j=1;j<=n;j++)
+              for(int k=1;k<=j;k++)
+                  c[j][k]=(c[j-1][k-1]+(j-1)*c[j-1][k])%MOD;
+          long long invn=modpow(n,MOD-2);
+          vector<long long> pw(n,1);
+          for(int e=1;e<n;e++) pw[e]=pw[e-1]*n%MOD;
+          vector<long long> ans(n+1,0);
+          for(int j=1;j<=n;j++){
+              int e=n-j;
+              long long powv=(e-1>=0)?pw[e-1]:invn;      // n^{n-j-1} (inv for the j=n corner)
+              long long forest=j*powv%MOD;               // rooted-forest attachment factor
+              long long combj=C(n,j);
+              for(int k=1;k<=j;k++)
+                  ans[k]=(ans[k]+combj*c[j][k]%MOD*forest)%MOD;
+          }
+          for(int k=1;k<=n;k++) cout<<ans[k]%MOD<<"\n";
+      }
+      ```
+      *Complexity: O(n²) time, O(n²) space (Stirling table) — instant for `n ≤ 5000`.*
+
+      **④ Alternative — exponential generating function.** Equivalently, with
+      `C(x)` the EGF of *connected* functional graphs, the EGF of all functional
+      graphs is `exp(C(x))` and the counts are `n![xⁿ] C(x)^k / k!`. The
+      Stirling+forest closed form above is the concrete evaluation of exactly
+      that EGF expansion — a good "compress the combinatorics" viewpoint, and a
+      useful cross-check.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n)` — O(n²). Key lines:
+
+      1. **`c[j][k]`** = unsigned Stirling numbers of the first kind via
+         `c[j][k] = c[j−1][k−1] + (j−1)·c[j−1][k]` — the number of permutations of
+         `j` items with exactly `k` cycles (this is how the cyclic nodes are
+         arranged into `k` directed cycles / components).
+      2. **`pw[e] = n^e`** and `invn` handle the forest factor
+         `j·n^(n−j−1)`: positive exponents come from `pw`, and the `j=n` corner
+         (`n−j−1 = −1`) uses the modular inverse of `n`.
+      3. **The sum.** For each possible number of cyclic nodes `j`, choose them
+         (`C(n,j)`), arrange into `k` cycles (`c[j][k]`), and attach the forest
+         (`j·n^(n−j−1)`). Accumulate into `ans[k]`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 3`. Total functional graphs = `3³ = 27`.
+
+      Break down `ans(k) = Σ_j C(3,j)·c[j][k]·(j·3^(3−j−1))`:
+
+      - **j=1**: `C(3,1)=3`, forest `1·3^(1)=3`, `c[1][1]=1` →
+        contribution to **k=1**: `3·1·3 = 9`.
+      - **j=2**: `C(3,2)=3`, forest `2·3^(0)=2`,
+        `c[2][1]=1`, `c[2][2]=1` →
+        **k=1**: `3·1·2=6`, **k=2**: `3·1·2=6`.
+      - **j=3**: `C(3,3)=1`, forest `3·3^(−1)=1`,
+        `c[3][1]=2`, `c[3][2]=3`, `c[3][3]=1` →
+        **k=1**: `1·2·1=2`, **k=2**: `1·3·1=3`, **k=3**: `1·1·1=1`.
+
+      Totals: **k=1**: `9+6+2 = 17`; **k=2**: `6+3 = 9`; **k=3**: `1`.
+      ✓ matches the sample `17 9 1` (and sums to 27, the total number of
+      functional graphs).
+
+      The brute-force tier (①) enumerates all 27 functions on 3 nodes and yields
+      the same distribution.
+
+  - type: mcq
+    prompt: "Why must each weak component of a functional graph contain exactly one directed cycle?"
+    options:
+      - "Because every node has outdegree 1, so following successors from any node eventually repeats a node, forming exactly one cycle per component."
+      - "Because weak components cannot contain directed edges."
+      - "Because functional graphs are always trees."
+      - "Because each component must be strongly connected."
+    answer: 0
+    explanation: "From any node, following the unique successor repeatedly lands on a node already visited, closing a unique directed cycle; trees feeding into it can reach it but not leave it (no node exits a cycle). Hence each weak component has exactly one cycle, and the number of components equals the number of cycles. This is why Stirling cycle-numbers (not subsets) drive the count."
+
+type: content
+---

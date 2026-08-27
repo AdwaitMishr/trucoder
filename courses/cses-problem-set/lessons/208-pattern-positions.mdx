@@ -1,0 +1,287 @@
+---
+id: pattern-positions
+title: Pattern Positions
+type: content
+difficulty: hard
+order: 208
+tags:
+  - string-algorithms
+  - aho-corasick
+  - suffix-links
+  - patterns
+blocks:
+  - type: markdown
+    content: |
+      # Pattern Positions — Aho–Corasick with suffix-link propagation
+
+      The twin of *Counting Patterns*: given one text and many patterns, find the
+      **first (1-indexed) start position** of each pattern in the text, or `-1`
+      if it never appears.
+
+      We reuse the **Aho–Corasick** automaton (trie + failure links). The new
+      challenge is *where to find the earliest position*. The idea: record, for
+      every automaton state, the **earliest text position at which that state was
+      reached**, then **propagate these down the failure tree** exactly like we
+      propagated counts — a pattern can only occur where some state whose
+      failure-chain contains its node was reached.
+
+      ## Why suffix links give positions
+
+      When a pattern `P` occurs ending at position `i`, the automaton state
+      reached at `i` is some node `u`, and following failure links from `u` walks
+      through the suffixes of `u`'s string. `P`'s node is on that chain **iff**
+      `P` occurs ending at `i`. So:
+
+      - For each state `u` set `firstEnd[u]` = the earliest end-position where
+        `u` was reached (left-to-right scan ⇒ first assignment is the minimum).
+      - Then for `P`'s node `v`, the earliest end-position of *any* occurrence of
+        `P` = the minimum of `firstEnd` over the whole failure-subtree rooted at
+        `v` — i.e. push `firstEnd` up the failure tree, child → parent.
+      - Start position = `firstEnd[v] − |P| + 1`.
+
+      If nothing remains, answer `-1`.
+
+      **Complexity.** Build `O(Σ|pattern|)`, scan `O(n)`, propagation `O(nodes)`.
+      Total `O(n + Σ|pattern|)` — the intended solution.
+
+      :::tip
+      **Interview tip:** "first / leftmost occurrence of many patterns" is
+      Aho–Corasick + a **minimum propagated along suffix links**. A neat
+      follow-up variant: *last occurrence* — same automaton, just take the max.
+      Recognise that the failure/suffix-link tree is where "propagate the best
+      answer so far" lives, the same pattern you use in suffix-array and
+      suffix-automaton problems.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given a string and patterns, find for each pattern the first position
+      (1-indexed) where it appears in the string.
+
+      ## Input
+
+      The first input line has a string of length `n`.
+
+      The next input line has an integer `k`: the number of patterns. Finally,
+      there are `k` lines that describe the patterns.
+
+      The string and the patterns consist of characters `a–z`.
+
+      **Constraints:** `1 ≤ n ≤ 10^5`, `1 ≤ k ≤ 5·10^5`, the total length of the
+      patterns is at most `5·10^5`.
+
+      ## Output
+
+      Print the first position for each pattern (or `-1` if it does not appear at
+      all).
+
+      ## Sample
+
+      **Input:**
+      ```
+      aybabtu
+      3
+      bab
+      abc
+      a
+      ```
+      **Output:**
+      ```
+      3
+      -1
+      1
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — first match per pattern, O(n·L) each**
+
+      Slide a window across the text and stop at the first full match. Cost
+      `O(n·L)` per pattern → up to `O(n·ΣL) = 5·10^10`, too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          string s; cin >> s;
+          int k; cin >> k;
+          while(k--){
+              string p; cin >> p;
+              int ans = -1;
+              for(int i = 0; i + (int)p.size() <= (int)s.size(); i++)
+                  if(s.compare(i, p.size(), p) == 0){ ans = i + 1; break; }
+              cout << ans << "\n";
+          }
+          return 0;
+      }
+      ```
+      *O(n·ΣL) — correct, too slow.*
+
+      **② Optimization — Aho–Corasick + suffix-link propagation, O(n + ΣL)**
+
+      As in 207, scan the text once, but keep `firstEnd[u]` = earliest end
+      position each state was reached. Then push minima up the failure tree so
+      every node holds the earliest end-position of *any* string containing it.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; cin >> s;
+          int k; cin >> k;
+          vector<array<int,26>> trie(1); trie[0].fill(0);
+          vector<int> fail(1,0), firstEnd(1,0);
+          auto newNode = [&](){
+              trie.push_back({}); trie.back().fill(0);
+              fail.push_back(0); firstEnd.push_back(0);
+              return (int)trie.size()-1;
+          };
+          vector<int> patEnd(k), patLen(k);
+          for(int i=0;i<k;i++){
+              string p; cin >> p; patLen[i]=(int)p.size();
+              int v=0;
+              for(char ch:p){ int c=ch-'a'; if(!trie[v][c]) trie[v][c]=newNode(); v=trie[v][c]; }
+              patEnd[i]=v;
+          }
+          // failure links by BFS
+          queue<int> q;
+          for(int c=0;c<26;c++) if(trie[0][c]) q.push(trie[0][c]);
+          while(!q.empty()){
+              int v=q.front(); q.pop();
+              for(int c=0;c<26;c++){
+                  int u=trie[v][c];
+                  if(!u) trie[v][c]=trie[fail[v]][c];
+                  else { fail[u]=trie[fail[v]][c]; q.push(u); }
+              }
+          }
+          // scan text, record earliest end-position per state (1-indexed)
+          int v=0, pos=0;
+          for(char ch:s){ pos++; v=trie[v][ch-'a']; if(!firstEnd[v]) firstEnd[v]=pos; }
+          // push minima up the failure tree, children before parents
+          vector<vector<int>> children(trie.size());
+          for(int i=1;i<(int)fail.size();i++) children[fail[i]].push_back(i);
+          vector<int> order;
+          function<void(int)> dfs=[&](int u){ order.push_back(u); for(int w:children[u]) dfs(w); };
+          dfs(0);
+          for(int i=(int)order.size()-1;i>0;i--){
+              int u=order[i], f=fail[u];
+              if(firstEnd[u]) {
+                  if(!firstEnd[f] || firstEnd[u] < firstEnd[f]) firstEnd[f]=firstEnd[u];
+              }
+          }
+          for(int i=0;i<k;i++){
+              int e=firstEnd[patEnd[i]];
+              cout << (e ? e - patLen[i] + 1 : -1) << "\n";
+          }
+          return 0;
+      }
+      ```
+      *O(n + ΣL) time, O(ΣL) memory — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      Linear in the input is optimal.
+
+      **④ Alternative — suffix automaton with `firstpos`, O(n + ΣL)**
+
+      Build a suffix automaton of the text and store, per state, a representative
+      end-position `first`. A pattern followed through the automaton reaches a
+      state whose `endpos` set contains the pattern's end positions; subtract
+      `|pattern|` to get the start. Mirrors a text-indexing structure.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; cin >> s;
+          int k; cin >> k;
+          vector<string> pat(k);
+          for(int i = 0; i < k; i++) cin >> pat[i];
+          struct St{ int len, link; array<int,26> next; int first; };
+          vector<St> st; st.push_back({0,-1,{},-1}); st[0].next.fill(-1);
+          int last = 0;
+          auto extend = [&](int c){
+              int cur = st.size(); st.push_back({st[last].len+1,-1,{},(int)st[last].len}); st[cur].next.fill(-1);
+              int p = last;
+              while(p != -1 && st[p].next[c] == -1){ st[p].next[c] = cur; p = st[p].link; }
+              if(p == -1) st[cur].link = 0;
+              else{
+                  int q = st[p].next[c];
+                  if(st[p].len + 1 == st[q].len) st[cur].link = q;
+                  else{
+                      int cl = st.size(); st.push_back(st[q]); st[cl].len = st[p].len + 1;
+                      while(p != -1 && st[p].next[c] == q){ st[p].next[c] = cl; p = st[p].link; }
+                      st[q].link = st[cur].link = cl;
+                  }
+              }
+              last = cur;
+          };
+          for(char ch : s) extend(ch - 'a');
+          for(int i = 0; i < k; i++){
+              int v = 0; bool ok = true;
+              for(char ch : pat[i]){ int c = ch-'a'; if(st[v].next[c] == -1){ ok = false; break; } v = st[v].next[c]; }
+              if(!ok) cout << -1 << "\n";
+              else{
+                  int e = st[v].first;                       // 0-based end of some occurrence
+                  cout << e - (int)pat[i].size() + 2 << "\n"; // -> 1-based start position
+              }
+          }
+          return 0;
+      }
+      ```
+      *O(n + ΣL) — equally fast, a different mental model.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the Aho–Corasick position solution:
+
+      - **`firstEnd[u] = earliest end-position of u`.** The text scan is left to
+        right, so the *first* time we land on `u` is automatically its minimum;
+        the `if(!firstEnd[v])` guard keeps that first value.
+      - **Failure-link propagation.** A state `u` reached at end-position `p`
+        proves that *every* prefix of `u`'s string (i.e. every node on `u`'s
+        failure chain) also occurs ending at `p`. Propagating `firstEnd[u]` up to
+        `firstEnd[fail[u]]` and on, tree-wide, hands each node the earliest
+        end-position of any occurrence.
+      - **Start = end − length + 1.** A pattern of length `L` ending at `e`
+        starts at `e − L + 1` in 1-indexed terms.
+      - **`-1` case.** A node never reached (*and* no descendant reached) keeps
+        `firstEnd = 0`, decoded as "does not appear".
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Text `s = "aybabtu"`, patterns `bab`, `abc`, `a` (expected `3 -1 1`).
+      Indices (1-based): `a1 y2 b3 a4 b5 t6 u7`.
+
+      | step | char | state `v` | is it a new earliest? | `firstEnd[v]` |
+      |------|------|-----------|-----------------------|---------------|
+      | 1 | `a` | node `a` | yes | `firstEnd[a]=1` |
+      | 2 | `y` | root | — | — |
+      | 3 | `b` | node `b` | yes | `firstEnd[b]=3` |
+      | 4 | `a` | node `a` | no (already 1) | stays `1` |
+      | 5 | `b` | node `b` | no (already 3) | stays `3` |
+      | 6 | `t` | root | — | — |
+      | 7 | `u` | root | — | — |
+
+      Propagation pushes the minima up the failure tree. Result at each terminal:
+
+      - `bab` node's subtree best → end position `5` → start `5−3+1 = 3`
+      - `abc` node → never reached → `-1`
+      - `a` node → end position `1` → start `1−1+1 = 1`
+
+      Output: `3 -1 1`. ✓ Matches the sample.
+  - type: mcq
+    prompt: "To find the first occurrence of pattern P, why do we propagate the minimum firstEnd up the failure tree rather than just reading firstEnd[P's node]?"
+    options:
+      - "Because P's node may never be reached directly by the scan — P occurs via a longer matched suffix whose failure chain includes P's node, so we must let those longer states contribute their earlier positions."
+      - "Because failure links are sorted numerically."
+      - "Because firstEnd must be doubled."
+      - "Because the text must be scanned twice."
+    answer: 0
+    explanation: "The scan only records the longest matched suffix state per position. A shorter pattern P is matched whenever that state's failure-chain reaches P's node; taking the minimum over that chain (pushed up the failure tree) yields the truly earliest occurrence."

@@ -1,0 +1,220 @@
+---
+id: counting-permutations
+title: Counting Permutations
+difficulty: medium
+order: 335
+tags:
+  - counting
+  - combinatorics
+  - inclusion-exclusion
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting permutations with a "no adjacent" forbidden pattern
+
+      We must count permutations of `1..n` with the property that **no two
+      consecutive integers are adjacent** in the permutation: for every position,
+      `|p[i] - p[i+1]| ≠ 1`. This is the archetypal *forbidden-adjacency*
+      counting problem, and the tool that solves it cleanly is
+      **inclusion–exclusion over the "gaps" between consecutive values**.
+
+      **The gap idea.** Lay out the values on a line in increasing order:
+      `1 - 2 - 3 - … - n`. Between value `i` and value `i+1` there is one *gap*
+      (there are `n-1` gaps total). A permutation is *bad* precisely when some
+      pair of consecutive values actually sit next to each other in the
+      permutation, i.e. when "value `i` and value `i+1` are adjacent".
+      For a chosen set `S` of gaps, let us count the permutations in which
+      *every* gap in `S` corresponds to an adjacency (adjacent values). When we
+      glue a run of consecutive values together (a *block*), the block can be
+      written in only **2 internal orders** (ascending or descending) as long as
+      it has length ≥ 2. The glued blocks are distinguishable, so arranging the
+      `(n - |S|)` resulting blocks gives `(n-|S|)!` ways.
+
+      By the principle of inclusion–exclusion:
+
+      ```
+      answer = Σ_{S ⊆ gaps} (−1)^{|S|} · (n − |S|)! · 2^{#(blocks of length ≥ 2)}
+      ```
+
+      **Computing it in O(n²).** Enumerating all `2^(n-1)` subsets `S` is too
+      slow, but the sum depends only on (number of glued gaps, number of
+      length-≥2 blocks). We sweep the gaps left to right with a tiny DP whose
+      state is `(glued count, are we currently inside a block?)`. Each gap is
+      either *not glued* (the current block, if any, closes) or *glued* (start a
+      new length-2 block → multiply by 2 once, or extend a block that already
+      counts its factor of 2). At the end we fold in `(n − glued)!` with the
+      `(−1)^{glued}` sign.
+
+      :::tip
+      **Interview tip:** When a counting problem forbids *consecutive values
+      being adjacent* (or any "no adjacent equal/different" pattern), the
+      reflex to reach for is inclusion–exclusion: force a set of "glued" pairs
+      and count how each gluing changes the number of free items. The factor is
+      almost always `(n − k)!` times a small per-block constant. This is the
+      kind of "count the *beautiful* permutations" question that appears in
+      combinatorics interviews and in the CSES Mathematics chapter.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      A permutation of integers `1,2,…,n` is called **beautiful** if there are
+      no adjacent elements whose difference is `1`. Given `n`, your task is to
+      count the number of beautiful permutations.
+
+      **Input.** The only input line contains an integer `n`.
+
+      **Output.** Print the number of beautiful permutations of `1..n`
+      modulo `10^9+7`.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 1000`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      5
+      ```
+
+      **Output:**
+      ```
+      14
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·n!).** Generate every permutation with
+      `next_permutation`, test whether any two neighbours differ by 1, and count.
+      Correct, but `n!` explodes instantly — impossible for `n = 1000`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+      int main(){
+          int n; cin>>n;
+          vector<int> p(n); iota(p.begin(), p.end(), 1);
+          long long cnt=0;
+          do{
+              bool ok=true;
+              for(int i=0;i+1<n;i++) if(abs(p[i]-p[i+1])==1){ok=false;break;}
+              if(ok) cnt++;
+          }while(next_permutation(p.begin(), p.end()));
+          cout<<cnt%MOD<<"\n";
+      }
+      ```
+      *Complexity: O(n·n!) time — unusable beyond roughly `n = 10`.*
+
+      **② Optimization — O(n²) gap inclusion–exclusion DP.** Sweep the `n-1`
+      gaps between consecutive values; for each gap decide "glued" or "free".
+      A glued run of ≥ 2 values contributes a factor 2 (ascending/descending
+      order) credited the moment the block reaches length 2. Folding in the
+      `(n − glued)!` arrangements of the remaining blocks with the alternating
+      sign gives the answer directly.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+      int main(){
+          int n; if(!(cin>>n)) return 0;
+          vector<long long> f(n+1,1);
+          for(int i=1;i<=n;i++) f[i]=f[i-1]*i%MOD;
+          int g=n-1;                                  // gaps between consecutive values
+          // dp[glued][inRun] : inRun=0 no block open, 1 a block of length>=2 is open
+          vector<array<long long,2>> dp(n+1), ndp(n+1);
+          dp[0][0]=1;
+          for(int p=0;p<g;p++){
+              fill(ndp.begin(),ndp.end(),array<long long,2>{0,0});
+              for(int glued=0;glued<=p;glued++){
+                  for(int inRun=0;inRun<2;inRun++){
+                      long long c=dp[glued][inRun];
+                      if(!c) continue;
+                      ndp[glued][0]=(ndp[glued][0]+c)%MOD;            // gap free: close block
+                      if(inRun==0) ndp[glued+1][1]=(ndp[glued+1][1]+c*2)%MOD; // start len-2 block (x2)
+                      else         ndp[glued+1][1]=(ndp[glued+1][1]+c)%MOD;   // extend block (2 already counted)
+                  }
+              }
+              dp.swap(ndp);
+          }
+          long long ans=0;
+          for(int glued=0;glued<n;glued++){
+              long long sgn = (glued%2==0)?1:MOD-1;
+              for(int inRun=0;inRun<2;inRun++)
+                  ans=(ans+sgn*dp[glued][inRun]%MOD*f[n-glued])%MOD;
+          }
+          cout<<ans%MOD<<"\n";
+      }
+      ```
+      *Complexity: O(n²) time, O(n) space — instant for `n ≤ 1000`.*
+
+      **④ Alternative / note.** The `run-in-glue` DP is already optimal for
+      `n ≤ 1000`; there is no asymptotically faster exact method. The resulting
+      sequence (`1, 0, 0, 2, 14, 90, 646, …`) is *OEIS A002464*, the "beautiful
+      permutations" or "Marriage-graph Hamiltonian" count — a useful
+      cross-check if you ever re-derive the count by hand.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n)` — the O(n²) gap inclusion–exclusion. Key lines:
+
+      1. **`f[t] = t!`** precomputed; `f[n-glued]` counts the ways to arrange the
+         `n-glued` distinguishable blocks (each glued run is one unit; single
+         values are one unit each).
+      2. **The sweep.** For each of the `g = n-1` gaps we move state
+         `(glued, inRun)` onto a fresh layer. `glued` = how many gaps we have
+         already decided to force adjacent; `inRun` says whether a block is
+         currently open at the right end of the swept region.
+      3. **Not glued** → `inRun` becomes `0`: any open block closes and keeps its
+         already-credited factor.
+      4. **Glued into an empty right-end** → we open a block of two values, which
+         can be written ascending *or* descending, so we multiply by `2`
+         immediately (`c·2`). 
+      5. **Glued into an open block** → the block just grows; its factor of 2 was
+         already credited when it reached length 2, so we only add `c`.
+      6. **Fold.** For each final `glued` count, multiply by `(−1)^{glued}` and by
+         `f[n-glued]`, and sum. This is exactly `Σ_S (−1)^{|S|} (n-|S|)! 2^{blocks}`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5`. There are `5! = 120` permutations; we must keep only
+      those with no adjacent values differing by 1.
+
+      Running the gap DP and reading `Σ_glued (−1)^{glued}·f[5-glued]·(count)`
+      layer by layer gives these signed contributions:
+
+      | glued | signed contribution | what it counts |
+      |-------|--------------------|----------------|
+      | 0 | `+120` | all `5!` permutations (IE baseline) |
+      | 1 | `−192` | subtract permutations forcing one glued pair |
+      | 2 | `+108` | add back permutations forcing two glued pairs |
+      | 3 | `−24` | subtract those forcing three glued pairs |
+      | 4 | `+2` | add those forcing all four pairs (runs `[1..5]`, 2 orders) |
+
+      Sum: `120 − 192 + 108 − 24 + 2 = 14`. ✓ matches the CSES sample.
+
+      **Why the tiers agree.** The brute force (①) enumerates exactly those 14
+      permutations for `n = 5` and prints `14`; the O(n²) DP (②) reproduces the
+      same answer through the inclusion-exclusion table above.
+
+  - type: mcq
+    prompt: "Why does starting a glued pair multiply the DP state by 2 at the moment the block reaches length 2?"
+    options:
+      - "Because a block of two consecutive values can be written in ascending or descending order."
+      - "Because there are exactly two gaps in that part of the line."
+      - "Because the alternating (−1) sign needs an extra factor of 2."
+      - "Because each glued gap doubles n."
+    answer: 0
+    explanation: "When two consecutive values are forced to be adjacent they form a block, which can be laid out in increasing or decreasing order — 2 internal orders. Longer blocks keep that same factor (extending a block just adds a value to one end). This per-block factor of 2 is exactly why we multiply by 2 once, when the block first reaches length 2, and not again as it grows."
+
+type: content
+---

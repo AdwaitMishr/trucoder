@@ -1,0 +1,232 @@
+---
+id: finding-periods
+title: Finding Periods
+type: content
+difficulty: medium
+order: 200
+tags:
+  - string
+  - prefix-function
+  - periodicity
+blocks:
+  - type: markdown
+    content: |
+      # Finding Periods — every length that regenerates the string
+
+      A **period** of a string is a prefix that can be used to **generate the
+      whole string by repeating it**; the last repetition may be partial. For
+      example the periods of `abcabca` are `abc` (repeated `abc + abc + a`) and
+      `abcabc` (repeated `abcabc + a`), and of course `abcabca` itself. Find
+      all period lengths.
+
+      ## The surprising identity: periods are borders in disguise
+
+      A length `p` is a period exactly when `s[i] == s[i % p]` for every `i` —
+      the string is the prefix of a paragraph of `s[0..p-1]` repeated. Compare
+      the overlapping first and last parts: requiring `s[i] == s[i-p]` for all
+      `i` in `[p, n-1]` is exactly the statement that the **first `n-p`
+      characters equal the last `n-p` characters** — i.e. that **`n-p` is a
+      border** of `s`.
+
+      So:
+
+      > **`p` is a period ⇔ `n - p` is a border of `s`** (and `p = n` is always
+      > a period, the empty border).
+
+      Using the **Finding Borders** technique from the previous lesson, the
+      borders are the prefix-function chain, and each border `L` yields the
+      period `p = n - L`.
+
+      ## Complexity
+
+      - Computes `pi`: `O(n)`. Walks the border chain: `O(n)`.
+      - Total `O(n)` time, `O(n)` space for `n <= 10^6`.
+
+      :::tip
+      **Interview tip:** Periods ↔ borders is one of the most reused identities
+      in string algorithms (KMP periodicity, string periodicity lemma in
+      competitive programming). Being able to say "a period is `n` minus a
+      border" on the spot is a strong signal.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      A period of a string is a prefix that can be used to generate the whole
+      string by repeating the prefix. The last repetition may be partial.
+      Find all period lengths of a string.
+
+      ## Input
+
+      The only input line has a string of length `n` consisting of characters
+      `a`–`z`.
+
+      **Constraints:** `1 <= n <= 10^6`
+
+      ## Output
+
+      Print all period lengths in increasing order.
+
+      ## Sample
+
+      **Input:**
+      ```
+      abcabca
+      ```
+      **Output:**
+      ```
+      3 6 7
+      ```
+      The periods: `abc` (`abc+abc+a`), `abcabc` (`abcabc+a`) and `abcabca`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — test every p by simulated regeneration, O(n²)**
+
+      For each `p` from `1` to `n`, build `s` in your head by requiring
+      `s[i] == s[i-p]` for every `i >= p` and check it with a loop. `O(n)`
+      candidates × `O(n)` check = `O(n²)`; for `n = 10^6` that is `10^12` —
+      far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin>>s; int n=s.size();
+          vector<int> ans;
+          for(int p=1;p<=n;p++){
+              bool ok=true;
+              for(int i=p;i<n;i++) if(s[i]!=s[i-p]){ ok=false; break; }
+              if(ok) ans.push_back(p);
+          }
+          for(size_t i=0;i<ans.size();i++){ if(i) cout<<" "; cout<<ans[i]; } cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n²)` time. Too slow for `n = 10^6`.*
+
+      **② Optimization — periods = n minus a border, O(n) (optimal)**
+
+      Compute `pi`, walk the border chain, and emit `n - L` for every border
+      length `L`, plus `n` itself (the empty border / whole string). Compiled
+      and run against the sample below.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin>>s; int n=s.size();
+          vector<int> pi(n,0);
+          for(int i=1;i<n;i++){ int j=pi[i-1]; while(j>0&&s[i]!=s[j]) j=pi[j-1]; if(s[i]==s[j]) j++; pi[i]=j; }
+          set<int> ans;
+          ans.insert(n);                    // p = n: the whole string generates itself
+          int L = pi[n-1];
+          while(L>0){ ans.insert(n - L); L = pi[L-1]; }  // p = n - L for every border length L
+          bool first=true;
+          for(int p: ans){ if(!first) cout<<" "; cout<<p; first=false; } cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n)` time, `O(n)` space. The recommended solution.*
+
+      **③ Alternative — rolling-hash verification, O(n) with hashing**
+
+      Precompute rolling hashes, then check each `p` in `O(1)`: `p` is a period
+      iff the length-`(n-p)` suffix equals the length-`(n-p)` prefix (that is
+      `n-p` is a border). `O(1)` per candidate → `O(n)` total, no prefix-function
+      bookkeeping.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll M1=1000000007, M2=1000000009, B=911382323;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin>>s; int n=s.size();
+          vector<ll> p1(n+1,1),p2(n+1,1),h1(n+1,0),h2(n+1,0);
+          for(int i=0;i<n;i++){ p1[i+1]=p1[i]*B%M1; p2[i+1]=p2[i]*B%M2; h1[i+1]=(h1[i]*B+s[i])%M1; h2[i+1]=(h2[i]*B+s[i])%M2; }
+          auto sub=[&](ll l,ll r,vector<ll>&ha,vector<ll>&pa,ll M){ return ((ha[r+1]-ha[l]*pa[r-l+1])%M+M)%M; };
+          vector<int> ans;
+          for(int p=1;p<=n;p++){
+              int k=n-p;                                   // need prefix(k) == suffix(k)
+              if(k==0 || (sub(0,k-1,h1,p1,M1)==sub(n-k,n-1,h1,p1,M1)
+                       && sub(0,k-1,h2,p2,M2)==sub(n-k,n-1,h2,p2,M2))) ans.push_back(p);
+          }
+          for(size_t i=0;i<ans.size();i++){ if(i) cout<<" "; cout<<ans[i]; } cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n)` expected time, `O(n)` space. Double hashing avoids collisions.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **The identity in code.** A set holds the periods. Insert `n` first
+        (always a period). Then walk the border chain from `pi[n-1]`: each
+        border length `L` contributes the period `n - L`. Using a `set`
+        deduplicates (a given `p` can only arise once, but it keeps the output
+        sorted for free).
+      - **Why `n - L` is a period.** `p = n - L` being a period means the first
+        `n - p = L` characters equal the last `L` characters — exactly the
+        definition of `L` being a border. Every valid period has this form,
+        which is why the border chain enumerates them all.
+      - **Off-by-one.** The chain stops at `L = 0`; the empty-border period
+        `p = n` is added explicitly, so the whole string is always reported.
+      - **Hash alternative.** Avoids the prefix function entirely: for each `p`
+        compare the prefix and suffix of length `n-p` with two `O(1)` rolling-hash
+        lookups.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `s = "abcabca"`, `n = 7`.
+
+      Prefix function:
+      ```
+      i:  0  1  2  3  4  5  6
+      s:  a  b  c  a  b  c  a
+      pi: 0  0  0  1  2  3  4
+      ```
+
+      Borders of `s` (border chain): `pi[6] = 4`, then `pi[3] = 1`, then
+      `pi[0] = 0` → borders are `{4, 1}`.
+
+      Periods:
+      - `p = 7 - 4 = 3` → prefix `abc` generates `abc + abc + a`. ✓
+      - `p = 7 - 1 = 6` → prefix `abcabc` generates `abcabc + a`. ✓
+      - `p = 7` (empty border / whole string) ✓
+
+      Printed:
+      ```
+      3 6 7
+      ```
+      Expected `3 6 7` — match.
+  - type: flowchart
+    title: "Periods from the border chain"
+    nodes: ["compute prefix function pi", "periods = { n }", "L = pi[n-1]", "L > 0?", "add n - L to periods", "L = pi[L-1]", "sort and print"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 0, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 4, to: 5}
+      - {from: 5, to: 3}
+      - {from: 3, to: 6, label: "no"}
+      - {from: 1, to: 6}
+  - type: mcq
+    prompt: "Using only the prefix-function border chain, which single computation turns every border into a period?"
+    options:
+      - "Subtracting each border length from n (p = n - L), plus always counting n itself."
+      - "Multiplying each border length by its position in the chain."
+      - "Adding every border length to n."
+      - "Taking only the largest border length."
+    answer: 0
+    explanation: "For a period p, n - p must be a border of s, so each border length L directly yields the period p = n - L. Including the empty border covers p = n. This is why one prefix-function pass answers both Finding Borders and Finding Periods."
+---

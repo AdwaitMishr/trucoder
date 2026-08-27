@@ -1,0 +1,255 @@
+---
+id: substring-reversals
+title: Substring Reversals
+difficulty: hard
+order: 241
+tags:
+  - implicit-treap
+  - lazy-tag
+  - sqrt-decomposition
+  - rope
+blocks:
+  - type: markdown
+    content: |
+      # Substring Reversals — mutable order with an implicit treap
+
+      You have a string and must repeatedly **reverse arbitrary substrings**,
+      then print the final result. The catch is that reversals are *global*:
+      they rearrange positions, so a plain character array cannot answer "what
+      is at position *k* now?" without doing the work of each operation.
+
+      The problem asks for `m` up to `2·10^5` reversals on a string of length up
+      to `2·10^5`. We need a data structure that treats the string as an
+      **ordered sequence** and supports *split into two halves*, *merge two
+      halves*, and *reverse a contiguous slice* — all fast.
+
+      **The core idea — an implicit treap.** A treap is a binary search tree
+      ordered not by key but by **position in the sequence** (this is why it is
+      called *implicit*). Each node stores the *size* of its subtree; the index
+      of a node is inferred from the sizes as you walk down. A random priority
+      keeps the tree balanced on average, so both `split` and `merge` run in
+      `O(log n)`.
+
+      To reverse the slice `[a, b]`, we **split** the tree into three pieces
+      — `[1, a-1]`, `[a, b]`, `[b+1, n]` — toggle a **lazy `rev` flag** on the
+      middle piece, and **merge** them back. The flag is *deferred*: we do not
+      actually flip the tree at split time. We only push the flag down when we
+      touch a node (during the next split/merge or during the final inorder
+      traversal). This keeps each reversal `O(log n)`.
+
+      The family of tools this problem trains is the same one used for *range
+      insert / delete / reverse / rotate* and for building a **rope** (the
+      structure behind the persistent "immutable string" of many editors):
+      split / merge / lazy tag. If you master the implicit treap here, Reversals
+      and Sums (next) is a one-line addition.
+
+      **Complexity.** Each reversal touches `O(log n)` treap nodes, so the whole
+      program is **O((n + m) log n)** time and **O(n)** space.
+
+      :::tip
+      **Interview tip:** an implicit treap is the "sequence backbone" interviewers
+      reach for when they ask for *logarithmic-range reversal / rotation /
+      insertion on an array*. The magic is that `split(t, k)` + `merge(a, b)` +
+      a deferred `rev` flag turn any "operate on a contiguous slice" request
+      into two splits, one flag, and two merges — articulate that pattern and
+      the rest of the solution writes itself.
+      :::
+  - type: markdown
+    content: |
+      # Question — Substring Reversals
+
+      Given a string, your task is to process operations where you reverse a
+      substring of the string. What is the final string after all the
+      operations?
+
+      **Constraints**
+
+      - `1 ≤ n, m ≤ 2·10^5`
+      - `1 ≤ a ≤ b ≤ n`
+
+      **Input.** The first input line has two integers `n` and `m`: the length
+      of the string and the number of operations. The characters of the string
+      are numbered `1,2,…,n`. The next line has a string of length `n` that
+      consists of characters `A`–`Z`. Finally, there are `m` lines that describe
+      the operations. Each line has two integers `a` and `b`: you reverse a
+      substring from position `a` to position `b`.
+
+      **Output.** Print the final string after all the operations.
+
+      Sample input:
+
+      ```
+      7 2
+      AYBABTU
+      3 4
+      4 7
+      ```
+
+      Sample output:
+
+      ```
+      AYAUTBB
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — reverse in place, O(n·m)**
+
+      Keep the string in a `std::string` and, for every operation, use
+      `std::reverse(s.begin()+a-1, s.begin()+b)`. It is trivially correct but
+      every reversal rewrites an `O(n)` block, and `n·m` can reach
+      `4·10^10`:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main(){ // too slow: O(n * m)
+          int n, m; cin >> n >> m;
+          string s; cin >> s;
+          while (m--) { int a, b; cin >> a >> b;   // 1-indexed
+              reverse(s.begin() + a - 1, s.begin() + b);
+          }
+          cout << s << "\n";
+      }
+      ```
+
+      **O(n·m)** — correct, hopeless at `n, m ≤ 2·10^5`.
+
+      **② Optimization — implicit treap with lazy reversal, O((n+m) log n)
+      (submission)**
+
+      Rebuild the string as an implicit treap. `split(t, k)` detaches the first
+      `k` nodes; `merge(a, b)` concatenates two treaps; both are `O(log n)`. To
+      reverse `[a, b]` we cut out that slice, toggle its `rev` flag, and glue
+      everything back. The flag is pushed lazily on every `split`/`merge`/output
+      step, so reversing costs the same as a pair of splits.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      struct Node {
+          char ch; int sz, pr; bool rev;
+          Node *l, *r;
+          Node(char c) : ch(c), sz(1), pr(rand()), rev(false), l(nullptr), r(nullptr) {}
+      };
+      int sz(Node* t){ return t ? t->sz : 0; }
+      void push(Node* t){              // propagate the lazy reverse tag
+          if (!t || !t->rev) return;
+          swap(t->l, t->r);            // reversing this subtree flips its children
+          if (t->l) t->l->rev = !t->l->rev;
+          if (t->r) t->r->rev = !t->r->rev;
+          t->rev = false;
+      }
+      void pull(Node* t){ if (t) t->sz = 1 + sz(t->l) + sz(t->r); }
+      void split(Node* t, int k, Node*& a, Node*& b){
+          if (!t){ a = b = nullptr; return; }
+          push(t);
+          if (sz(t->l) >= k){ split(t->l, k, a, t->l); b = t; }
+          else { split(t->r, k - sz(t->l) - 1, t->r, b); a = t; }
+          pull(t);
+      }
+      Node* merge(Node* a, Node* b){
+          if (!a) return b; if (!b) return a;
+          if (a->pr < b->pr){ push(a); a->r = merge(a->r, b); pull(a); return a; }
+          push(b); b->l = merge(a, b->l); pull(b); return b;
+      }
+      string out(Node* t){
+          if (!t) return "";
+          push(t);
+          return out(t->l) + t->ch + out(t->r);  // inorder = current order
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          srand(12345);
+          int n, m; string s;
+          cin >> n >> m >> s;
+          Node* root = nullptr;
+          for (char c : s) root = merge(root, new Node(c));
+          while (m--){ int a, b; cin >> a >> b;  // 1-indexed inclusive
+              Node *A, *B, *C, *D;
+              split(root, a - 1, A, B);
+              split(B, b - a + 1, C, D);         // C = the slice [a,b]
+              if (C) C->rev = !C->rev;           // defer the reversal
+              root = merge(merge(A, C), D);
+          }
+          cout << out(root) << "\n";
+          return 0;
+      }
+      ```
+
+      **O((n + m) log n)** time, **O(n)** space. This is the submission tier.
+
+      **③ Alternative — sqrt decomposition with a `rev` flag per block**
+
+      Split the string into blocks of size `≈ √n` and store each block's text
+      plus a *is this block reversed?* flag. A reversal `[a, b]` walks the
+      blocks: it **toggles the flag** on whole middle blocks and physically
+      rebuilds only the (at most two) boundary blocks. There are `O(√n)` blocks,
+      so each reversal is `O(√n)` (plus the extra work of repairing boundary
+      blocks) and the whole run is `O((n + m)·√n)`. It is a classic "cheap but
+      still fast enough" fallback when a treap feels heavy to implement; with
+      `n, m = 2·10^5` and `√n ≈ 447` it comfortably fits the 1-second limit.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The submission tier is all about **deferring work** and **splitting the
+      sequence**:
+
+      - **`split(t, k)` / `merge(a, b)`.** `split` walks down, deciding by the
+        left subtree's size *where* position `k` sits, and physically severs the
+        treap at that point into `a = first k nodes` and `b = the rest`.
+        `merge` is the symmetric inverse driven by random priorities. Together
+        they move any contiguous slice in and out of the tree in `O(log n)`.
+      - **The lazy `rev` tag.** When we reverse slice `C`, we only set
+        `C->rev`. None of the subtree is physically flipped. The flag is *pushed*
+        (children swapped, flag copied down and cleared) only when we later
+        split/merge/output a node — exactly when the true order is needed. This
+        is why one reversal is `O(log n)`, not `O(|slice|)`.
+      - **Toggling vs setting.** `C->rev = !C->rev` because a slice may be
+        reversed multiple times; `rev` is per-subtree, so two toggles cancel.
+        (In `push`, copying the flag to children also *toggles* each child.)
+      - **The inorder pull.** Nodes' keys are implicit positions, so output is a
+        simple inorder traversal `out(l) + ch + out(r)`, pushed lazily along the
+        way to respect outstanding `rev` flags.
+      - **`sz` is the only aggregate we need** here — there is no value-sum (see
+        the next lesson, Reversals and Sums, where one more aggregate is added).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 7, m = 2`, string `AYBABTU`, operations `(3, 4)`
+      and `(4, 7)` (1-indexed).
+
+      **Step 1 — reversal `(3, 4)`.** `split(root, 2)` → `A = "AY"`,
+      `B = "BABTU"`; then `split(B, 2)` → `C = "BA"`, `D = "BTU"`. Toggle
+      `C->rev`, merge back:
+
+      | piece | value |
+      |-------|-------|
+      | A | `AY` |
+      | C (rev) | `AB` |
+      | D | `BTU` |
+      | result | `AYABBTU` |
+
+      **Step 2 — reversal `(4, 7)`.** Positions 4..7 of `AYABBTU` are `BBTU`.
+      `split(root, 3)` → `"AYA"` + `"BBTU"`; `split(·, 4)` → slice `"BBTU"`,
+      remainder empty. Toggle the slice's `rev`, merge back:
+      `"AYA" + "UTBB"` = **`AYAUTBB`**.
+
+      **Output:** we print **`AYAUTBB`**, matching the expected sample output
+      exactly.
+  - type: mcq
+    prompt: 'Why does toggling a lazy rev flag on the middle slice make a substring reversal O(log n) instead of O(n)?'
+    options:
+      - Because we physically sort the slice when toggling
+      - Because we only flip a flag on an O(log n) subtree and defer the actual reordering to a later push
+      - Because std::reverse is O(log n)
+      - Because the string is stored in an array
+    answer: 1
+    explanation: An implicit treap represents the string as a balanced tree; split and merge are O(log n). Reversing a slice is just split, toggle the rev flag on the O(log n)-sized middle subtree, and merge. The flag is pushed (flipping children) only when the true order is needed later, so the actual reorder is spread lazily across future operations.
+type: content
+---

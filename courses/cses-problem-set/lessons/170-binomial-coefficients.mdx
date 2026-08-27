@@ -1,0 +1,257 @@
+---
+id: binomial-coefficients
+title: Binomial Coefficients
+difficulty: medium
+order: 170
+tags:
+  - math
+  - combinatorics
+  - modular-arithmetic
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — nCr mod p with factorials and modular inverses
+
+      The binomial coefficient
+      `C(a, b) = a! / (b! · (a−b)!)` gives "choose b of a". The problem is evaluating
+      it `mod p = 10^9+7` for up to `10^5` queries with `a` as large as `10^6`.
+
+      Since `p` is prime and all factorials are `< p` (hence nonzero and invertible),
+      Fermat's little theorem gives the modular inverse `inv(x) = x^(p−2) mod p`. If we
+      precompute:
+
+      ```
+      fact[i]    = i!            mod p
+      invfact[i] = (i!)^{-1}     mod p
+      ```
+
+      then each query is a single `O(1)` product:
+
+      ```
+      C(a, b) ≡ fact[a] · invfact[b] · invfact[a−b]   (mod p)
+      ```
+
+      The inverse factorials are computed cheaply backwards from the last one:
+      `invfact[a−1] = invfact[a] · a mod p`, because `a! = a · (a−1)!`.
+
+      **Time complexity:** `O(A)` precompute (`A = max a ≤ 10^6`) plus
+      `O(1)` per query — trivial for `10^5` queries.
+
+      :::tip
+      **Interview tip:** handling `nCr mod p` with a prime modulus is one of the most
+      reused pieces of modular arithmetic. Precompute `fact` and `invfact` up to the
+      maximum `n` once, then answer `C(n,k)` in O(1). The inverse-factorial backward
+      trick (`invfact[i−1] = invfact[i]·i`) is worth knowing so you only run ONE
+      modular exponentiation. When `n` exceeds the modulus (Lucas' theorem territory),
+      the same `fact`/`invfact` no longer applies — but note that here `a ≤ 10^6 < p`.
+      :::
+  - type: markdown
+    content: |
+      ## Question
+
+      Your task is to calculate `n` binomial coefficients modulo `10^9+7`.
+
+      A binomial coefficient `{a \choose b}` can be calculated using the formula
+      `a! / (b! · (a−b)!)`. We assume that `a` and `b` are integers and
+      `0 <= b <= a`.
+
+      **Input**
+
+      The first input line contains an integer `n`: the number of calculations.
+
+      After this, there are `n` lines, each of which contains two integers `a` and `b`.
+
+      **Output**
+
+      Print each binomial coefficient modulo `10^9+7`.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `0 <= b <= a <= 10^6`
+
+      **Example**
+
+      Input:
+
+      ```
+      3
+      5 3
+      8 1
+      9 5
+      ```
+
+      Output:
+
+      ```
+      10
+      8
+      126
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(b) time per query, O(1) space (multiplicative formula per query).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+
+      ll modpow(ll a, ll e) {
+          ll r = 1; a %= MOD;
+          while (e) { if (e & 1) r = r * a % MOD; a = a * a % MOD; e >>= 1; }
+          return r;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int q; cin >> q;
+          while (q--) {
+              int a, b; cin >> a >> b;
+              // C(a,b) = prod_{k=1..b} (a-b+k)/k  (exactly b terms)
+              ll ans = 1;
+              for (int k = 1; k <= b; k++) {
+                  ans = ans * (a - b + k) % MOD;
+                  ans = ans * modpow(k, MOD - 2) % MOD;   // divide by k via inverse
+              }
+              cout << ans << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      The multiplicative form `C(a,b) = (a−b+1)/1 · (a−b+2)/2 · … · a/b` runs one inverse
+      per factor, so it is `O(b)` per query — up to `10^6` steps times `10^5` queries is
+      `10^11` work, far too slow. It finishes on the small sample only.
+
+      **② Optimization — O(A) precompute + O(1) per query (factorials + inverse factorials).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+      const int MAXA = 1000000;
+
+      ll modpow(ll a, ll e) {
+          ll r = 1; a %= MOD;
+          while (e) { if (e & 1) r = r * a % MOD; a = a * a % MOD; e >>= 1; }
+          return r;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+
+          vector<ll> fact(MAXA + 1), invfact(MAXA + 1);
+          fact[0] = 1;
+          for (int i = 1; i <= MAXA; i++) fact[i] = fact[i - 1] * i % MOD;
+          invfact[MAXA] = modpow(fact[MAXA], MOD - 2);            // one modular inverse
+          for (int i = MAXA; i >= 1; i--) invfact[i - 1] = invfact[i] * i % MOD;
+
+          int q; cin >> q;
+          while (q--) {
+              int a, b; cin >> a >> b;
+              ll ans = fact[a] * invfact[b] % MOD * invfact[a - b] % MOD;
+              cout << ans << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      Precompute `fact` up to the maximum `a`, then a single Fermat inverse of `fact[MAXA]`
+      and a downward pass fills all of `invfact`. Each query is three array lookups and
+      two multiplications — `O(1)`. This is the intended solution.
+
+      **③ Further optimization — not needed.**
+
+      `O(A)` precompute plus `O(1)` per query is already optimal: an `O(1)`-per-query
+      answer cannot be improved asymptotically, and `10^6` array elements is negligible
+      memory. (If `a` ever exceeded the modulus, this fallback would *not* hold — you
+      would need Lucas' theorem — but here `a ≤ 10^6 < p`, so it is exact.)
+
+      **④ Alternative algorithm — O(A) precompute + O(1) per query (linear-inverse recurrences).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+      const int MAXA = 1000000;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+
+          vector<ll> inv(MAXA + 1), fact(MAXA + 1), invfact(MAXA + 1);
+          inv[1] = 1;
+          for (int i = 2; i <= MAXA; i++)
+              inv[i] = MOD - (MOD / i) * inv[MOD % i] % MOD;      // linear inverse formula
+          fact[0] = invfact[0] = 1;
+          for (int i = 1; i <= MAXA; i++) {
+              fact[i] = fact[i - 1] * i % MOD;
+              invfact[i] = invfact[i - 1] * inv[i] % MOD;          // (i!)^-1 built from inv[i]
+          }
+
+          int q; cin >> q;
+          while (q--) {
+              int a, b; cin >> a >> b;
+              ll ans = fact[a] * invfact[b] % MOD * invfact[a - b] % MOD;
+              cout << ans << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      Instead of one Fermat inverse plus a backward pass, build every `inv[i]` directly
+      with the recurrence `inv[i] = p − ⌊p/i⌋·inv[p mod i] mod p` (valid for `i < p`),
+      then accumulate `invfact[i] = invfact[i−1]·inv[i]`. Identical result and
+      complexity, but avoids exponentiation entirely — a handy forge when you already
+      need `inv[i]` for other purposes.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The single idea that makes it instant is that **`C(a,b)` factors completely**:
+      it is `fact[a]` times the inverse of `fact[b]` times the inverse of `fact[a−b]`.
+      So instead of recomputing factorials per query, the program:
+
+      1. builds `fact[0..MAXA]`;
+      2. inverts only `fact[MAXA]` via `modpow(fact[MAXA], MOD−2)` (Fermat), then walks
+         `fact[i]` back down to cheaply fill `invfact[i−1] = invfact[i]·i` —
+         because `1/(i−1)! = i / i!`;
+      3. answers each query with the three-term product, all `mod p`.
+
+      Both multiplicative steps overflow if taken naively, which is why every product
+      is reduced `% MOD`, and the values stay well within `long long`
+      (two residues `< p ≈ 10^9` multiply to `< p² ≈ 10^18`).
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      Trace the sample queries with the precomputed arrays (expected `10 8 126`):
+
+      | a | b | fact[a] | invfact[b] | invfact[a−b] | product            | equals |
+      |---|----|---------|------------|---------------|--------------------|--------|
+      | 5 | 3 | 120     | (6)^-1     | (2)^-1        | 120/12             | 10     |
+      | 8 | 1 | 40320   | 1          | (7!)^-1       | 40320/5040         | 8      |
+      | 9 | 5 | 362880  | (120)^-1   | (24)^-1       | 362880/2880        | 126    |
+
+      Each row is `fact[a] · invfact[b] · invfact[a−b]`, which equals
+      `fact[a] / (fact[b]·fact[a−b])` by construction. The three outputs — `10`, `8`,
+      `126` — match the sample exactly.
+  - type: mcq
+    prompt: Why can invfact[i−1] be computed from invfact[i] with just one multiplication, avoiding a modular exponentiation for each i?
+    options:
+      - 'Because (i−1)! = i! / i, so its inverse is i!·i, i.e. invfact[i−1] = invfact[i]·i mod p.'
+      - 'Because (i−1)! is exactly 1 mod p whenever p is prime.'
+      - 'Because Fermat says every factorial is its own inverse.'
+      - 'Because the inverse only needs to be exact, never reduced mod p.'
+    answer: 0
+    explanation: 'Since i! = i · (i−1)!, inverting gives 1/(i−1)! = i / i! , i.e. invfact[i−1] = invfact[i] · i mod p. Starting from ONE Fermat inverse of fact[MAXA] and stepping down fills the whole array in O(A), so the entire precompute uses a single modular exponentiation.'
+type: content
+---

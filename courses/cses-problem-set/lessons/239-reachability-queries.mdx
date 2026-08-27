@@ -1,0 +1,213 @@
+---
+id: reachability-queries
+title: Reachability Queries
+difficulty: hard
+order: 239
+tags:
+  - advanced-techniques
+  - reachability
+  - strongly-connected-components
+  - bitset
+  - transitive-closure
+blocks:
+  - type: markdown
+    content: |
+      # Reachability Queries — "can you reach b from a?" on a general digraph
+
+      Now the graph may have **cycles**, and we must answer many arbitrary
+      reachability queries `(a, b)`. The DAG-only bitset trick from the previous
+      lesson still works after one crucial reduction: **Strongly Connected
+      Components (SCCs)**.
+
+      Inside an SCC every node reaches every other, so all SCC members are
+      mutually reachable. Collapse each SCC to a single super-node; the
+      resulting **condensation graph is a DAG**. Then:
+
+      - `a` reaches `b` ⟺ `comp(a) = comp(b)`, **or** `comp(a)` reaches
+        `comp(b)` in the condensation DAG.
+      - Precompute the condensation DAG's transitive closure with the same
+        reverse-topological **bitset union** (each super-node ORs its children's
+        bitsets), then each query is an O(1) bit test.
+
+      **Time:** SCC (Kosaraju/Tarjan) is `O(n+m)`; the closure is
+      `O((V+M)·V/64)`; each query O(1). **Memory:** `O(V²/8)` bits. Both stay
+      inside the limits at `n ≤ 5·10^4`.
+
+      This is the template for "many reachability queries": SCC-condense the
+      graph first, then bitset-transitive-closure the DAG.
+
+      :::tip
+      **Interview tip:** reachability on a general graph = "collapse SCCs to a
+      DAG, then close it". Sad-but-true, a per-query BFS is O(n+m) each, so with
+      `q` queries that's `q·(n+m)`. Precomputing the closure once and answering
+      each query in O(1) is the canonical optimization and a very common
+      follow-up after the "what's an SCC for?" question.
+      :::
+  - type: markdown
+    content: |
+      # Question — Reachability Queries
+
+      A directed graph consists of `n` nodes and `m` edges. The nodes are
+      numbered `1, 2, …, n`.
+
+      Your task is to answer `q` queries of the form *"can you reach node `b`
+      from node `a`?"*
+
+      **Input.** The first input line has three integers `n`, `m` and `q`: the
+      number of nodes, edges and queries. After this there are `m` lines
+      describing the edges: each line has two distinct integers `a` and `b`,
+      meaning an edge from node `a` to node `b`. Finally there are `q` lines
+      describing the queries: each line has two integers `a` and `b`.
+
+      **Output.** Print the answer for each query: either `YES` or `NO`.
+
+      **Constraints**
+      - `1 ≤ n ≤ 5·10^4`
+      - `1 ≤ m,q ≤ 10^5`
+
+      **Example**
+      ```
+      Input:
+      4 4 3
+      1 2
+      2 3
+      3 1
+      4 3
+      1 3
+      1 4
+      4 1
+
+      Output:
+      YES
+      NO
+      YES
+      ```
+      Explanation: nodes 1,2,3 form one SCC (1→2→3→1). Node 1 reaches 3
+      (YES); nothing reaches node 4, so 1→4 is NO; node 4 reaches 3 which is in
+      the SCC containing 1, so 4→1 is YES.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — DFS per query, O(q·(n+m))**
+
+      For each query, run a DFS from `a` and check if `b` is reached.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      vector<int> adj[50005];
+      int vis[50005];
+      bool dfs(int v,int target){ if(v==target) return true; vis[v]=1;
+          for(int to:adj[v]) if(!vis[to] && dfs(to,target)) return true; return false; }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m,q; cin>>n>>m>>q;
+          for(int i=0;i<m;i++){ int a,b; cin>>a>>b; --a;--b; adj[a].push_back(b); }
+          while(q--){ int a,b; cin>>a>>b; --a;--b;
+              memset(vis,0,sizeof(vis)); cout<<(dfs(a,b)?"YES":"NO")<<"\n"; }
+          return 0;
+      }
+      ```
+
+      **O(q·(n+m))** — with `q,m ≤ 10^5` that is ~10^10; too slow.
+
+      **② Optimization — SCC condensation + bitset transitive closure, O((n+m) + (V+M)·V/64 + q) (submission)**
+
+      Kosaraju finds SCCs (first DFS on the reversed graph for finish order,
+      second on the forward graph in reverse finish order). Condense to a DAG,
+      dedupe its edges, then run reverse-topological bitset closure.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int MAXN = 50005;
+      int n,m,q;
+      vector<int> adj[MAXN], radj[MAXN], dag[MAXN];
+      vector<char> used(MAXN,0);
+      vector<int> order;
+      int comp[MAXN], cid=0, csz;
+      int cvis[MAXN];
+      vector<int> corder;
+      void dfs1(int v){ used[v]=1; for(int to: radj[v]) if(!used[to]) dfs1(to); order.push_back(v); }
+      void dfs2(int v, int c){ used[v]=1; comp[v]=c; for(int to: adj[v]) if(!used[to]) dfs2(to,c); }
+      void dfs3(int v){ cvis[v]=1; for(int to: dag[v]) if(!cvis[to]) dfs3(to); corder.push_back(v); }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          if(!(cin>>n>>m>>q)) return 0;
+          for(int i=0;i<m;i++){ int a,b; cin>>a>>b; --a;--b; adj[a].push_back(b); radj[b].push_back(a); }
+          for(int i=0;i<n;i++) if(!used[i]) dfs1(i);
+          used.assign(MAXN,0);
+          for(int i=n-1;i>=0;i--){ int v=order[i]; if(!used[v]) dfs2(v,cid++); }
+          csz=cid;
+          map<pair<int,int>,bool> seen;
+          for(int i=0;i<n;i++)
+              for(int to: adj[i])
+                  if(comp[i]!=comp[to]){
+                      auto key=make_pair(comp[i],comp[to]);
+                      if(!seen[key]){ seen[key]=true; dag[comp[i]].push_back(comp[to]); }
+                  }
+          for(int i=0;i<csz;i++) if(!cvis[i]) dfs3(i);
+          int W=(csz+63)/64;
+          vector<vector<unsigned long long>> bset(csz, vector<unsigned long long>(W,0));
+          for(int i=0;i<csz;i++){            // children (finish earlier) processed first
+              int v=corder[i];
+              bset[v][v>>6] |= (1ULL<<(v&63));
+              for(int to: dag[v])
+                  for(int w=0;w<W;w++) bset[v][w] |= bset[to][w];
+          }
+          while(q--){
+              int a,b; cin>>a>>b; --a;--b;
+              int ca=comp[a], cb=comp[b];
+              cout << (((bset[ca][cb>>6]>>(cb&63))&1ULL) ? "YES" : "NO") << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      **O(n+m)** for SCC + **O((V+M)·V/64)** for the closure (deduping merges
+      parallel edges, `M ≤ m`) + **O(q)** for the O(1) per-query bit tests.
+      Submission tier.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **Kosaraju in three passes.** (1) `dfs1` on the reversed graph records a
+        finish order; (2) walking that order backwards and running `dfs2` on the
+        forward graph assigns component ids — each DFS seeds one SCC; (3) `dfs3`
+        topological-orders the *condensed DAG* for the closure pass.
+      - **Edge dedup.** Multiple inter-component edges from `ci` to `cj` are
+        collapsed with a `seen` map, keeping `dag` small (so the closure's
+        `M·V/64` term uses real distinct edges).
+      - **Bitset closure in the same finish-order trick.** `corder` lists a node
+        only after its DAG-children, so iterating it forward means each
+        super-node's children bitsets are final when ORed in.
+      - **Query = two comp lookups + one bit test.** `comp[a]`,`comp[b]`, then a
+        shift-and-mask check on `bset[comp[a]]`. O(1) per query, and the
+        same-SCC case falls out naturally (a component contains itself).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n=4`, edges `1→2,2→3,3→1,4→3`; queries `1 3`, `1 4`,
+      `4 1`.
+
+      1. **SCCs.** `1→2→3→1` is one SCC `S={1,2,3}` (id 0); node 4 alone is
+         `T={4}` (id 1). Condensation edge: `T→S` (from `4→3` cross-edge).
+      2. **Closure.** `bset[S] = {S}`; `bset[T] = {T, S}` (T reaches S).
+      3. **Queries:**
+         - `1 3` → `comp(1)=S, comp(3)=S`, same bit → **YES**.
+         - `1 4` → does `bset[S]` contain `T`? No → **NO**.
+         - `4 1` → `comp(4)=T`, does `bset[T]` contain `S`? Yes → **YES**.
+
+      Output: **YES NO YES** — matches the expected **YES NO YES** (the compiled
+      submission prints exactly that).
+  - type: mcq
+    prompt: 'After condensing a general digraph into SCCs, why does a reachability query reduce to a single bitset test?'
+    options:
+      - Because condensation always produces a complete graph where every node reaches every other
+      - Because the condensation graph is a DAG whose transitive closure is precomputed, so a→b iff comp(a) reaches comp(b) in that closure
+      - Because SCCs are also topological orders, so reachability is always transitive both ways
+      - Because within any SCC every out-edge can be ignored
+    answer: 1
+    explanation: Nodes in the same SCC are mutually reachable, and the condensation graph is a DAG. Precomputing its transitive closure with a bitset per component (children ORed into parents in reverse topological order) lets each query be answered in O(1) — a query is YES exactly when both endpoints share a component or the source component's bitset contains the target component.

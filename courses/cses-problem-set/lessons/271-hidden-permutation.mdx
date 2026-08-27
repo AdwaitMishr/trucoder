@@ -1,0 +1,255 @@
+---
+id: hidden-permutation
+title: Hidden Permutation
+type: content
+difficulty: medium
+order: 271
+tags:
+  - interactive
+  - sorting
+  - merge-sort
+  - comparator
+blocks:
+  - type: markdown
+    content: |
+      # Hidden Permutation — rebuild an array from comparison queries
+
+      There is a hidden permutation `a_1, a_2, …, a_n` of the integers `1..n`.
+      You never see it directly. Instead, you may only ask one kind of question:
+      pick two indices `i` and `j` and learn whether `a_i < a_j`. Your job is to
+      report the whole permutation.
+
+      This is an **interactive** problem: it is not solved offline — your program
+      and the judge literally talk to each other, your program reading the
+      judge's answers from standard input and sending its own lines to standard
+      output. The one tool you have is the **comparison query** `a_i < a_j`, and
+      the whole skill is gathering `O(n log n)` such queries instead of asking
+      every pair.
+
+      ## Why `a_i < a_j` is just a comparison
+
+      Because the hidden values are a *permutation*, every two are distinct, and
+      `a_i < a_j` is a strict, never-ambiguous comparison. So discovering the
+      permutation is exactly the same thing as **sorting the indices
+      `1..n` by their hidden values**: if the sorted index list is
+      `p_1, p_2, …, p_n` (with `a_{p_1} < a_{p_2} < … < a_{p_n}`), then the value
+      at position `p_r` is exactly `r`.
+
+      The naive idea — compare *every* pair with a double loop — costs
+      `n(n−1)/2 ≈ 10⁶` queries for `n = 1000`, but the judging rule caps the
+      program at **`10⁴` query lines**. So the brute force is not merely slow, it
+      is *illegal*: the judge stops reading after `10⁴` and the submission dies.
+
+      ## The interacting loop
+
+      The judge itself is a process. Every query you print and every answer you
+      read goes through the same pipe. That means two non-negotiable habits:
+
+      - **Flush after every query.** The judged program must `cout.flush()`
+        (or `endl`) after writing a question line, or the judge may never see it.
+      - **Read exactly what the judge wrote.** Answers come back on their own
+        lines as `YES` or `NO`.
+
+      :::tip
+      **Interview tip:** "compare pairs, but stay under a query budget" is the
+      signature of an interactive problem where you must *derive enough
+      information*, not run an algorithm offline. Recognising that `a_i < a_j`
+      is just a comparison oracle, and then reaching for merge sort's
+      `n log n` comparisons, is the exact kind of reasoning interviewers probe.
+      In interviews, interactive questions usually have a query budget that the
+      optimal algorithm meets with a handful of queries to spare — the trick is
+      proving *why* you can't do better (an information-theoretic lower bound).
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There is a hidden permutation `a_1, a_2, …, a_n` of integers `1, 2, …,
+      n`. Your task is to find this permutation.
+
+      To do this, you can ask questions: choose two indices `i` and `j` and you
+      will be told if `a_i < a_j`.
+
+      ## Interaction
+
+      This is an interactive problem. Your code will interact with the grader
+      using standard input and output. You should start by reading a single
+      integer `n`: the length of the permutation.
+
+      On your turn, you can print one of the following:
+
+      - `? i j`, where `1 <= i, j <= n`: ask if `a_i < a_j`. The grader will
+        return `YES` if `a_i < a_j` and `NO` otherwise.
+      - `! a_1 a_2 ... a_n`: report that the hidden permutation is
+        `a_1, a_2, …, a_n`. Your program must terminate after this.
+
+      Each line should be followed by a line break. You must make sure the output
+      gets flushed after printing each line.
+
+      ## Constraints
+
+      - `1 <= n <= 1000`
+      - you can ask **at most `10^4` questions** of type `?`
+
+      ## Sample
+
+      **Input:**
+      ```
+      3
+      ? 3 2
+      NO
+      ? 3 1
+      YES
+      ! 3 1 2
+      ```
+      **Explanation:** the hidden permutation is `[3, 1, 2]`. The first question
+      asks if `a_3 < a_2`, which is false (`2 < 1`), so the answer is `NO`. The
+      second asks if `a_3 < a_1`, which is true (`2 < 3`), so the answer is
+      `YES`. The program then reports the permutation `3 1 2`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — compare every pair, O(n²) queries (NOT allowed)**
+
+      Ask `a_i < a_j` for every ordered pair `(i, j)` and build the sorted order.
+      Correct in principle, but `n(n−1)/2 ≈ 10⁶` question lines for `n = 1000`
+      — a hundred times over the `10⁴` limit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      bool ask(int i,int j){
+          cout<<"? "<<i<<" "<<j<<"\n"; cout.flush();
+          string r; cin>>r; return r=="YES";
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<int> p(n); iota(p.begin(),p.end(),1);
+          // insertion into a sorted-by-value list, comparing with every element:
+          for(int i=1;i<n;i++)
+              for(int j=0;j<i;j++)
+                  if(ask(p[i], p[j])) swap(p[i], p[j]);   // crude, O(n^2) asks
+          cout<<"!";
+          for(int x:p) cout<<" "<<x;
+          cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *Exact same answer, but `≈ n²` queries — far over the `10⁴` cap. Not usable.*
+
+      **② Optimization — merge sort the indices, O(n log n) queries (optimal)**
+
+      Sort the indices `1..n` with merge sort, using `a_i < a_j` as the
+      comparator. Merge sort uses stable `n log n` comparisons, so for
+      `n = 1000` this is `≈ 10⁴` queries — right at the limit and legal. After
+      sorting, position `p_r` holds value `r`. This is the tier we compile and
+      verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      bool ask(int i,int j){
+          cout<<"? "<<i<<" "<<j<<"\n"; cout.flush();
+          string r; cin>>r; return r=="YES";
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+
+          vector<int> p(n); iota(p.begin(), p.end(), 1);
+
+          // indices sorted by their hidden values (ascending)
+          stable_sort(p.begin(), p.end(),
+              [](int a,int b){ return ask(a,b); });
+
+          // the r-th element of the sorted order has value r
+          vector<int> val(n+1);
+          for(int r=0; r<n; r++) val[p[r]] = r+1;
+
+          cout<<"!";
+          for(int i=1;i<=n;i++) cout<<" "<<val[i];
+          cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n log n)` queries (`≈ 10⁴` worst case for `n = 1000`), `O(n)` memory.*
+
+      **③ Why this is optimal**
+
+      Reconstructing a permutation whose only observable is pairwise comparison
+      is exactly a comparison sort, and any comparison sort needs
+      `Ω(n log n)` comparisons in the worst case (there are `n!` possible
+      outcomes but only 2 answers per query, so `2^q ≥ n!`, giving
+      `q ≥ log₂(n!) ≈ n log₂ n`). Since the budget is exactly `n log₂ n`, merge
+      sort is not just *a* solution — it is the *matching* one, and there is no
+      faster tier to chase. An alternative presentation of the identical idea is
+      to replace `stable_sort` with `std::sort` and the same comparator; the
+      comparison count stays `O(n log n)`.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **The comparator hides the query.** The lambda passed to `stable_sort`
+        calls `ask(a,b)` and returns whether `a_a < a_b`. From the sort's point
+        of view the hidden values are just the "keys", and it never cares how
+        they were obtained.
+      - **`stable_sort`, not `sort`.** Both work, but `stable_sort` is the mergesort
+        and its comparison count is the well-bounded `n log₂ n` we budgeted for.
+        The hidden values are distinct, so stability is irrelevant to correctness
+        — the choice is purely to keep the query count provably under the cap.
+      - **Rank becomes value.** After sorting, `p[r]` is the index whose hidden
+        value is the `(r+1)`-th smallest, i.e. is `r+1`. `val[p[r]] = r+1` writes
+        that value into the answer at the right position.
+      - **Read before you ask again.** Every `?` line is flushed, and every
+        follow-up `cin >> r` blocks until the judge replies. This strict
+        read-then-ask discipline is the whole protocol.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 3`, hidden permutation `a = [3, 1, 2]`.
+
+      **Merge sort the indices `{1,2,3}` by `a_i < a_j`:**
+      - Hidden values: `a_1 = 3, a_2 = 1, a_3 = 2`.
+      - Sorted by value, indices are `2 (value 1), 3 (value 2), 1 (value 3)`,
+        so `p = [2, 3, 1]`.
+
+      **Assign values by rank:**
+      ```
+      val[2] = 1, val[3] = 2, val[1] = 3
+      ```
+      Output:
+
+      ```
+      ! 3 1 2
+      ```
+
+      Printed vs. expected (sample) `3 1 2` — **match**. The actual merge-sort
+      comparison questions (for instance `? 3 2` → `NO`, since `2 < 1` is false;
+      `? 3 1` → `YES`, since `2 < 3` is true) each consume exactly one of the
+      `n log₂ n ≈ 10^4` allowed queries; for `n = 3`, only `≈ 9` are needed.
+  - type: flowchart
+    title: "Hidden Permutation via merge sort"
+    nodes: ["read n", "sort indices 1..n by stable_sort with comparator ask(a,b)", "each comparison = one flushed '? i j' query", "merge sort issues n log n comparisons", "value of position p[r] is r+1", "print '!' + values, terminate"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "Why is comparing every pair (O(n^2) queries) not a valid solution even though it is correct?"
+    options:
+      - "It returns a wrong permutation because pairwise comparisons cannot reconstruct an array."
+      - "It is correct but uses about 10^6 query lines for n = 1000, over 100x the 10^4 question cap, so the judge stops reading and the submission is judged wrong."
+      - "Pairwise comparisons violate the interaction protocol by reading before flushing."
+      - "The values are not distinct, so comparisons are ambiguous."
+    answer: 1
+    explanation: "Correctness and legality are different in interactive problems. Every pair query is counted by the judge, and the limit is 10^4 for n up to 1000. A double loop issues ~10^6 queries and blows the budget before it ever reports an answer. Merge sort achieves the same reconstruction with O(n log n) ~ 10^4 queries because a comparison query is exactly a comparison: the problems are equivalent, so the standard optimal comparison count applies."
+---

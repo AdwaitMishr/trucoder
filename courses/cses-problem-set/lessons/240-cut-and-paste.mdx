@@ -1,0 +1,201 @@
+---
+id: cut-and-paste
+title: Cut and Paste
+difficulty: hard
+order: 240
+tags:
+  - advanced-techniques
+  - implicit-treap
+  - rope
+  - sqrt-decomposition
+  - string
+blocks:
+  - type: markdown
+    content: |
+      # Cut and Paste — a rope / implicit treap for fast substring moves
+
+      We must apply `m` operations of the form *"move the substring at
+      positions `[a, b]` to the end of the string."* A std::string does each
+      `erase + append` in O(n), giving O(n·m) — and with `n, m ≤ 2·10^5` that is
+      ~4·10^10 character moves. Too slow.
+
+      The right structure is a **rope**: a balanced tree whose leaves hold
+      characters and whose internal nodes hold subtree sizes, so that *"take the
+      first `k` characters"* (an implicit `split`) and *"concatenate two
+      sequences"* (`merge`) are each O(log n). Since we index by **position**,
+      not key, this is an **implicit treap** — a randomized binary search tree
+      where the inorder traversal is exactly the current string.
+
+      Cut-and-paste then becomes:
+      ```
+      (L, X)    ← split at a-1        // L = prefix, X = rest
+      (X, R)    ← split X at (b-a+1)  // X = the substring, R = suffix
+      root      ← merge(L, R)         // remove the substring
+      root      ← merge(root, X)      // paste it at the end
+      ```
+      Three splits/merges per operation, all O(log n).
+
+      :::tip
+      **Interview tip:** the implicit treap / rope is *the* tool for "handle a
+      sequence under cut / paste / reverse / range-sum" operations. Its three
+      primitives — `split(t, k)` (first k nodes), `merge(a, b)`, and a subtree
+      `size` maintained by `upd` — are worth memorizing cold because the whole
+      template (implicit treap) appears verbatim across substring-reversal and
+      range-query problems. Randomized priorities keep it balanced without an
+      explicit rebalance step.
+      :::
+  - type: markdown
+    content: |
+      # Question — Cut and Paste
+
+      Given a string, your task is to process operations where you cut a
+      substring and paste it to the end of the string. What is the final string
+      after all the operations?
+
+      **Input.** The first input line has two integers `n` and `m`: the length
+      of the string and the number of operations. The characters of the string
+      are numbered `1, 2, …, n`. The next line has a string of length `n` that
+      consists of characters `A–Z`. Finally, there are `m` lines describing the
+      operations: each line has two integers `a` and `b`: you cut a substring
+      from position `a` to position `b`.
+
+      **Output.** Print the final string after all the operations.
+
+      **Constraints**
+      - `1 ≤ n, m ≤ 2·10^5`
+      - `1 ≤ a ≤ b ≤ n`
+
+      **Example**
+      ```
+      Input:
+      7 2
+      AYBABTU
+      3 5
+      3 5
+
+      Output:
+      AYABTUB
+      ```
+      Explanation: after the first operation `AYBABTU` becomes `AYTUBAB`;
+      after the second, `AYABTUB`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — std::string erase + append, O(n·m)**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; cin>>n>>m;
+          string s; cin>>s;
+          while(m--){ int a,b; cin>>a>>b; --a;--b;
+              string mid=s.substr(a,b-a+1);
+              s.erase(a,b-a+1);
+              s += mid; }
+          cout<<s<<"\n";
+          return 0;
+      }
+      ```
+
+      **O(n·m)** — each op shifts/rebuilds up to O(n) characters; `n=m=2·10^5` is
+      ~4·10^10, far too slow.
+
+      **② Optimization — implicit treap (rope), O((n+m)·log n) (submission)**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
+      struct Node { char ch; unsigned pri; int sz; Node *l,*r;
+                    Node(char c):ch(c),pri(rng()),sz(1),l(nullptr),r(nullptr){} };
+      int sz(Node* t){ return t ? t->sz : 0; }
+      void upd(Node* t){ if(t) t->sz = sz(t->l)+sz(t->r)+1; }
+      void split(Node* t, int k, Node*& a, Node*& b){   // a = first k nodes, b = rest
+          if(!t){ a=b=nullptr; return; }
+          if(sz(t->l) >= k){ split(t->l,k,a,t->l); b=t; }
+          else { split(t->r, k-sz(t->l)-1, t->r, b); a=t; }
+          upd(t);
+      }
+      Node* merge(Node* a, Node* b){
+          if(!a) return b; if(!b) return a;
+          if(a->pri > b->pri){ a->r=merge(a->r,b); upd(a); return a; }
+          else { b->l=merge(a,b->l); upd(b); return b; }
+      }
+      void cut(Node*& t, int l, int r){                 // 0-based inclusive [l,r] → move to end
+          Node *L,*mid,*R;
+          split(t, l, L, mid);
+          split(mid, r-l+1, mid, R);
+          t = merge(L, R);
+          t = merge(t, mid);
+      }
+      void output(Node* t, string& s){
+          if(!t) return;
+          output(t->l,s); s.push_back(t->ch); output(t->r,s);
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; if(!(cin>>n>>m)) return 0;
+          string str; cin>>str;
+          Node* root=nullptr;
+          for(char c: str) root=merge(root, new Node(c));
+          while(m--){ int a,b; cin>>a>>b; --a;--b; cut(root,a,b); }
+          string ans; output(root,ans);
+          cout<<ans<<"\n";
+          return 0;
+      }
+      ```
+
+      **O((n+m)·log n)** time, **O(n)** memory. Each of the `m` operations is
+      3 `split`/`merge` calls of height ~log n. This is the submission tier.
+
+      **③ Alternative — sqrt decomposition, O((n+m)·√n)**
+
+      Split the string into ~√n contiguous blocks (each ~√n chars). Cutting a
+      substring pulls whole blocks plus (at most two) split blocks; rebuilding
+      the block list after moving the segment is O(#blocks) per op → O(√n).
+      Simpler to reason about than a treap but a worse constant and asymptotics;
+      the treap above is the intended answer and the reusable template.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **Position = size, not value.** There is no key; the tree is ordered
+        *implicitly* by inorder, and the number of nodes in a subtree is its
+        "position length". `sz(t)` is the sole ordering handle.
+      - **`split(t, k)`** partitions into `a` (k nodes) and `b` (the rest). It
+        descends using `sz(t->l)`: if the split point falls in the left subtree
+        it recurses there; otherwise it subtracts the left subtree (+1 for the
+        root) and recurses right. Every visited node is `upd`-ed on the way up.
+      - **`merge(a,b)`** picks the higher-priority root and recursively glues,
+        keeping heap order by priority and BST/sequence order by inorder.
+        Random priorities make the expected height O(log n) with no rebalancing.
+      - **`cut(t, l, r)`** = three primitives: isolate the segment, drop it,
+        re-append it. The final `output` is a simple inorder traversal.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n=7`, `s=AYBABTU`, operations `(3,5)` then `(3,5)`.
+
+      - **Build:** treap inorder = `A Y B A B T U`.
+      - **Op 1, cut `[3,5]`** (0-based `[2,4]` = `B A B`):
+        split at 2 → `L=AY`, `X=BABTU`; split `X` at 3 → `X=BAB`,
+        `R=TU`. `merge(L,R)=AYTU`; `merge(.,X)=AYTUBAB`. String is now
+        **`AYTUBAB`**.
+      - **Op 2, cut `[3,5]`** (0-based `[2,4]` of `AYTUBAB` = `T U B`):
+        `L=AY`, `X=TUB`, `R=AB`. `merge → AYAB`, then append → **`AYABTUB`**.
+
+      Output: **AYABTUB** — matches the expected **AYABTUB** (the compiled
+      submission prints `AYABTUB`).
+  - type: mcq
+    prompt: 'In the implicit treap, what determines the tree shape (which node is the root of a subtree)?'
+    options:
+      - The alphabetical order of the characters
+      - The order the characters were inserted by index
+      - Random priority per node: higher priority nodes stay nearer the root to keep the tree balanced
+      - The depth-first insertion sequence of the first layer
+    answer: 2
+    explanation: Each node gets a random priority. merge() keeps the max-priority root, so the treap is a max-heap by priority while preserving the inorder sequence order — randomization makes the expected height O(log n) regardless of how the operations rearrange the sequence, with no explicit rebalancing.

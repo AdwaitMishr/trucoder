@@ -1,0 +1,306 @@
+---
+id: dynamic-range-minimum-queries
+title: Dynamic Range Minimum Queries
+difficulty: medium
+order: 122
+tags:
+  - segment-tree
+  - dynamic-array
+  - range-minimum
+  - point-update
+blocks:
+  - type: markdown
+    content: |
+      # Dynamic Range Minimum Queries
+
+      **The technique: the segment tree.** A complete binary tree where each
+      node stores the aggregate (here the `min`) of a contiguous segment. The
+      root covers the whole array; each internal node merges its two children:
+      `st[node] = min(st[left], st[right])`. Because the children partition the
+      parent's interval, a query decomposes the range `[l, r]` into O(log n)
+      disjoint node-intervals, and a point update touches only the O(log n)
+      nodes on a single leaf→root path.
+
+      ```
+      build(node, lo, hi):  leaf -> a[lo];  else build(left), build(right), merge
+      query(node, lo, hi):  fully outside -> +inf; fully inside -> st[node];
+                            else split and merge both children
+      update(node, lo, hi): leaf -> new value; else recurse the side, then merge
+      ```
+
+      **Why a segment tree here and not a Fenwick/sparse table?** Range minimum
+      is **not invertible**, so the Fenwick's `prefix minus prefix` trick does
+      not apply and a `min` sparse table cannot be updated. The segment tree only
+      needs the operation to be *associative* — `min` is perfectly fine.
+
+      **When you reach for it.** Point updates + arbitrary range aggregates
+      (sum, min, max, gcd, bitwise ops). It is the most general of the range
+      structures; virtually every harder range problem reduces to "keep a segment
+      tree, store more in each node" (max-prefix / max-suffix for sums, counts,
+      lazy propagation for range updates).
+
+      **Worked mini-example.** `[3,2,4,5]`. Leaf nodes hold `3 | 2 | 4 | 5`;
+      their parents hold `min(3,2)=2` and `min(4,5)=4`; the root holds `min(2,4)
+      = 2`. Updating position 1 to `10` recomputes the path `leaf(10) → merge →
+      root`, and the root becomes `min(10,4) = 4`.
+
+      **Complexity.** O(n) build, O(log n) per update and query, O(4n) memory.
+
+      :::tip
+      **Interview tip:** The segment tree is the single most important range data
+      structure in interviews. Be ready to (1) write iterative or recursive
+      build/query/update from memory, (2) state that the range is decomposed into
+      O(log n) disjoint canonical segments, and (3) extend the node with extra
+      fields — the classic hard variant is "range sum with range updates"
+      (lazy propagation, CSES "Range Updates and Sums") and "range gcd". A good
+      line to volunteer: *any associative operation works; the tree never stores
+      the whole range, only O(log n) covers.* Interviewers contrast it with the
+      Fenwick (invertible-only, less memory) and the sparse table (static-only,
+      O(1) query).
+      :::
+  - type: markdown
+    content: |
+      # Question — Dynamic Range Minimum Queries
+
+      Given an array of `n` integers, your task is to process `q` queries of two
+      types:
+
+      1. `1 k u` — update the value at position `k` to `u`
+      2. `2 a b` — what is the **minimum** value in the range `[a, b]`?
+
+      **Constraints:**
+      - `1 ≤ n, q ≤ 2·10^5`
+      - `1 ≤ x[i], u ≤ 10^9`
+      - `1 ≤ k ≤ n`, `1 ≤ a ≤ b ≤ n`
+
+      **Input:** the first line has `n` and `q`. The second line has the `n`
+      values. Then `q` lines, each either `1 k u` or `2 a b`.
+
+      **Output:** print the result of each type-2 query.
+
+      Sample input:
+
+      ```
+      8 4
+      3 2 4 5 1 1 5 3
+      2 1 4
+      2 5 6
+      1 2 3
+      2 1 4
+      ```
+
+      Sample output:
+
+      ```
+      2
+      1
+      3
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·q)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<long long> a(n + 1);
+          for (int i = 1; i <= n; ++i) cin >> a[i];
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) { int k; long long u; cin >> k >> u; a[k] = u; }
+              else {
+                  int l, r; cin >> l >> r;
+                  long long mn = LLONG_MAX;
+                  for (int i = l; i <= r; ++i) mn = min(mn, a[i]);
+                  cout << mn << '\n';
+              }
+          }
+          return 0;
+      }
+      ```
+      Updates O(1), queries O(n) → up to `4·10^10` min operations. Correct, too
+      slow.
+
+      **② Optimization — segment tree, O(log n) per operation** (the chosen
+      solution)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<ll> a(n);
+          for (int i = 0; i < n; ++i) cin >> a[i];
+          vector<ll> st(4 * n);
+
+          function<void(int,int,int)> build = [&](int node, int lo, int hi) {
+              if (lo == hi) { st[node] = a[lo]; return; }
+              int mid = (lo + hi) / 2;
+              build(2 * node, lo, mid);
+              build(2 * node + 1, mid + 1, hi);
+              st[node] = min(st[2 * node], st[2 * node + 1]);
+          };
+          function<void(int,int,int,int,ll)> upd = [&](int node, int lo, int hi, int pos, ll u) {
+              if (lo == hi) { st[node] = u; return; }
+              int mid = (lo + hi) / 2;
+              if (pos <= mid) upd(2 * node, lo, mid, pos, u);
+              else upd(2 * node + 1, mid + 1, hi, pos, u);
+              st[node] = min(st[2 * node], st[2 * node + 1]);
+          };
+          function<ll(int,int,int,int,int)> qry = [&](int node, int lo, int hi, int l, int r) {
+              if (r < lo || hi < l) return LLONG_MAX;         // disjoint -> neutral
+              if (l <= lo && hi <= r) return st[node];        // fully covered
+              int mid = (lo + hi) / 2;
+              return min(qry(2 * node, lo, mid, l, r),
+                         qry(2 * node + 1, mid + 1, hi, l, r));
+          };
+
+          build(1, 0, n - 1);
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) { int k; ll u; cin >> k >> u; upd(1, 0, n - 1, k - 1, u); }
+              else { int a, b; cin >> a >> b; cout << qry(1, 0, n - 1, a - 1, b - 1) << '\n'; }
+          }
+          return 0;
+      }
+      ```
+      O(n) build, O(log n) per update and query. Handles the full `2·10^5` easily.
+
+      **③ Further optimization — a Fenwick/sparse table won't work here**
+      Range minimum is not invertible, so the Fenwick prefix-minus approach of
+      the last lesson cannot be reused, and a static sparse table cannot be
+      updated. The segment tree's O(log n) per operation is optimal for a fully
+      dynamic point-update + range-min problem; nothing beats it.
+
+      **④ Alternative — sqrt decomposition, O(√n) per operation**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          int B = (int)sqrt(n) + 1;
+          int cnt = (n + B - 1) / B;
+          vector<ll> a(n), blk(cnt, LLONG_MAX);
+          for (int i = 0; i < n; ++i) {
+              cin >> a[i];
+              blk[i / B] = min(blk[i / B], a[i]);
+          }
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) {
+                  int k; ll u; cin >> k >> u; --k;
+                  a[k] = u;
+                  int b = k / B; blk[b] = LLONG_MAX;
+                  for (int i = b * B; i < min((b + 1) * B, n); ++i) blk[b] = min(blk[b], a[i]);
+              } else {
+                  int l, r; cin >> l >> r; --l; --r;
+                  ll mn = LLONG_MAX;
+                  int bl = l / B, br = r / B;
+                  if (bl == br) { for (int i = l; i <= r; ++i) mn = min(mn, a[i]); }
+                  else {
+                      for (int i = l; i < (bl + 1) * B; ++i) mn = min(mn, a[i]);
+                      for (int b = bl + 1; b < br; ++b) mn = min(mn, blk[b]);
+                      for (int i = br * B; i <= r; ++i) mn = min(mn, a[i]);
+                  }
+                  cout << mn << '\n';
+              }
+          }
+          return 0;
+      }
+      ```
+      O(√n) per update/query (rebuild one block of size √n; scan ≤ 2 edges plus
+      full block minima). Simpler to derive than a segment tree, useful when `n`
+      is small enough that √n ≈ 450 is fine, but worse on the full constraints.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② segment tree**. Three recursive functions over the
+      canonical `[lo, hi]` interval of each node:
+
+      - **`build`:** leaves hold the raw values; every internal node is the `min`
+        of its two children. A single O(n) pass over all `4n` array slots.
+      - **`query`:** three cases at each node — *disjoint* (return `LLONG_MAX`,
+        the neutral for `min`), *fully inside* (return the precomputed `st[node]`),
+        or *straddling* (descend to both children and merge). The straddling
+        recursion decomposes `[l, r]` into O(log n) fully-covered nodes.
+      - **`update`:** walk from the root to the leaf `pos`, then re-merge
+        `st[node] = min(left, right)` on the way back up, so ancestors stay
+        correct. Only the O(log n) nodes on that one path change.
+
+      The `LLONG_MAX` neutral value is what makes a fully-outside node contribute
+      nothing to a `min` — the same zeros-out contribution idea a sum-tree uses
+      with `0`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      8 4
+      3 2 4 5 1 1 5 3
+      2 1 4
+      2 5 6
+      1 2 3
+      2 1 4
+      ```
+
+      0-indexed array = `3 2 4 5 1 1 5 3`.
+
+      | op | effect on array | range query / result |
+      |----|-----------------|----------------------|
+      | `2 1 4` | – | min(idx 0..3) = min(3,2,4,5) = **2** |
+      | `2 5 6` | – | min(idx 4..5) = min(1,1) = **1** |
+      | `1 2 3` | pos 2 (idx 1): 2 → 3 | update + re-merge path |
+      | `2 1 4` | array now `[3,3,4,5,1,1,5,3]` | min(idx 0..3) = min(3,3,4,5) = **3** |
+
+      Result: `2 1 3` ✓. The last query shows the update taking effect: a naive
+      static table would still report the stale `2`; the segment tree recomputes
+      the affected ancestors, so it returns the new minimum `3`.
+
+      **Edge cases:** a single-point query `2 k k` is a fully-covered leaf;
+      updating to the same value is a cheap no-op path; a query equal to the
+      whole array hits the root directly (one node).
+  - type: flowchart
+    title: "Segment tree query decomposition"
+    nodes:
+      - "Node covers [lo,hi]"
+      - "Range disjoint from node?"
+      - "Return +INF (neutral)"
+      - "Range contains whole node?"
+      - "Return st[node]"
+      - "Descend left & right, return min of both"
+      - "Combine into answer"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "yes"}
+      - {from: 1, to: 3, label: "no"}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 3, to: 5, label: "no: straddle"}
+      - {from: 5, to: 6}
+      - {from: 4, to: 6}
+      - {from: 2, to: 6}
+  - type: mcq
+    prompt: 'For this dynamic range-minimum problem, why is a segment tree the right choice over a Fenwick tree and a sparse table?'
+    options:
+      - Because the segment tree is always faster than the Fenwick for sums
+      - Because range minimum is associative but not invertible, so the Fenwick relies on subtracting a prefix (min has no inverse), and a static sparse table cannot be updated — the segment tree only needs associativity and supports point updates, so it is the structure that fits both requirements
+      - Because the sparse table stores no data
+      - Because the Fenwick sorts elements by minimum first
+    answer: 1
+    explanation: A Fenwick range query is sum(b) − sum(a−1), which needs an invertible operation; min has no inverse. A sparse table's O(n log n) precomputation is static and every update would invalidate it. The segment tree merges child minima with an associative op and recomputes only the O(log n) ancestor path on update, giving O(log n) queries and updates — the correct fit for dynamic range minimum.
+type: content
+---

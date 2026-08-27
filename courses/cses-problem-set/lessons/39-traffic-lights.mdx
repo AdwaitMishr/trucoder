@@ -1,0 +1,263 @@
+---
+id: traffic-lights
+title: Traffic Lights
+difficulty: medium
+order: 39
+tags:
+  - sorting
+  - multiset
+  - offline
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — split a line into gaps; process additions (or reversed)
+
+      A street of length `x` gets a traffic light added at position `p` on each
+      step. A light **splits the empty passage it lands in** into two shorter
+      ones, and after every addition you must report the length of the longest
+      passage *without* any light.
+
+      The state you want to keep is the set of all **gap lengths** between
+      consecutive lights (including the street ends `0` and `x`). When a light
+      lands at `p`, find its two neighbours `a` and `b` in the current set of
+      light positions; the gap `b - a` disappears and is replaced by `p - a` and
+      `b - p`. The answer after that step is the maximum gap, i.e. the largest
+      element of the gap multiset.
+
+      **Going backwards (the cleanest trick).** Instead of simulating the
+      forward splits, imagine you already have *all* final lights. Now **remove**
+      lights in the *reverse* order of their addition. Removing a light *merges*
+      two adjacent gaps into one — a joyful, no-bookkeeping operation — and the
+      max gap *before* each removal is exactly the answer for the step when that
+      light was last present. This turns a "split" problem into a "merge"
+      problem and is far less error-prone.
+
+      **Worked mini-example.** Street `[0, 6]`, lights added at `2` then `5`.
+
+      Forward: add `2` → gaps `2, 4`, max `4`. Add `5` → gaps `2, 3, 1`, max `3`.
+      Answers: `4, 3`.
+
+      Backwards: final lights `{2, 5}`, gaps `2, 3, 1`, max `3`. Remove `5` (last
+      added): gaps `2, 4`, max `4`. Answers reversed: `4, 3`. Same result.
+
+      **Complexity.** `O(n log n)` time (each step one `O(log n)` insertion or
+      removal in a `std::set` / `std::multiset`), `O(n)` space.
+
+      :::tip
+      **Interview tip:** When a problem says *"an answer after every insertion /
+      query"* and insertions are hard but deletions are easy, try **running the
+      queries in reverse**. Reversing time converts "split" into "merge" and is a
+      recognised algorithmic trick worth naming out loud in interviews.
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      There is a street of length `x` whose positions are numbered `0, 1, …, x`.
+      Initially there are no traffic lights, but `n` sets of traffic lights are
+      added to the street one after another.
+
+      Your task is to calculate the length of the **longest passage without
+      traffic lights** after each addition.
+
+      **Input:** The first input line contains two integers `x` and `n`: the
+      length of the street and the number of sets of traffic lights. Then the
+      next line contains `n` integers `p1, p2, …, pn`: the position of each set
+      of traffic lights. Each position is distinct.
+
+      **Output:** Print after each addition the length of the longest passage
+      without traffic lights (as `n` separated integers).
+
+      **Constraints:**
+
+      - `1 ≤ x ≤ 10^9`
+      - `1 ≤ n ≤ 2 · 10^5`
+      - `0 < p_i < x`
+
+      ### Sample
+
+      Input:
+
+      ```text
+      8 3
+      3 6 2
+      ```
+
+      Output:
+
+      ```text
+      5 3 3
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²)**
+
+      After each addition, collect all light positions (plus `0` and `x`), sort
+      them, and scan adjacent pairs for the largest gap.
+
+      ```cpp
+      vector<int> solve(int x, vector<int>& p) {
+          vector<int> ans;
+          vector<int> lights = {0, x};
+          for (int pos : p) {
+              lights.push_back(pos);
+              sort(lights.begin(), lights.end());
+              int mx = 0;
+              for (int i = 1; i < (int)lights.size(); ++i)
+                  mx = max(mx, lights[i] - lights[i - 1]);
+              ans.push_back(mx);
+          }
+          return ans;
+      }
+      ```
+
+      Time `O(n² log n)` (sort each step), space `O(n)`. At `n = 2 · 10^5` this
+      is far too slow.
+
+      **② Optimization — forward scan: a set of lights + a multiset of gaps — O(n log n)**
+
+      Keep the light positions in a `std::set` and the gap lengths in a
+      `std::multiset`. Inserting a light splits one gap into two.
+
+      ```cpp
+      vector<int> solve(int x, vector<int>& p) {
+          set<int> lights = {0, x};
+          multiset<int> gaps = {x};
+          vector<int> ans;
+          for (int pos : p) {
+              auto it = lights.insert(pos).first;
+              int a = *prev(it), b = *next(it);      // neighbours of the new light
+              gaps.erase(gaps.find(b - a));          // old gap disappears
+              gaps.insert(pos - a);                  // two smaller gaps appear
+              gaps.insert(b - pos);
+              ans.push_back(*gaps.rbegin());         // largest gap
+          }
+          return ans;
+      }
+      ```
+
+      Time `O(n log n)`, space `O(n)`.
+
+      **③ Further optimization — process in reverse (merge instead of split) — O(n log n)**
+
+      Insert all lights up front, compute every gap, then remove lights in
+      reverse order. Each removal merges two gaps into one; the max gap before
+      each removal is the answer for that step. Only a `std::set` for positions
+      is needed.
+
+      ```cpp
+      vector<int> solve(int x, vector<int>& p) {
+          set<int> lights = {0, x};
+          for (int pos : p) lights.insert(pos);
+          multiset<int> gaps;
+          for (auto it = lights.begin(); next(it) != lights.end(); ++it)
+              gaps.insert(*next(it) - *it);
+          vector<int> ans(p.size());
+          for (int i = (int)p.size() - 1; i >= 0; --i) {
+              ans[i] = *gaps.rbegin();               // max gap *before* this removal
+              auto it = lights.find(p[i]);
+              int a = *prev(it), b = *next(it);      // neighbours when removed
+              gaps.erase(gaps.find(p[i] - a));       // left gap disappears
+              gaps.erase(gaps.find(b - p[i]));       // right gap disappears
+              gaps.insert(b - a);                    // merged gap appears
+              lights.erase(it);
+          }
+          return ans;
+      }
+      ```
+
+      Time `O(n log n)`, space `O(n)`. Only a `std::set` for positions is
+      required — the gap multiset is never grown while scanning (it shrinks).
+
+      **④ Alternative — offline doubly-linked list — O(n log n)**
+
+      Sort all lights once, link positions into a doubly-linked list, and compute
+      the gaps. Process lights in reverse order, *unlinking* each one (merging
+      its two gaps) while tracking the running maximum.
+
+      ```cpp
+      vector<int> solve(int x, vector<int>& p) {
+          vector<int> all = p; all.push_back(0); all.push_back(x);
+          sort(all.begin(), all.end());
+          unordered_map<int,int> left, right;   // neighbours at each position
+          for (int i = 0; i < (int)all.size(); ++i) {
+              left[all[i]]  = (i == 0 ? -1 : all[i-1]);
+              right[all[i]] = (i + 1 == (int)all.size() ? -1 : all[i+1]);
+          }
+          vector<int> ans(p.size());
+          int mx = 0;
+          for (int i = 0; i + 1 < (int)all.size(); ++i) mx = max(mx, all[i+1] - all[i]);
+          for (int i = (int)p.size() - 1; i >= 0; --i) {
+              ans[i] = mx;
+              int a = left[p[i]], b = right[p[i]];
+              if (a != -1) right[a] = b;
+              if (b != -1) left[b] = a;
+              if (a != -1 && b != -1) mx = max(mx, b - a);
+          }
+          return ans;
+      }
+      ```
+
+      Time `O(n log n)`, space `O(n)`. A different mechanism (linking instead of
+      searching) achieving the same bound — good to know when the judge forbids
+      heavy `std::set` use or you want `O(1)` neighbour access.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` receives the street length `x` and the light positions in
+      *addition order*, and returns a `vector<int>` of `n` answers. The positions
+      are stored in a `std::set<int>` so that on every step we can query the two
+      neighbours `a` and `b` of the freshly inserted light in `O(log n)`.
+
+      The invariant: `gaps` always holds one entry per empty passage between two
+      consecutive lights. Inserting at `pos` destroys `b - a` (find it with
+      `find`, since `multiset` has duplicates generically) and adds `pos - a` and
+      `b - pos`. The largest gap is `*gaps.rbegin()`.
+
+      In the reversed version the roles flip: we build the final `gaps` once,
+      then on each reverse step the max gap is recorded *before* removing the
+      light, the two adjacent gap entries are erased, and the merged gap
+      (`b - a`) is inserted. This is why the last reported answer is simply the
+      max gap of the fully built street.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `x = 8`, additions `p = [3, 6, 2]` (the CSES sample).
+
+      **Expected output:** `5 3 3`.
+
+      **Forward ② run:**
+
+      | step | lights | gaps | max |
+      |------|--------|------|-----|
+      | — | `{0, 8}` | `{8}` | 8 |
+      | add 3 | `{0, 3, 8}` | `{5, 3}` | **5** |
+      | add 6 | `{0, 3, 6, 8}` | `{3, 3, 2}` | 3 |
+      | add 2 | `{0, 2, 3, 6, 8}` | `{2, 1, 3, 2}` | 3 |
+
+      Outputs: `5, 3, 3` ✓.
+
+      **Reversed ③ run:**
+
+      | remove | gaps before | removed | merged | new gaps | max |
+      |--------|-------------|---------|--------|----------|-----|
+      | 2 | `{2,1,3,2}` | 3 → `{2}` | 0..3 → 3 | `{2,3,3}` | 3 → ans[2] |
+      | 6 | `{2,3,3}` | 3,2 | 3..8 → 5 | `{3,5}` | 3 → ans[1] |
+      | 3 | `{3,5}` | 3,5 | 0..8 → 8 | `{8}` | 5 → ans[0] |
+
+      Reversed: `ans[2]=3, ans[1]=3, ans[0]=5`, i.e. output `5 3 3` ✓.
+  - type: mcq
+    prompt: When a light at position p is inserted between existing lights a and b, what exactly happens to the multiset of gap lengths?
+    options:
+      - 'The gap b - a is removed, and the gaps p - a and b - p are inserted.'
+      - 'The gap b - a is removed, and the gaps a - p and p - b are inserted.'
+      - 'The gap b - a stays, and two copies of p are inserted.'
+      - 'Nothing changes, because inserting a light never affects gap lengths.'
+    answer: 0
+    explanation: 'The new light splits the single passage from a to b into two passages: a to p (length p - a) and p to b (length b - p). The old combined gap b - a no longer exists, so it is erased and the two pieces are added. b - a must always be split as (p - a) + (b - p).'
+type: content
+---

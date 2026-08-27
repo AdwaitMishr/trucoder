@@ -1,0 +1,252 @@
+---
+id: all-manhattan-distances
+title: All Manhattan Distances
+type: content
+difficulty: medium
+order: 226
+tags:
+  - geometry
+  - manhattan-distance
+  - prefix-sums
+  - big-integral
+blocks:
+  - type: markdown
+    content: |
+      # All Manhattan Distances — sort, then prefix sums
+
+      Given `n` points, compute the **sum of all Manhattan distances between every
+      pair of points**.
+
+      ```
+      sum over all pairs (i<j) of  |P.x-Q.x| + |P.y-Q.y|
+      ```
+
+      ## When do you reach for it?
+
+      - "Total travel / total dissimilarity over all pairs" style problems.
+      - Any `sum over pairs of |a_i - a_j|` — the same sort+prefix trick applies to a
+        single dimension, then you add the two axes.
+
+      ## Why it separates into two 1-D problems
+
+      Manhattan distance is **separable**:
+
+      ```
+      sum_pairs |xi - xj| + |yi - yj|  =  (sum_pairs |xi - xj|) + (sum_pairs |yi - yj|)
+      ```
+
+      So handle the `x`-axis and the `y`-axis independently and add the results.
+
+      ## The one-dimensional sum
+
+      Sort the values `a[0] <= a[1] <= ... <= a[n-1]`. When the value `a[i]` is the
+      **right endpoint** of a pair, its contribution is `a[i]` minus every smaller
+      value already seen:
+
+      ```
+      contribution of a[i] = i * a[i] - (a[0] + a[1] + ... + a[i-1])
+      ```
+
+      because it pairs with the `i` values to its left, and each difference is
+      `a[i] - a[k]`. With `prefix[i] = a[0] + ... + a[i-1]` maintained on the fly,
+      the total over `i` is one pass. **Sorting is why `|a-b|` becomes a simple
+      subtraction.**
+
+      ## Big numbers — you MUST use 128-bit
+
+      `n` can be `2 * 10^5`. Worst case each `|dx|, |dy| <= 2 * 10^9`, there are
+      `n(n-1)/2 ≈ 2 * 10^10` pairs, so the total can reach **~8 * 10^19** — bigger
+      than a signed 64-bit `long long` (`~9.2 * 10^18`). Accumulate in
+      `__int128_t` and print it by hand.
+
+      ## Complexity
+
+      - Brute force: `O(n²)` (and at `8 * 10^19` the answer already warns you the
+        pair count is huge).
+      - **Sort + prefix: `O(n log n)` time, `O(n)` space. Optimal.**
+
+      :::tip
+      **Interview tip:** The phrase "sort, then contribution = `i*a[i] - prefix[i]`"
+      is the standard answer for "sum of pairwise absolute differences". Interviewers
+      love the overflow follow-up: "what's the largest possible answer" — the
+      `__int128` guard is exactly the trap they are probing.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given a set of points, calculate the sum of all Manhattan distances between
+      two point pairs.
+
+      ## Input
+
+      The first line has an integer `n`: the number of points. The following `n`
+      lines describe the points. Each line has two integers `x` and `y`. You can
+      assume that each point is distinct.
+
+      ## Output
+
+      Print the sum of all Manhattan distances.
+
+      ## Constraints
+
+      - `1 <= n <= 2 * 10^5`
+      - `-10^9 <= x, y <= 10^9`
+
+      ## Sample
+
+      **Input:**
+      ```
+      5
+      1 1
+      3 2
+      2 4
+      2 1
+      4 5
+      ```
+      **Output:**
+      ```
+      36
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate all pairs, O(n²)**
+
+      Sum `|xi - xj| + |yi - yj|` over all `n(n-1)/2` pairs. For `n = 2 * 10^5`,
+      that is `~2 * 10^10` pairs — far too many.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using i128 = __int128_t;
+      void print128(i128 v){
+          if(v==0){ cout << "0\n"; return; }
+          if(v<0){ cout << "-"; v = -v; }
+          string s;
+          while(v>0){ s.push_back('0'+ (char)(v%10)); v/=10; }
+          reverse(s.begin(), s.end()); cout << s << "\n";
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<pair<long long,long long>> p(n);
+          for(auto&q: p) cin >> q.first >> q.second;
+          i128 ans = 0;
+          for(int i=0;i<n;i++) for(int j=i+1;j<n;j++)
+              ans += (i128)(llabs(p[i].first-p[j].first) + llabs(p[i].second-p[j].second));
+          print128(ans);
+          return 0;
+      }
+      ```
+
+      *`O(n²)` time. Correct, but `~2 * 10^10` pair-checks is too slow.*
+
+      **② Sort + prefix sums — O(n log n) (optimal)**
+
+      Sort each axis independently and add the 1-D pairwise sums. Compiled and run:
+      prints `36` on the sample below.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using i128 = __int128_t;
+      void print128(i128 v){
+          if(v==0){ cout << "0\n"; return; }
+          if(v<0){ cout << "-"; v = -v; }
+          string s;
+          while(v>0){ s.push_back('0' + (char)(v%10)); v /= 10; }
+          reverse(s.begin(), s.end()); cout << s << "\n";
+      }
+      i128 oneAxis(vector<long long> a){
+          sort(a.begin(), a.end());
+          i128 pref = 0, total = 0;
+          for(int i=0;i<(int)a.size();i++){
+              total += (i128) i * a[i] - pref;   // a[i] vs all earlier (smaller) values
+              pref += a[i];
+          }
+          return total;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<long long> xs(n), ys(n);
+          for(int i=0;i<n;i++) cin >> xs[i] >> ys[i];
+          print128(oneAxis(xs) + oneAxis(ys));
+          return 0;
+      }
+      ```
+
+      *`O(n log n)` time, `O(n)` space. The recommended solution. There is no
+      separate faster 3rd/4th algorithm — the sort+prefix is already optimal for a
+      comparison-based input.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Separate axes.** `oneAxis` is called on the array of `x`'s and again on the
+        array of `y`'s; the results add because the two coordinates contribute to
+        every Manhattan distance independently.
+      - **Sort each axis.** Sorting guarantees that for value `a[i]`, all `i` values
+        before it are `<= a[i]`, so each `|a[i] - a[k]|` with `k < i` is simply
+        `a[i] - a[k]`.
+      - **Runnung prefix.** `pref` holds `a[0] + ... + a[i-1]`; then
+        `i * a[i] - pref` = `(a[i]-a[0]) + ... + (a[i]-a[i-1])`, the sum of all new
+        differences contributed by `a[i]` as the right endpoint.
+      - **`__int128_t` + manual print.** The answer can exceed `long long`; the raw
+        `__int128` has no `operator<<`, hence the `print128` helper that extracts
+        digits.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5`, points `(1,1),(3,2),(2,4),(2,1),(4,5)`.
+
+      **x-axis:** values `{1,3,2,2,4}` → sorted `{1,2,2,3,4}`.
+
+      | i | a[i] | pref before | contribution `i*a[i] - pref` |
+      |---|------|-------------|------------------------------|
+      | 0 | 1    | 0           | 0                            |
+      | 1 | 2    | 1           | 2 - 1 = 1                    |
+      | 2 | 2    | 3           | 4 - 3 = 1                    |
+      | 3 | 3    | 5           | 9 - 5 = 4                    |
+      | 4 | 4    | 8           | 16 - 8 = 8                   |
+
+      x-total = `0+1+1+4+8 = 14`.
+
+      **y-axis:** values `{1,2,4,1,5}` → sorted `{1,1,2,4,5}`.
+
+      | i | a[i] | pref before | contribution |
+      |---|------|-------------|--------------|
+      | 0 | 1    | 0           | 0            |
+      | 1 | 1    | 1           | 1 - 1 = 0    |
+      | 2 | 2    | 2           | 4 - 2 = 2    |
+      | 3 | 4    | 4           | 12 - 4 = 8   |
+      | 4 | 5    | 8           | 20 - 8 = 12  |
+
+      y-total = `0+0+2+8+12 = 22`.
+
+      Total = `14 + 22 = 36`. Printed:
+      ```
+      36
+      ```
+      Expected `36` — match.
+  - type: flowchart
+    title: "Sum of pairwise |a-b|"
+    nodes: ["a = sorted values", "pref = 0, total = 0", "for i: total += i*a[i] - pref; pref += a[i]", "return total", "answer = xAxis + yAxis; print 128-bit"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+  - type: mcq
+    prompt: "After sorting one axis, why is the total pairwise-sum computed in a single pass using `total += i*a[i] - pref`?"
+    options:
+      - "Because once sorted, a[i] is the largest of its first (i+1) values, so pairing it with the i values to its left contributes exactly (i*a[i]) minus their sum pref — and that covers every distinct pair exactly once."
+      - "Because sorting guarantees all differences collapse to zero."
+      - "Because only adjacent values matter after sorting."
+      - "Because each pair must be counted twice to be correct."
+    answer: 0
+    explanation: "With `a[i]` the largest among the prefix, each pair `(k, i)` with `k<i` contributes `a[i]-a[k]`. Summing over `k` gives `i*a[i] - pref`, and every unordered pair appears once as its larger-index endpoint."
+---

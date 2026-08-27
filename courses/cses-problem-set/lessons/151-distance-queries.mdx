@@ -1,0 +1,292 @@
+---
+id: distance-queries
+title: Distance Queries
+difficulty: medium
+order: 151
+tags:
+  - tree
+  - lca
+  - binary-lifting
+blocks:
+  - type: markdown
+    content: |
+      # Distance Queries — distance between two nodes via LCA
+
+      You have an unweighted tree of `n` nodes and `q` queries; each query asks
+      for the **distance** (number of edges on the shortest path) between two
+      nodes `a` and `b`.
+
+      **The technique: `dist(a,b) = depth[a] + depth[b] - 2·depth[LCA(a,b)]`.**
+      Root the tree anywhere (node `1`), and compute every node's `depth` and
+      its **Lowest Common Ancestor** via binary lifting (the previous lesson).
+      The shortest path from `a` to `b` "goes up" from `a` to their LCA and
+      "down" to `b`:
+      - `a → LCA` is `depth[a] - depth[LCA]` edges,
+      - `LCA → b` is `depth[b] - depth[LCA]` edges.
+      Adding them gives `depth[a] + depth[b] - 2·depth[LCA]`, exactly the number
+      of edges on the path.
+
+      **Why it works.** In a tree the path between two nodes is unique, and it
+      always passes through their LCA. So distance decomposes into the two
+      up/down legs, both of which are "vertical" differences of `depth`.
+
+      **The new ingredient here is only the formula** — the binary-lifting `up`
+      table and the `lca` routine come straight from Company Queries II.
+      Because `n, q ≤ 2·10^5`, `O(log n)` per query is the goal.
+
+      **Worked mini-example.** Tree: root `1`; `2` and `3` are children of `1`;
+      `4` and `5` are children of `3`. `depth[2]=1`, `depth[5]=2`. For `dist(2,5)`:
+      `LCA(2,5)=1` (`depth 0`) → `1 + 2 - 2·0 = 3`. The path `2 → 1 → 3 → 5` has
+      exactly 3 edges. ✓
+
+      **Complexity.** **O(n log n)** time / **O(n log n)** space to build;
+      **O(log n)** per query.
+
+      :::tip
+      **Interview tip:** LCA is *the* workhorse for "path on a tree" questions:
+      node-to-node distance, path sums, path min/max, weighted trees, and tree
+      difference. The `dist = depth[a] + depth[b] - 2·depth[lca]` formula also
+      extends to weighted trees by replacing `depth` with **root-to-node path
+      weight** — a classic follow-up question.
+      :::
+  - type: markdown
+    content: |
+      # Question — Distance Queries
+
+      You are given a tree consisting of `n` nodes.
+
+      Your task is to process `q` queries of the form: what is the **distance
+      between nodes `a` and `b`**?
+
+      **Constraints**
+
+      - `1 ≤ n, q ≤ 2·10^5`
+      - `1 ≤ a, b ≤ n`
+
+      **Input.** Line 1: `n q`. Then `n-1` lines describing the edges (each
+      `a b`: an edge between nodes `a` and `b`). Then `q` lines, each `a b`.
+
+      **Output.** For each query, print the distance between `a` and `b`.
+
+      Time limit 1.00 s, memory 512 MB.
+
+      Sample input:
+
+      ```
+      5 3
+      1 2
+      1 3
+      3 4
+      3 5
+      1 3
+      2 5
+      1 4
+      ```
+
+      Sample output:
+
+      ```
+      1
+      3
+      2
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — BFS from a over the whole tree, O(n) per query**
+
+      For each query, run a BFS from node `a` until you reach `b`, counting
+      layers. Every query re-explores up to all `n` nodes.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<vector<int>> g(n + 1);
+          for(int i = 0; i < n - 1; i++){ int a, b; cin >> a >> b; g[a].push_back(b); g[b].push_back(a); }
+          while(q--){
+              int a, b; cin >> a >> b;
+              vector<int> dist(n + 1, -1);
+              queue<int> qu; qu.push(a); dist[a] = 0;
+              while(!qu.empty()){
+                  int u = qu.front(); qu.pop();
+                  if(u == b) break;
+                  for(int v : g[u]) if(dist[v] == -1){ dist[v] = dist[u] + 1; qu.push(v); }
+              }
+              cout << dist[b] << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      **O(n) per query, O(nq) overall** — on `2·10^5` nodes and queries this is
+      roughly `4·10^10` edge visits. Correct but far too slow.
+
+      **② Optimization — binary-lifting LCA + depth formula, O(log n) (submission)**
+
+      Root the tree at `1`, compute `depth` and the `up[k][u] = 2^k`-th-ancestor
+      table by DFS, then answer each query with
+      `depth[a] + depth[b] - 2·depth[lca(a,b)]`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<vector<int>> g(n + 1);
+          for(int i = 0; i < n - 1; i++){ int a, b; cin >> a >> b; g[a].push_back(b); g[b].push_back(a); }
+          int LOGN = 1; while((1 << LOGN) <= n) LOGN++;
+          vector<vector<int>> up(LOGN, vector<int>(n + 1));
+          vector<int> depth(n + 1, 0);
+          function<void(int,int)> dfs = [&](int u, int p){
+              up[0][u] = p;
+              for(int v : g[u]) if(v != p){ depth[v] = depth[u] + 1; dfs(v, u); }
+          };
+          dfs(1, 1);
+          for(int k = 1; k < LOGN; k++)
+              for(int i = 1; i <= n; i++) up[k][i] = up[k-1][ up[k-1][i] ];
+          auto lca = [&](int a, int b){
+              if(depth[a] < depth[b]) swap(a, b);
+              int diff = depth[a] - depth[b];
+              for(int k = 0; k < LOGN; k++) if(diff & (1 << k)) a = up[k][a];
+              if(a == b) return a;
+              for(int k = LOGN - 1; k >= 0; k--)
+                  if(up[k][a] != up[k][b]){ a = up[k][a]; b = up[k][b]; }
+              return up[0][a];
+          };
+          while(q--){
+              int a, b; cin >> a >> b;
+              int c = lca(a, b);
+              cout << depth[a] + depth[b] - 2 * depth[c] << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      **O(n log n)** build, **O(log n)** per query. This is the submission tier.
+
+      **③ Alternative — Euler tour + RMQ sparse table, O(1) per query**
+
+      Build an Euler array (append each node on entry *and* on every return;
+      length `2n-1`) plus its depth array. The LCA of `a` and `b` is the minimum
+      depth in the window between the two nodes' first appearances — answered in
+      `O(1)` by a sparse table. Same formula, `log n` trade-offs as in the
+      previous lesson.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<vector<int>> g(n + 1);
+          for(int i = 0; i < n - 1; i++){ int a, b; cin >> a >> b; g[a].push_back(b); g[b].push_back(a); }
+          vector<int> euler(2*n), ed(2*n), first(n + 1, -1), depth(n + 1, 0);
+          int m = 0;
+          function<void(int,int)> visit = [&](int u, int p){
+              if(first[u] == -1) first[u] = m;
+              euler[m] = u; ed[m] = depth[u]; m++;
+              for(int v : g[u]) if(v != p){
+                  depth[v] = depth[u] + 1; visit(v, u);
+                  euler[m] = u; ed[m] = depth[u]; m++;
+              }
+          };
+          visit(1, 0);
+          int L = m, LOGN = 1; while((1 << LOGN) <= L) LOGN++;
+          vector<vector<int>> st(LOGN, vector<int>(L));
+          for(int i = 0; i < L; i++) st[0][i] = i;
+          for(int k = 1; k < LOGN; k++)
+              for(int i = 0; i + (1 << k) <= L; i++){
+                  int l = st[k-1][i], r = st[k-1][i + (1<<(k-1))];
+                  st[k][i] = (ed[l] <= ed[r]) ? l : r;
+              }
+          auto queryMin = [&](int l, int r){
+              int len = r - l + 1; int k = 31 - __builtin_clz(len);
+              int a = st[k][l], b = st[k][r - (1<<k) + 1];
+              return (ed[a] <= ed[b]) ? a : b;
+          };
+          while(q--){
+              int a, b; cin >> a >> b;
+              int x = first[a], y = first[b]; if(x > y) swap(x, y);
+              int c = euler[queryMin(x, y)];
+              cout << depth[a] + depth[b] - 2 * depth[c] << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      **O(n log n)** build, **O(1)** per query. Pick binary lifting for the
+      shorter code; use this when O(1) LCA is needed inside a hot loop.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The submission is tier ②. Beyond the `up` table (identical to Company
+      Queries II), two details map onto *this* problem:
+
+      - **Rooting via DFS.** The input gives undirected edges, not parent
+        pointers, so `dfs(1, 1)` sets `up[0][u]` and `depth[v] = depth[u] + 1`
+        while discovering children. This is the only structural difference from
+        the parent-pointer tree of the previous lesson.
+      - **The distance line.** `depth[a] + depth[b] - 2 * depth[c]` is the whole
+        problem. It reads the two vertical legs (`a` up to the LCA, then `b` up
+        to the LCA) and subtracts the doubled common segment so the LCA's own
+        depth isn't counted twice.
+
+      Because `depth` and `up` are shared, every later "path on a tree" lesson
+      (Counting Paths, path queries) reuses this exact `lca` routine.
+
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):**
+
+      ```
+      5 3
+      1 2
+      1 3
+      3 4
+      3 5
+      1 3
+      2 5
+      1 4
+      ```
+
+      **Root at 1.** DFS gives:
+
+      | node | depth |
+      |------|-------|
+      | 1 | 0 |
+      | 2 | 1 |
+      | 3 | 1 |
+      | 4 | 2 |
+      | 5 | 2 |
+
+      parent `of 2 = 1`, of 3 = 1, of 4 = 3, of 5 = 3.
+
+      **Query `1 3`:** `LCA(1,3) = 1`. `dist = depth[1]+depth[3]-2·depth[1] =
+      0 + 1 - 0 = 1`. Direct edge. ✓
+
+      **Query `2 5`:** raise `5` by `2-1=1` → `5 → 3`; `depth[2]=depth[3]=1`,
+      `up[0][2]=1`, `up[0][3]=1` equal → no jump; `LCA = 1`. `dist =
+      depth[2]+depth[5]-2·depth[1] = 1 + 2 - 0 = 3`. Path `2→1→3→5` = 3 edges. ✓
+
+      **Query `1 4`:** `LCA(1,4)=1`. `dist = 0 + 2 - 0 = 2`. Path `1→3→4`. ✓
+
+      Output: **1, 3, 2** — matches the sample. **Expected — actual: match.**
+  - type: mcq
+    prompt: 'Why is the distance formula depth[a] + depth[b] - 2·depth[LCA] correct for an unweighted tree?'
+    options:
+      - Because every pair of nodes has many alternative paths, and the formula picks the longest one
+      - Because the tree path from a to b is unique and passes through their LCA, splitting into the up-leg a→LCA and down-leg LCA→b, whose edge counts are depth[a]-depth[LCA] and depth[b]-depth[LCA]
+      - Because depth is always the distance to the nearest leaf
+      - Because the LCA always equals one of the two nodes
+    answer: 1
+    explanation: In a tree there is exactly one simple path between any two nodes, and it goes up from `a` to the LCA, then down to `b`. The up-leg needs `depth[a]-depth[LCA]` edges and the down-leg `depth[b]-depth[LCA]`, which sum to `depth[a]+depth[b]-2·depth[LCA]`. Doubling `depth[LCA]` (not subtracting it once) fixes the double count of the shared part of the route. If the LCA were one endpoint, the formula still holds because that endpoint's term becomes zero.
+type: content
+---

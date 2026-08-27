@@ -1,0 +1,230 @@
+---
+id: creating-offices
+title: "Creating Offices"
+type: content
+difficulty: medium
+order: 321
+tags:
+  - graph-algorithms
+  - trees
+  - greedy
+  - distance-separated-set
+blocks:
+  - type: markdown
+    content: |
+      # Creating Offices — maximum far-apart cities on a tree
+
+      The cities form a **tree** (`n - 1` roads, one unique route between any
+      two). We must place offices in as many cities as possible such that any two
+      offices are at distance **greater than or equal to `d`**.
+
+      This is a *packing* problem: choose a maximum set of vertices whose
+      pairwise distance is at least `d` — a maximum independent set in the
+      "distance-`d` power graph" of the tree.
+
+      The intended tool is a beautiful **farthest-first greedy**:
+
+      > Repeatedly take the **deepest** remaining city, place an office there,
+      > and **delete it together with every city within distance `< d`** (they
+      > can no longer host an office). Repeat until no city remains.
+
+      Why is taking the deepest city always safe? The deepest remaining city `u`
+      exists on a deepest leaf-branch of the current forest. A solution that
+      places an office *somewhere within distance `< d`* of `u` (it must, since
+      every city needs coverage on its own branch) can be rearranged to place it
+      **at `u` itself** without hurting anything — swapping the office to the
+      far endpoint never brings it closer to any other office. So the greedy
+      never loses optimality, and by deleting the `d`-ball around each chosen
+      city it provably achieves the maximum count.
+
+      **Time:** sorting by depth once, then each city is deleted once, so the
+      whole process is `O(n)`. **Space:** `O(n)`.
+
+      :::tip
+      **Interview tip:** "Maximum set of vertices with pairwise distance >= d on
+      a tree" is the farthest-first greedy: pick the deepest node, delete its
+      `(d-1)`-ball, repeat. It is the same idea that solves "cover the tree with
+      the fewest distance-`d` guards" — choosing a farthest/extreme node first is
+      the classic exchange-argument move for tree packing problems.
+      :::
+  - type: markdown
+    content: |
+      # Question
+
+      There are `n` cities and `n-1` roads between them. There is a unique route
+      between any two cities, and their distance is the number of roads on that
+      route. A company wants to have offices in some cities, but the distance
+      between any two offices has to be at least `d`. What is the maximum number
+      of offices they can have?
+
+      **Input**
+
+      The first input line has two integers `n` and `d`: the number of cities and
+      the minimum distance. The cities are numbered `1, 2, ..., n`. After this,
+      there are `n-1` lines describing the roads; each line has two integers `a`
+      and `b`: there is a road between cities `a` and `b`.
+
+      **Output**
+
+      First print an integer `k`: the maximum number of offices. After that,
+      print the cities which will have offices. You can print any valid solution.
+
+      **Constraints**
+
+      - `1 <= n, d <= 2*10^5`
+
+      **Example**
+
+      Input:
+      ```
+      5 3
+      1 2
+      2 3
+      3 4
+      3 5
+      ```
+      Output:
+      ```
+      2
+      1 4
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — try every subset, O(2^n * n^2)**
+
+      Enumerate every subset of cities, check the pairwise distances all exceed
+      `d`, and keep the largest feasible set.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n,d; vector<vector<int>> adj, dist;
+      int main(){
+          cin>>n>>d; adj.assign(n,{});
+          for (int i=0;i<n-1;i++){int a,b;cin>>a>>b;--a;--b;adj[a].push_back(b);adj[b].push_back(a);}
+          dist.assign(n, vector<int>(n, 1e9));
+          for (int s=0;s<n;s++){ dist[s][s]=0; queue<int> q; q.push(s);
+              while (!q.empty()){ int u=q.front(); q.pop();
+                  for (int v:adj[u]) if (dist[s][v]>dist[s][u]+1){ dist[s][v]=dist[s][u]+1; q.push(v); } } }
+          int best=0; vector<int> bestSet;
+          for (int mask=0; mask<(1<<n); mask++){
+              if (__builtin_popcount(mask)<=best) continue;
+              vector<int> S; for (int i=0;i<n;i++) if (mask&(1<<i)) S.push_back(i);
+              bool ok=true;
+              for (int i=0;i<(int)S.size()&&ok;i++) for (int j=i+1;j<(int)S.size()&&ok;j++)
+                  if (dist[S[i]][S[j]]<d) ok=false;
+              if (ok){ best=S.size(); bestSet=S; }
+          }
+          cout<<best<<"\n"; for (int x:bestSet) cout<<x+1<<' '; cout<<"\n";
+      }
+      ```
+      *Exponential — unusable for `n` up to `2*10^5`.*
+
+      **② Optimization — farthest-first greedy, O(n)**
+
+      Root the tree, compute depths, sort cities deepest-first. For each city not
+      yet deleted, place an office and BFS-delete its whole `(d-1)`-ball (all
+      cities within distance `< d`). The delete step only ever touches each city
+      once, so it is `O(n)` overall.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, d; cin>>n>>d;
+          vector<vector<int>> adj(n+1);
+          for (int i=0;i<n-1;i++){int a,b;cin>>a>>b;adj[a].push_back(b);adj[b].push_back(a);}
+          vector<int> depth(n+1,-1); queue<int> q; q.push(1); depth[1]=0;
+          vector<int> order;
+          while (!q.empty()){ int u=q.front(); q.pop(); order.push_back(u);
+              for (int v:adj[u]) if (depth[v]==-1){ depth[v]=depth[u]+1; q.push(v); } }
+          sort(order.begin(), order.end(),
+               [&](int x,int y){ return depth[x]>depth[y]; });   // deepest first
+          vector<char> deleted(n+1,0); vector<int> offices;
+          for (int u : order){
+              if (deleted[u]) continue;
+              offices.push_back(u);
+              vector<int> dist(n+1,-1); dist[u]=0; queue<int> bq; bq.push(u);
+              while (!bq.empty()){ int x=bq.front(); bq.pop(); deleted[x]=1;
+                  if (dist[x]+1 >= d) continue;
+                  for (int y:adj[x]) if (!deleted[y] && dist[y]==-1){ dist[y]=dist[x]+1; bq.push(y); } }
+          }
+          cout<<offices.size()<<"\n";
+          for (int x:offices) cout<<x<<' '; cout<<"\n";
+      }
+      ```
+      *O(n) time, O(n) space — the intended solution.*
+
+      **③ Alternative view — independent set in the distance-d power graph**
+
+      This is exactly a maximum independent set of the graph where two vertices
+      are adjacent when their distance is `< d`. On general graphs that is
+      `NP`-hard, but on a **tree** it is polynomial. The farthest-first greedy is
+      the clean linear-time choice; a centroid-decomposition flavour that
+      maintains "distance to the nearest placed office" and places a city only
+      when that is `>= d` achieves the same answer in `O(n log n)`. For `n =
+      2*10^5` the `O(n)` greedy is plenty.
+
+      **④ Further optimization** — none; `O(n)` already matches the input size.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Rooted depths.** A BFS from city `1` gives every city's depth; deeper
+        cities are the leaves of the current forest, which is where the greedy
+        insists on placing first.
+      - **Greedy loop.** Iterate cities in decreasing depth. A city still
+        "alive" gets an office.
+      - **Delete the ball.** From the placed city, BFS only through *undead*
+        neighbours while the distance is still `< d`, marking each visited city
+        deleted. Because each city is deleted at most once across all offices,
+        the entire loop is linear.
+      - **Output.** Count of placed cities, then their labels (any order).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Sample:** `n = 5, d = 3`, tree `1-2, 2-3, 3-4, 3-5` (a path `1-2-3-4`
+      with leaf `5` at `3`).
+
+      BFS depths: `depth(1)=0, depth(2)=1, depth(3)=2, depth(4)=3, depth(5)=3`.
+
+      Sorted deepest-first: `4, 5, 3, 2, 1` (ties broken arbitrarily).
+
+      - **City `4`** (depth 3): alive → place an office. Delete its `(d-1)=2`-ball,
+        i.e. every city at distance `< 3`: `4` (0), `3` (1), `2` (2), `5` (2).
+        Deleted: `{2,3,4,5}`.
+      - **City `5`**: deleted, skip. **City `3`**: deleted, skip.
+      - **City `2`**: deleted, skip (it was inside `4`'s ball).
+      - **City `1`** (depth 0): alive → place an office. Delete its 2-ball:
+        only `{1}` (and `2`, already gone). Nothing new.
+
+      Result: `k = 2`, offices `4` and `1`. Distance between them is
+      `4-3-2-1 = 3 >= d = 3` — valid. The official sample also returns `2` with
+      offices `1 4` (same two cities, printed in the other order; any valid set
+      is accepted).
+
+      Expected `k = 2`; actual `k = 2` with a valid placement. ✔
+  - type: flowchart
+    title: "Farthest-first office placement"
+    nodes: ["root & compute depths", "sort cities deepest-first", "take next undeleted city u", "place office at u", "delete u + all cities at distance < d", "any cities left?", "print k and the offices"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "alive"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 2, label: "yes"}
+      - {from: 5, to: 6, label: "no"}
+  - type: mcq
+    prompt: "Why is it safe (exchange argument) to place an office at the deepest remaining city u?"
+    options:
+      - "Because moving 'up' toward u can only increase distance to every other office, so whatever office would be forced in u's vicinity can be swapped to u itself without violating the distance constraint."
+      - "Because u is always a leaf, and leaves are never needed for distance constraints."
+      - "Because placing offices as low as possible always covers more vertices per office."
+      - "Because the tree is a path and the deepest city is always an optimal center."
+    answer: 0
+    explanation: "The deepest remaining city lies at the far end of a branch. Any feasible solution must place an office somewhere within distance d of that branch's end; moving that office to the farthest possible point (u itself) can only increase the distance to every other office, so validity is preserved. Hence putting an office at u is never worse than an optimal alternative — the exchange that proves the greedy optimal."

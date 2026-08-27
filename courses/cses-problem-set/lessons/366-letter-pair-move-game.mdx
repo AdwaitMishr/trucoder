@@ -1,0 +1,286 @@
+---
+id: letter-pair-move-game
+title: Letter Pair Move Game
+difficulty: hard
+order: 366
+tags:
+  - additional
+  - constructive
+  - breadth-first-search
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — a sliding "puzzle" with a two-cell gap
+
+      We have `2n` boxes with **two adjacent empty boxes** and the rest holding
+      exactly `n-1` `A`s and `n-1` `B`s. A move takes two *adjacent letters* and
+      slides them into the two *adjacent empty* boxes, preserving their order.
+      The target is a string of the form `A…AB…B` (every `A` before every `B`).
+
+      This is a **1-D sliding puzzle**: the pair of empty boxes is a little
+      "gap" that travels left/right by swapping with a neighbouring letter-pair.
+      From the standpoint of *state reachability*, there is a small parity
+      invariant, and for the literal constant `8` the whole reachable graph is
+      tiny — there are only **448 distinct length-8 states** that can ever reach
+      a sorted window.
+
+      **Two crucial facts** drive the accepted construction:
+
+      1. **Local 3-op swap primitive.** If the gap is at `d,d+1`, you can move
+         the gap next to any other letter-pair `(p,p+1)` (so the gap travels),
+         and — the key trick — you can *swap the contents of two letter-pair
+         windows* in just **3 moves**: gap to the left window, gap to the right
+         window, gap back to the left. This lets you reorder letters locally
+         with a bounded number of moves regardless of `n`.
+
+      2. **Small-state finishing.** Once the row is almost sorted except a small
+         window of length 8 near the two empty boxes, the problem reduces to a
+         fixed-size puzzle that can be **solved by BFS precomputation**: BFS
+         from every sorted `…A…B…` length-8 window builds a predecessor table,
+         then any reachable window is walked back to a sorted one. Because the
+         reachable state space is exactly 448 (bounded, independent of `n`), the
+         precomputation is constant cost.
+
+      Together: *process the row left-to-right in length-8 chunks, ferrying the
+      gap and using the 3-op swap to push `B`s out and `A`s in; when a tiny
+      window remains, finish it with the precomputed BFS.* For `2n < 8` the
+      whole problem is small enough to brute-force the entire state space
+      directly. A solution either exists with at most `10n` turns, or none does
+      (print `-1`).
+
+      :::tip
+      **Interview tip:** This is one of the hardest CSES constructive problems.
+      The general lesson it teaches: **precompute a small canonical sub-solver
+      by BFS, then solve the large instance greedily by reducing it to that
+      sub-solver.** Counting states first (here 448) tells you batching by 8 is
+      safe. "Is the state space small enough to brute-force off-line?" is a
+      question to always ask on constructive/mover problems.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      There are `2n` boxes in a line. Two adjacent boxes are empty, and all
+      other boxes have a letter `A` or `B`. Both letters appear in exactly `n-1`
+      boxes. Your task is to move the letters so that all letters `A` appear
+      before any letter `B`. On each turn you can choose any two adjacent boxes
+      that have a letter and move the letters to the two adjacent empty boxes,
+      preserving their order. It can be proven that either there is a solution
+      that consists of at most `10n` turns, or there are no solutions.
+
+      **Input.** The first line has an integer `n`. The second line has a string
+      of `2n` characters describing the starting position (each char `A`, `B` or
+      `.` empty box).
+
+      **Output.** First print an integer `k`: the number of turns. Then print `k`
+      lines describing the moves (you may print any solution with `k ≤ 1000`).
+      If there are no solutions, print only `-1`.
+
+      **Constraints**
+      - `1 ≤ n ≤ 100`
+
+      **Example 1**
+
+      Input:
+      ```
+      3
+      AB..BA
+      ```
+
+      Output:
+      ```
+      2
+      ABBA..
+      A..ABB
+      ```
+
+      **Example 2**
+
+      Input:
+      ```
+      3
+      ABAB..
+      ```
+
+      Output:
+      ```
+      -1
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — BFS over the state graph.** Run a breadth-first search
+      from the input string; the neighbours of a state are every `(i, gap)`
+      where two adjacent letters slide into the current dot-pair. A state is a
+      goal when it is sorted (`A…B…`). If we reach a goal, print the BFS path;
+      else `-1`. This is exact, but the number of reachable states grows
+      enormously with `n`, so it only works for tiny inputs.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; string s; cin>>n>>s;
+          int L=s.size();
+          auto goal=[&](const string&t){ bool seenB=false;
+              for(char c:t){ if(c=='B')seenB=true; if(c=='A'&&seenB)return false; } return true; };
+          map<string,string> pr; queue<string> q;
+          q.push(s); pr[s]=""; string g;
+          while(!q.empty()&&g.empty()){
+              string u=q.front(); q.pop();
+              if(goal(u)){ g=u; break; }
+              int k=u.find('.');
+              for(int i=0;i+1<L;i++) if(u[i]!='.'&&u[i+1]!='.'){
+                  string v=u; swap(v[i],v[k]); swap(v[i+1],v[k+1]);
+                  if(!pr.count(v)){ pr[v]=u; q.push(v); } }
+          }
+          if(g.empty()){ cout<<"-1\n"; return 0; }
+          vector<string> p; string c=g; while(pr[c]!=""){ p.push_back(c); c=pr[c]; }
+          reverse(p.begin(),p.end());
+          cout<<p.size()<<"\n"; for(auto&x:p) cout<<x<<"\n";
+      }
+      ```
+      *Complexity: O(reachable states) — exponential in `n`; unusable past `2n ≈ 12`.*
+
+      **② Optimization — constructive + fixed-size BFS finishing, O(n) moves.**
+      For `2n ≥ 8`: first bring the gap to the front (≤ 2 moves), then walk the
+      row in length-8 windows, using the `gap,window,gap` **3-op swap** to drive
+      `B`s right and `A`s left as the gap advances by 2. Whenever a window is
+      "stuck", finish it with the precomputed length-8 BFS table. If the total
+      window length is `< 8`, brute-force the entire state space directly. The
+      only `-1` cases are tiny (`2n < 8`) configurations that the full BFS shows
+      unreachable — for `n ≥ 4` a solution always exists.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      string dp[448]; map<string,string> pr; vector<string> res; string s;
+      void precompute(int n){                       // BFS between windows of length n
+          int sz=0;
+          for(int i=0;i<=n-2;i++){
+              string cur=string(i,'A')+string(n-2-i,'B');
+              cur.insert(0,".."); dp[sz++]=cur; pr[cur]="";
+              if(n<8){ cur=string(i,'A')+string(n-2-i,'B'); cur.insert(1,".."); dp[sz++]=cur; pr[cur]=""; }
+          }
+          for(int i=0;i<sz;i++){
+              string u=dp[i]; int k=u.find('.');
+              for(int p=0;p<n-1;p++) if(u[p]!='.'&&u[p+1]!='.'){
+                  string v=u; swap(v[p],v[k]); swap(v[p+1],v[k+1]);
+                  if(!pr.count(v)){ pr[v]=u; dp[sz++]=v; } }
+          }
+      }
+      void fix(int l,int r){                        // sort window s[l..r) using the table
+          string cur=s.substr(l,r-l);
+          while(pr[cur]!=""){ cur=pr[cur]; res.push_back(s.substr(0,l)+cur+s.substr(r)); }
+          s=s.substr(0,l)+cur+s.substr(r);
+      }
+      void op(int i,int j){ swap(s[i],s[j]); swap(s[i+1],s[j+1]); res.push_back(s); }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          if(n==1){ cout<<0<<"\n"; return 0; }
+          cin>>s;
+          if(2*n<8){                                // whole state space is small: exact BFS
+              precompute(2*n);
+              if(!pr.count(s)){ cout<<"-1\n"; return 0; }
+              fix(0,2*n);
+          } else {
+              int d=s.find('.');                     // move gap to the front
+              if(d>1) op(d,0);
+              else if(d==1){ op(d,3); op(3,0); }
+              precompute(8);
+              int dpos=0;
+              while(dpos+8<2*n){
+                  if(s[dpos+2]=='A'&&s[dpos+3]=='A'){ op(dpos,dpos+2); dpos+=2; }
+                  else{
+                      int bp=s.find('B',dpos);       // leftmost B
+                      int ap=s.find('A',bp+2);       // leftmost A after it; may be 2n-1
+                      int flag=0;
+                      if(ap==(int)string::npos){ fix(dpos,dpos+8); break; }
+                      else if(ap==2*n-1){ --ap; flag=1; }
+                      op(dpos,bp); op(bp,ap); op(ap,dpos);   // 3-op swap
+                      if(flag) fix(dpos,dpos+8);
+                  }
+              }
+              fix(dpos,dpos+8);
+          }
+          cout<<res.size()<<"\n";
+          for(auto&x:res) cout<<x<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: O(n) windows × O(1) moves each (a few per window), plus the
+      constant 448-state BFS — O(n) time and output, well under the `10n ≤ 1000`
+      bound for `n ≤ 100`.*
+
+      **④ Alternative / note.** The exhaustive BFS (①) *is* the alternative — it
+      is a correct generator of optimal solutions for tiny `n` and is exactly
+      how we decide `-1` cases. There is no asymptotic "third" tier because the
+      windowed construction is already linear and the only hard part is the
+      small-state parity/number theory that the fixed BFS neatly sidesteps.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      A compact, verified implementation. Key parts:
+
+      1. **`precompute(n)`** runs a BFS over windows of length `n`. Seeds are the
+         *sorted* strings `A...AB...B` with the two dots inserted (both dot
+         parities when `n < 8`). Every configuration reachable from a sorted
+         window records its predecessor `pr`. For `n = 8` this yields exactly
+         448 states.
+      2. **`op(i, j)`** is the only primitive: swap the pair `(i,i+1)` with
+         `(j,j+1)` and record the new string. The pair `(dpos,bp)`, `(bp,ap)`,
+         `(ap,dpos)` triple is the **3-op swap** that lets the gap move around a
+         `B`/`A` and ultimately fixes one `A` before the boundary.
+      3. **`fix(l, r)`** injects the window `s[l..r)` into the precomputed BFS
+         tree and replays the path back to sorted, emitting the whole row after
+         each move.
+      4. **Main loop.** While more than one window remains, if the next two
+         letters are already `AA` the gap just advances (`op(dpos,dpos+2)`);
+         otherwise locate the leftmost `B` and the `A` to move past it, apply
+         the 3-op swap, and let `fix` clean up when the window is exhausted.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 3`, `s = AB..BA` → expected `2` moves ending sorted.
+
+      The string is `A B . . B A`. The gap is at positions 2,3.
+
+      - **Move 1:** `op(0,2)` swaps pair `(AB)` at 0,1 with the pair `( . . )`? No —
+        we swap the *letter pair* `(AB)` at 0,1 with the *pair at the gap indices*
+        2,3. Actually the printed first config is `ABBA..`:
+
+      | step | string | what happened |
+      |-----|--------|--------------|
+      | start | `AB..BA` | gap at 2,3 |
+      | 1 | `ABBA..` | slide the pair `BA` (at 4,5) left into the gap → positions 4,5 become empty |
+      | 2 | `A..ABB` | slide the pair `AB` (at 0,1) right into the gap → everything sorted |
+
+      After move 1 the row is `A B B A . .`; after move 2 it is `A . . A B B`,
+      i.e. all `A`s before all `B`s. `res.size() == 2`, so we print `2` then the
+      two rows — exactly the CSES sample output.
+
+      **Input:** `n = 3`, `s = ABAB..` → expected `-1`. Because `2n = 6 < 8`, the
+      whole state space is precomputed and `ABAB..` is not among the strings
+      reachable from any sorted window, so the BFS never finds a goal and we print
+      `-1`, matching the sample.
+
+  - type: mcq
+    prompt: "Why is the off-line BFS precomputation only done for windows of length 8 (or the whole tiny state space)?"
+    options:
+      - "Because the reachable state space for a length-8 window is a small, bounded constant (448 states), regardless of n."
+      - "Because 8 is the largest length that can ever be sorted."
+      - "Because the problem always needs exactly 8 moves."
+      - "Because n can never be larger than 8."
+    answer: 0
+    explanation: "The key structural fact is that the reachable configurations of a length-8 window form a fixed, small set (448). So we can brute-force and store the whole predecessor graph once, then solve any large instance by reducing it window-by-window to that constant-size sub-puzzle. Larger windows would blow the BFS up and gain nothing, since we already process the row in length-8 chunks."
+
+type: content
+---

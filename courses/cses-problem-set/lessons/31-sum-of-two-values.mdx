@@ -1,0 +1,291 @@
+---
+id: sum-of-two-values
+title: Sum of Two Values
+difficulty: medium
+order: 31
+tags:
+  - hashing
+  - two-pointers
+  - sorting
+  - hash-map
+  - pair-sum
+blocks:
+  - type: markdown
+    content: |
+      # Sum of Two Values
+
+      **The technique: lookup of a complement.** Given a list of numbers and a
+      target `x`, we want two *distinct* entries that add up to `x`. For every
+      element `a[i]` the partner we are hunting is its **complement** `x - a[i]`.
+      The question "has the complement already appeared?" is answered in O(1)
+      by a hash map keyed on value → index.
+
+      **When you reach for it:** any "find two entries whose ... is a target"
+      problem — a sum, a difference, a product, a pair with a fixed relationship.
+      The two canonical engines are:
+
+      - **Hashing** — sweep once, and for each `a[i]` check whether
+        `x - a[i]` was seen earlier. O(n) expected time, keeps original indices.
+      - **Sort + two pointers** — sort the values, then walk one pointer up and
+        the other down, moving them towards the target. O(n log n) dominated by
+        the sort.
+
+      Both are correct; hashing is faster on the average but uses a hash table;
+      sort + two pointers is deterministic and needs no extra structure.
+
+      **Worked mini-example.** `[2, 7, 5, 1]`, target `x = 8`.
+
+      - `a[0]=2` → need `6`; not seen → store `2 @ 0`.
+      - `a[1]=7` → need `1`; not seen → store `7 @ 1`.
+      - `a[2]=5` → need `3`; not seen → store `5 @ 2`.
+      - `a[3]=1` → need `7`; **seen at index 1** → answer `(1, 3)` (0-based),
+        i.e. `7 + 1 = 8`. ✓
+
+      **Complexity.** Hashing: **O(n)** expected time, **O(n)** space. Sort +
+      two pointers: **O(n log n)** time, **O(1)** extra space (beyond the copy
+      that keeps original positions). Both fit `n ≤ 2·10^5` comfortably.
+
+      :::tip
+      **Interview tip:** "two-sum" is a classic opener. Interviewers probe two
+      things: (1) that you react to *distinct positions* (an element cannot pair
+      with itself), and (2) whether you remember every element as you go, which
+      lets the hash approach work in a single pass instead of two. Prefer
+      storing each value *after* checking its complement so the same element is
+      never paired with itself. Follow-ups often ask for *all* pairs or for the
+      *indices* — keep the map value → index, not just presence.
+      :::
+  - type: markdown
+    content: |
+      # Question — Sum of Two Values
+
+      You are given an array of `n` integers, and your task is to find two
+      values at **distinct positions** whose sum is `x`.
+
+      **Constraints:**
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ x, a[i] ≤ 10^9`
+
+      **Input:** the first line has two integers `n` and `x` (array size and
+      target sum). The second line has `n` integers `a[1], ..., a[n]`.
+
+      **Output:** print two integers — the **1-based positions** of the two
+      values. If there are several solutions, you may print any of them. If
+      there are no solutions, print `IMPOSSIBLE`.
+
+      Sample input:
+
+      ```
+      4 8
+      2 7 5 1
+      ```
+
+      Sample output:
+
+      ```
+      2 4
+      ```
+
+      (Position 2 holds `7` and position 4 holds `1`, and `7 + 1 = 8`.)
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; long long x;
+          cin >> n >> x;
+          vector<long long> a(n);
+          for (int i = 0; i < n; ++i) cin >> a[i];
+          for (int i = 0; i < n; ++i)
+              for (int j = i + 1; j < n; ++j)
+                  if (a[i] + a[j] == x) {
+                      cout << i + 1 << " " << j + 1 << "\n";
+                      return 0;
+                  }
+          cout << "IMPOSSIBLE\n";
+          return 0;
+      }
+      ```
+      O(n²) — about `2·10^10` pair checks for `n = 2·10^5`, far beyond the
+      1-second limit. Correct but too slow.
+
+      **② Optimization — hash map of complements, O(n)** (the chosen solution)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; long long x;
+          cin >> n >> x;
+          vector<long long> a(n);
+          for (int i = 0; i < n; ++i) cin >> a[i];
+
+          unordered_map<long long, int> pos;   // value -> last index seen
+          pos.reserve(n * 2);
+          for (int i = 0; i < n; ++i) {
+              long long need = x - a[i];
+              if (auto it = pos.find(need); it != pos.end()) {
+                  cout << it->second + 1 << " " << i + 1 << "\n";
+                  return 0;
+              }
+              pos[a[i]] = i;       // store only after the complement check
+          }
+          cout << "IMPOSSIBLE\n";
+          return 0;
+      }
+      ```
+      O(n) expected time, O(n) space. One pass: check complement, then store.
+
+      **③ Sort + two pointers, O(n log n)** (further/alternative)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; long long x;
+          cin >> n >> x;
+          vector<pair<long long, int>> a(n);   // (value, original index)
+          for (int i = 0; i < n; ++i) { cin >> a[i].first; a[i].second = i; }
+
+          sort(a.begin(), a.end());
+          int lo = 0, hi = n - 1;
+          while (lo < hi) {
+              long long s = a[lo].first + a[hi].first;
+              if (s == x) {
+                  cout << a[lo].second + 1 << " " << a[hi].second + 1 << "\n";
+                  return 0;
+              } else if (s < x) ++lo;
+              else --hi;
+          }
+          cout << "IMPOSSIBLE\n";
+          return 0;
+      }
+      ```
+      O(n log n) time (sort dominates), O(n) space to keep original indices.
+      Deterministic, no hash table; the two pointers walk inward because the
+      boundary pair at each step brackets the target.
+
+      **④ Alternative — binary search on the sorted copy, O(n log n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; long long x;
+          cin >> n >> x;
+          vector<long long> a(n);
+          for (int i = 0; i < n; ++i) cin >> a[i];
+          vector<long long> b = a;
+          sort(b.begin(), b.end());
+          for (long long v : b) {
+              long long need = x - v;
+              int j = lower_bound(b.begin(), b.end(), need) - b.begin();
+              // need != v guarantees distinct positions; find real indices
+              if (j < n && b[j] == need && (need != v || lower_bound(b.begin(), b.end(), v + 1) - b.begin() > j)) {
+                  int p = -1, q = -1;
+                  for (int i = 0; i < n; ++i) if (a[i] == v && p < 0) p = i;
+                  for (int i = 0; i < n; ++i) if (a[i] == need && i != p) { q = i; break; }
+                  cout << p + 1 << " " << q + 1 << "\n";
+                  return 0;
+              }
+          }
+          cout << "IMPOSSIBLE\n";
+          return 0;
+      }
+      ```
+      O(n log n) time, O(n) space. Same asymptotic cost as two pointers but
+      clutter-prone (handling the duplicate-value edge case). Presented as a
+      contrast — the hash and two-pointer versions are the ones to use.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② the hash-map pass**. The key lines:
+
+      - `unordered_map<long long, int> pos` maps a value to the (latest) index
+        it appeared at, giving O(1) "have I seen X?" queries.
+      - `pos.reserve(n * 2)` pre-sizes the table so the repeated inserts do not
+        trigger costly re-hashes.
+      - `long long need = x - a[i];` — the complement. If `need` is already in
+        the map, the pair exists and we print `it->second + 1` (0-based map
+        index → 1-based position) and `i + 1`.
+      - **Store *after* checking.** `pos[a[i]] = i` runs only when the
+        complement was not found, so an element is never paired with *itself* —
+        this is what "distinct positions" requires and it also picks the two
+        positions correctly even when a value appears more than once.
+      - If the loop completes without a hit, no pair exists → `IMPOSSIBLE`.
+      - Values up to `10^9` and `x` up to `10^9` fit in `long long`, so
+        `x - a[i]` and `a[i] + a[j]` never overflow.
+
+      The sample's first completed pair is `(7, 1)` found at the moment `a[3]=1`
+      sees its complement `7` already stored.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      4 8
+      2 7 5 1
+      ```
+
+      | step | `a[i]` | complement `x - a[i]` | in map? | map after | action |
+      |------|--------|------------------------|---------|-----------|--------|
+      | 0 | 2 | 6 | no | `{2:0}` | store |
+      | 1 | 7 | 1 | no | `{2:0, 7:1}` | store |
+      | 2 | 5 | 3 | no | `{2:0, 7:1, 5:2}` | store |
+      | 3 | 1 | 7 | **yes @1** | — | print `2 4` |
+
+      At index 3 (`a[3]=1`) the complement is `7`, which was stored at index 1.
+      Output `1+1=2` and `3+1=4` → **`2 4`** ✓ (positions 2 and 4 hold `7`
+      and `1`, summing to `8`).
+
+      **Edge cases:**
+      - No pair: `4 10 / 1 2 3 4` → every complement is missing, prints
+        `IMPOSSIBLE`.
+      - Duplicate partner: `3 4 / 2 2 5` → at index 1, `2 + 2` satisfies it
+        (map stored `2` at index 0, distinct) → `1 2`.
+      - Self-pair guard: `2 4 / 2 2` → `x - a[0] = 2` is *not* in the map yet
+        (we store after checking), so no self-pair; index 1 finds `2` in the map
+        → `1 2`.
+  - type: flowchart
+    title: "Sum of Two Values — hash pass"
+    nodes:
+      - "Read n, x and array"
+      - "For each a[i]"
+      - "need = x - a[i] in map?"
+      - "Yes: print both indices"
+      - "No: store a[i] → i"
+      - "More elements?"
+      - "Empty map: print IMPOSSIBLE"
+    edges:
+      - {from: 0, to: 1, label: "start"}
+      - {from: 1, to: 2, label: "compute complement"}
+      - {from: 2, to: 3, label: "found"}
+      - {from: 2, to: 4, label: "missing"}
+      - {from: 4, to: 5, label: "next i"}
+      - {from: 5, to: 1, label: "yes"}
+      - {from: 5, to: 6, label: "done"}
+  - type: mcq
+    prompt: 'Why must the value be stored in the hash map only AFTER its complement is checked?'
+    options:
+      - To make the map smaller and save memory
+      - To guarantee the two chosen positions are distinct, so an element is never paired with itself
+      - Because unordered_map can only store one value per key, and storing first would overwrite it
+      - To keep the array sorted as we go
+    answer: 1
+    explanation: If we inserted a[i] before checking x - a[i], then a[i] would find itself as its own partner whenever 2·a[i] == x. Storing after the check ensures the complement searched for was seen at a strictly earlier index, which is exactly the "distinct positions" requirement — and it still works when a value repeats, because the map keys on value and a later duplicate supplies the distinct index.
+type: content
+---

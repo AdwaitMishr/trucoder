@@ -1,0 +1,287 @@
+---
+id: prefix-sum-queries
+title: Prefix Sum Queries
+type: content
+difficulty: medium
+order: 129
+tags:
+  - range-queries
+  - segment-tree
+  - prefix-sum
+  - max-prefix
+blocks:
+  - type: markdown
+    content: |
+      # Prefix Sum Queries — a segment tree that remembers its best prefix
+
+      You are given an array `x[1..n]`, a point update, and a range query: for a
+      window `[a, b]` report the **maximum prefix sum** — the largest value of
+      `sum(x[a..i])` over all `a <= i <= b`, with the empty prefix (sum `0`)
+      also allowed.
+
+      If there were no updates we could precompute prefix sums and answer each
+      query with a range-maximum query. But the values change, and every change
+      shifts every prefix sum after it, so a static prefix array does not survive
+      an update at all. The standard move is to let a **segment tree** carry just
+      enough information per node that two children can be merged into a parent.
+
+      ## What one node must remember
+
+      For a segment `S`, the node needs exactly two numbers to answer "max
+      prefix sum" combined with its right neighbour:
+
+      - `sum` — the total sum of all elements in `S`;
+      - `bestPrefix` — the maximum `sum(S[1..i])` over all `i` inside `S`
+        (the best prefix sum **of this segment alone**).
+
+      When two neighbouring segments `L` and `R` are joined, a prefix of the
+      combined segment is either:
+
+      1. a prefix that stays entirely inside `L` → best is `L.bestPrefix`, or
+      2. all of `L` plus a prefix of `R` → best is `L.sum + R.bestPrefix`.
+
+      So the merge rule is:
+
+      ```
+      sum        = L.sum + R.sum
+      bestPrefix = max(L.bestPrefix, L.sum + R.bestPrefix)
+      ```
+
+      This one rule is the whole algorithm. Build merges bottom-up, a point
+      update recomputes the `O(log n)` nodes on one root-to-leaf path, and a
+      range query is answered by merging exactly the canonical `O(log n)`
+      covering segments **in left-to-right order**.
+
+      :::tip
+      **Interview tip:** \"max prefix / max subarray over a range with point
+      updates\" is a classic. Interviewers test whether you know that a plain
+      prefix-sum array breaks under updates and that a segment-tree node must
+      store *derived* values (`sum`, `bestPrefix`) rather than a live prefix
+      list. The exact tie-in is that a prefix of `L+R` is either a prefix of
+      `L` or all of `L` plus a prefix of `R` — if you can say that sentence you
+      have understood the merge.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given an array of `n` integers, process `q` queries of the following
+      types:
+
+      1. update the value at position `k` to `u`;
+      2. what is the maximum prefix sum in the range `[a, b]`?
+
+      Empty prefixes (with sum `0`) are allowed.
+
+      ## Input
+
+      The first input line has two integers `n` and `q`: the number of values
+      and queries.
+
+      The second line has `n` integers `x_1, x_2, ..., x_n`: the array values.
+
+      Finally, there are `q` lines describing the queries. Each line has three
+      integers: either `1 k u` or `2 a b`.
+
+      ## Output
+
+      Print the result of each query of type `2`, one per line.
+
+      ## Constraints
+
+      - `1 <= n, q <= 2 * 10^5`
+      - `-10^9 <= x_i, u <= 10^9`
+      - `1 <= k <= n`
+      - `1 <= a <= b <= n`
+
+      ## Sample
+
+      **Input:**
+      ```
+      8 4
+      1 2 -1 3 1 -5 1 4
+      2 2 6
+      1 4 -2
+      2 2 6
+      2 3 4
+      ```
+      **Output:**
+      ```
+      5
+      2
+      0
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n) per query, O(q·n) total**
+
+      For a type-2 query walk `[a, b]`, keeping a running sum and recording the
+      maximum seen so far; the answer is that maximum clamped to `0` (empty
+      prefix). A type-1 query just assigns the new value.
+
+      With `n,q <= 2*10^5` this is up to `4*10^10` basic steps — far over the
+      time limit. But it is a correct baseline.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<ll> x(n + 1);
+          for (int i = 1; i <= n; i++) cin >> x[i];
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) { int k; ll u; cin >> k >> u; x[k] = u; }
+              else {
+                  int a, b; cin >> a >> b;
+                  ll run = 0, best = 0;
+                  for (int i = a; i <= b; i++) { run += x[i]; best = max(best, run); }
+                  cout << best << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`O(q·n)` worst case — correct but far too slow for `2*10^5`.*
+
+      **② Optimization — segment tree storing `{sum, bestPrefix}` — O((n+q) log n)** — optimal
+
+      Each node keeps `sum` and `bestPrefix`. Merge rule: `sum = L.sum + R.sum`,
+      `bestPrefix = max(L.bestPrefix, L.sum + R.bestPrefix)`. A point update
+      fixes one root-leaf path; a range query merges the canonical covering
+      nodes left-to-right. Clamp the final result to `0` for the empty prefix.
+      This is the tier we compile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      struct Node { ll sum, bestPrefix; };
+
+      struct SegTree {
+          int n;
+          vector<Node> t;
+          SegTree(const vector<ll>& a) { n = (int)a.size() - 1; t.assign(4 * n, {0, 0}); build(1, 1, n, a); }
+          Node merge(const Node& L, const Node& R) {
+              return { L.sum + R.sum, max(L.bestPrefix, L.sum + R.bestPrefix) };
+          }
+          void build(int v, int l, int r, const vector<ll>& a) {
+              if (l == r) { t[v] = { a[l], a[l] }; return; }
+              int m = (l + r) / 2;
+              build(v * 2, l, m, a); build(v * 2 + 1, m + 1, r, a);
+              t[v] = merge(t[v * 2], t[v * 2 + 1]);
+          }
+          void update(int v, int l, int r, int pos, ll val) {
+              if (l == r) { t[v] = { val, val }; return; }
+              int m = (l + r) / 2;
+              if (pos <= m) update(v * 2, l, m, pos, val);
+              else update(v * 2 + 1, m + 1, r, pos, val);
+              t[v] = merge(t[v * 2], t[v * 2 + 1]);
+          }
+          Node query(int v, int l, int r, int ql, int qr) {
+              if (ql <= l && r <= qr) return t[v];
+              int m = (l + r) / 2;
+              if (qr <= m) return query(v * 2, l, m, ql, qr);
+              if (ql > m)  return query(v * 2 + 1, m + 1, r, ql, qr);
+              return merge(query(v * 2, l, m, ql, qr),
+                           query(v * 2 + 1, m + 1, r, ql, qr));
+          }
+      };
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<ll> x(n + 1);
+          for (int i = 1; i <= n; i++) cin >> x[i];
+          SegTree st(x);
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) { int k; ll u; cin >> k >> u; st.update(1, 1, n, k, u); }
+              else {
+                  int a, b; cin >> a >> b;
+                  ll ans = st.query(1, 1, n, a, b).bestPrefix;
+                  cout << max(0LL, ans) << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`O((n+q) log n)` time, `O(n)` space — optimal for these constraints.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Node.** `sum` is the plain total of the segment; `bestPrefix` is the
+        best *internal* prefix. Both do not depend on anything outside the
+        segment, which is exactly what makes bottom-up merging sound.
+
+      - **Merge.** `sum = L.sum + R.sum` is obvious. For `bestPrefix`, every
+        prefix of `L+R` is either contained in `L` (best `L.bestPrefix`) or
+        swallows all of `L` and then a prefix of `R` (best `L.sum +
+        R.bestPrefix`). Taking the max covers it.
+
+      - **Query.** `query(1,1,n,a,b)` returns a synthetic `Node` for `[a,b]`.
+        When the interval straddles two children we must merge them in
+        *left-then-right* order — a prefix may cross the boundary, so the merge
+        order matters and `merge(left, right)` enforces it. Full-covered nodes
+        are returned as-is.
+
+      - **Empty prefix.** The problem allows it, so the final answer is
+        `max(0, bestPrefix)`: a window of only negatives must report `0`, not a
+        negative number.
+
+      - **Update.** `update` descends to the leaf, sets `{val, val}`, and
+        re-merges every ancestor on the path back up — `O(log n)` re-evaluations
+        per update.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 8`, array `x = [1, 2, -1, 3, 1, -5, 1, 4]`.
+
+      **Query `2 2 6`** — max prefix over `[2,6] = [2, -1, 3, 1, -5]`.
+      Prefix sums: `2, 1, 4, 5, 0`. The maximum is `5`. Expected `5`, answer `5`.
+
+      **Update `1 4 -2`** — set `x[4] = -2`. Array becomes `[1, 2, -1, -2, 1,
+      -5, 1, 4]`. The segment tree re-merges the path containing position 4.
+
+      **Query `2 2 6`** — over `[2,6] = [2, -1, -2, 1, -5]`. Prefix sums:
+      `2, 1, -1, 0, -5`. Maximum is `2`. Expected `2`, answer `2`.
+
+      **Query `2 3 4`** — over `[3,4] = [-1, -2]`. Prefix sums `-1, -3`, max
+      `-1`, but empty prefix allowed so clamp to `0`. Expected `0`, answer `0`.
+
+      Printed output:
+      ```
+      5
+      2
+      0
+      ```
+      Matching the sample exactly.
+  - type: flowchart
+    title: "Max prefix sum over a range with point updates"
+    nodes: ["point update / range query", "segment tree: node holds sum + bestPrefix", "merge: max = max(L.prefix, L.sum + R.prefix)", "query merges covering nodes left-to-right", "clamp answer to 0 (empty prefix)"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 1, to: 3}
+      - {from: 3, to: 4}
+      - {from: 2, to: 4}
+  - type: mcq
+    prompt: "A segment tree node for this problem must store two values per segment. The reason `bestPrefix` alone is not enough is that…"
+    options:
+      - "…a node's best prefix can never be used again once the node is rebuilt."
+      - "…when the node is joined with a right neighbour, the best prefix that crosses the boundary is `node.sum` plus the neighbour's best prefix — so the node must expose its total `sum` to its parent."
+      - "…bestPrefix requires the minimum element, which must be stored separately."
+      - "…the empty prefix rule forces the node to store a zero separately."
+    answer: 1
+    explanation: "Merging L with a right neighbour R, a prefix that spills out of L is exactly 'all of L' plus a prefix of R, whose sum is L.sum + R.bestPrefix. The parent cannot compute that crossing prefix without L's total, so every node must expose both sum and bestPrefix."
+---

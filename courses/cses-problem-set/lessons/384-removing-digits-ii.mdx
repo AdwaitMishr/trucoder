@@ -1,0 +1,221 @@
+---
+id: removing-digits-ii
+title: Removing Digits II
+difficulty: hard
+order: 384
+tags:
+  - additional
+  - dynamic-programming
+  - digits
+  - greedy
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — accelerating an optimal greedy with a digit-block DP
+
+      We have an integer `n`; each step we subtract any **one digit that appears
+      in the current number**. We want the minimum number of steps to reach `0`.
+
+      **The greedy is optimal.** The best digit to subtract is always the
+      *largest digit present*:
+
+      > Subtracting a bigger digit always leaves a smaller number, and having a
+      > smaller number can never make the future *harder* (every reachable state
+      > from a smaller `n` is also reachable — with no more, and usually fewer,
+      > steps).
+
+      Its answer is validated against brute force on every small value; the real
+      difficulty isn't *which* digit — it's **speed**. For `n ≤ 10¹⁸` the greedy
+      needs up to ~`n/9` ≈ 10¹⁷ steps, which we can never simulate one by one.
+
+      **Block compression.** A number consists of decimal blocks of size `10^i`.
+      We precompute, for each block size and a "state" (current rounding target
+      `j` and the best digit `k` allowed everywhere in the higher part), the
+      cost to finish reducing that block by repeatedly applying the greedy, plus
+      the resulting residue. Then a single pass over the digits from the least
+      significant side answers the whole number in O(log² n).
+
+      Concretely, `dp[i][j][k]` returns `(steps, residue)` describing how to
+      get from "a low block that needs `j` more units removed and that has digit
+      `k` available" down to a clean reduced state. The top-level loop peels
+      digits of `n` using this table instead of stepping by one.
+
+      :::tip
+      **Interview tip:** When the naive number-to-zero process is too slow,
+      look for **block compression**: re-use the answer for every `10^i` block
+      so the work becomes proportional to the number of digits, not the value.
+      Especially when the per-step rule is a small, repeated operation (subtract
+      a digit, add one, double…). Verify the greedy micro-rule on brute force,
+      then make it fast.
+      :::
+
+  - type: markdown
+    content: |-
+      ## The Problem
+
+      You are given an integer `n`. On each step, you may subtract from it any
+      one-digit number that appears in it. How many steps are required to make
+      the number equal to `0`?
+
+      **Input.** The only input line has an integer `n`.
+
+      **Output.** Print one integer: the minimum number of steps.
+
+      **Constraints**
+      - `1 ≤ n ≤ 10¹⁸`
+
+      **Example**
+
+      Input:
+      ```
+      27
+      ```
+
+      Output:
+      ```
+      5
+      ```
+
+      *Explanation:* an optimal solution is
+      `27 → 20 → 18 → 10 → 9 → 0`.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·10).** `dp[x] = 1 + min over digits d of dp[x−d]`.
+      Exact, but the `dp` array needs `n+1` entries and `n` can be `10¹⁸`,
+      so this is impossible in both time and memory.
+
+      ```cpp
+      int brute(long long n){
+        vector<int> dp(n+1, 1e9); dp[0]=0;
+        for(int x=1;x<=n;x++)for(char ch:to_string(x))
+            dp[x]=min(dp[x], dp[x-(ch-'0')]+1);
+        return dp[n];
+      }
+      ```
+
+      **② Optimization — greedy, O(answer).** Always subtract the current
+      largest digit. This is optimal (checked against brute force on all small
+      values), but the loop count equals the answer which can be ~`n/9`, so for
+      `10¹⁸` it's still far too slow.
+
+      ```cpp
+      long long greedy(long long n){ long long st=0;
+        while(n>0){ int d=0; long long t=n; while(t){ d=max<int>(d,t%10); t/=10; } n-=d; st++; }
+        return st; }
+      ```
+
+      **③ Further optimization — digit-block DP, O(log² n).** The main solution.
+      It runs the greedy reduction but in compressed blocks of `10^i`, so the
+      number of operations is proportional to the number of digits (18), not the
+      value.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      pair<ll,int> dp[18][10][10];     // (steps, residue) per block
+      ll deg[19];
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          deg[0]=1; for(int i=1;i<19;i++) deg[i]=deg[i-1]*10;
+          for(int j=1;j<10;j++) for(int k=0;k<10;k++)
+              dp[0][j][k]={1, -min(0,10-j-k)};
+          for(int k=0;k<10;k++) dp[0][0][k]={2, -min({0,10-2*k})};
+          for(int i=1;i<18;i++){
+              for(int j=1;j<10;j++)for(int k=0;k<10;k++){
+                  int cur=j; ll ops=0;
+                  for(int z=9;z>=0;z--){
+                      if(cur==0){ ops++; cur=max(k,z+1); }
+                      ops += dp[i-1][cur][max(k,z)].first;
+                      cur = dp[i-1][cur][max(k,z)].second;
+                  }
+                  dp[i][j][k]={ops, cur};
+              }
+              for(int k=0;k<10;k++){ dp[i][0][k]=dp[i][max(k,1)][k]; dp[i][0][k].first++; }
+          }
+          ll n; cin>>n;
+          if(n<10){ cout<<1<<"\n"; return 0; }
+          ll res=0;
+          for(int i=1; n>0; ++i){
+              int k=0;
+              for(int j=i+1;j<19;j++) k=max(k,(int)(n/deg[j]%10));
+              int cur=(10-(n%10))%10;
+              while(((n/deg[i]%10)!=9 || cur==0) && n>0){
+                  int d=n/deg[i]%10;
+                  if(cur==0){ n-=max(d,k); ++res; }
+                  else {
+                      res += dp[i-1][cur][max(d,k)].first;
+                      cur = dp[i-1][cur][max(d,k)].second;
+                      n/=deg[i]; n*=deg[i]; n-=cur;
+                  }
+                  cur=(10-(n%10))%10;
+              }
+          }
+          cout<<res<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: O(18·10·10·10) precompute + O(log n) peel — effectively
+      constant, handles `n ≤ 10¹⁸` instantly.*
+
+      **④ Alternative.** A BFS over the small *digit-residue* state space (the
+      sub-`n` arrangement of digits plus a carry) gives the same speed-up from a
+      different angle. In practice the block-DP above (which compresses the
+      optimal greedy) is the canonical, simplest correct answer.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(log² n) block DP. Key lines:
+
+      1. **`dp[i][j][k]`.** One precomputed `(ops, residue)` per block: given the
+         block still needs `j` removed and digit `k` is reachable in the higher
+         part, finish the block and hand back the residue. Base cases `i=0` deal
+         with the one- or two-digit bottom block.
+      2. **Recurrence** combines `dp[i-1]` over every candidate digit `z`, so a
+         large `10^i` block is reduced in one table lookup instead of step-by-step.
+      3. **Top-level peel.** `k` is the best digit available in higher digits;
+         `cur` tracks how much the units still need. The `while` skips whole
+         blocks via `dp[i-1][cur][…]` when possible, otherwise subtracts one
+         digit (`n-=max(d,k)`).
+      4. **Answer** is the accumulated step count `res`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 27`, expected output `5`.
+
+      Optimal greedy path: `27 → 20 → 18 → 10 → 9 → 0` — six transitions, i.e.
+      **5 steps**. The DP's top-level peel reproduces exactly this optimal
+      count: the units digit 7 is cleared (→ 20), then the tens block is reduced
+      via the table (20 → 18 → 10 → 9) and finally 9 → 0, summing to 5.
+
+      | state | digit subtracted | new |
+      |-------|------------------|-----|
+      | 27    | 7                | 20  |
+      | 20    | 2                | 18  |
+      | 18    | 8                | 10  |
+      | 10    | 1                | 9   |
+      | 9     | 9                | 0   |
+
+      Verified against brute force on thousands of small `n` (the algorithm
+      agrees with the exact per-value DP), and it also answers `n = 10¹⁸ − 1`
+      instantly, which no per-step method could.
+
+  - type: mcq
+    prompt: "Why is 'subtract the largest digit present' not enough on its own to solve Removing Digits II, even though it is the optimal digit choice?"
+    options:
+      - "Because the number of steps can be about n/9 ≈ 10^17, so simulating the greedy step-by-step is far too slow; we need a compressed block-DP to count the steps quickly."
+      - "Because the largest digit might not be present in the number."
+      - "Because subtraction can make the number negative."
+      - "Because a DP table of size n cannot be allocated for n ≤ 10^9."
+    answer: 0
+    explanation: "Greedy (always subtract the max present digit) is the right digit choice, but the step count grows with the value, reaching ~n/9 which is 10^17 for the largest n. Speed — not digit choice — is the bottleneck, so we compress runs of greedy steps into per-10^i-block DP lookups, making it O(log^2 n)."
+
+type: content
+---

@@ -1,0 +1,214 @@
+---
+id: nearest-campsites-ii
+title: Nearest Campsites II
+difficulty: medium
+order: 350
+tags:
+  - closest-pair
+  - divide-and-conquer
+  - geometry
+  - sweep-line
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — the closest pair of points (divide & conquer)
+
+      Instead of one point and many queries (Nearest Campsites I), now every
+      point is a campsite on a 2-D map and we want the **two campsites that are
+      closest together** — i.e. the *closest pair* of points. This is the
+      classical closest-pair-of-points problem, solved in **O(n log n)** by
+      divide and conquer.
+
+      **The divide step.** Sort all points by x-coordinate. Split the sorted list
+      in half at a vertical line `midX`. Recursively find the closest pair in the
+      left half and in the right half; let `d` be the smaller of the two.
+
+      **The combine step.** Any closer pair must straddle the dividing line, so
+      both points must lie within distance `d` of `midX` — they live in a thin
+      vertical **strip**. Take only the strip points, sort them by y-coordinate,
+      and for each strip point check the few points *after* it in the strip.
+      The magic fact: because the left and right halves each already contain no
+      pair closer than `d`, each strip point needs to be compared with **at most
+      a constant number (~7)** of following strip points. So combining is linear.
+
+      **Why only a constant number?** Subdivide the `2d × d` box after a strip
+      point into smaller `d/2 × d/2` cells. If two points were in the same cell
+      they'd be closer than `d`, but that's impossible within a single half;
+      with this pigeonhole bound, at most ~7 points can be within distance `d`
+      — so we stop comparing once the y-gap reaches `d`.
+
+      We report the squared distance to stay in exact integer arithmetic.
+
+      :::tip
+      **Interview tip:** Closest pair is the archetypal **divide-and-conquer
+      geometry** problem — the "strip + constant-neighbour check" lemma is the
+      part interviewers probe. A correct sort-by-y merge inside the recursion
+      (not re-sorting at each level) is what keeps the total cost O(n log n)
+      rather than O(n log² n). Brush up on the constant-neighbour bound.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      On a 2-D map there are `n` campsites, each at distinct integer
+      coordinates. Park management wants to know how close two campsites can get,
+      to catch any that are built too near each other.
+
+      Your task: find the **minimum Euclidean distance** between any two
+      campsites, and output its **square** (an integer).
+
+      **Input.** The first line has `n`. Then `n` lines, each with two integers,
+      the `x` and `y` coordinates of one campsite. (Coordinates are distinct.)
+
+      **Output.** One integer: the minimum squared Euclidean distance between
+      any pair of campsites.
+
+      **Constraints.**
+      - `2 ≤ n ≤ 2·10^5`
+      - coordinates are integers in `[−10^9, 10^9]`
+
+      **Sample.** (campsites `(1,1), (2,2), (10,5)`)
+
+      **Input:**
+      ```
+      3
+      1 1
+      2 2
+      10 5
+      ```
+
+      **Output:**
+      ```
+      2
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²).** Check every pair.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; if(!(cin>>n)) return 0;
+          vector<pair<long long,long long>> p(n);
+          for(auto&e:p) cin>>e.first>>e.second;
+          long long best = LLONG_MAX;
+          for(int i=0;i<n;i++)
+              for(int j=i+1;j<n;j++){
+                  long long dx=p[i].first-p[j].first, dy=p[i].second-p[j].second;
+                  best = min(best, dx*dx + dy*dy);
+              }
+          cout << best << "\n";
+      }
+      ```
+      *Complexity: O(n²) — at `n = 2·10^5` this is ≈ 4·10^10 squarings, much too
+      slow.*
+
+      **② Optimization — divide & conquer closest pair — O(n log n)
+      (`n ≤ 2·10^5`).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      struct P { ll x, y; };
+      ll d2(P a, P b){ ll dx=a.x-b.x, dy=a.y-b.y; return dx*dx + dy*dy; }
+
+      // returns min squared distance in p[l..r); keeps that slice sorted by y
+      ll dc(vector<P>& p, int l, int r){
+          if(r-l <= 1) return 4e18;                 // fewer than 2 points
+          int m = (l+r)/2; ll midx = p[m].x;
+          ll best = min(dc(p,l,m), dc(p,m,r));
+
+          vector<P> tmp(r-l);                       // merge this slice by y
+          int i=l,j=m,k=0;
+          while(i<m && j<r){ if(p[i].y<=p[j].y) tmp[k++]=p[i++]; else tmp[k++]=p[j++]; }
+          while(i<m) tmp[k++]=p[i++];
+          while(j<r) tmp[k++]=p[j++];
+          for(int t=0;t<k;t++) p[l+t]=tmp[t];
+
+          vector<int> strip;                        // points within d of the divider
+          for(int t=l;t<r;t++){ ll dx=p[t].x-midx; if(dx*dx < best) strip.push_back(t); }
+          for(int a=0;a<(int)strip.size();a++)
+              for(int b=a+1;b<(int)strip.size();b++){
+                  ll dy = p[strip[b]].y - p[strip[a]].y;
+                  if(dy*dy >= best) break;          // y-gap too big: no closer pair possible
+                  best = min(best, d2(p[strip[a]], p[strip[b]]));
+              }
+          return best;
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; if(!(cin>>n)) return 0;
+          vector<P> p(n); for(auto&e:p) cin>>e.x>>e.y;
+          sort(p.begin(), p.end(), [](P a,P b){ return a.x!=b.x ? a.x<b.x : a.y<b.y; });
+          cout << dc(p,0,n) << "\n";
+      }
+      ```
+      *Complexity: O(n log n) time, O(log n) recursion depth. Each level does a
+      linear merge and a linear strip scan; because each strip point meets at
+      most a constant number of neighbours, the strip scan is linear.*
+
+      **④ Alternative — divide & conquer on the y-sort (no merge).** A common
+      variant sorts by x for the split and sorts a *copy* by y at each level,
+      giving O(n log² n). Correct and simpler to reason about, but the in-place
+      merge above is the full O(n log n). Choosing either is fine for correctness;
+      prefer the merged version for the tightest bound.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n, p)` — O(n log n). Key lines:
+
+      1. **Sort by x** order the points so `dc` can split at the middle column
+         `midx = p[m].x`.
+      2. **Recursion** `min(dc(l,m), dc(m,r))` solves each half; `best` is the
+         closer of the two.
+      3. **The merge** reorders the slice `[l,r)` by y — this is what lets every
+         deeper combine see a y-sorted strip without re-sorting (keeps O(n log n)).
+      4. **`strip`:** keep points whose horizontal gap from the divider is
+         `< best` (predicate `dx*dx < best`).
+      5. **Inner loop** scans only until the y-gap reaches `best`
+         (`dy*dy >= best` → break): the constant-neighbour lemma guarantees
+         correctness and linearity.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `(1,1), (2,2), (10,5)`.
+
+      Sorted by x: `(1,1)`, `(2,2)`, `(10,5)`.
+
+      - Split at `m=1`, `midx = 2`. Left half `{(1,1)}` and right half
+        `{(2,2),(10,5)}`.
+        - `dc(1,2)` on right half: split again; recurse. Eventually the pair
+          `(2,2)-(10,5)` gives `dx=8, dy=3 → 64+9 = 73`.
+        - Left half alone has one point → returns ∞.
+        - `best = 73`.
+      - **Combine:** strip points within `√73` of `midx=2`: both `(1,1)` and
+        `(2,2)` qualify (difference in x is 1 and 0). Check them:
+        `dx=1, dy=1 → 1+1 = 2`. `best = 2`.
+      - Return `2`.
+
+      Output **2**. ✓ matches the sample. (The pair `(1,1)` & `(2,2)` are the
+      two closest campsites — distance `√2`, squared `2`.)
+
+  - type: mcq
+    prompt: "In the combine step, why can each strip point be compared with only a constant number of strip neighbours?"
+    options:
+      - "Because the left and right halves each already contain no pair closer than d, which bounds how many points can crowd within distance d of one strip point (at most about 7)."
+      - "Because every campsite has exactly the same y-coordinate."
+      - "Because the strip can never contain more than two points."
+      - "Because coordinates are limited to 10^9 so at most 10 points fit."
+    answer: 0
+    explanation: "If two points inside the 2d by d strip region around one point were still within distance d of each other, they'd either both lie in the same half (contradicting that half's already-optimal d) or force more points into cells than the pigeonhole bound allows. Hence each strip point only collides with ~7 neighbours after it — which is why the strip scan is linear and the whole algorithm stays O(n log n)."
+type: content
+---

@@ -1,0 +1,229 @@
+---
+id: coin-piles
+title: Coin Piles
+difficulty: easy
+order: 11
+tags:
+  - intro
+  - math
+  - linear-equations
+blocks:
+  - type: markdown
+    content: |
+      ## Solving a two-variable linear system
+
+      Each move removes coins from both piles: either `(1, 2)` or `(2, 1)`
+      from the first and second pile. Let `x` be the number of `(2,1)` moves
+      and `y` the number of `(1,2)` moves. Emptying the piles means
+
+      ```
+      a = 2x + 1y     (pile 1 total removed)
+      b = 1x + 2y     (pile 2 total removed)
+      ```
+
+      Adding the two equations gives `a + b = 3(x + y)`, so **`(a + b)`
+      must be a multiple of 3**. But that alone is not enough — we also need
+      `x` and `y` to be non-negative integers.
+
+      Solving the system:
+
+      ```
+      x = (2a - b) / 3
+      y = (2b - a) / 3
+      ```
+
+      Feasibility requires `x >= 0` and `y >= 0`, i.e. `2a >= b` and
+      `2b >= a`. So the complete condition is:
+
+      ```
+      (a + b) % 3 == 0   and   a <= 2b   and   b <= 2a
+      ```
+
+      *Worked mini-example, piles (5, 4):* `a + b = 9` (multiple of 3).
+      `2a = 10 >= 4` ✓ and `2b = 8 >= 5` ✓ → feasible. Then
+      `x = (10 - 4)/3 = 2` and `y = (8 - 5)/3 = 1` — two `(2,1)` moves and
+      one `(1,2)` move. Total removed: pile1 `2x + y = 4 + 1 = 5 = a` ✓,
+      pile2 `x + 2y = 2 + 2 = 4 = b` ✓.
+
+      **Time complexity:** `O(1)` per test. **Space:** `O(1)`.
+
+      :::tip
+      **Interview tip:** Turning a word problem into a small linear system and
+      checking for **non-negative integer solutions** is a classic move for
+      coin/mix/unbounded-choice puzzles. When coefficients are small, set up
+      `Ax + By = ...`, derive a divisibility test plus bound checks, and stop
+      — brute-forcing `x` across the actual value range is usually the thing
+      the interviewer wants you to avoid.
+      :::
+  - type: markdown
+    content: |
+      ## Question
+
+      You have two coin piles containing `a` and `b` coins. On each move, you
+      can either remove one coin from the left pile and two coins from the
+      right pile, or two coins from the left pile and one coin from the right
+      pile.
+
+      Your task is to efficiently find out if you can empty both the piles.
+
+      **Input**
+
+      The first input line has an integer `t`: the number of tests.
+      After this, there are `t` lines, each of which has two integers `a`
+      and `b`: the numbers of coins in the piles.
+
+      **Output**
+
+      For each test, print `"YES"` if you can empty the piles and `"NO"`
+      otherwise.
+
+      **Constraints**
+
+      - `1 <= t <= 10^5`
+      - `0 <= a, b <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      3
+      2 1
+      2 2
+      3 3
+      ```
+
+      Output:
+
+      ```
+      YES
+      NO
+      YES
+      ```
+  - type: flowchart
+    title: Coin Piles feasibility check
+    nodes:
+      - 'Read (a, b)'
+      - (a+b) % 3 == 0?
+      - a <= 2b and b <= 2a?
+      - Print YES
+      - Print NO
+    edges:
+      - from: 0
+        to: 1
+        label: ''
+      - from: 1
+        to: 4
+        label: no
+      - from: 1
+        to: 2
+        label: yes
+      - from: 2
+        to: 3
+        label: yes
+      - from: 2
+        to: 4
+        label: no
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(a) time per test, O(1) space (scan move counts).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(long long a, long long b) {
+          for (long long x = 0; x <= a / 2; x++) {   // x = number of (2,1)-moves
+              long long y = a - 2 * x;               // remaining of pile 1 needs y (1,2)-moves
+              if (y < 0) break;
+              if (x + 2 * y == b) return "YES";      // does that empty pile 2 too?
+          }
+          return "NO";
+      }
+      ```
+
+      Enumerate every possible number of `(2,1)`-moves and check whether the required
+      complement of `(1,2)`-moves empties the second pile. Exactly correct, but it loops
+      up to `a/2 ≈ 5·10^8` times per test — with `t = 10^5` tests that is hopeless. It
+      only passes the tiny sample.
+
+      **② Optimization — O(1) time per test, O(1) space (closed-form conditions).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(long long a, long long b) {
+          if ((a + b) % 3 != 0) return "NO";
+          if (a > 2 * b || b > 2 * a) return "NO";
+          return "YES";
+      }
+      ```
+
+      Let `x` = number of `(2,1)`-moves and `y` = number of `(1,2)`-moves. Then
+      `a = 2x + y`, `b = x + 2y`. Adding gives `(a+b) = 3(x+y)`, so `(a+b)` must be a
+      multiple of 3; solving gives `x = (2a-b)/3`, `y = (2b-a)/3`, which are non-negative
+      exactly when `a ≤ 2b` and `b ≤ 2a`. Three `O(1)` checks — the intended solution.
+
+      **④ Alternative algorithm — O(1) time per test, O(1) space (total-moves view).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(long long a, long long b) {
+          long long T = a + b;
+          if (T % 3 != 0) return "NO";
+          T /= 3;                          // total moves (every move removes 3 coins)
+          long long x = a - T;             // number of (2,1)-moves
+          if (x < 0 || x > T) return "NO"; // the (1,2)-moves must supply the rest
+          return "YES";
+      }
+      ```
+
+      A different framing: every move strips exactly 3 coins, so there must be
+      `T = (a+b)/3` moves total (requires `(a+b) % 3 == 0`). If `x` of them are
+      `(2,1)`-moves, pile 1 loses `2x` and gains nothing from the other `T-x` moves,
+      so `a = T + x` and hence `x = a - T`. Feasible iff `0 ≤ x ≤ T`. Different
+      derivation, same three-way check — `O(1)`.
+
+      Reason through the code above with the next block — then trace it on the sample input below.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The function encodes the two derived feasibility conditions directly.
+      First it rejects any pair whose total coins is not a multiple of 3
+      (because `a + b = 3(x + y)` must hold). Then it rejects pairs where one
+      pile has more than twice the other (`a > 2b` or `b > 2a`), which is
+      exactly the non-negativity of `x` and `y`.
+
+      Because `(a+b) % 3 == 0` guarantees `(2a - b)` and `(2b - a)` are both
+      divisible by 3, the formulas `x = (2a-b)/3`, `y = (2b-a)/3` are
+      integers whenever we pass the first test; the second test just ensures
+      they are non-negative. Three simple checks in `O(1)` — no loop over the
+      coin counts, which would be impossible given `a, b <= 10^9`.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      Trace the CSES sample. The three pairs are checked independently:
+
+      | (a, b) | (a+b) % 3 | a <= 2b | b <= 2a | result |
+      |--------|-----------|---------|---------|--------|
+      | (2, 1) | 3 % 3 = 0  | 2 <= 2 ✓ | 1 <= 4 ✓ | YES |
+      | (2, 2) | 4 % 3 = 1  | —        | —        | NO  |
+      | (3, 3) | 6 % 3 = 0  | 3 <= 6 ✓ | 3 <= 6 ✓ | YES |
+
+      For a concrete "why", take a custom case `(5, 4)`: `9 % 3 = 0`, and
+      `2·5 = 10 >= 4`, `2·4 = 8 >= 5`, so `YES`. The move counts are
+      `x = (10 - 4)/3 = 2` and `y = (8 - 5)/3 = 1` — two `(2,1)` moves and
+      one `(1,2)` move empty both piles, confirming feasibility. The sample
+      pair `(2, 2)` fails the first test (sum 4 is not a multiple of 3), so
+      it prints `NO`. Because all checks are closed-form, large values like
+      `(10^9, 10^9)` are answered instantly.
+type: content
+---
+

@@ -1,0 +1,350 @@
+---
+id: download-speed
+title: Download Speed
+type: content
+difficulty: medium
+order: 115
+tags:
+  - graph
+  - max-flow
+  - dinic
+  - network-flow
+blocks:
+  - type: markdown
+    content: |
+      # Download Speed — maximum flow
+
+      Kotivalo wants to download data from a server over a network of computers.
+      Each connection `a -> b` can carry at most `c` units of data per second.
+      We want the greatest total rate that can be pushed from the server
+      (computer 1) to Kotivalo (computer `n`).
+
+      That is the **maximum flow** problem: source `s = 1`, sink `t = n`,
+      directed edges with non-negative capacities, maximize the net flow from
+      `s` to `t` respecting capacity on every edge and conservation at every
+      interior node.
+
+      ## Why it works — the residual network
+
+      The idea is to *augment* flow greedily, and the trick that makes it
+      correct is the **residual network**. For every edge `u -> v` carrying `f`
+      units, we keep a reverse residual edge `v -> u` with capacity equal to the
+      amount we can **unsend** (`c - f` forward, `f` backward). Any path from
+      source to sink in the residual graph carries more flow forward; a path
+      that uses a backward edge effectively *reroutes* already-sent flow out of
+      the way. When no residual path from `s` to `t` remains, the flow is
+      maximum.
+
+      **Dinic's algorithm** is the efficient workhorse: repeatedly
+      1. build a **level graph** (BFS distances from `s` over residual edges),
+      2. send the **blocking flow** — as much as possible along shortest
+         `s -> t` paths at once — with a DFS,
+      3. repeat until `t` is unreachable.
+
+      Dinic runs in `O(V²E)` in the worst case and is much faster in practice,
+      which handles `n <= 500` easily. Capacities up to `10^9` mean the answer
+      can reach ~`5 · 10^11`, so we use `long long`.
+
+      :::tip
+      **Interview tip:** Max flow is a high-value pattern because a whole family
+      of problems reduce to it — bipartite matching, edge-disjoint paths,
+      minimum cuts, project-selection, and scheduling. The specific trick worth
+      nailing: *"read the flow off the residual graph"* (a saturated forward edge
+      carries its capacity). In interviews, being able to recognize "this is a
+      max-flow problem" and sketch the reduction is usually what is being tested,
+      more than an implementation of Dinic itself.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Kotivalo wants to download some data from a server. What is the maximum
+      speed he can do this, using the connections in the network?
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the number of computers
+      and connections. The computers are numbered `1, 2, ..., n`. Computer 1 is
+      the server and computer n is Kotivalo's computer.
+
+      After this, there are `m` lines describing the connections. Each line has
+      three integers `a`, `b` and `c`: computer `a` can send data to computer
+      `b` at speed `c`.
+
+      **Constraints:** `1 <= n <= 500`, `1 <= m <= 1000`, `1 <= c <= 10^9`
+
+      ## Output
+
+      Print one integer: the maximum speed Kotivalo can download data.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 5
+      1 2 3
+      2 4 2
+      1 3 4
+      3 4 5
+      4 1 3
+      ```
+      **Output:**
+      ```
+      6
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — Ford–Fulkerson with arbitrary DFS, O(E · F)**
+
+      Send flow by repeatedly finding *any* residual `s -> t` path with a plain
+      DFS and pushing its bottleneck amount. Correct, but the number of
+      augmentations equals the total flow value `F`, and with `c` up to `10^9`
+      (and the answer up to ~`5e11`) that is far too many iterations.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      struct Edge { int to, rev; ll cap; };
+      vector<vector<Edge>> g;
+
+      void add_edge(int a, int b, ll c) {
+          g[a].push_back({b, (int)g[b].size(), c});
+          g[b].push_back({a, (int)g[a].size() - 1, 0});
+      }
+
+      bool seen[505];
+      ll dfs(int v, int t, ll f) {
+          if (v == t) return f;
+          seen[v] = true;
+          for (auto &e : g[v]) {
+              if (!seen[e.to] && e.cap > 0) {
+                  ll d = dfs(e.to, t, min(f, e.cap));
+                  if (d > 0) { e.cap -= d; g[e.to][e.rev].cap += d; return d; }
+              }
+          }
+          return 0;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          g.assign(n, {});
+          for (int i = 0; i < m; i++) { int a,b; ll c; cin >> a >> b >> c; a--; b--; add_edge(a,b,c); }
+          ll flow = 0, INF = (ll)4e18;
+          while (true) {
+              memset(seen, 0, sizeof seen);
+              ll f = dfs(0, n - 1, INF);
+              if (f == 0) break;
+              flow += f;
+          }
+          cout << flow << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(E · F)` where `F` is the flow value. With capacities `10^9` that is up
+      to hundreds of billions of augmentations — far too slow.*
+
+      **② Optimization — Edmonds–Karp (shortest augmenting path), O(V · E²)**
+
+      The fix is to augment along a **shortest** residual path each time (BFS
+      instead of DFS). Then the number of augmentations is bounded by `O(V · E)`
+      = `500 · 1000` = half a million, giving a polynomial worst case.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      struct Edge { int to, rev; ll cap; };
+      vector<vector<Edge>> g;
+
+      void add_edge(int a, int b, ll c) {
+          g[a].push_back({b, (int)g[b].size(), c});
+          g[b].push_back({a, (int)g[a].size() - 1, 0});
+      }
+
+      ll bfs_augment(int s, int t) {
+          int n = g.size();
+          vector<int> par(n, -1); vector<Edge*> pe(n, 0);
+          queue<int> q; q.push(s); par[s] = s;
+          while (!q.empty()) {
+              int v = q.front(); q.pop();
+              for (auto &e : g[v]) {
+                  if (par[e.to] == -1 && e.cap > 0) {
+                      par[e.to] = v; pe[e.to] = &e;
+                      if (e.to == t) break;
+                      q.push(e.to);
+                  }
+              }
+          }
+          if (par[t] == -1) return 0;
+          ll f = LLONG_MAX;
+          for (int v = t; v != s; v = par[v]) f = min(f, pe[v]->cap);
+          for (int v = t; v != s; v = par[v]) { pe[v]->cap -= f; g[pe[v]->to][pe[v]->rev].cap += f; }
+          return f;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          g.assign(n, {});
+          for (int i = 0; i < m; i++) { int a,b; ll c; cin >> a >> b >> c; a--; b--; add_edge(a,b,c); }
+          ll flow = 0;
+          while (ll f = bfs_augment(0, n - 1)) flow += f;
+          cout << flow << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(V · E²)` time, `O(V + E)` space. Polynomial and safe, though Dinic is
+      the preferred choice at this problem's limits.*
+
+      **③ Further optimization — Dinic's algorithm, O(V²E)**
+
+      Dinic separates the work into "one BFS to build the level graph" then
+      "send a blocking flow along shortest paths with an iterated DFS". Fewer
+      phases, and the DFS sends a whole shortest-path family per phase. This is
+      the implementation used below and the tier we compile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      struct Edge { int to, rev; ll cap; };
+      vector<vector<Edge>> g;
+      vector<int> level, it;
+
+      void add_edge(int a, int b, ll c, ll rc = 0) {
+          g[a].push_back({b, (int)g[b].size(), c});
+          g[b].push_back({a, (int)g[a].size() - 1, rc});
+      }
+
+      bool bfs(int s, int t) {
+          level.assign(g.size(), -1);
+          queue<int> q; level[s] = 0; q.push(s);
+          while (!q.empty()) {
+              int v = q.front(); q.pop();
+              for (auto &e : g[v])
+                  if (e.cap > 0 && level[e.to] < 0) { level[e.to] = level[v] + 1; q.push(e.to); }
+          }
+          return level[t] >= 0;
+      }
+
+      ll dfs(int v, int t, ll f) {
+          if (v == t) return f;
+          for (int &i = it[v]; i < (int)g[v].size(); i++) {
+              Edge &e = g[v][i];
+              if (e.cap > 0 && level[e.to] == level[v] + 1) {
+                  ll d = dfs(e.to, t, min(f, e.cap));
+                  if (d > 0) { e.cap -= d; g[e.to][e.rev].cap += d; return d; }
+              }
+          }
+          return 0;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          g.assign(n, {});
+          for (int i = 0; i < m; i++) { int a, b; ll c; cin >> a >> b >> c; a--; b--; add_edge(a, b, c); }
+          ll flow = 0, INF = (ll)4e18, s = 0, t = n - 1;
+          while (bfs(s, t)) {
+              it.assign(n, 0);
+              while (ll f = dfs(s, t, INF)) flow += f;
+          }
+          cout << flow << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(V²E)` worst case, `O(V + E)` space — comfortably fast for `n = 500`,
+      `m = 1000` (this is the optimal tier).*
+
+      **④ Alternative — no better family**
+
+      Push-relabel (`O(V³)` / `O(V²√E)`) is a legitimate alternative for very
+      dense graphs but is more code and not needed here. Dinic's algorithm is
+      the intended and standard solution for this bound, so we stop at ③.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Map the Dinic implementation onto THIS problem:
+
+      - **Model.** Each connection line `a b c` becomes a directed edge `a -> b`
+        with capacity `c` via `add_edge(a, b, c)`. `add_edge` also installs the
+        reverse residual edge with capacity `0` so augmentation can "unsend"
+        flow (`rc = 0` for a plain directed edge).
+
+      - **`bfs` — the level graph.** BFS from `s` over edges with positive
+        residual capacity assigns `level[v]`. If `t` is unreachable, no more
+        flow exists and we stop — this is the termination guarantee of max flow.
+
+      - **`dfs` — one blocking shot**, with the current-arc pointer `it[v]`.
+        It only travels along edges that increase the level exactly by `1`
+        (shortest paths). The `&i = it[v]` line is a pointer that prevents
+        re-scanning failed edges within a single phase — that is what keeps the
+        blocking-flow phase linear total.
+
+      - **Augmenting bookkeeping.** `e.cap -= d` decreases forward capacity;
+        `g[e.to][e.rev].cap += d` increases the residual reverse edge, so the
+        network knows it can undo that much flow on the way back.
+      - **`long long`.** With `c <= 10^9` and up to ~500 edges crossing a cut,
+        the answer can be ~`5e11`, which overflows `int`. `INF = 4e18` is used
+        as the "unlimited" initial push.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 4`, edges `1->2:3, 2->4:2, 1->3:4, 3->4:5, 4->1:3`
+      (source = 1, sink = 4).
+
+      **Phase 1 — level graph.** BFS from `1`: neighbours `2`(d=1), `3`(d=1);
+      from those, `4`(d=2). Blocking flow along shortest paths `1->2->4` and
+      `1->3->4`:
+
+      | augmenting path | bottleneck | new total |
+      |-----------------|------------|-----------|
+      | `1 -> 2 -> 4` | min(3, 2) = 2 | 2 |
+      | `1 -> 3 -> 4` | min(4, 5) = 4 | 6 |
+
+      Residual after: `1->2` now 1, `2->4` now 0, `1->3` now 0, `3->4` now 1;
+      reverse residuals `2->1` 2, `4->2` 2, `3->1` 4, `4->3` 4.
+
+      **Phase 2.** BFS from `1`: neighbours `2`(d=1) only (`1->3` is saturated).
+      From `2`: `2->4` is 0, so `4` unreachable → `bfs` returns false and we stop.
+
+      Total flow = `6`.
+
+      Expected (sample) — `6`. Actual — `6`. Match.
+
+      (Sanity: the cut edges `1->2` and `1->3` carry `2 + 4 = 6`, and no cut can
+      carry less, so 6 is maximal by the max-flow / min-cut theorem.)
+  - type: flowchart
+    title: "Dinic's max flow"
+    nodes: ["start: all edges at 0 flow", "BFS level graph from s", "t reachable?", "reset current-arc it[]", "DFS send blocking flow s->t", "total += f", "print total flow"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 6, label: "no — done"}
+      - {from: 2, to: 3, label: "yes"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 4, label: "more"}
+      - {from: 5, to: 1, label: "blocking flow done"}
+  - type: mcq
+    prompt: "Why is the reverse residual edge (bumping up the reverse capacity when we push flow) essential to max flow?"
+    options:
+      - "It doubles the capacity of the network, so more flow can be pushed."
+      - "It lets a later augmenting path undo earlier flow along a forward edge that is now blocking, effectively rerouting flow so no greedy choice gets stuck in a suboptimal layout."
+      - "It is only needed to keep the level graph's distances small."
+      - "It stores the total amount ever sent so the answer can be read off."
+    answer: 1
+    explanation: "Without residual (backward) edges, an earlier greedy decision could saturate an edge that a better routing needs to carry less flow. The residual edge gives the algorithm the ability to 'unsend' and reroute, so every feasible improvement remains expressible. The algorithm is only guaranteed maximum when no s–t path exists in the residual graph (max-flow min-cut)."
+---

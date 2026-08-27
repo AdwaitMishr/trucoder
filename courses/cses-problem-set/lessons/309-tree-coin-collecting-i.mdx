@@ -1,0 +1,253 @@
+---
+id: tree-coin-collecting-i
+title: "Tree Coin Collecting I"
+type: content
+difficulty: medium
+order: 309
+tags:
+  - advanced-graph
+  - tree-dp
+  - multi-source-bfs
+  - lca
+blocks:
+  - type: markdown
+    content: |
+      # Tree Coin Collecting I — shortest path visiting any coin
+
+      You have a tree; some nodes hold a coin. For a query `(a, b)`, you walk along tree
+      edges from `a` and stop at `b`, and you must visit **at least one** coin on the way
+      (you may start or finish on a coin). What is the shortest such walk?
+
+      ## The height of the problem: nearest coin to a path
+
+      Let `dst(x)` be the distance from node `x` to the **nearest coin** in the whole tree
+      (multi-source BFS from every coin computes all of these in one pass). For a query
+      `(a,b)` the best walk is: walk `a → b` along the tree path, but if no coin lies on
+      that path, detour from the closest point of the path down to the nearest coin and
+      back. So
+
+      ```
+      answer(a, b) = dist(a, b) + 2 * ( min over nodes x on path(a,b) of dst(x) )
+      ```
+
+      `dist(a, b)` is the ordinary tree distance (via LCA). The second term is `2 ×`
+      the distance from the path `a..b` to the nearest coin: the nearest coin's distance to
+      the path equals `min_{x on path} dst(x)`, because `dst(x)` is already the distance
+      from `x` to the nearest coin.
+
+      Querying `min dst(x)` over an arbitrary path is a classic **range-min over a tree
+      path**: preprocess with binary lifting (a sparse "minimum" table over ancestor jumps)
+      to answer each path-min in `O(log n)`.
+
+      > Tip: `dist(a,c) + dist(b,c) = dist(a,b) + 2 · dist(c, path(a,b))`, so minimizing
+      > over coins `c` of `dist(a,c)+dist(b,c)` is exactly the detour formula above.
+
+      :::tip
+      **Interview tip:** two separate ingredients come in constantly: **multi-source BFS**
+      to answer "nearest marked node to every node" in `O(n)`, and a **binary-lifting
+      sparse min** table for range-min over a tree path. Together they unlock a whole
+      family of "detour / nearest-colored / shortest-visiting" tree problems.
+      :::
+  - type: markdown
+    content: |
+      # Question — Tree Coin Collecting I
+
+      You are given a tree with `n` nodes. Some nodes contain a coin.
+
+      Your task is to answer `q` queries of the form: what is the shortest length of a path
+      from node `a` to node `b` that **visits a node with a coin**?
+
+      **Input**
+
+      The first line contains two integers `n` and `q`: the number of nodes and queries.
+      The nodes are numbered `1, 2, ..., n`.
+
+      The second line contains `n` integers `c1, c2, ..., cn`. If `ci = 1`, node `i` has a
+      coin; if `ci = 0`, node `i` doesn't have a coin. You can assume at least one node has
+      a coin.
+
+      Then there are `n-1` lines describing the edges. Each line contains two integers
+      `a` and `b`: there is an edge between nodes `a` and `b`.
+
+      Finally, there are `q` lines describing the queries. Each line contains two integers
+      `a` and `b`: the start and end nodes.
+
+      **Output**
+
+      Print `q` integers: the answers to the queries.
+
+      **Constraints**
+
+      - `1 <= n, q <= 2 * 10^5`
+      - `1 <= a, b <= n`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 4
+      1 0 0 1 0
+      2 4
+      2 3
+      1 3
+      3 5
+      1 5
+      3 2
+      4 4
+      5 5
+      ```
+
+      Output:
+
+      ```
+      2
+      3
+      0
+      4
+      ```
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      **① Brute force — scan every coin per query, O(q · (#coins) · log n)**
+
+      For each query compute `min over coins c of (dist(a,c) + dist(b,c))` with LCA
+      distances. With up to `2*10^5` coins and queries this is quadratic.
+
+      ```cpp
+      // O(q * C * log n) — illustration of the naive idea only.
+      // for each query (a,b): ans = min over coins c of dist(a,c)+dist(b,c)
+      ```
+
+      **② Optimization — multi-source BFS + binary-lift path-min (optimal), O((n + q) log n)**
+
+      Multi-source BFS gives `dst[]` = distance to nearest coin. Binary-lifting tables
+      `up[][·]` give LCA (for `dist(a,b)`), and an extra sparse-min table `mn[j][u]` gives
+      `min dst` over any ancestor jump, so a whole path-min is one `O(log n)` query.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+        ios::sync_with_stdio(false); cin.tie(nullptr);
+        int n,m; cin>>n>>m;
+        vector<int> coin(n+1), seed;
+        for(int i=1;i<=n;i++){ cin>>coin[i]; if(coin[i]) seed.push_back(i); }
+        vector<vector<int>> g(n+1);
+        for(int i=0;i<n-1;i++){ int a,b;cin>>a>>b; g[a].push_back(b); g[b].push_back(a); }
+
+        // multi-source BFS: dist[x] = distance to nearest coin
+        const int INF=1e9;
+        vector<int> dist(n+1, INF);
+        queue<int> q;
+        for(int s: seed){ dist[s]=0; q.push(s); }
+        while(!q.empty()){ int u=q.front(); q.pop();
+          for(int v:g[u]) if(dist[v]==INF){ dist[v]=dist[u]+1; q.push(v);} }
+
+        const int LOG=20;
+        vector<array<int,LOG>> up(n+1), mn(n+1);
+        vector<int> dep(n+1,0), par(n+1,0);
+        for(int u=1;u<=n;u++){ up[u][0]=0; mn[u][0]=dist[u]; }
+        up[0].fill(0); mn[0].fill(INF);
+        vector<int> stk, order; vector<char> vis(n+1,0); vis[1]=1; stk.push_back(1);
+        while(!stk.empty()){ int u=stk.back(); stk.pop_back(); order.push_back(u);
+          for(int v:g[u]) if(!vis[v]){ vis[v]=1; par[v]=u; dep[v]=dep[u]+1; stk.push_back(v);} }
+        for(int u=1;u<=n;u++) up[u][0]=par[u];
+        for(int j=1;j<LOG;j++) for(int u=1;u<=n;u++){
+          up[u][j]=up[up[u][j-1]][j-1];
+          mn[u][j]=min(mn[u][j-1], mn[up[u][j-1]][j-1]);
+        }
+        auto walk=[&](int u,int k){ for(int j=0;j<LOG;j++) if(k>>j&1) u=up[u][j]; return u; };
+        auto lca=[&](int u,int v){
+          if(dep[u]>dep[v]) swap(u,v); v=walk(v, dep[v]-dep[u]);
+          if(u==v) return u;
+          for(int j=LOG-1;j>=0;j--) if(up[u][j]!=up[v][j]){ u=up[u][j]; v=up[v][j]; }
+          return par[u];
+        };
+        auto pathMin=[&](int u,int len){ // min dst over `len` nodes from u upward (excl. ancestor at `len` steps)
+          int res=dist[u];
+          for(int j=0;j<LOG;j++) if(len>>j&1){ res=min(res,mn[u][j]); u=up[u][j]; }
+          return res;
+        };
+        while(m--){
+          int a,b; cin>>a>>b; int L=lca(a,b);
+          int dpath=dep[a]+dep[b]-2*dep[L];
+          int near=min({dist[L], pathMin(a,dep[a]-dep[L]), pathMin(b,dep[b]-dep[L])});
+          cout << dpath + 2*near << "\n";
+        }
+        return 0;
+      }
+      ```
+
+      `pathMin(u, len)` returns `min dst` over the `len` nodes `u, up1(u), …, up(len-1)(u)`
+      (the part of the path strictly below the LCA); `dist[L]` covers the LCA itself, so
+      the three terms tile the whole path exactly.
+
+      **③ Further optimization** — not needed: `O((n + q) log n)` is optimal.
+
+      **④ Alternative — reroot DP for dst[]**
+
+      Instead of multi-source BFS, compute `dst[]` with a two-pass tree DP (bottom-up then
+      top-down), which is the same `O(n)` but often clearer to explain in a "DP on tree"
+      framing. The rest (LCA + sparse path-min) is unchanged.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Follow the optimal **②** solution:
+
+      - Multi-source BFS from all coins fills `dist[]` in `O(n)`. Every node gets the
+        distance to the closest coin.
+      - An iterative DFS roots the tree at `1`, recording parent `par[u]`, depth `dep[u]`,
+        and a traversal order.
+      - Lifting tables: `up[u][j]` is the `2^j`-th ancestor; `mn[u][j]` is the minimum of
+        `dist` over the nodes on that `2^j`-long upward jump.
+      - `lca(a,b)` aligns depths by `walk`, then lifts both nodes.
+      - `pathMin(u, len)` decomposes `len` into binary blocks and takes the `mn` of each —
+        exactly the range-min over the nodes from `u` up `len` steps.
+      - `near` = the smallest `dist` on the whole `a..b` path; `dpath` is its length.
+        Output `dpath + 2 * near`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5`, coins at nodes `1` and `4`. Edges: `2-4, 2-3, 1-3, 3-5` (tree:
+      `3` links `1, 2, 5`; `2` links `4`).
+
+      `dst[] = {node1:0, 4:0, 3:1, 2:1, 5:2}` (node 3 is 1 from coin 1, node 2 is 1 from
+      coin 4, node 5 is 2 from coin 1).
+
+      | query | path | dpath | nearest dst on path | answer = dpath + 2·near |
+      |---|---|---|---|---|
+      | 1→5 | 1-3-5 | 2 | node 1 is on path → 0 | 2 |
+      | 3→2 | 3-2 | 1 | nodes 3,2 have dst 1 | 1 + 2 = 3 |
+      | 4→4 | 4 | 0 | 4 is a coin → 0 | 0 |
+      | 5→5 | 5 | 0 | min dst = dst[5]=2 | 0 + 4 = 4 |
+
+      Output `2 3 0 4`, matching the sample. For `3→2`, the path `3-2` holds no coin; the
+      nearest coin is `1` (adjacent to `3`) or `4` (adjacent to `2`), each at distance 1,
+      so we detour one edge down and back: `1 + 2 = 3`. For `5→5`, we must go to coin 1
+      (`5-3-1`, length 2) and back.
+  - type: flowchart
+    title: "Nearest coin to a path"
+    nodes: ["multi-source BFS from all coins", "dist[u] = nearest coin distance",
+            "binary lifting: up[][] + sparse min mn[][]", "for query (a,b): L = lca(a,b)",
+            "near = min dst over path (three pathMin pieces)",
+            "print dist(a,b) + 2*near"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: "O(log n)"}
+  - type: mcq
+    prompt: "Why is the answer for (a, b) exactly dist(a,b) + 2·(min dst over the path), where dst is the distance to the nearest coin?"
+    options:
+      - "Because the pure tree path a..b already goes from a to b, and if no coin is on it we must leave the path at its closest point, reach a coin and return; reaching a coin costs dst(x) and returning costs dst(x) again, and using min over path nodes x gives the closest such point"
+      - "Because every walk from a to b is always exactly twice the tree distance"
+      - "Because coins are only ever leaves, so the detour length is always 2"
+      - "Because we are forced to visit every coin on the tree path, not just one"
+    answer: 0
+    explanation: "dist(a,b) is the straight tree walk. To touch a coin we detour from some node x of the path down to the nearest coin (cost dst(x)) and back to x (another dst(x)); total dist(a,b)+2·dst(x). Taking x that minimizes dst(x) finds the coin closest to the path, which is the cheapest coin to visit. This is the same as min over coins c of dist(a,c)+dist(b,c) = dist(a,b) + 2·dist(c, path(a,b))."
+---

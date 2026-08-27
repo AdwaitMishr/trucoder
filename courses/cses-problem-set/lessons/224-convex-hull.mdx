@@ -1,0 +1,336 @@
+---
+id: convex-hull
+title: Convex Hull
+type: content
+difficulty: hard
+order: 224
+tags:
+  - geometry
+  - convex-hull
+  - monotone-chain
+  - orientation
+blocks:
+  - type: markdown
+    content: |
+      # Convex Hull — Andrew's monotone chain
+
+      The **convex hull** of a set of points is the smallest convex polygon that
+      contains every point. You can picture it as a rubber band stretched around
+      the points: the band snaps onto the "outermost" points.
+
+      ## When do you reach for it?
+
+      - Collision/POV checks, collision avoidance and "outermost envelope" problems.
+      - Many geometry problems reduce to "which points are on the hull" or "is this
+        point inside the hull".
+      - It is often a preprocessing step: rotate-calipers diameter, farthest point
+        queries, etc.
+
+      ## Why the monotone chain works
+
+      Sort all points by `(x, y)`. On the **left-to-right scan** you build the
+      **lower hull** (the bottom chain): you push points and, whenever the newest
+      point makes a *clockwise* turn with the last two, the middle point can never
+      be on the lower boundary, so you pop it. The **right-to-left scan** builds the
+      **upper hull** symmetrically. Concatenate the two chains and drop the duplicate
+      start point.
+
+      The orientation test is the signed cross product:
+
+      ```
+      cross(A, B, P) = (B.x - A.x) * (P.y - A.y) - (B.y - A.y) * (P.x - A.x)
+      ```
+
+      - `cross > 0` → `P` is left of the directed line `A → B` (counter-clockwise turn).
+      - `cross < 0` → `P` is right of `A → B` (clockwise turn).
+      - `cross == 0` → `A`, `B`, `P` are collinear.
+
+      **CSES-specific catch.** CSES wants *all* points that lie on the hull boundary,
+      including points that are merely **collinear on an edge** — the sample keeps a
+      point sitting exactly on the top edge. The classic "corners only" version pops
+      on `cross <= 0`, which would drop those boundary points. To match CSES we pop
+      only on a strict clock‑wise turn, i.e. `while (...) cross < 0`, so collinear
+      boundary points are kept.
+
+      ## Complexity
+
+      - Sort: `O(n log n)`. Both scans: `O(n)`. **Total `O(n log n)` time, `O(n)` space.**
+      - A brute-force hull is `O(n³)`; a naive "check every edge" approach is `O(n³)`.
+
+      :::tip
+      **Interview tip:** "Rubber band around the points" shows you understand the
+      geometry. Mentioning that the orientation test uses only integer cross products
+      (no floating point, so no precision bugs near zero) is a strong signal, and
+      catching the "does the problem want collinear boundary points too?" detail is
+      exactly the kind of nuance interviewers probe.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given a set of `n` points in the two-dimensional plane, determine the convex
+      hull of the points.
+
+      ## Input
+
+      The first input line has an integer `n`: the number of points.
+      After this, there are `n` lines that describe the points. Each line has two
+      integers `x` and `y`: the coordinates of a point. You may assume that each
+      point is distinct, and the area of the hull is positive.
+
+      ## Output
+
+      First print an integer `k`: the number of points in the convex hull. After
+      this, print `k` lines that describe the points. You can print the points in
+      **any order**. Print all points that lie on the convex hull.
+
+      ## Constraints
+
+      - `3 <= n <= 2 * 10^5`
+      - `-10^9 <= x, y <= 10^9`
+
+      ## Sample
+
+      **Input:**
+      ```
+      6
+      2 1
+      2 5
+      3 3
+      4 3
+      4 4
+      6 3
+      ```
+      **Output:**
+      ```
+      4
+      2 1
+      2 5
+      4 4
+      6 3
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — every candidate edge, O(n³)**
+
+      An edge `(i, j)` is a hull edge if every other point lies on the same
+      (closed) side of the directed line `i → j`. Trying all `O(n²)` pairs and
+      checking all `n` points against each gives `O(n³)` — for `n = 2 * 10^5`
+      that is `8 * 10^15`, hopeless.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct P { long long x, y; };
+      long long cross(P a, P b, P c){ // (b-a) x (c-a)
+          return (b.x-a.x)*(c.y-a.y) - (b.y-a.y)*(c.x-a.x);
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; if(!(cin>>n)) return 0;
+          vector<P> p(n);
+          for(auto&q: p) cin >> q.x >> q.y;
+          set<pair<long long,long long>> hull;
+          for(int i=0;i<n;i++) for(int j=0;j<n;j++){
+              if(i==j) continue;
+              long long side=0; bool ok=true;
+              for(int k=0;k<n;k++){
+                  long long c = cross(p[i], p[j], p[k]);
+                  if(c==0) continue;
+                  long long s = (c>0) ? 1 : -1;
+                  if(side==0) side = s;
+                  else if(s != side){ ok=false; break; }
+              }
+              if(ok){ hull.insert({p[i].x,p[i].y}); hull.insert({p[j].x,p[j].y}); }
+          }
+          cout << hull.size() << "\n";
+          for(auto &c: hull) cout << c.first << " " << c.second << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n³)` time, `O(n)` space. Correct but far too slow for `n = 2 * 10^5`.*
+
+      **② Andrew's monotone chain — O(n log n) (optimal)**
+
+      Sort by `(x, y)`, build the lower hull left-to-right and the upper hull
+      right-to-left, popping on a strict clock‑wise turn (`cross < 0`) so that
+      collinear hull-boundary points are kept. Compiled and run against the sample
+      below (prints `4`, and the samples `(2,1),(6,3),(4,4),(2,5)`).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct P { long long x, y; };
+      long long cross(P a, P b, P c){ return (b.x-a.x)*(c.y-a.y) - (b.y-a.y)*(c.x-a.x); }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<P> p(n);
+          for(auto&q: p) cin >> q.x >> q.y;
+          sort(p.begin(), p.end(), [](const P&a, const P&b){
+              return a.x<b.x || (a.x==b.x && a.y<b.y);
+          });
+          p.erase(unique(p.begin(), p.end(), [](const P&a, const P&b){
+              return a.x==b.x && a.y==b.y;
+          }), p.end());
+          vector<P> H;
+          for(auto pt = p.begin(); pt != p.end(); ++pt){            // lower hull
+              while(H.size()>=2 && cross(H[H.size()-2], H.back(), *pt) < 0)
+                  H.pop_back();
+              H.push_back(*pt);
+          }
+          size_t lower = H.size();
+          for(auto it = p.rbegin()+1; it != p.rend(); ++it){        // upper hull
+              while(H.size()>lower && cross(H[H.size()-2], H.back(), *it) < 0)
+                  H.pop_back();
+              H.push_back(*it);
+          }
+          H.pop_back();                                             // drop duplicate first
+          cout << H.size() << "\n";
+          for(auto q: H) cout << q.x << " " << q.y << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n log n)` time, `O(n)` space. The recommended solution.*
+
+      **③ Alternative — Graham scan (polar-angle sort), O(n log n)**
+
+      A different, equally correct classic: pick the lowest-leftmost point as the
+      pivot, sort the rest by polar angle around it, then walk the stack popping
+      every right turn. To recover hull-*boundary* points (the CSES output), run the
+      scan with `cross <= 0` to get the corners, then add every point that lies on a
+      corner-to-corner edge.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct P { long long x, y; };
+      long long cross(P a, P b, P c){ return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x); }
+      long long dist2(P a, P b){ long long dx=a.x-b.x, dy=a.y-b.y; return dx*dx+dy*dy; }
+      bool between(P a, P b, P p){
+          return cross(a,b,p)==0 &&
+                 min(a.x,b.x)<=p.x && p.x<=max(a.x,b.x) &&
+                 min(a.y,b.y)<=p.y && p.y<=max(a.y,b.y);
+      }
+      P piv;
+      bool cmp(const P&a, const P&b){
+          long long c = cross(piv, a, b);
+          if(c != 0) return c > 0;              // CCW order around pivot
+          return dist2(piv, a) < dist2(piv, b); // nearer first
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<P> p(n);
+          for(auto&q: p) cin >> q.x >> q.y;
+          int k=0;
+          for(int i=1;i<n;i++)
+              if(p[i].y<p[k].y || (p[i].y==p[k].y && p[i].x<p[k].x)) k=i;
+          swap(p[0], p[k]); piv = p[0];
+          sort(p.begin()+1, p.end(), cmp);
+          vector<P> H{p[0]};
+          for(int i=1;i<n;i++){                      // corners only
+              while(H.size()>=2 && cross(H[H.size()-2], H.back(), p[i]) <= 0)
+                  H.pop_back();
+              H.push_back(p[i]);
+          }
+          set<pair<long long,long long>> S;
+          for(auto q:H) S.insert({q.x, q.y});
+          for(int i=0;i<(int)H.size();i++){          // add collinear boundary pts
+              P a = H[i], b = H[(i+1)%H.size()];
+              for(auto q:p) if(between(a,b,q)) S.insert({q.x, q.y});
+          }
+          cout << S.size() << "\n";
+          for(auto q:S) cout << q.first << " " << q.second << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n log n)` time (sort dominated), `O(n)` space. A different method reaching
+      the same bound — useful to know in case an interviewer asks for a construction
+      from angle sort.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Sort once.** `O(n log n)` sort by `(x, y)` turns the 2-D problem into two
+        axis scans, which is the heart of Andrew's method; everything after the sort
+        is `O(n)`.
+      - **Lower hull.** For each point in increasing `x`, pop the last point whenever
+        `cross(lastTwo, new)` is negative. A negative cross means the middle point
+        sits below a straight lower chain and cannot be on the boundary, so it is
+        removed. Using `cross < 0` (not `<= 0`) keeps points that are *collinear* on
+        an edge — which CSES wants.
+      - **Upper hull.** Repeat the scan in reverse (right-to-left) on top samples;
+        `H.size() > lower` guards against popping below the already-built lower chain.
+      - **Dedupe.** The two scans each add the extreme left point, so pop the last
+        element before printing.
+      - **`long long` everywhere.** Coordinates are up to `±10^9`; the cross product
+        involves products of differences up to `2*10^9`, i.e. `~4*10^18` which fits in
+        `long long` but not `int`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 6`, points `(2,1),(2,5),(3,3),(4,3),(4,4),(6,3)`.
+
+      Sorted by `(x,y)`: `(2,1),(2,5),(3,3),(4,3),(4,4),(6,3)`.
+
+      **Lower hull (left → right):**
+
+      - start `(2,1)`; push `(2,5)`.
+      - `(3,3)`: `cross((2,1),(2,5),(3,3)) = -4 < 0` → pop `(2,5)`, push `(3,3)`.
+      - `(4,3)`: `cross((2,1),(3,3),(4,3)) = -2 < 0` → pop `(3,3)`, push `(4,3)`.
+      - `(4,4)`: `cross((2,1),(4,3),(4,4)) = +2` → keep, push `(4,4)`.
+      - `(6,3)`: `cross((4,3),(4,4),(6,3)) = -2 < 0` pop `(4,4)`;
+        `cross((2,1),(4,3),(6,3)) = -4 < 0` pop `(4,3)`; push `(6,3)`.
+
+      Lower hull = `(2,1),(6,3)`.
+
+      **Upper hull (right → left):**
+
+      - edge `(4,4)`: `H.size() == 2` not `> lower`, push `(4,4)`.
+      - `(4,3)`: `cross((6,3),(4,4),(4,3)) = +2` → keep, push `(4,3)`.
+      - `(3,3)`: `cross((4,4),(4,3),(3,3)) = -1 < 0` pop `(4,3)`;
+        `cross((6,3),(4,4),(3,3)) = +3` → keep, push `(3,3)`.
+      - `(2,5)`: `cross((4,4),(3,3),(2,5)) = -3 < 0` pop `(3,3)`;
+        `cross((6,3),(4,4),(2,5)) = 0` (collinear, not `< 0`) → keep, push `(2,5)`.
+      - `(2,1)`: `cross((4,4),(2,5),(2,1)) = +8` → keep, push `(2,1)`.
+
+      Drop duplicate first point → `H = (2,1),(6,3),(4,4),(2,5)`.
+
+      Printed:
+      ```
+      4
+      2 1
+      6 3
+      4 4
+      2 5
+      ```
+      Count `= 4`, and the point set `{(2,1),(2,5),(4,4),(6,3)}` matches the sample's
+      hull (order is free). Expected `4 ... 2 1 ... 2 5 ... 4 4 ... 6 3` — same set.
+      (Note `(4,4)` sits exactly on the edge `(2,5)→(6,3)`; the `cross < 0` rule keeps
+      it, exactly as required.)
+  - type: flowchart
+    title: "Andrew monotone chain"
+    nodes: ["sort by (x,y); H = []", "scan left→right, pop while cross < 0, push", "lower hull built", "scan right→left (guard size > lower), pop while cross < 0, push", "upper hull built; pop duplicate first", "print H.size() and each point"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "In the CSES Convex Hull problem, why does the monotone-chain loop pop on `cross < 0` instead of `cross <= 0`?"
+    options:
+      - "Because a strict clockwise turn (`cross < 0`) removes only interior points, while `cross <= 0` would also remove points lying collinear on a hull edge — and CSES prints every boundary point, including collinear ones."
+      - "Because the cross product can overflow `long long` exactly at zero."
+      - "Because negative cross products are faster to compute than zero ones."
+      - "Because points must be output in clockwise order, and `cross <= 0` reverses them."
+    answer: 0
+    explanation: "The sample includes a point (4,4) sitting exactly on the top hull edge. Merging collinear turns (`cross == 0`) into the edge would drop it, producing a hull of only extreme corners. Popping only on a strict right turn keeps every point on the boundary, which is what the problem's output demands."
+---

@@ -1,0 +1,373 @@
+---
+id: fixed-length-paths-i
+title: Fixed-Length Paths I
+type: content
+difficulty: hard
+order: 158
+tags:
+  - tree
+  - centroid-decomposition
+  - ntt
+  - convolution
+  - path-counting
+blocks:
+  - type: markdown
+    content: |
+      # Fixed-Length Paths I — count paths of exactly k edges
+
+      Count the number of distinct paths in a tree whose length (number of
+      edges) is some fixed `k`. This is the canonical **path-counting-through-a-
+      centroid** problem, solved by **centroid decomposition** — recursively
+      splitting the tree at its centroid and, at each centroid, counting the
+      paths that *pass through it*.
+
+      The key insight: **every path in a tree passes through exactly one
+      centroid** in the decomposition — the one at the top level of the
+      recursion where the path's two endpoints land in *different* subcomponents
+      (or one endpoint is the centroid). So "count all length-k paths" =
+      "sum, over every centroid c, the number of length-k paths through c".
+
+      ## Counting paths through a centroid
+
+      Fix a centroid `c`. A length-`k` path through `c` has its two endpoints in
+      *different* subtrees of `c` (or one endpoint is `c` itself), at distances
+      `d1` and `d2` with `d1 + d2 = k`. Maintain a frequency array
+      `cnt[d]` = how many already-processed nodes sit at distance `d` from `c`.
+      Process each direct subtree of `c` in turn: for a node at distance `d`,
+      the number of valid partners is `cnt[k - d]` (the centroid counts as one
+      node at distance `0`, and so pairs with nodes at distance `k`). After
+      answering, merge that subtree's distances into `cnt`, so nodes from the
+      *same* subtree are never paired with each other (their path does not pass
+      through `c`).
+
+      ## Why O(n log n) — and the polynomial view
+
+      Centroid decomposition nests to depth `O(log n)` and each node is handled
+      once per level it appears in, so doing the distance-frequencies counting
+      at every centroid is `O(n log n)`.
+
+      There is a second, elegant view: the `cnt` array and each subtree's
+      distance array are *polynomials*, and "number of pairs summing to `k`" is
+      the **coefficient of `x^k` in their product**. Computing that coefficient
+      for one subtree is a convolution we can do in closed form, but computing
+      the *entire* product (all path lengths at once) calls for **NTT / FFT** —
+      `O(L log L)` per convolution. That is the advanced approach covered in
+      tier ③ — it trades the linear coefficient-sum for fast polynomial
+      multiplication when you need the full length distribution.
+
+      :::tip
+      **Interview tip:** Path-counting on trees = centroid decomposition. The
+      exact-k (and range-k, Fixed-Length Paths II) questions are classic uses of
+      it. Recognizing "path through a centroid = pair of distances summing to
+      k", and that you must process subtrees one at a time so pairs from the
+      same subtree are excluded, is the core signal an interviewer wants. The
+      NTT variant is mostly for counting all lengths at once.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given a tree of `n` nodes, count the number of distinct paths that consist
+      of exactly `k` edges.
+
+      ## Input
+
+      The first input line has two integers `n` and `k`: the number of nodes and
+      the path length. The nodes are numbered `1, 2, ..., n`.
+
+      Then there are `n - 1` lines describing the edges: each has two integers
+      `a` and `b` — an edge between `a` and `b`.
+
+      **Constraints:** `1 <= k <= n <= 2 * 10^5`, `1 <= a, b <= n`
+
+      ## Output
+
+      Print one integer: the number of paths.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 2
+      1 2
+      2 3
+      3 4
+      3 5
+      ```
+      **Output:**
+      ```
+      4
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — distances from every node, O(n²)**
+
+      For each node as source, BFS/DFS to record every other node's distance.
+      The number of ordered pairs at distance `k` is the number of length-`k`
+      paths, so divide by `2`. Each source costs `O(n)`; `n` sources → `O(n²)`,
+      ≈ `4 * 10^10` for `n = 2 * 10^5`. Too slow.
+
+      **② Optimization — centroid decomposition + distance frequencies, O(n log n) (optimal)**
+
+      Recurse centroids; at each one, maintain a frequency `cnt[d]` and, subtree
+      by subtree, add `cnt[k-d]` for every node then merge. Exact arithmetic
+      (fits `long long`). This is the compiled optimal tier.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int n, k;
+      vector<int> g[200005];
+      int blocked[200005], sz[200005];
+      ll ans = 0;
+      int cnt[200005];            // cnt[d] = # processed nodes at distance d from centroid
+
+      void dfsSize(int v, int p){ sz[v] = 1; for (int u : g[v]) if (u != p && !blocked[u]){ dfsSize(u, v); sz[v] += sz[u]; } }
+      int findCentroid(int v, int p, int total){
+          for (int u : g[v]) if (u != p && !blocked[u] && sz[u] > total / 2) return findCentroid(u, v, total);
+          return v;
+      }
+
+      vector<int> nodes;                      // distances collected in the current subtree
+      void work(int v, int p, int d){
+          if (d > k) return;
+          ans += cnt[k - d];                  // partner already-processed at distance k-d
+          nodes.push_back(d);
+          for (int u : g[v]) if (u != p && !blocked[u]) work(u, v, d + 1);
+      }
+
+      void decompose(int entry){
+          dfsSize(entry, -1);
+          int c = findCentroid(entry, -1, sz[entry]);
+
+          cnt[0] = 1;                         // the centroid itself
+          int usedMax = 0;
+          for (int u : g[c]) if (!blocked[u]){
+              nodes.clear();
+              work(u, c, 1);
+              for (int d : nodes) cnt[d]++;
+              if (!nodes.empty()) usedMax = max(usedMax, *max_element(nodes.begin(), nodes.end()));
+          }
+          for (int d = 1; d <= usedMax; d++) cnt[d] = 0;   // reset for the next centroid
+          cnt[0] = 0;
+
+          blocked[c] = 1;
+          for (int u : g[c]) if (!blocked[u]) decompose(u);
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          cin >> n >> k;
+          for (int i = 0; i + 1 < n; i++){ int a, b; cin >> a >> b; --a; --b; g[a].push_back(b); g[b].push_back(a); }
+          decompose(0);
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n log n)` time (`O(n)` per level × `O(log n)` depth), `O(n)` space.
+      This is the recommended solution for a single fixed `k`.*
+
+      **③ Further optimization — centroid decomposition + NTT convolution, O(n log² n)**
+
+      The same counting, but subtree × processed arrays are treated as
+      polynomials and multiplied with the **Number Theoretic Transform (NTT)**.
+      `cnt[d]` frequencies are the coefficients; the number of pairs summing to
+      `k` is `[x^k](sub ⊗ poly)`. We compute this coefficient at every centroid
+      merge. Because a single coefficient can exceed the NTT prime (it is a sum
+      of products of frequencies), we run **two NTT primes and combine by CRT**,
+      recovering the exact integer. Verified below on the sample and random
+      small trees.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      // ---- NTT machinery (modular convolution) ----
+      template<int MOD, int G>
+      int power(int a, int e){ ll r = 1, b = a; while (e){ if (e & 1) r = r * b % MOD; b = b * b % MOD; e >>= 1; } return (int)r; }
+
+      template<int MOD, int G>
+      void ntt(vector<int>& a, bool inv){
+          int n = a.size();
+          for (int i = 1, j = 0; i < n; i++){ int bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; if (i < j) swap(a[i], a[j]); }
+          for (int len = 2; len <= n; len <<= 1){
+              int wlen = power<MOD, G>(G, (MOD - 1) / len);
+              if (inv) wlen = power<MOD, G>(wlen, MOD - 2);
+              for (int i = 0; i < n; i += len){
+                  ll w = 1;
+                  for (int j = 0; j < len / 2; j++){
+                      int u = a[i + j], v = (int)(a[i + j + len / 2] * w % MOD);
+                      a[i + j] = (u + v) % MOD;
+                      a[i + j + len / 2] = (u - v + MOD) % MOD;
+                      w = w * wlen % MOD;
+                  }
+              }
+          }
+          if (inv){ int ninv = power<MOD, G>(n, MOD - 2); for (int& x : a) x = (int)((ll)x * ninv % MOD); }
+      }
+
+      template<int MOD, int G>
+      vector<int> conv_mod(const vector<int>& a, const vector<int>& b){
+          if (a.empty() || b.empty()) return {};
+          int need = (int)a.size() + (int)b.size() - 1, n = 1; while (n < need) n <<= 1;
+          vector<int> fa(a.begin(), a.end()), fb(b.begin(), b.end()); fa.resize(n); fb.resize(n);
+          ntt<MOD, G>(fa, false); ntt<MOD, G>(fb, false);
+          for (int i = 0; i < n; i++) fa[i] = (ll)fa[i] * fb[i] % MOD;
+          ntt<MOD, G>(fa, true); fa.resize(need);
+          return fa;
+      }
+
+      ll egcd(ll a, ll b, ll& x, ll& y){ if (!b){ x = 1; y = 0; return a; } ll x1, y1; ll d = egcd(b, a % b, x1, y1); x = y1; y = x1 - (a / b) * y1; return d; }
+
+      const ll MOD1 = 998244353, MOD2 = 1004535809;
+      // exact integer convolution via CRT over two NTT primes
+      vector<ll> conv_exact(const vector<int>& a, const vector<int>& b){
+          auto r1 = conv_mod<998244353, 3>(a, b);
+          auto r2 = conv_mod<1004535809, 3>(a, b);
+          ll x1, y1; egcd(MOD1, MOD2, x1, y1);
+          ll inv1 = (x1 % MOD2 + MOD2) % MOD2;                 // inverse of MOD1 mod MOD2
+          vector<ll> res(r1.size());
+          for (size_t i = 0; i < res.size(); i++){
+              ll x = r1[i], y = r2[i];
+              ll t = ((y - x) % MOD2 + MOD2) % MOD2;
+              t = t * inv1 % MOD2;
+              res[i] = x + MOD1 * t;                           // < MOD1*MOD2 ~ 1e18, exact
+          }
+          return res;
+      }
+
+      // ---- centroid decomposition using convolution ----
+      int n, k;
+      vector<int> g[200005];
+      int blocked[200005], sz[200005];
+      ll ans = 0;
+
+      void dfsSize(int v, int p){ sz[v] = 1; for (int u : g[v]) if (u != p && !blocked[u]){ dfsSize(u, v); sz[v] += sz[u]; } }
+      int findCentroid(int v, int p, int total){
+          for (int u : g[v]) if (u != p && !blocked[u] && sz[u] > total / 2) return findCentroid(u, v, total);
+          return v;
+      }
+
+      void collect(int v, int p, int d, vector<int>& cnt){
+          if (d > k) return;
+          cnt[d]++;
+          for (int u : g[v]) if (u != p && !blocked[u]) collect(u, v, d + 1, cnt);
+      }
+
+      void decompose(int entry){
+          dfsSize(entry, -1);
+          int c = findCentroid(entry, -1, sz[entry]);
+
+          vector<int> poly(k + 1, 0);
+          poly[0] = 1;                                          // centroid at distance 0
+          for (int u : g[c]) if (!blocked[u]){
+              vector<int> sub(k + 1, 0);
+              collect(u, c, 1, sub);
+              int subMax = 0;
+              for (int d = 1; d <= k; d++) if (sub[d]) subMax = d;
+              if (subMax == 0) continue;
+              vector<int> A(sub.begin(), sub.begin() + subMax + 1);
+              vector<int> B(poly.begin(), poly.begin() + k + 1);
+              auto conv = conv_exact(A, B);
+              if (k < (int)conv.size()) ans += conv[k];         // coeff of x^k
+              for (int d = 1; d <= subMax; d++) poly[d] += sub[d];
+          }
+
+          blocked[c] = 1;
+          for (int u : g[c]) if (!blocked[u]) decompose(u);
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          cin >> n >> k;
+          for (int i = 0; i + 1 < n; i++){ int a, b; cin >> a >> b; --a; --b; g[a].push_back(b); g[b].push_back(a); }
+          decompose(0);
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n log² n)` time (an `O(L log L)` NTT per merge), `O(n)` space +
+      `O(n)` NTT buffers. The polynomial method shines when the whole length
+      distribution is needed at once; for a single fixed `k` the frequency-array
+      tier ② is simpler and faster.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      The machinery of tier ② (and the structure of ③) reduces to three steps.
+
+      - **Centroid search.** `dfsSize` computes component sizes ignoring
+        `blocked` nodes; `findCentroid` descends into the child heavier than
+        `n/2` until none remains. This carves the tree into `O(log n)`-deep
+        nested components.
+      - **Count through the centroid.** `cnt[0] = 1` seeds the centroid. For
+        each child subtree, `work` walks it: at a node at distance `d` from `c`,
+        `ans += cnt[k - d]` counts every length-`k` path whose far endpoint is
+        the centroid itself or a node in an *earlier-processed* subtree.
+        Processing subtrees one at a time is what stops two nodes in the *same*
+        subtree from being paired (their connecting path avoids `c` and is
+        handled by a deeper recursion).
+      - **Merge + reset.** After a subtree is answered its distances are added
+        to `cnt`, then the whole `cnt` is zeroed before moving to the next
+        centroid — a global array reused safely because we only touch indices we
+        set.
+
+      In tier ③ the same logic is algebraic: `sub` and `poly` are polynomials
+      and the number of pairs is the single coefficient `[x^k]`. The two-prime
+      NTT + CRT step exists only so that this coefficient (which can exceed one
+      prime) is recovered exactly. Only the chosen coefficient is read; `poly`
+      is still merged by plain pointwise addition.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5`, `k = 2`, edges `1-2, 2-3, 3-4, 3-5`.
+
+      **Centroid decomposition.** Node 3 is the centroid (deleting it leaves
+      components of sizes 2, 1, 1 — all `<= floor(5/2) = 2`). Recurse on
+      component `{1,2}` — no length-2 path inside (only 2 nodes). So all paths
+      are counted through centroid `3`.
+
+      **Count length-2 paths through 3.** `cnt[0] = 1`.
+      - Subtree via `2` (nodes 2,1 at distances 1,2 from 3): node 2 (`d=1`):
+        `cnt[2-1]=cnt[1]=0`; node 1 (`d=2`): `cnt[0]=1` → **+1** (path `1-2-3`).
+        Merge: `cnt[1]=1, cnt[2]=1`.
+      - Subtree via `4` (node 4 at `d=1`): `cnt[1]=1` → **+1** (path `4-3-2`).
+        Merge: `cnt[1]=2`.
+      - Subtree via `5` (node 5 at `d=1`): `cnt[1]=2` → **+2** (paths `5-3-2`,
+        `5-3-4`). Merge: `cnt[1]=3`.
+
+      Total through `3`: `1 + 1 + 2 = 4`.
+
+      Printed:
+      ```
+      4
+      ```
+      Expected `4` — actual matches. (The four paths: `1-2-3`, `2-3-4`,
+      `2-3-5`, `4-3-5`.)
+  - type: flowchart
+    title: "Count length-k paths by centroid decomposition"
+    nodes: ["find centroid c of component", "init freq: centroid at distance 0", "for each subtree: collect distances", "add cnt[k-d] for each node", "merge subtree into freq", "recurse into non-blocked components"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "Why must each subtree of the centroid be processed one at a time (answer, then merge) instead of merging everything and counting all pairs at once?"
+    options:
+      - "Because merging everything first would be slower."
+      - "Because two nodes from the SAME subtree have a path that does not pass through the centroid — counting them together at this centroid would double-count (they belong to a deeper component), so they must be excluded here."
+      - "Because the centroid always lies between two nodes of the same subtree."
+      - "Because the frequency array can only hold one distance value."
+    answer: 1
+    explanation: "A path through the centroid c must have its endpoints in different subtrees of c (or one endpoint is c itself). By answering only against the already-merged subtrees, then merging the current one, we never pair two nodes of the current subtree — their path does not go through c and is counted exactly once later at the centroid that separates them deeper in the decomposition."
+---

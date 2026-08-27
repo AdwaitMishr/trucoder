@@ -1,0 +1,230 @@
+---
+id: two-stacks-sorting
+title: "Two Stacks Sorting"
+type: content
+difficulty: hard
+order: 400
+tags:
+  - stacks
+  - greedy
+  - longest-increasing-subsequence
+  - dilworth
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — sorting with two stacks reduces to LIS ≤ 2
+
+      Given a permutation that must be output in increasing order, a **single stack**
+      (LIFO) can only finish successfully if its contents can be popped in that order.
+      Since you always pop the top, a single stack holds a *strictly decreasing*
+      sequence (largest at the bottom, smallest at the top) when read bottom-to-top —
+      i.e. the elements assigned to one stack must form a **strictly decreasing
+      subsequence** of the input order.
+
+      With **two** stacks you may split the input between them, but every stack alone
+      must still be a decreasing subsequence. So the task becomes:
+
+      > Can the permutation be split into **two strictly decreasing subsequences**?
+
+      This is a classic structural question answered by **Dilworth's / Mirsky's
+      theorem** (duality of chains and antichains): the minimum number of strictly
+      decreasing subsequences needed to cover all elements equals the length of the
+      **longest increasing subsequence (LIS)**. Therefore it is possible with exactly
+      two stacks *iff* **LIS ≤ 2** — i.e. iff there is **no increasing subsequence of
+      length 3**.
+
+      :::tip
+      **Interview tip:** The "cover a sequence with the fewest decreasing
+      subsequences → LIS" duality (patience sorting / Dilworth–Mirsky) is a powerful
+      hammer: it turns a messy stack-simulation into a clean LIS computation. When you
+      hear "partition the array", always ask whether the answer is captured by LIS.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      :::note
+      **Concrete formulation.** The set lists "Two Stacks Sorting". We adopt this
+      coherent version: each input element is first assigned (in input order) to one
+      of two stacks, after which we may only pop from a stack top to produce the
+      output; decide whether the output can be exactly `1,2,…,n`.
+      :::
+
+      You have a permutation `a[1..n]` of `1..n` and two stacks. You push every element
+      of the permutation, in input order, onto **exactly one** of the two stacks (your
+      choice per element). After all pushes you may pop elements from the tops of the
+      stacks, in any interleaving, to form an output sequence. Determine whether the
+      output can be exactly `1, 2, …, n`.
+
+      **Input.** The first line has an integer `n`. The second line has `n` integers
+      `a[1..n]`, a permutation.
+
+      **Output.** Print `YES` if a valid assignment of each element to one of the two
+      stacks exists, otherwise `NO`.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 2·10^5`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      4
+      2 1 4 3
+      ```
+
+      **Output:**
+      ```
+      YES
+      ```
+
+      (Stacks: `{2,1}` and `{4,3}` — pop `1,2` then `3,4`.)
+
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      Feasible ⇔ split into **two strictly decreasing subsequences** ⇔ **LIS ≤ 2**.
+
+      **① Brute force — O(2ⁿ · n).** Try every way of assigning each element to stack
+      0 or stack 1, and simulate the popping.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin>>n; vector<int> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          for(int mask=0; mask<(1<<n); mask++){
+              int p0=INT_MAX, p1=INT_MAX; bool ok=true;
+              for(int i=0;i<n;i++){
+                  int &p = (mask>>i&1)? p0:p1;   // this element's stack top
+                  if(a[i]>=p){ ok=false; break; } // not strictly decreasing inside a stack
+                  p=a[i];
+              }
+              if(ok){ cout<<"YES\n"; return 0; }
+          }
+          cout<<"NO\n";
+      }
+      ```
+      *Complexity: O(2ⁿ · n) — only for tiny `n`.*
+
+      **② Optimization — LIS via patience sorting, O(n log n) (the solution).**
+      Compute the LIS; feasible iff it is ≤ 2.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin>>n; vector<int> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          vector<int> tails;
+          for(int x:a){
+              auto it=lower_bound(tails.begin(), tails.end(), x);
+              if(it==tails.end()) tails.push_back(x); else *it=x;
+              if(tails.size()>2){ cout<<"NO\n"; return 0; }
+          }
+          cout<<"YES\n";
+      }
+      ```
+      *Complexity: O(n log n) time, O(1) extra memory — handles `n=2·10^5`.*
+
+      **③ Further optimization — O(n): just check for an increasing subseq. of length
+      3.** Feasibility only needs to know whether any length-3 increasing subsequence
+      exists. Track the smallest first element `f1` and second element `f2` of an
+      increasing subsequence seen so far; if a new element exceeds `f2`, we have
+      length 3.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin>>n;
+          int f1=INT_MAX, f2=INT_MAX;
+          bool bad=false;
+          for(int i=0;i<n;i++){
+              int x; cin>>x;
+              if(x<f1)      f1=x;
+              else if(x<f2) f2=x;   // x>=f1, a valid 2nd element -> tighten f2
+              else          bad=true; // x>=f2 -> f1, f2, x is length 3
+          }
+          cout << (bad? "NO" : "YES") << "\n";
+      }
+      ```
+      *Complexity: O(n) time, O(1) memory — optimal; you cannot do better than reading
+      the input.*
+
+      **④ Alternative — constructive greedy with the stack tops.** Instead of only the
+      decision, build the two decreasing subsequences greedily: keep the current tops
+      of the (at most two) decreasing chains in a `multiset`; for each `x`, place it
+      below the smallest top that is strictly greater than `x` (so we spend the least
+      flexible stack), otherwise open a new chain — impossible if a third chain would
+      be needed.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin>>n;
+          multiset<int> tops;                 // current tops of decreasing chains
+          for(int i=0;i<n;i++){
+              int x; cin>>x;
+              auto it=tops.upper_bound(x);    // first top > x that can host x
+              if(it!=tops.end()){ tops.erase(it); tops.insert(x); }
+              else{
+                  if(tops.size()>=2){ cout<<"NO\n"; return 0; }
+                  tops.insert(x);             // open a new chain (≤ 2 allowed)
+              }
+          }
+          cout<<"YES\n";
+      }
+      ```
+      *Complexity: O(n log 2) = O(n) time, O(1) memory. This yields the explicit two
+      stacks, not just the decision, and matches tier ②/③ on every permutation.*
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n). Key lines of tier ③ (the cleanest):
+
+      1. **`f1`, `f2`** hold the smallest possible first and second elements of an
+         increasing subsequence of the prefix processed so far.
+      2. **`x < f1 → f1 = x`** — a new smallest "first element".
+      3. **`else if (x < f2) → f2 = x`** — since `x ≥ f1`, `(f1, x)` is a valid
+         increasing pair, so tighten the best second element.
+      4. **`else → bad`** — `x ≥ f2` with `f1 < f2 ≤ x`: `(f1, f2, x)` is an
+         increasing subsequence of length 3, impossible.
+
+      Tier ② is the generic version (patience-sorted `tails`, the LIS), and tier ④ is
+      its constructive reverse, but all three decide the identical answer.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 4`, `a = 2 1 4 3`. Run tier ③:
+      - `x=2`: `f1 = 2`, `f2 = ∞`.
+      - `x=1`: `1 < f1` → `f1 = 1`.
+      - `x=4`: `4 ≥ f1`, `4 < f2(∞)` → `f2 = 4`.
+      - `x=3`: `3 ≥ f1`, `3 < f2(4)` → `f2 = 3`. (Still length 2 — `1,3`.)
+
+      No length-3 subsequence found → **`YES`**. Concretely, stacks `{2,1}` and
+      `{4,3}` each hold a decreasing sequence: pop `1,2` from the first and `3,4` from
+      the second.
+
+      **Non-example:** `a = 1 2 3` — `1 < f1` → `f1=1`; `2` → `f2=2`; `3 ≥ f2` →
+      bad → **`NO`** (indeed `1,2,3` needs three stacks). The brute tier (①) finds no
+      two-colouring for `1 2 3`, confirming the decision.
+
+  - type: mcq
+    prompt: "What single condition makes a permutation sortable with two stacks?"
+    options:
+      - "Its longest increasing subsequence has length at most 2 (no increasing subsequence of length 3)."
+      - "Its longest increasing subsequence has length at least 2."
+      - "It must already be sorted in increasing order."
+      - "It must contain every number exactly twice."
+    answer: 0
+    explanation: "Each stack must hold a strictly decreasing subsequence, so a valid split into two stacks is exactly a partition into two decreasing subsequences. By the Dilworth–Mirsky duality the minimum number of decreasing subsequences needed equals the LIS length, so two stacks suffice iff LIS ≤ 2. Thus a length-3 increasing subsequence is the unique obstruction."
+---

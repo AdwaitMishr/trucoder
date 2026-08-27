@@ -1,0 +1,336 @@
+---
+id: range-queries-and-copies
+title: "Range Queries and Copies"
+type: content
+difficulty: hard
+order: 142
+tags:
+  - range-queries
+  - persistent-segment-tree
+  - persistence
+  - point-update
+  - range-sum
+blocks:
+  - type: markdown
+    content: |
+      # Range Queries and Copies — persistent segment tree
+
+      We keep a growing **list of arrays**. Initially there is one array. Three
+      operations:
+      1. set position `a` of array `k` to `x`;
+      2. sum `[a,b]` of array `k`;
+      3. **create a copy of array `k` and append it to the list**.
+
+      The twist is the copies: they are snapshots that must stay independent —
+      later edits to a copy must not corrupt the array it was copied from. With
+      `n, q = 2·10^5` and up to `q` arrays, physically copying a whole array on
+      every operation is `O(n)` and too slow.
+
+      The right tool is a **persistent segment tree** (path copying). Every edit
+      creates a *new version* of the tree that shares all the untouched nodes
+      with the old one; only the `O(log n)` nodes on the path to the changed leaf
+      are newly allocated. Copying an array becomes `O(1)` — just record a pointer
+      to the same root.
+
+      ## How persistence works
+
+      The tree is built over positions `1..n`; its root is the "array". A normal
+      segment tree has one root; a persistent one keeps **many roots**, each a
+      snapshot.
+
+      - **Build:** create the full tree for the initial array. It has `~2n` nodes.
+      - **Point update:** walk root → leaf, but *clone* every node you touch: a new
+        node gets the old node's children, then one child is replaced by the
+        already-cloned new child from the recursion. `O(log n)` new nodes.
+      - **Query:** no changes at all — just read from a given root. `O(log n)`.
+      - **Copy:** `roots.push_back(roots[k])` — the new "array" literally points
+        at the same root. `O(1)`.
+
+      Because versions share nodes, the total memory is `O(n + q·log n)` instead
+      of `O(q·n)`.
+
+      :::tip
+      **Interview tip:** persistence is the go-to when a problem asks for
+      *"versions"/"snapshots"/"copies of the whole structure, each independently
+      editable or queryable"*. The pattern is always the same: clone `O(log n)`
+      nodes on the path of a change and keep every past root. A classic follow-up
+      is "k-th version supports the same queries", and the interviewer usually
+      probes whether you realise that storing the roots in a vector and reusing
+      them is all the copying you need — no deep-clone anywhere.
+      :::
+
+      **Complexities:** build `O(n)`, point update `O(log n)`, sum query `O(log n)`,
+      copy `O(1)`, memory `O(n + q log n)`.
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to maintain a list of arrays which initially has a single
+      array. You have to process the following types of queries:
+
+      - **Set the value `a` in array `k` to `x`.**
+      - **Calculate the sum of values in range `[a,b]` in array `k`.**
+      - **Create a copy of array `k` and add it to the end of the list.**
+
+      ## Input
+
+      The first input line has two integers `n` and `q`: the array size and the
+      number of queries.
+
+      The next line has `n` integers `t_1, t_2, ..., t_n`: the initial contents of
+      the array.
+
+      Finally, there are `q` lines describing the queries. The format of each line
+      is one of the following: `1 k a x`, `2 k a b` or `3 k`.
+
+      **Constraints:**
+
+      ```
+      1 ≤ n, q ≤ 2·10^5
+      1 ≤ t_i, x ≤ 10^9
+      1 ≤ a ≤ b ≤ n
+      ```
+
+      ## Output
+
+      Print the answer to each sum query.
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      5 6
+      2 3 1 2 5
+      3 1
+      2 1 1 5
+      2 2 1 5
+      1 2 2 5
+      2 1 1 5
+      2 2 1 5
+      ```
+
+      **Output:**
+
+      ```
+      13
+      13
+      13
+      15
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n) per copy or edit**
+
+      Keep a `vector<vector<ll>>` of arrays. A copy is a full deep copy of the
+      array, an edit walks position `a`, a sum walks `a..b`. A deep copy alone
+      costs `O(n)`, and with up to `q` copies plus `n = 2·10^5` that is `O(nq)`
+      — far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std; typedef long long ll;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<vector<ll>> L(1, vector<ll>(n));
+          for (int i = 0; i < n; i++) cin >> L[0][i];
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) {
+                  int k, a; ll x; cin >> k >> a >> x; L[k-1][a-1] = x;
+              } else if (t == 2) {
+                  int k, a, b; cin >> k >> a >> b;
+                  ll s = 0; for (int i = a; i <= b; i++) s += L[k-1][i-1];
+                  cout << s << "\n";
+              } else {
+                  int k; cin >> k; L.push_back(L[k-1]);   // O(n) deep copy
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *Correct, but the deep copy steps on `3 k` and edits cost `O(n)`.*
+
+      **② Optimization — persistent segment tree, O(log n) per operation**
+
+      Store each array as the root of a segment tree. Edits clone only the path
+      (`O(log n)` nodes); copies share a root (`O(1)`); sums read any root in
+      `O(log n)`. This is the optimal tier we compile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      struct Node { int l, r; ll sum; };
+      vector<Node> st;                 // node 0 = empty sentinel
+
+      int build(int l, int r, const vector<ll>& a) {
+          int cur = (int)st.size(); st.push_back({0, 0, 0});
+          if (l == r) { st[cur].sum = a[l]; return cur; }
+          int m = (l + r) / 2;
+          st[cur].l = build(l, m, a);
+          st[cur].r = build(m + 1, r, a);
+          st[cur].sum = st[st[cur].l].sum + st[st[cur].r].sum;
+          return cur;
+      }
+
+      // new version = clone of root `cur` with a[pos] := val (shares untouched nodes)
+      int update(int cur, int l, int r, int pos, ll val) {
+          int ncur = (int)st.size(); st.push_back(st[cur]);   // copy this node
+          if (l == r) { st[ncur].sum = val; return ncur; }
+          int m = (l + r) / 2;
+          if (pos <= m) st[ncur].l = update(st[cur].l, l, m, pos, val);
+          else          st[ncur].r = update(st[cur].r, m + 1, r, pos, val);
+          st[ncur].sum = st[st[ncur].l].sum + st[st[ncur].r].sum;
+          return ncur;
+      }
+
+      ll query(int cur, int l, int r, int ql, int qr) {
+          if (cur == 0 || ql > r || qr < l) return 0;
+          if (ql <= l && r <= qr) return st[cur].sum;
+          int m = (l + r) / 2;
+          return query(st[cur].l, l, m, ql, qr) + query(st[cur].r, m + 1, r, ql, qr);
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<ll> a(n + 1);
+          for (int i = 1; i <= n; i++) cin >> a[i];
+          st.push_back({0, 0, 0});                 // sentinel node 0
+          vector<int> roots;
+          roots.push_back(build(1, n, a));         // array 1
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) {                        // set a[pos] in array k
+                  int k, pos; ll x; cin >> k >> pos >> x;
+                  roots[k-1] = update(roots[k-1], 1, n, pos, x);
+              } else if (t == 2) {                 // sum [a,b] in array k
+                  int k, a2, b; cin >> k >> a2 >> b;
+                  cout << query(roots[k-1], 1, n, a2, b) << "\n";
+              } else {                             // copy array k to end of list
+                  int k; cin >> k;
+                  roots.push_back(roots[k-1]);     // O(1) - just the new root
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`O(log n)` per update/query, `O(1)` per copy, `O(n + q log n)` memory — this
+      meets the constraints.*
+
+      **③ Note on alternatives**
+
+      Persistence-by-path-copying *is* the method for true version independence;
+      no meaningfully different efficient approach exists for "editable snapshots
+      of a range-sum structure". A comparable idea — a balanced BST where each
+      version is a root and rotations clone `O(log n)` nodes — has the same
+      complexity but is strictly harder to implement, so we skip it here. The
+      key realisation stands: copying is free because versions share nodes.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The whole solution hinges on **sharing nodes between versions**:
+
+      - **`Node { l, r, sum }`** stores the two child indices and the subtree sum.
+        Rather than a fixed array index, each version is addressed by its *root
+        node index*. `st` is a single growing pool of all nodes ever created;
+        every version's root lives in `roots`.
+
+      - **Build** allocates the tree for the initial array. `st[0]` is an empty
+        sentinel (l=r=0, sum=0) so that queries reaching a missing child in a
+        sparse version return `0` safely.
+
+      - **`update(cur, pos, val)`** clones nodes only along the root-to-leaf path
+        to `pos`: each cloned node copies the old node (`st.push_back(st[cur])`),
+        then one child pointer is rewired to the freshly cloned child. Untouched
+        subtrees are *shared* with the old version — that is what makes copies
+        cheap and edits version-safe. The spelling
+        `st[ncur].l = update(st[cur].l, ...)` is the crux: the *new* left child is
+        the persisted clone of the *old* left child.
+
+      - **`roots[k-1] = update(...)`** makes array `k`'s root point at the new
+        version. Because the old root still points at the untouched shared nodes,
+        any other array that was a copy of `k` keeps its own earlier snapshot —
+        no corruption.
+
+      - **Copy (`3 k`)** is just `roots.push_back(roots[k-1])`: the new array is
+        the *same* root. Two independent names, one set of shared nodes, fully
+        independent edits afterward.
+
+      - **Query** reads from a given root without modifying anything, so it never
+        allocates. `sum` values use `long long` because `t_i, x ≤ 10^9` and a whole
+        array's sum reaches `10^9 · n`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `n = 5`, initial array `A1 = [2, 3, 1, 2, 5]`, `q = 6`. List `L`
+      starts as `[A1]`.
+
+      **Query `3 1`** — copy array 1 to the end. `L = [A1, A2]` where A2 shares
+      A1's root (both are `[2,3,1,2,5]`). `O(1)`.
+
+      **Query `2 1 1 5`** — sum of `[1,5]` in A1 = `2+3+1+2+5 = 13`.
+
+      ```
+      Output 13
+      ```
+
+      **Query `2 2 1 5`** — A2 is an identical copy: `13`.
+
+      ```
+      Output 13
+      ```
+
+      **Query `1 2 2 5`** — set position 2 of array 2 to `5`. `update` clones the
+      path to leaf 2; the root of A2 is replaced by the new version. A2 becomes
+      `[2, 5, 1, 2, 5]`, while A1 stays `[2, 3, 1, 2, 5]` — they diverged.
+
+      **Query `2 1 1 5`** — sum of A1 = `2+3+1+2+5 = 13` (state preserved).
+
+      ```
+      Output 13
+      ```
+
+      **Query `2 2 1 5`** — sum of A2 = `2+5+1+2+5 = 15`.
+
+      ```
+      Output 15
+      ```
+
+      Printed output (in order): `13, 13, 13, 15`. Expected (sample) — `13, 13,
+      13, 15`. Actual — identical. Match. Notice array 1 and array 2 shared nodes
+      until the `1 2 2 5` edit split them apart — exactly the persistence
+      guarantee.
+  - type: flowchart
+    title: "Persistent segment tree"
+    nodes: ["build tree for initial array", "read query type", "3: copy array k", "1: set pos in array k", "2: sum range in array k", "clone O(log n) path nodes, append new root", "roots.push_back(roots[k-1]) (O(1))", "query old root (no changes)", "print range sum"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "type 3"}
+      - {from: 1, to: 3, label: "type 1"}
+      - {from: 1, to: 7, label: "type 2"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 8}
+      - {from: 2, to: 8}
+      - {from: 7, to: 8}
+  - type: mcq
+    prompt: "Copying an array (`3 k`) is O(1) in a persistent segment tree because…"
+    options:
+      - "…persistence clones every node of the array on copy, but the constant is small."
+      - "…the new array is just a second pointer to the same root, and both names share the untouched nodes until one of them is edited, which then clones only that path."
+      - "…copies are compressed into a flat array of values."
+      - "…copies are forbidden once the array is modified."
+    answer: 1
+    explanation: "A 'copy' must be a valid independent snapshot, but it does not need its own nodes. Pushing the same root index gives a second reference to the shared tree; edits clone only the O(log n) nodes along the changed path, so the other reference keeps the old snapshot intact. Hence copy costs O(1) and memory stays O(n + q log n)."
+---

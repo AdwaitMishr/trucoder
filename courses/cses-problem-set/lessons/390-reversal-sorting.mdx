@@ -1,0 +1,274 @@
+---
+id: reversal-sorting
+title: Reversal Sorting
+difficulty: medium
+order: 390
+tags:
+  - additional
+  - implicit-treap
+  - greedy
+  - data-structures
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — sorting by subarray reversals with a lazy-implicit treap
+
+      We have a permutation of `1..n` and may reverse any subarray; we must sort
+      it using **at most `n` reversals**.
+
+      **Greedy selection by reversal.** The classic strategy: for `pos` from `1`
+      to `n`, find the current position `p` of the value `pos`, and if `p != pos`
+      reverse the subarray `[pos, p]`. This moves value `pos` into its final
+      slot `pos` and **never touches positions `< pos` again**, because it
+      reverses only `[pos, p]` with `p ≥ pos`. So after this step values
+      `1..pos` are in their final places; each iteration fixes one more position.
+      At most one reversal per position ⇒ ≤ `n` reversals total. This is correct
+      and greedy-optimal in the sense that it uses the minimum "one fix per
+      element" scheme.
+
+      **The challenge is data structure.** Naively we would `std::reverse` the
+      array each time and search for the target value. Each reverse costs O(len)
+      and we do O(n) of them ⇒ O(n²), too slow for `n = 2·10⁵`. And after many
+      reversals the position of value `pos` must be tracked *dynamically* — it
+      changes every time a reversal passes over it.
+
+      **Solution: an implicit treap with lazy reversal.** An implicit treap is a
+      randomized balanced BST keyed by *position* (subtree size), supporting
+      `split` and `merge` in O(log n). A node keeps a `rev` lazy flag; flipping
+      it reverses its whole subtree in O(1), deferred until the next traversal.
+      With this we get:
+
+      - `reverse(a,b)` (1-indexed, inclusive): `split` into `[1,a-1] | [a,b] |
+        [b+1,n]`, flip the middle, `merge` back — O(log n).
+      - **index of value `v`**: keep a pointer to its node and walk up the parent
+        chain (after pushing lazy flags down the path) to sum subtree sizes —
+        O(log n).
+
+      Everything is O(log n) per operation, so the whole sort is O(n log n).
+
+      :::tip
+      **Interview tip:** When you must apply **range reversals** and answer
+      position queries online, an **implicit treap with lazy reversal** (or a
+      rope / `std::list`-based scheme) is the tool — a Fenwick tree alone cannot
+      reverse. The recurring pattern: *keep positions as an implicit tree, lazily
+      flip a whole range in O(1), and index/find by climbing parents*. Construct
+      problems that say "≤ n operations of this shape" almost always want a
+      structured O(log n) sequence, not simulation.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You have an array that contains a permutation of integers `1,2,…,n`. Your
+      task is to sort the array in increasing order by reversing subarrays. You
+      can construct any solution that has at most `n` reversals.
+
+      **Input.** The first input line has an integer `n`: the size of the array.
+      The array elements are numbered `1,2,…,n`. The next line has `n` integers
+      `x_1,x_2,…,x_n`: the contents of the array.
+
+      **Output.** First print an integer `k`: the number of reversals. After
+      that, print `k` lines that describe the reversals. Each line has two
+      integers `a` and `b`: you reverse a subarray from position `a` to position
+      `b`.
+
+      **Constraints**
+      - `1 ≤ n ≤ 2·10^5`
+
+      **Sample**
+
+      Input:
+      ```
+      4
+      2 3 1 4
+      ```
+
+      Output:
+      ```
+      2
+      1 3
+      2 3
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²).** Simulate with a plain array: for each `pos`,
+      scan for value `pos` (a `std::find`), then `std::reverse` the subarray.
+      Each reverse touches O(len) and we perform O(n) reversals ⇨ O(n²).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n; vector<int> a(n+1);
+          for(int i=1;i<=n;i++) cin>>a[i];
+          vector<pair<int,int>> out;
+          for(int pos=1; pos<=n; pos++){
+              int p = find(a.begin()+pos, a.end(), pos) - a.begin(); // current index of pos
+              if(p != pos){ reverse(a.begin()+pos, a.begin()+p+1); out.push_back({pos,p}); }
+          }
+          cout<<out.size()<<"\n";
+          for(auto &pr:out) cout<<pr.first<<" "<<pr.second<<"\n";
+      }
+      ```
+      *Complexity: O(n²) worst case — `n = 2·10⁵` needs ~4·10¹⁰ ops, too slow.*
+
+      **② Optimization — implicit treap with lazy reversal — O(n log n).**
+      Keep the permutation as an implicit treap. For each `pos`, get the current
+      index of value `pos` by walking up from that node to the root; if it isn't
+      `pos`, reverse `[pos, idx]` via split/flip/merge.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
+      uniform_int_distribution<int> dist(1,(int)2e9);
+      struct Node{
+          bool rev; int val, prior, sz; Node *p,*l,*r;
+          Node(int _val,int _pri):rev(false),val(_val),prior(_pri),sz(1),p(nullptr),l(nullptr),r(nullptr){}
+      };
+      int sz(Node* t){ return t?t->sz:0; }
+      void fl(Node* t){ if(t) t->rev^=true; }
+      void pull(Node* t){ if(!t) return; if(t->l)t->l->p=t; if(t->r)t->r->p=t; t->sz=sz(t->l)+sz(t->r)+1; }
+      void push(Node* t){
+          if(!t)return;
+          if(t->rev){ swap(t->l,t->r); fl(t->l); fl(t->r); t->rev=false; }
+      }
+      Node* merge(Node* x,Node* y){
+          if(!x||!y)return x?x:y;
+          push(x); push(y);
+          if(x->prior<y->prior){ x->r=merge(x->r,y); pull(x); return x; }
+          else { y->l=merge(x,y->l); pull(y); return y; }
+      }
+      pair<Node*,Node*> split(Node* x,int k){ // first k nodes -> left
+          if(!x)return {nullptr,nullptr};
+          pair<Node*,Node*> y; push(x);
+          if(k<=sz(x->l)){ y=split(x->l,k); x->l=y.second; pull(x); y.second=x; }
+          else { y=split(x->r,k-sz(x->l)-1); x->r=y.first; pull(x); y.first=x; }
+          return y;
+      }
+      void heapify(Node* t){
+          if(!t)return; Node* mx=t;
+          if(t->l&&t->l->prior>mx->prior)mx=t->l;
+          if(t->r&&t->r->prior>mx->prior)mx=t->r;
+          if(mx!=t){ swap(t->prior,mx->prior); heapify(mx); }
+      }
+      Node* build(vector<int>&arr,int lo,int hi){
+          if(lo>hi)return nullptr;
+          int mid=(lo+hi)/2;
+          Node* t=new Node(arr[mid],dist(rng));
+          t->l=build(arr,lo,mid-1); t->r=build(arr,mid+1,hi);
+          heapify(t); pull(t); return t;
+      }
+      void rev_range(Node*& root,int a,int b){ // 1-indexed inclusive
+          Node *x,*y,*z;
+          tie(x,y)=split(root,a-1); tie(y,z)=split(y,b-a+1);
+          fl(y); root=merge(merge(x,y),z); root->p=nullptr;
+      }
+      int orderOf(Node* root,int v,Node** nd){ // 0-based index of value v
+          Node* t=nd[v]; vector<Node*> walk;
+          while(t){ walk.push_back(t); t=t->p; }
+          reverse(walk.begin(),walk.end());
+          for(Node* w:walk){ push(w); pull(w); }
+          t=nd[v]; int idx=sz(t->l);
+          while(t){ if(t->p && t==t->p->r) idx+=sz(t->p->l)+1; t=t->p; }
+          return idx;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<int> arr(n); for(int i=0;i<n;i++) cin>>arr[i];
+          Node* root=build(arr,0,n-1);
+          vector<Node*> nd(n+1,nullptr);
+          function<void(Node*)> coll=[&](Node* t){ if(!t)return; coll(t->l); nd[t->val]=t; coll(t->r); };
+          coll(root);
+          vector<pair<int,int>> out;
+          for(int pos=1; pos<=n; pos++){        // 1-indexed final slot
+              int idx=orderOf(root,pos,nd.data())+1; // 1-indexed current position
+              if(idx!=pos){ rev_range(root,pos,idx); out.push_back({pos,idx}); }
+          }
+          cout<<out.size()<<"\n";
+          for(auto &pr:out) cout<<pr.first<<" "<<pr.second<<"\n";
+      }
+      ```
+      *Complexity: O(n log n) time, O(n) space — each of the ≤ n reversals and
+      index-queries is O(log n).*
+
+      **④ Alternative / note.** The greedy "fix value `pos` in place" gives ≤ n
+      reversals, satisfying the bound. There exist more clever schemes (fewer
+      reversals for special permutations) but none are needed to meet the
+      constraint — the greedy + treap is the canonical accepted solution. A
+      simpler O(n²) plain-array version also passes for small tests but not for
+      `2·10⁵`, hence the treap.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n log n) treap-based. Key lines:
+
+      1. **Implicit treap.** Nodes are keyed by position (subtree `sz`); `val`
+         stores the array element at that position. A `rev` lazy flag flips a
+         whole subtree in O(1).
+      2. **`split(root,k)`** produces `(first k nodes, rest)`. **`merge`** fuses
+         two treaps. Together they implement any range reverse: cut out
+         `[a,b]`, flip its lazy flag, reassemble.
+      3. **`orderOf(pos)`** climbs the parent chain of value `pos` (pushing lazy
+         flags down the path first) and sums left-subtree sizes to get its 0-
+         based index — a query the array simulation cannot do cheaply.
+      4. **Greedy fix.** For each `pos`, if value `pos` isn't already at slot
+         `pos`, reverse `[pos, idx]`. Positions `< pos` are never disturbed, so
+         ≤ n reversals suffice.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 4`, array `2 3 1 4` → expected `2` reversals: `[1,3]`,
+      `[2,3]`.
+
+      | step | array (before) | pos | idx(value pos) | reverse | array (after) |
+      |------|----------------|-----|----------------|---------|---------------|
+      | 1 | `2 3 1 4` | 1 | value `1` at idx 3 | `[1,3]` | `1 3 2 4` |
+      | 2 | `1 3 2 4` | 2 | value `2` at idx 3 | `[2,3]` | `1 2 3 4` |
+      | 3 | `1 2 3 4` | 3 | value `3` at idx 3 | — | (already placed) |
+      | 4 | `1 2 3 4` | 4 | value `4` at idx 4 | — | (already placed) |
+
+      Output: `2` lines `1 3` and `2 3`. ✓ Matches the sample. The final array
+      is `1 2 3 4`, sorted, and only 2 ≤ n reversals were used.
+
+  - type: flowchart
+    title: "Sorting by reversals with an implicit treap"
+    nodes:
+      - Build implicit treap of the permutation
+      - pos = 1
+      - idx = indexOf(value pos)
+      - idx == pos?
+      - No: reverse [pos, idx] via split-flip-merge
+      - Yes / after: pos++
+      - pos > n? -> print reversals
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 5, label: "yes"}
+      - {from: 3, to: 4, label: "no"}
+      - {from: 4, to: 5, label: ""}
+      - {from: 5, to: 6, label: ""}
+      - {from: 6, to: 1, label: "still <= n"}
+
+  - type: mcq
+    prompt: "Why does reversing subarray [pos, idx] to place value pos never disturb the already-fixed positions 1..pos-1?"
+    options:
+      - "Because the reversal only touches the range [pos, idx] with idx >= pos, so all indices smaller than pos are left completely unchanged."
+      - "Because value pos is always at index 1."
+      - "Because the treap reassigns every position after each reverse."
+      - "Because reversals always operate on a copy of the array."
+    answer: 0
+    explanation: "The greedy only ever reverses [pos, idx] where idx (the current position of value pos) is at least pos. The range therefore contains nothing below pos, so positions 1..pos-1 keep their just-fixed values. This is exactly what lets each iteration commit one more position, bounding the total number of reversals by n — one per position at most."
+type: content
+---

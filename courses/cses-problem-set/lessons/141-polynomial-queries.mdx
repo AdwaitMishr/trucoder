@@ -1,0 +1,382 @@
+---
+id: polynomial-queries
+title: "Polynomial Queries"
+type: content
+difficulty: hard
+order: 141
+tags:
+  - range-queries
+  - segment-tree
+  - lazy-propagation
+  - polynomial
+  - arithmetic-progression
+blocks:
+  - type: markdown
+    content: |
+      # Polynomial Queries — lazy segment tree with a linear tag
+
+      We have an array and two operations:
+      1. on `[a,b]`, add `1` to the first value, `2` to the second, `3` to the
+         third, and so on — i.e. position `p` (with `a ≤ p`) gets `+(p-a+1)`;
+      2. sum the values in `[a,b]`.
+
+      The added amount is a **linear function of the position** (a degree-1
+      polynomial `p + (1-a)`). A plain segment tree with a scalar lazy tag cannot
+      hold cheaply guided updates, so we generalise: each node's pending update
+      is an **affine function** `A·p + B` added to every leaf at absolute
+      position `p` in its interval.
+
+      ## Why a linear lazy tag works
+
+      For a node covering positions `[l, r]`, if every position `p` gets an added
+      amount `A·p + B`, then the increase in the *sum* of that node is:
+
+      ```
+      A · sum of indices in [l,r]  +  B · (r - l + 1)
+      A · (l+r)(r-l+1)/2           +  B · (r - l + 1)
+      ```
+
+      The index-sum `(l+r)(r-l+1)/2` is computed in `O(1)`, so a node's sum can
+      be updated instantly and the affine tag `(A, B)` recorded for later push
+      down. Both `A` and `B` accumulate across several operations.
+
+      ## Mapping the query onto the tag
+
+      One operation `1 l r` adds `(p - a + 1)` to each `p in [l,r]`, where `a` is
+      the query's left end. Since `p - a + 1 = 1·p + (1-a)`, a full node gets:
+
+      - `lazyA += 1`,
+      - `lazyB += (1 - a)`,
+      - and its `sum` increased by `sumIdx(l,r) + (1-a)·(r-l+1)`.
+
+      When a query only partly covers a node, we `push` the affine tag to the two
+      children (each child inherits `lazyA`, `lazyB` and its own index-sum boost),
+      then recurse. Push arithmetic mirrors the full-node formula.
+
+      :::tip
+      **Interview tip:** "add a sequence (1,2,3,...) to a range and query range
+      sums" is the classic *polynomial lazy tag* problem. The move that generalises
+      beyond this exact question: notice the added amount is an affine function of
+      the index and store it as `(slope, intercept)`, using the closed-form
+      `Σ indices = (l+r)(r-l+1)/2` to update a node's sum in `O(1)`. The same idea
+      extends to any low-degree polynomial — a degree-`k` update just needs `k+1`
+      coefficients plus prefix-sums of `p^k` for that segment.
+      :::
+
+      **Complexities:** build `O(n)`, each update/query `O(log n)`, space `O(n)`.
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to maintain an array of `n` values and efficiently process the
+      following types of queries:
+
+      - **Increase the first value in range `[a,b]` by `1`, the second value by
+        `2`, the third by `3`, and so on.**
+      - **Calculate the sum of values in range `[a,b]`.**
+
+      ## Input
+
+      The first input line has two integers `n` and `q`: the size of the array
+      and the number of queries.
+
+      The next line has `n` values `t_1, t_2, ..., t_n`: the initial contents of
+      the array.
+
+      Finally, there are `q` lines describing the queries. The format of each
+      line is either `1 a b` or `2 a b`.
+
+      **Constraints:**
+
+      ```
+      1 ≤ n, q ≤ 2·10^5
+      1 ≤ t_i ≤ 10^6
+      1 ≤ a ≤ b ≤ n
+      ```
+
+      ## Output
+
+      Print the answer to each sum query.
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      5 3
+      4 2 3 1 7
+      2 1 5
+      1 1 5
+      2 1 5
+      ```
+
+      **Output:**
+
+      ```
+      17
+      32
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n) per query**
+
+      Walk the range on every query. For type 1, add `1,2,3,...` to `a..b`; for
+      type 2, sum `a..b` in a loop. `O(n)` per query is `~4·10^10` steps at the
+      limits — far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<ll> a(n + 1);
+          for (int i = 1; i <= n; i++) cin >> a[i];
+          while (q--) {
+              int t, l, r; cin >> t >> l >> r;
+              if (t == 1) {
+                  ll inc = 1;                       // +1, +2, +3, ...
+                  for (int i = l; i <= r; i++) a[i] += inc++;
+              } else {
+                  ll s = 0; for (int i = l; i <= r; i++) s += a[i];
+                  cout << s << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *O(n) per query — correct but too slow.*
+
+      **② Optimization — lazy segment tree with affine tag, O(log n) per query**
+
+      Store each node's pending update as `(lazyA, lazyB)` meaning "add `A·p + B`
+      to every position `p` in this interval", and use the index-sum identity to
+      update a node's sum in `O(1)`. This is the optimal tier we compile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int n, q;
+      vector<ll> sumv, lazyA, lazyB;   // pending add at position p is A*p + B
+
+      ll sumIdx(ll l, ll r) { return (l + r) * (r - l + 1) / 2; }
+
+      void build(int v, int l, int r, const vector<ll>& a) {
+          if (l == r) { sumv[v] = a[l]; return; }
+          int m = (l + r) / 2;
+          build(2*v, l, m, a);
+          build(2*v+1, m+1, r, a);
+          sumv[v] = sumv[2*v] + sumv[2*v+1];
+      }
+
+      // add (p - a + 1) to every position p in a fully-covered node [l, r]
+      void applyPoly(int v, int l, int r, ll a) {
+          lazyA[v] += 1;                 // slope contribution
+          lazyB[v] += (1 - a);           // constant contribution
+          sumv[v] += sumIdx(l, r) + (1 - a) * (ll)(r - l + 1);
+      }
+
+      void push(int v, int l, int r) {
+          if (l == r) { lazyA[v] = lazyB[v] = 0; return; }
+          int m = (l + r) / 2;
+          if (lazyA[v] || lazyB[v]) {
+              ll da = lazyA[v], db = lazyB[v];
+              lazyA[2*v] += da;  lazyB[2*v] += db;
+              sumv[2*v] += da * sumIdx(l, m) + db * (ll)(m - l + 1);
+              lazyA[2*v+1] += da;  lazyB[2*v+1] += db;
+              sumv[2*v+1] += da * sumIdx(m+1, r) + db * (ll)(r - m);
+              lazyA[v] = lazyB[v] = 0;
+          }
+      }
+
+      void update(int v, int l, int r, int ql, int qr, ll a) {
+          if (ql > r || qr < l) return;
+          if (ql <= l && r <= qr) { applyPoly(v, l, r, a); return; }
+          push(v, l, r);
+          int m = (l + r) / 2;
+          update(2*v, l, m, ql, qr, a);
+          update(2*v+1, m+1, r, ql, qr, a);
+          sumv[v] = sumv[2*v] + sumv[2*v+1];
+      }
+
+      ll query(int v, int l, int r, int ql, int qr) {
+          if (ql > r || qr < l) return 0;
+          if (ql <= l && r <= qr) return sumv[v];
+          push(v, l, r);
+          int m = (l + r) / 2;
+          return query(2*v, l, m, ql, qr) + query(2*v+1, m+1, r, ql, qr);
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(0);
+          cin >> n >> q;
+          vector<ll> a(n + 1);
+          for (int i = 1; i <= n; i++) cin >> a[i];
+          sumv.assign(4*n + 5, 0);
+          lazyA.assign(4*n + 5, 0);
+          lazyB.assign(4*n + 5, 0);
+          build(1, 1, n, a);
+          while (q--) {
+              int t, a2, b; cin >> t >> a2 >> b;
+              if (t == 1) update(1, 1, n, a2, b, a2);
+              else cout << query(1, 1, n, a2, b) << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      *`O(log n)` per operation, `O(n)` space — meets the constraints.*
+
+      **③ Alternative — sqrt decomposition with a linear lazy per block**
+
+      Maintain the array in ~`√n` blocks; each full block stores its own `lazyA,
+      lazyB` (an added linear function) and recomputes only the edge blocks
+      elementwise. Same affine idea as the segment tree, but block-sized lazy tags
+      give `O(√n)` per query.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std; typedef long long ll;
+      int n, q, BS;
+      vector<ll> val, bsum, lazyA, lazyB;
+      int bid(int i){ return (i-1)/BS; }
+      int blo(int b){ return b*BS+1; } int bhi(int b){ return min(n,(b+1)*BS); }
+      ll sumIdx(int l,int r){ return (ll)(l+r)*(r-l+1)/2; }
+      void rebuild(int b){ bsum[b]=0; for(int i=blo(b);i<=bhi(b);i++) bsum[b]+=val[i]; }
+      void push(int b){
+          if(lazyA[b]||lazyB[b]){
+              for(int i=blo(b);i<=bhi(b);i++) val[i]+=lazyA[b]*(ll)i+lazyB[b];
+              lazyA[b]=lazyB[b]=0; rebuild(b);
+          }
+      }
+      void addPoly(int l,int r,ll a){                 // + (p - a + 1)
+          int bl=bid(l),br=bid(r);
+          if(bl==br){ push(bl); for(int i=l;i<=r;i++) val[i]+=(ll)i-a+1;
+                      rebuild(bl); return; }
+          push(bl); for(int i=l;i<=bhi(bl);i++) val[i]+=(ll)i-a+1; rebuild(bl);
+          push(br); for(int i=blo(br);i<=r;i++) val[i]+=(ll)i-a+1; rebuild(br);
+          for(int b=bl+1;b<br;b++){
+              lazyA[b]+=1; lazyB[b]+=(1-a);
+              bsum[b]+= sumIdx(blo(b),bhi(b)) + (1-a)*(ll)(bhi(b)-blo(b)+1);
+          }
+      }
+      ll sumR(int l,int r){
+          int bl=bid(l),br=bid(r); ll s=0;
+          if(bl==br){ push(bl); for(int i=l;i<=r;i++) s+=val[i]; return s; }
+          push(bl); for(int i=l;i<=bhi(bl);i++) s+=val[i];
+          push(br); for(int i=blo(br);i<=r;i++) s+=val[i];
+          for(int b=bl+1;b<br;b++) s+=bsum[b];
+          return s;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          cin>>n>>q; BS=450;
+          val.assign(n+1,0); bsum.assign(n/BS+5,0);
+          lazyA.assign(n/BS+5,0); lazyB.assign(n/BS+5,0);
+          for(int i=1;i<=n;i++){ cin>>val[i]; bsum[bid(i)]+=val[i]; }
+          while(q--){
+              int t,a,b; cin>>t>>a>>b;
+              if(t==1) addPoly(a,b,a);
+              else cout<<sumR(a,b)<<"\n";
+          }
+      }
+      ```
+
+      *`O(√n)` per query — correct but not as fast as the segment tree.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      The heart is treating the pending update as an **affine function of the
+      absolute index**, not of the query:
+
+      - **Full node.** `applyPoly(v,l,r,a)` applies "add `p-a+1` to every `p` in
+        `[l,r]`". Because `p-a+1 = 1·p + (1-a)`, it accumulates `lazyA += 1` and
+        `lazyB += (1-a)` on the node. The sum boost uses the identity
+        `Σ_{p=l..r} p = (l+r)(r-l+1)/2`, so `sum += sumIdx(l,r) + (1-a)·(r-l+1)`.
+
+      - **`push`.** The affine tag `(da, db)` is copied to both children, and each
+        child's sum grows by `da·sumIdx(childRange) + db·childLength`. This is the
+        same formula as a full-node apply — consistent, so stacked operations stay
+        correct. After pushing, the parent's tags reset.
+
+      - **Partial coverage.** `update` pushes first, recurses on the two children
+        (this is where the *slope* differs between the left and right halves — but
+        the affine representation makes that automatic), and recomputes
+        `sumv[v] = left + right`. `query` pushes then descends likewise.
+
+      - **Why absolute index?** The update says the *first* value in `[a,b]` gets
+        `+1` — position-dependent, anchored at the query's `a`. By expressing the
+        boost as `p - a + 1` with the *absolute* position `p`, a partial node above
+        `[a,b]` correctly splits the slope across its children without any
+        re-anchoring. The far-right child whose positions are `> a` receives a
+        larger slope contribution automatically.
+
+      All values use `long long`: indices up to `2·10^5`, multiple adds accumulate,
+      and node sums easily exceed `int` range.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `n = 5`, array `[4, 2, 3, 1, 7]`, `q = 3`.
+
+      **Query `2 1 5`** (sum of `[1,5]`): `4 + 2 + 3 + 1 + 7 = 17`.
+
+      ```
+      Output 17
+      ```
+
+      **Query `1 1 5`** (add `+1,+2,+3,+4,+5` to positions 1..5, since `a = 1`):
+
+      ```
+      pos 1: + (1-1+1) = +1   -> 5
+      pos 2: + (2-1+1) = +2   -> 4
+      pos 3: + (3-1+1) = +3   -> 6
+      pos 4: + (4-1+1) = +4   -> 5
+      pos 5: + (5-1+1) = +5   -> 12
+      array becomes [5, 4, 6, 5, 12]
+      ```
+
+      The root node spans all positions; `applyPoly(1, 1, 5, a=1)` adds
+      `sumIdx(1..5) + (1-1)·5 = 15` to the total sum. `17 + 15 = 32`.
+
+      **Query `2 1 5`** (sum of `[1,5]`): `5 + 4 + 6 + 5 + 12 = 32`.
+
+      ```
+      Output 32
+      ```
+
+      Printed output (in order): `17`, `32`. Expected (sample) — `17, 32`.
+      Actual — identical. Match.
+  - type: flowchart
+    title: "Affine lazy segment tree"
+    nodes: ["build array into segment tree", "read query t a b", "type 1: poly add", "type 2: range sum", "node fully covered?", "yes: lazyA+=1, lazyB+=(1-a), sum += sumIdx+…", "no: push (A,B) to children, recurse", "recompute node sum = left+right", "print node sum"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "type 1"}
+      - {from: 1, to: 8, label: "type 2"}
+      - {from: 2, to: 4}
+      - {from: 4, to: 5, label: "covered"}
+      - {from: 5, to: 8}
+      - {from: 4, to: 6, label: "partial"}
+      - {from: 6, to: 7}
+      - {from: 7, to: 8}
+  - type: mcq
+    prompt: "Storing a lazy update as the affine tag (A, B) (add A·p + B to position p) lets a full segment-tree node be updated in O(1) because…"
+    options:
+      - "…A and B are always zero, so nothing needs to be stored."
+      - "…the increase in the node's sum is A·(sum of indices in the range) + B·(length), and the index-sum has the closed form (l+r)(r-l+1)/2."
+      - "…each node only ever holds one leaf, so the tag is trivial."
+      - "…the update is a constant, not a function of position."
+    answer: 1
+    explanation: "A node's sum is the sum over every position p in its interval of the added A·p + B. That equals A·Σp + B·len, and Σ_{p=l..r} p = (l+r)(r-l+1)/2 is O(1) to compute, so the whole node's sum updates in constant time. The same formula is reused in push to propagate the tag to children."
+---

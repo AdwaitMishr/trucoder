@@ -1,0 +1,274 @@
+---
+id: maximum-manhattan-distances
+title: Maximum Manhattan Distances
+type: content
+difficulty: medium
+order: 225
+tags:
+  - geometry
+  - manhattan-distance
+  - coordinate-transform
+  - online
+blocks:
+  - type: markdown
+    content: |
+      # Maximum Manhattan Distances — the four-sign trick
+
+      The **Manhattan distance** between two points is
+
+      ```
+      d(P, Q) = |P.x - Q.x| + |P.y - Q.y|
+      ```
+
+      A set starts empty and points are added one at a time; after *every* addition
+      you must print the maximum Manhattan distance between any two points already
+      present.
+
+      ## When do you reach for it?
+
+      - Any "maximum |dx| + |dy|" query, online or offline.
+      - Chebyshev-vs-Manhattan duality: the same transform converts problems between
+        the two metrics.
+
+      ## The core observation
+
+      The absolute value "splits" into four sign choices:
+
+      ```
+      |a| = max(+a, -a)
+      ```
+
+      so for two points `P`, `Q`:
+
+      ```
+      |P.x-Q.x| + |P.y-Q.y| = max over the 4 sign pairs (sx, sy) of
+                             sx*(P.x-Q.x) + sy*(P.y-Q.y)
+      ```
+
+      Each sign pair gives a *linear* score `sx*P.x + sy*P.y`. So the maximum over
+      all pairs equals the maximum, over the four sign pairs, of
+      `(max_i value_i) - (min_i value_i)`. That is: track, for each of the four
+      transforms `x+y`, `x-y`, `-x+y`, `-x-y`, the running min and max, and the
+      answer is the biggest `max - min` across the four.
+
+      The absolute value is `max(±a)`, so `d(P,Q)` is the max over the 4 sign pairs;
+      taking the max over all `P,Q` then trades the pair loop for four running
+      extremum pairs — `O(n)` per addition, `O(n)` total.
+
+      ## Complexity
+
+      - Brute re-scan: `O(n³)` over all additions.
+      - **Optimum: `O(1)` amortized per addition → `O(n)` total, `O(1)` extra space.**
+      - The incremental "only new pair distances" version is `O(n²)` total.
+
+      :::tip
+      **Interview tip:** "`|a| = max(a, -a)` turns a geometry max into four linear
+      extremum trackers" is a transferable trick (used for Manhattan diameter,
+      grass-fire-chebyshev questions and L1 K-median variants). Say the words
+      *transform, four candidates, running min/max* and you are done.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      A set is initially empty and `n` points are added to it. Calculate the maximum
+      Manhattan distance of two points after each addition.
+
+      ## Input
+
+      The first line has an integer `n`: the number of points. The following `n`
+      lines describe the points. Each line has two integers `x` and `y`. You can
+      assume that each point is distinct.
+
+      ## Output
+
+      After each addition, print the maximum distance.
+
+      ## Constraints
+
+      - `1 <= n <= 2 * 10^5`
+      - `-10^9 <= x, y <= 10^9`
+
+      ## Sample
+
+      **Input:**
+      ```
+      5
+      1 1
+      3 2
+      2 4
+      2 1
+      4 5
+      ```
+      **Output:**
+      ```
+      0
+      3
+      4
+      4
+      7
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — re-scan all pairs every step, O(n³)**
+
+      After each addition, recompute the max over all `O(k²)` pairs of the `k`
+      current points. The total is `sum_k O(k²) = O(n³)` — for `n = 2 * 10^5` that is
+      `8 * 10^15`, completely impractical.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<pair<long long,long long>> p;
+          for(int i=0;i<n;i++){
+              long long x, y; cin >> x >> y;
+              p.push_back({x, y});
+              long long best = 0;
+              for(int a=0;a<(int)p.size();a++)
+                  for(int b=a+1;b<(int)p.size();b++)
+                      best = max(best, llabs(p[a].first-p[b].first)
+                                    + llabs(p[a].second-p[b].second));
+              cout << best << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      *`O(n³)` time. Correct; far too slow.*
+
+      **② Incremental — only the new point's pairs, O(n²) total**
+
+      When point `i` arrives, the maximum can only grow via pairs that involve the
+      new point. Checking the new point against all `i-1` previous points is `O(i)`,
+      so the whole run is `O(n²)` — better, but still `4 * 10^10` for `n = 2 * 10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<pair<long long,long long>> p;
+          long long best = 0;
+          for(int i=0;i<n;i++){
+              long long x, y; cin >> x >> y;
+              for(auto &q : p)
+                  best = max(best, llabs(x-q.first) + llabs(y-q.second));
+              p.push_back({x, y});
+              cout << best << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      *`O(n²)` time total, `O(n)` space.*
+
+      **③ Four-sign transform — O(n) total (optimal)**
+
+      Replace the pair loop with four running `(min, max)` trackers for the sign
+      combos `(++, +−, −+, −−)` applied to each point. Compiled and run: prints
+      `0, 3, 4, 4, 7` on the sample below.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          long long mn[4], mx[4];
+          fill_n(mn, 4, LLONG_MAX);
+          fill_n(mx, 4, LLONG_MIN);
+          for(int i=0;i<n;i++){
+              long long x, y; cin >> x >> y;
+              long long v[4] = { x+y, x-y, -x+y, -x-y };   // the 4 sign combos
+              for(int c=0;c<4;c++){
+                  mn[c] = min(mn[c], v[c]);
+                  mx[c] = max(mx[c], v[c]);
+              }
+              long long best = 0;
+              for(int c=0;c<4;c++) best = max(best, mx[c]-mn[c]);
+              cout << best << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      *`O(1)` amortized per addition → `O(n)` total, `O(1)` space. The recommended
+      solution. There is no meaningful independent 4th algorithm — the transform is
+      the trick, and everything else is just the definition of `|a| = max(a, −a)`.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Four transforms.** The four score functions are `x+y`, `x-y`, `-x+y`,
+        `-x-y` (equivalently the four sign choices for `sx*x + sy*y`).
+      - **Running min/max.** For each transform we keep `mn[c]` and `mx[c]`.
+        A value only matters through its extremes, so `O(1)` per new point.
+      - **Answer.** `max over c of (mx[c] - mn[c])`. This is the widest spread of any
+        one of the four linear scores, which equals the greatest Manhattan distance.
+      - **`long long`.** Scores like `x+y` can reach `±2*10^9`; differences up to
+        `4*10^9`, so `int` would overflow.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample points: `(1,1),(3,2),(2,4),(2,1),(4,5)`.
+
+      Track the four bars. After the 1st point `(1,1)`: each transform has
+      `min == max`, so `best = 0`. ✓
+
+      After `(3,2)`:
+      ```
+      x+y : {2,5}   spread 3     x-y : {0,1}  spread 1
+      -x+y: {0,-1}  spread 1     -x-y: {-2,-5} spread 3
+      ```
+      `best = max(3,1,1,3) = 3`. ✓
+
+      After `(2,4)`:
+      ```
+      x+y : {2,5,6} spread 4     x-y : {0,1,-2} spread 3
+      -x+y: {0,-1,2} spread 3    -x-y: {-2,-5,-6} spread 4
+      ```
+      `best = 4`. ✓
+
+      After `(2,1)`: `x+y:{2,5,6,3} spread 4`, all others `<=3` → `best = 4`. ✓
+
+      After `(4,5)`:
+      ```
+      x+y : {2,5,6,3,9} spread 7
+      ```
+      `best = 7`. ✓
+
+      Output:
+      ```
+      0
+      3
+      4
+      4
+      7
+      ```
+      Every value matches the expected sample. (Manually, the farthest pair is
+      `(1,1)`–`(4,5)` with distance `|3| + |4| = 7`.)
+  - type: flowchart
+    title: "Four-sign max-Manhattan tracker"
+    nodes: ["new point (x, y)", "compute v = (x+y, x-y, -x+y, -x-y)", "for each c: mn[c]=min, mx[c]=max", "best = max_c (mx[c]-mn[c])", "print best"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+  - type: mcq
+    prompt: "Why can the four running (min, max) trackers give the maximum over all point pairs without ever comparing two points directly?"
+    options:
+      - "Because |a| = max(+a, -a) rewrites d(P,Q) as the max of four linear expressions, and the best pair for any one of them is its max minus its min — so only extremes of each linear score matter."
+      - "Because Manhattan distance equals Euclidean distance under a 45° rotation, so one tracker suffices."
+      - "Because all points have non-negative coordinates, making x+y always the largest score."
+      - "Because the answer only ever equals the distance from the newest point, which we track directly."
+    answer: 0
+    explanation: "Each sign pair defines a linear score; the best pair under that score is the spread between its running max and running min. The true maximum Manhattan distance is the largest such spread over the four transforms, so no explicit pair comparison is ever needed."
+---

@@ -1,0 +1,358 @@
+---
+id: police-chase
+title: Police Chase
+type: content
+difficulty: hard
+order: 116
+tags:
+  - graph
+  - max-flow
+  - min-cut
+  - dinic
+blocks:
+  - type: markdown
+    content: |
+      # Police Chase — minimum s-t cut
+
+      Kaaleppi robs a bank (crossing 1) and must drive to the harbor (crossing
+      `n`). By closing the fewest possible streets, the police want to make it
+      impossible to drive from `1` to `n`. The streets are **undirected**.
+      Equivalently: pick the smallest set of edges whose removal separates
+      `s = 1` from `t = n`.
+
+      This is the **minimum s-t cut** problem, and it is solved by the
+      foundational **max-flow / min-cut theorem**:
+
+      > The value of a maximum flow equals the capacity of a minimum cut.
+
+      A *cut* is any partition of the vertices into two sets `(S, T)` with
+      `s ∈ S`, `t ∈ T`; its capacity is the total capacity of edges crossing
+      from `S` to `T`. If we give every street capacity `1`, the capacity of a
+      cut is simply the **number** of streets crossing it — so the minimum cut
+      value is exactly the minimum number of streets the police must close.
+
+      ## Finding the cut itself
+
+      Max flow gives us the *number* `k` and — just as usefully — the *set*:
+      1. Run max flow from `s` to `t`.
+      2. In the **residual** network, BFS from `s` over edges that still have
+         positive residual capacity. The reached vertices are `S`; the rest are
+         `T`.
+      3. A street is in the minimum cut iff exactly one of its endpoints is
+         reachable: remove it (its forward edge is saturated, and it crosses the
+         `S`/`T` boundary).
+
+      This BFS-on-the-residual trick is the standard way to turn a max flow
+      into an explicit minimum cut — and it is exactly what an interviewer
+      probes when they ask "okay, now *list* the cut."
+
+      :::tip
+      **Interview tip:** Maximum-flow/minimum-cut is a repeat interview theme.
+      The two moves interviewers care about are (1) recognizing a problem as a
+      min-cut ("workers to jobs", "pairs that cannot be split", "remove fewest
+      edges to disconnect s and t") and (2) recovering the actual cut — *reach*s
+      an BFS over the residual graph. Undirected edges are modelled as two
+      antiparallel directed arcs of equal capacity, which is the small twist
+      this problem exists to teach.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Kaaleppi has just robbed a bank and is now heading to the harbor. However,
+      the police wants to stop him by closing some streets of the city.
+
+      What is the minimum number of streets that should be closed so that there
+      is no route between the bank and the harbor?
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the number of crossings
+      and streets. The crossings are numbered `1, 2, ..., n`. The bank is
+      located at crossing 1, and the harbor is located at crossing n.
+
+      Then, there are `m` lines describing the streets. Each line has two
+      integers `a` and `b`: there is a street between crossings `a` and `b`
+      (two-way).
+
+      **Constraints:** `2 <= n <= 500`, `1 <= m <= 1000`, `1 <= a, b <= n`
+
+      ## Output
+
+      First print an integer `k`: the minimum number of streets that should be
+      closed. After this, print `k` lines describing the streets. You can print
+      any valid solution.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 5
+      1 2
+      1 3
+      2 3
+      3 4
+      1 4
+      ```
+      **Output:**
+      ```
+      2
+      3 4
+      1 4
+      ```
+      (Closing the streets `3 4` and `1 4` disconnects the bank from the harbor.
+      Any minimum set is accepted.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — try every subset of streets, O(2^m · (n + m))**
+
+      Enumerate every subset of streets, delete them, and check (BFS/DFS) whether
+      `1` still connects to `n`. The smallest deleting subset that disconnects
+      them wins. Correct, but `2^1000` subsets is hopeless.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          vector<pair<int,int>> e(m);
+          for (int i = 0; i < m; i++) { cin >> e[i].first >> e[i].second; e[i].first--; e[i].second--; }
+          int best = m; vector<int> bestSet;
+          for (int mask = 0; mask < (1 << m); mask++) {
+              int cuts = __builtin_popcount(mask);
+              if (cuts >= best) continue;
+              vector<vector<int>> g(n);
+              auto add = [&](pair<int,int> p) { g[p.first].push_back(p.second); g[p.second].push_back(p.first); };
+              for (int i = 0; i < m; i++) if (!(mask & (1 << i))) add(e[i]);
+              vector<char> vis(n, 0); queue<int> q; vis[0] = 1; q.push(0);
+              while (!q.empty()) { int v = q.front(); q.pop(); for (int u : g[v]) if (!vis[u]) { vis[u] = 1; q.push(u); } }
+              if (!vis[n - 1]) { best = cuts; bestSet.clear(); for (int i = 0; i < m; i++) if (mask & (1 << i)) bestSet.push_back(i); }
+          }
+          cout << best << "\n";
+          for (int i : bestSet) cout << e[i].first + 1 << " " << e[i].second + 1 << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(2^m · (n + m))`. With `m <= 1000` this is astronomically slow; the
+      brute force illustrates the structure but never runs on the real input.*
+
+      **② Optimization — max flow gives the number k, O(V·E²)**
+
+      Treat every undirected street as two directed arcs each of capacity 1
+      (`add_edge(a, b, 1, 1)`). By max-flow/min-cut the maximum flow value is
+      exactly `k`. Edmonds–Karp (BFS shortest augmenting path) is polynomial.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      struct Edge { int to, rev; ll cap; };
+      vector<vector<Edge>> g;
+
+      void add_undir(int a, int b, ll c) {
+          g[a].push_back({b, (int)g[b].size(), c});
+          g[b].push_back({a, (int)g[a].size() - 1, c});   // undirected: c both ways
+      }
+
+      ll bfs_augment(int s, int t) {
+          int n = g.size();
+          vector<int> par(n, -1); vector<Edge*> pe(n, 0);
+          queue<int> q; q.push(s); par[s] = s;
+          while (!q.empty()) {
+              int v = q.front(); q.pop();
+              for (auto &e : g[v]) if (par[e.to] < 0 && e.cap > 0) { par[e.to] = v; pe[e.to] = &e; q.push(e.to); }
+          }
+          if (par[t] < 0) return 0;
+          ll f = LLONG_MAX;
+          for (int v = t; v != s; v = par[v]) f = min(f, pe[v]->cap);
+          for (int v = t; v != s; v = par[v]) { pe[v]->cap -= f; g[pe[v]->to][pe[v]->rev].cap += f; }
+          return f;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          g.assign(n, {});
+          for (int i = 0; i < m; i++) { int a, b; cin >> a >> b; a--; b--; add_undir(a, b, 1); }
+          ll flow = 0;
+          while (ll f = bfs_augment(0, n - 1)) flow += f;   // value == minimal k
+          cout << flow << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(V · E²)` — returns `k`, but this tier only prints the count, not the
+      streets.*
+
+      **③ Further optimization — Dinic + residual reachability, the full answer**
+
+      Dinic computes the maximum flow fast; then one BFS over residual capacity
+      finds the cut edges and prints both `k` and the streets `A B` to close.
+      This is the tier we compile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      struct Edge { int to, rev; ll cap; };
+      vector<vector<Edge>> g;
+      vector<int> level, it;
+      vector<pair<int,int>> street;   // original undirected streets, 0-indexed
+
+      void add_edge(int a, int b, ll c, ll rc) {
+          g[a].push_back({b, (int)g[b].size(), c});
+          g[b].push_back({a, (int)g[a].size() - 1, rc});
+      }
+
+      bool bfs(int s, int t) {
+          level.assign(g.size(), -1);
+          queue<int> q; level[s] = 0; q.push(s);
+          while (!q.empty()) {
+              int v = q.front(); q.pop();
+              for (auto &e : g[v])
+                  if (e.cap > 0 && level[e.to] < 0) { level[e.to] = level[v] + 1; q.push(e.to); }
+          }
+          return level[t] >= 0;
+      }
+
+      ll dfs(int v, int t, ll f) {
+          if (v == t) return f;
+          for (int &i = it[v]; i < (int)g[v].size(); i++) {
+              Edge &e = g[v][i];
+              if (e.cap > 0 && level[e.to] == level[v] + 1) {
+                  ll d = dfs(e.to, t, min(f, e.cap));
+                  if (d > 0) { e.cap -= d; g[e.to][e.rev].cap += d; return d; }
+              }
+          }
+          return 0;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          g.assign(n, {});
+          for (int i = 0; i < m; i++) {
+              int a, b; cin >> a >> b; a--; b--;
+              street.push_back({a, b});
+              add_edge(a, b, 1, 1);   // undirected street = two arcs, cap 1 each
+          }
+          int s = 0, t = n - 1;
+          ll flow = 0, INF = (ll)4e18;
+          while (bfs(s, t)) {
+              it.assign(n, 0);
+              while (ll f = dfs(s, t, INF)) flow += f;
+          }
+
+          // reachable set S in the residual graph (edges with remaining cap > 0)
+          vector<char> reach(n, 0);
+          queue<int> q; reach[s] = 1; q.push(s);
+          while (!q.empty()) {
+              int v = q.front(); q.pop();
+              for (auto &e : g[v]) if (e.cap > 0 && !reach[e.to]) { reach[e.to] = 1; q.push(e.to); }
+          }
+
+          cout << flow << "\n";
+          for (auto [a, b] : street)
+              if (reach[a] != reach[b])                     // edge crosses the cut
+                  cout << a + 1 << " " << b + 1 << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(V²E)` time, `O(V + E)` space; the residual reachability BFS is a
+      single extra `O(V + E)` pass. (This is the optimal tier.)*
+
+      **④ Alternative — not a better family here**
+
+      Push-relabel would send the same flow for very dense graphs but adds code
+      without benefit at `m <= 1000`. Dinic's flow + residual-BFS is the
+      intended solution, so we stop at ③.
+  - type: markdown
+    content: |
+      # Code logic
+
+      How the algorithm maps onto THIS problem:
+
+      - **Undirected modelling.** A two-way street `a – b` becomes two directed
+        arcs with capacity 1 each: `add_edge(a, b, 1, 1)`. The reverse capacity
+        of `1` (not `0`) is precisely what encodes "the street is two-way and an
+        equal increment of flow can travel back". If we used `add_edge(a,b,1,0)`
+        the model would wrongly mean a one-way road.
+
+      - **Why capacity means "one street".** A cut's capacity = number of arcs
+        crossing it. Because the arcs are paired and equal, the min cut capacity
+        counts distinct streets, not arcs, so max flow = `k`.
+
+      - **Finding the cut.** After the flow, edges with positive residual
+        capacity are exactly the ones not saturated. A BFS over them from `s`
+        marks the reachable side `S`. For each original street `(a,b)`, if one
+        endpoint is in `S` and the other in `T`, that street is saturated and
+        must be closed — that is the min cut. We print all such streets.
+
+      - **Correctness of the BFS cut.** At max flow no residual `s -> t` path
+        exists, so `t` is never marked; every street crossing the boundary has
+        its forward arc saturated (else it would be a residual path step), hence
+        is safely printable. Max-flow/min-cut guarantees the number printed
+        equals the maximum flow.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 4`, streets `1-2, 1-3, 2-3, 3-4, 1-4` (`s = 1`,
+      `t = 4`), all capacity 1.
+
+      **Max flow.** Two edge-disjoint paths reach the harbor:
+      `1 -> 4` (street `1-4`) and `1 -> 2 -> 3 -> 4` (streets `1-2,2-3,3-4`),
+      for a total flow of **2**. No third route exists (every path from 1 to 4
+      must use one of those saturated edges), so `k = 2`.
+
+      **Residual BFS.** Starting from `s = 1`, which vertices are still reachable
+      through unsaturated edges? `1 -> 2` (saturated for the used path but its
+      residual `2 -> 1` points back; forward arcs with remaining capacity exist
+      from `1` to `2`? Let's check: `1-2` was used, so its forward cap is 0; but
+      `1-3` was *not* used → `3` is reachable, and `3 -> 2` street `2-3`? that
+      was used). In practice the reachable set is `{1, 2, 3}` and `4` is not
+      reachable. Identify cuts:
+
+      | street   | reach[a] | reach[b] | crosses cut? |
+      |----------|----------|----------|--------------|
+      | `1-2` | S | S | no |
+      | `1-3` | S | S | no |
+      | `2-3` | S | S | no |
+      | `3-4` | S | T | **yes → close** |
+      | `1-4` | S | T | **yes → close** |
+
+      Printed streets: `3 4` and `1 4`.
+
+      Expected (sample) — `k = 2`, streets `3 4` and `1 4`. Actual — same
+      multiset. Match. Removing exactly those two streets leaves `1,2,3` in one
+      component and `4` alone, so the bank can no longer reach the harbor with
+      only 2 closures.
+  - type: flowchart
+    title: "Min cut from max flow"
+    nodes: ["model each street as two arcs, cap 1", "run Dinic max flow s->t", "flow value k", "BFS from s over residual (>0 cap)", "reachable set S; rest is T", "street crosses S/T? print it", "done: printed streets = min cut"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6, label: "yes"}
+      - {from: 5, to: 5, label: "no"}
+  - type: mcq
+    prompt: "After computing a maximum s-t flow, we BFS from s over residual edges with positive capacity. Why does every original street with exactly one reachable endpoint belong to a minimum cut?"
+    options:
+      - "Because such streets are always the most heavily used and are therefore simply the ones carrying the most flow."
+      - "Because at maximum flow the reachable set S is one side of an s-t cut, and any street crossing S/T must have its forward arc saturated — so removing exactly those crossing streets disconnects s from t and Max-Flow/Min-Cut certifies their count equals the flow value."
+      - "Because the BFS finds the shortest soure-to-sink street, which for capacity-1 edges is always a minimum cut."
+      - "Because every reverse residual edge automatically ends on the T side."
+    answer: 1
+    explanation: "At max flow no s–t path exists in the residual network, so the BFS marks a set S with s in it and t not. Every original edge crossing between S and T must be saturated in the forward direction (otherwise it would keep a residual path alive), so deleting those edges disconnects s from t. By Max-Flow/Min-Cut their number equals the max flow, which is the smallest possible cut — hence a minimum cut."
+---

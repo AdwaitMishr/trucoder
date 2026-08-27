@@ -1,0 +1,325 @@
+---
+id: knight-moves-grid
+title: Knight Moves Grid
+difficulty: easy
+order: 23
+tags:
+  - intro
+  - grid
+  - bfs
+  - graph
+blocks:
+  - type: markdown
+    content: |
+      # Knight Moves Grid
+
+      **The technique: BFS for shortest path on an unweighted graph.** A chess
+      knight moves in an `L` shape — `(±1,±2)` or `(±2,±1)` — so from any square
+      it has up to **8** possible moves. We can model every square of an `n×n`
+      board as a *node* and every legal knight move as an unweighted *edge*. The
+      minimum number of moves between two squares is then the **shortest path**
+      in this graph.
+
+      Because every edge costs the same (`1` move), **Breadth-First Search**
+      finds it in optimal time: BFS explores nodes in order of increasing
+      distance from the start, so the first time we pop the destination we have
+      the minimum number of moves. A `dist` array records the distance to each
+      square as it is first reached (BFS guarantees "first reach = shortest").
+
+      **When you reach for it:** any "minimum number of steps to reach a
+      target" problem where the next states are a fixed, small set of moves —
+      knight tours, sliding puzzles, word-ladders, shortest path in a maze.
+      If all moves cost the same, BFS is the tool; only use Dijkstra when edges
+      have different weights.
+
+      **Worked mini-example.** From `(0,0)` on an `8×8` board the 8 possible
+      moves land on `(1,2), (2,1)` (and symmetric negatives where in bounds).
+      Distance to `(1,2)` is `1`; distance to `(0,0)` is `0`. Because boards of
+      side ≥ 4 allow full mobility, most short hops are reachable, and BFS
+      returns `-1` (unreachable) only on very small boards (e.g. `2×2`, where a
+      knight has no legal move at all).
+
+      **Complexity.** `n²` squares, each expanding to ≤ 8 neighbours →
+      **O(n²)** time (each square visited once), and **O(n²)** space for
+      `dist`. This is optimal for a grid graph.
+
+      :::tip
+      **Interview tip:** "minimum number of knight moves" is a classic BFS
+      warm-up. Be ready to (1) describe the 8-move jump set, (2) explain why
+      BFS (a FIFO queue) rather than DFS gives the shortest path, and (3) state
+      the O(n²) bound. A common follow-up is a very large board (`n ≈ 10^5`) —
+      there the *full* BFS is too big and the expected answer is batched or
+      pattern-based; mention you'd switch to bidirectional BFS (or a
+      closed-form) for huge boards.
+      :::
+  - type: markdown
+    content: |
+      # Question — Knight Moves Grid
+
+      You are given an `n × n` chessboard whose squares are labelled `(row,
+      column)` with `0 ≤ row, column < n`. A knight placed on square `(r1,c1)`
+      wants to reach square `(r2,c2)`.
+
+      The knight moves like a chess knight: from `(r,c)` it may move to any
+      square `(r±1, c±2)` or `(r±2, c±1)` that stays on the board.
+
+      Compute the **minimum number of moves** needed, or `-1` if the
+      destination is unreachable.
+
+      **Constraints:** `1 ≤ n ≤ 10^3`. All coordinates are within the board.
+
+      **Input:** one line with five integers: `n r1 c1 r2 c2`.
+      **Output:** a single integer — the minimum number of knight moves, or
+      `-1`.
+
+      Sample input:
+
+      ```
+      8 0 0 7 7
+      ```
+
+      Sample output:
+
+      ```
+      6
+      ```
+
+      Second sample (from a square to itself takes zero moves):
+
+      ```
+      8 0 0 0 0
+      ```
+
+      Output:
+
+      ```
+      0
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — DFS path enumeration, exponential**
+
+      The simplest correct idea: explore *all* simple paths (never revisiting a
+      square on the same path) and remember the shortest one that reaches the
+      target. Correct, but the number of simple paths grows explosively, so it
+      only terminates for short distances.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int dr[8] = {-2,-2,-1,-1, 1, 1, 2, 2};
+      const int dc[8] = {-1, 1,-2, 2,-2, 2,-1, 1};
+
+      int n;
+      int dfs(int r, int c, int r2, int c2, int depth, int best,
+              vector<vector<int>>& onPath) {
+          if (r == r2 && c == c2) return depth;
+          if (depth >= best) return best;              // can't beat current best
+          for (int k = 0; k < 8; ++k) {
+              int nr = r + dr[k], nc = c + dc[k];
+              if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+              if (onPath[nr][nc]) continue;
+              onPath[nr][nc] = 1;
+              best = min(best, dfs(nr, nc, r2, c2, depth + 1, best, onPath));
+              onPath[nr][nc] = 0;                      // backtrack
+          }
+          return best;
+      }
+
+      int solve(int nn, int r1, int c1, int r2, int c2) {
+          n = nn;
+          if (r1 == r2 && c1 == c2) return 0;
+          const int INF = 1e9;
+          vector<vector<int>> onPath(n, vector<int>(n, 0));
+          onPath[r1][c1] = 1;
+          int ans = dfs(r1, c1, r2, c2, 0, INF, onPath);
+          return ans == INF ? -1 : ans;
+      }
+      ```
+
+      **O(b^d)** time (exponential in the distance `d`; branching factor 8) —
+      correct but far too slow for the `n = 10^3` board.
+
+      **② Optimization — BFS, O(n²) (submission)**
+
+      A FIFO queue expands layer by layer. First time we reach the target we
+      have the minimum (all edges cost 1). A `dist` array that starts at `-1`
+      doubles as the visited flag.
+
+      ```cpp
+      int solve(int n, int r1, int c1, int r2, int c2) {
+          if (r1 == r2 && c1 == c2) return 0;
+          vector<vector<int>> dist(n, vector<int>(n, -1));
+          queue<pair<int,int>> q;
+          dist[r1][c1] = 0; q.push({r1, c1});
+          int dr[8] = {-2,-2,-1,-1, 1, 1, 2, 2};
+          int dc[8] = {-1, 1,-2, 2,-2, 2,-1, 1};
+          while (!q.empty()) {
+              auto [r, c] = q.front(); q.pop();
+              for (int k = 0; k < 8; ++k) {
+                  int nr = r + dr[k], nc = c + dc[k];
+                  if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+                  if (dist[nr][nc] != -1) continue;
+                  dist[nr][nc] = dist[r][c] + 1;
+                  if (nr == r2 && nc == c2) return dist[nr][nc];
+                  q.push({nr, nc});
+              }
+          }
+          return -1;   // destination never reached
+      }
+      ```
+
+      **O(n²)** time, O(n²) space — optimal for a board graph. This is the tier
+      you'd submit for `n = 10^3`.
+
+      **③ Further optimization — bidirectional BFS (huge boards)**
+
+      Expand from *both* the start and the target, alternating between the two
+      smaller frontiers, and stop when a square is reached from both sides —
+      the answer is `dₐ + d_b` at the meeting square. This cuts the explored
+      frontier roughly in half and can handle very large boards where a full
+      BFS would touch too many squares.
+
+      ```cpp
+      int solve(int n, int r1, int c1, int r2, int c2) {
+          if (r1 == r2 && c1 == c2) return 0;
+          vector<vector<int>> dA(n, vector<int>(n, -1)), dB(n, vector<int>(n, -1));
+          queue<pair<int,int>> qA, qB;
+          dA[r1][c1] = 0; qA.push({r1, c1});
+          dB[r2][c2] = 0; qB.push({r2, c2});
+          int best = INT_MAX; int dr[8] = {-2,-2,-1,-1,1,1,2,2}, dc[8] = {-1,1,-2,2,-2,2,-1,1};
+          while (!qA.empty() && !qB.empty()) {
+              if (qA.size() > qB.size()) { swap(dA, dB); swap(qA, qB); }  // grow the smaller side
+              int sz = (int)qA.size();
+              while (sz--) {
+                  auto [r, c] = qA.front(); qA.pop();
+                  for (int k = 0; k < 8; ++k) {
+                      int nr = r + dr[k], nc = c + dc[k];
+                      if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+                      if (dA[nr][nc] != -1) continue;
+                      dA[nr][nc] = dA[r][c] + 1; qA.push({nr, nc});
+                      if (dB[nr][nc] != -1)                          // frontiers meet here
+                          best = min(best, dA[nr][nc] + dB[nr][nc]);
+                  }
+              }
+          }
+          return best == INT_MAX ? -1 : best;
+      }
+      ```
+
+      **O((n²) in the worst case, ~half the frontier in practice)** — a
+      different search strategy that shines when the board is very large.
+
+      **④ Alternative — Dijkstra / uniform-cost search**
+
+      A priority-queue (min-heap) version of shortest path. With all edges of
+      weight 1 it returns the same answer as BFS, but it's the algorithm you'd
+      use the moment moves get different costs — so it's a good *generalization*
+      to be able to write.
+
+      ```cpp
+      int solve(int n, int r1, int c1, int r2, int c2) {
+          if (r1 == r2 && c1 == c2) return 0;
+          vector<vector<int>> dist(n, vector<int>(n, -1));
+          priority_queue<tuple<int,int,int>, vector<tuple<int,int,int>>, greater<tuple<int,int,int>>> pq;
+          dist[r1][c1] = 0; pq.push({0, r1, c1});
+          int dr[8] = {-2,-2,-1,-1,1,1,2,2}, dc[8] = {-1,1,-2,2,-2,2,-1,1};
+          while (!pq.empty()) {
+              auto [d, r, c] = pq.top(); pq.pop();
+              if (d != dist[r][c]) continue;                 // stale entry
+              if (r == r2 && c == c2) return d;
+              for (int k = 0; k < 8; ++k) {
+                  int nr = r + dr[k], nc = c + dc[k];
+                  if (nr < 0 || nr >= n || nc < 0 || nc >= n) continue;
+                  if (dist[nr][nc] == -1 || d + 1 < dist[nr][nc]) {
+                      dist[nr][nc] = d + 1;
+                      pq.push({dist[nr][nc], nr, nc});
+                  }
+              }
+          }
+          return dist[r2][c2];
+      }
+      ```
+
+      **O(n² log n²)** time, O(n²) space — same answer, and it generalizes to
+      weighted edges where a simple FIFO BFS no longer works.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      All tiers compute the same minimum; they differ in *how* they explore.
+
+      - **Tier ① (brute).** A recursive DFS never revisits a square on the
+        current path (`onPath`), tracks the running path length, and prunes any
+        branch already deeper than the best found. `depth >= best` cuts the
+        search, `min(...)` keeps the shortest arrival. Correct but the branching
+        factor 8 makes it exponential — only usable for very short hops.
+      - **Tier ② (BFS).** `dist[n][n]` starts all `-1` ("not yet reached"),
+        with `dist[r1][c1] = 0`; the `-1` doubles as the visited flag. The 8
+        move vectors encode the knight's L-shapes. Because every expansion adds
+        `1`, the queue processes squares in non-decreasing distance order, so
+        the first discovery of `(r2,c2)` is its true shortest distance — we can
+        return immediately without draining the queue. If BFS exhausts the
+        queue without reaching the target (e.g. a `2×2` board), the answer is
+        `-1`.
+      - **Tier ③ (bidirectional).** Two distance arrays grow from opposite
+        corners. Swapping the smaller frontier each round keeps both expansions
+        cheap. The first square reached from both sides yields
+        `dₐ + d_b`; we keep the minimum over all such meetings. This is the
+        "meet in the middle" idea that reduces how much of a huge board gets
+        touched.
+      - **Tier ④ (Dijkstra).** Identical discovery rule, but a min-heap pops
+        the globally smallest distance first (not FIFO order). The
+        `if (d != dist[r][c]) continue;` skips stale heap entries. With unit
+        weights it degenerates to BFS; its real value is the weighted case.
+
+      The `same-square` early return in tiers ②–④ keeps the trivial case
+      O(1), but it's optional — each algorithm handles start = end with
+      distance 0 naturally.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `8 0 0 7 7`. BFS layers by distance from `(0,0)`:
+
+      | distance layer | squares reached (sample) |
+      |----------------|--------------------------|
+      | 0 | `(0,0)` |
+      | 1 | `(1,2)`, `(2,1)` |
+      | 2 | e.g. `(0,4)`, `(1,0)`, `(3,3)`, `(2,0)`, `(4,1)` … |
+      | 3 | widens further |
+      | 4–5 | continue expanding towards the far corner |
+      | 6 | `(7,7)` ← first reached here |
+
+      BFS pops each layer in order, so the very first time `(7,7)` is enqueued
+      its distance is recorded as `6`, which is returned as the minimum. Output
+      **6** ✓ (sample). Bidirectional BFS reaches the same `6` but grows
+      frontiers from `(0,0)` and `(7,7)` simultaneously — the layers meet in
+      the middle after far fewer expansions.
+
+      **Input:** `2 0 0 1 1`. On a `2×2` board no knight move from `(0,0)` even
+      stays in bounds (every L-shape needs a coordinate of at least 2). The
+      queue empties immediately and BFS never reaches `(1,1)` → return **-1**
+      ✓.
+
+      **Input:** `8 0 0 1 2`. `(1,2)` is one legal L-move from `(0,0)`, so the
+      first layer contains it → return **1**.
+
+      | case | start → end | BFS outcome | output |
+      |------|-------------|-------------|--------|
+      | `8 0 0 7 7` | far corner | reached at layer 6 | 6 |
+      | `8 0 0 0 0` | same square | dist 0 | 0 |
+      | `2 0 0 1 1` | tiny board | never reached | -1 |
+  - type: mcq
+    prompt: Why does Breadth-First Search return the minimum number of knight moves while a depth-first search would not necessarily?
+    options:
+      - DFS visits fewer squares so it is too fast to be correct
+      - 'BFS explores nodes in order of increasing distance (all edges cost 1), so the first time it discovers the target the recorded distance is guaranteed minimal'
+      - DFS stores distances as negative numbers
+      - 'BFS tries every move twice, doubling accuracy'
+    answer: 1
+    explanation: 'Because every edge has weight 1, BFS''s FIFO queue processes nodes in non-decreasing distance from the source. Whichever layer the destination is first discovered in is its true shortest distance. DFS (or a naive depth-first path enumeration) may reach a node via a long path first and has no such guarantee.'
+type: content
+---

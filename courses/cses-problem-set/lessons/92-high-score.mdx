@@ -1,0 +1,239 @@
+---
+id: high-score
+title: High Score
+type: content
+difficulty: hard
+order: 92
+tags:
+  - graph-algorithms
+  - bellman-ford
+  - longest-path
+  - cycle-detection
+blocks:
+  - type: markdown
+    content: |
+      # High Score — longest path with a positive-cycle trap
+
+      We walk from room `1` to room `n` through one-way tunnels that add (possibly
+      negative) scores `x`. We may reuse tunnels freely and want the **maximum** total
+      score. Two things make this tricky:
+
+      - weights can be **negative**, so Dijkstra is invalid;
+      - there may be a **positive-weight cycle** on a route from `1` to `n` — looping
+        around it an arbitrary number of times would make the score arbitrarily large,
+        so the answer is **`-1`**.
+
+      ## Reduce "maximize" to "minimize"
+
+      Multiplying every tunnel value by `-1` turns "maximize the sum" into "minimize
+      the sum". Then the problem becomes: find the shortest path from `1` to `n`,
+      allowing negative edges, and detect any *negative cycle* that lies on a `1 → n`
+      route. `-1` is printed if such a cycle exists; otherwise the answer is
+      `-dist[n]`.
+
+      ## Why Bellman–Ford
+
+      Dijkstra cannot handle negative weights. **Bellman–Ford** handles them by simple
+      repeated relaxation: run `n-1` rounds, each relaxing every edge
+      (`if dist[u] + w < dist[v], tighten dist[v]`). After `n-1` rounds all shortest
+      paths (which use at most `n-1` edges) are correct. To *detect* a negative cycle,
+      run **one extra (n-th) round**: if any edge still relaxes, a negative cycle is
+      reachable.
+
+      **Complexity.** `O(n·m)` time, `O(n)` memory. With `n <= 2500`, `m <= 5000` this
+      is up to `1.25·10^7` relaxations — fast.
+
+      :::tip
+      **Interview tip:** Whenever you see "shortest path" and negative weights, reach
+      for Bellman–Ford (`O(n·m)`) or its queue-based cousin SPFA. The "does it still
+      relax on the n-th round?" trick is the standard negative-cycle detector. For the
+      *longest* path, negate weights — but only do that when the goal is a single
+      detect-cycle-or-answer, because longest paths with cycles are ill-posed in
+      general.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You play a game consisting of `n` rooms and `m` tunnels. Your initial score is
+      `0`, and each tunnel increases your score by `x`, where `x` may be positive or
+      negative. You may go through a tunnel several times. Your task is to walk from
+      room `1` to room `n` and get the maximum possible score.
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the number of rooms and
+      tunnels. Rooms are numbered `1, 2, ..., n`.
+
+      Then there are `m` lines describing the tunnels. Each line has three integers
+      `a`, `b` and `x`: the tunnel starts at room `a`, ends at room `b`, and increases
+      your score by `x`. All tunnels are one-way.
+
+      It is guaranteed you can get from room `1` to room `n`.
+
+      **Constraints:** `1 <= n <= 2500`, `1 <= m <= 5000`, `1 <= a,b <= n`, `-10^9 <= x
+      <= 10^9`. Note the answer may be as large as `±10^18` — use `long long`.
+
+      ## Output
+
+      Print one integer: the maximum score you can get. However, if you can get an
+      arbitrarily large score, print `-1`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 5
+      1 2 3
+      2 4 -1
+      1 3 -2
+      3 4 7
+      1 4 4
+      ```
+      **Output:**
+      ```
+      5
+      ```
+      Explanation: the route `1 → 3 → 4` scores `-2 + 7 = 5`, beating the direct
+      `1 → 4` (`4`) and `1 → 2 → 4` (`3 - 1 = 2`).
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate simple paths, O(n!)**
+
+      Backtrack over every simple path from `1` to `n` and take the maximum sum. It is
+      correct only when no positive cycle is usable; it cannot even *represent* the
+      `-1` (unbounded) case, and `n!` paths blow up instantly. Merely a strawman.
+
+      **② Optimization — Bellman–Ford on negated edges, O(n·m)**
+
+      Relax every tunnel `n-1` times, negating each value first. After that,
+      `-dist[n]` is the maximum finite score.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          int n, m; cin >> n >> m;
+          struct E { int a, b; long long x; };
+          vector<E> e(m);
+          vector<vector<int>> adj(n + 1), radj(n + 1);
+          for (int i = 0; i < m; i++) {
+              cin >> e[i].a >> e[i].b >> e[i].x;
+              adj[e[i].a].push_back(e[i].b);
+              radj[e[i].b].push_back(e[i].a);
+          }
+          auto reach = [&](const vector<vector<int>>& g, int s, vector<char>& v) {
+              v.assign(n + 1, 0);
+              queue<int> q; v[s] = 1; q.push(s);
+              while (!q.empty()) {
+                  int u = q.front(); q.pop();
+                  for (int t : g[u]) if (!v[t]) { v[t] = 1; q.push(t); }
+              }
+          };
+          vector<char> from1, ton;                 // reachable from 1 / can reach n
+          reach(adj, 1, from1); reach(radj, n, ton);
+
+          const long long INF = 4e18;
+          vector<long long> dist(n + 1, INF);
+          dist[1] = 0;
+          for (int it = 0; it < n - 1; it++) {     // n-1 relaxation rounds
+              bool any = false;
+              for (auto& ed : e) {
+                  long long w = -ed.x;             // shortest on -x  ==  longest on x
+                  if (dist[ed.a] < INF && dist[ed.b] > dist[ed.a] + w) {
+                      dist[ed.b] = dist[ed.a] + w; any = true;
+                  }
+              }
+              if (!any) break;
+          }
+          // n-th round: any edge still relaxing on a 1->n path => positive cycle
+          bool poscycle = false;
+          for (auto& ed : e) {
+              long long w = -ed.x;
+              if (dist[ed.a] < INF && from1[ed.a] && ton[ed.a]
+                  && dist[ed.b] > dist[ed.a] + w) { poscycle = true; break; }
+          }
+          cout << (poscycle ? -1 : -dist[n]) << "\n";
+          return 0;
+      }
+      ```
+
+      *O(n·m) time, O(n) memory — the intended solution.*
+
+      **③ Further optimization — none meaningful**
+
+      `O(n·m)` is already a tight bound for the negative-weighted SSSP with cycle
+      detection; there is no general faster algorithm for this setting.
+
+      **④ Alternative — SPFA with a relaxation counter**
+
+      A queue-based variant that pushes a vertex only when it improved (and aborts at
+      `n` relaxations of one vertex as a negative-cycle signal) is often faster in
+      practice, though its worst case is the same `O(n·m)`. It changes the constant,
+      not the class.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focusing on the `②` solution:
+
+      - **Negation.** Each tunnel value `x` is stored as `w = -x`; minimizing over
+        negated values is exactly maximizing over the originals.
+      - **Why only `n-1` rounds.** Any simple path uses at most `n-1` edges, so after
+        `n-1` full relaxation rounds every finite distance reflects a shortest path of
+        at most that many edges. After this, `-dist[n]` is the best finite score.
+      - **The positive-cycle test.** We run one more scan of the edges. If edge `a→b`
+        still improves `dist[b]`, that improvement can only come from a negative cycle
+        (in negated terms) — i.e. a **positive** cycle in the original. Such a cycle
+        only corrupts the answer if you can *reach* it from `1` (`from1[a]`) and reach
+        `n` from it (`ton[a]`); otherwise it is irrelevant and we keep the finite
+        answer.
+      - **The two reachability BFS(s).** `adj` gives vertices reachable from `1`;
+        `radj` (reversed edges) gives vertices that can reach `n`. `from1[a] && ton[a]`
+        means vertex `a` sits on some `1 → n` route.
+      - **`-dist[n]`.** Because we minimized negated costs, the maximum original score
+        is the negated shortest distance.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample. Tunnels (negated weights `w = -x`):
+      `1→2 (w= -3)`, `2→4 (w= +1)`, `1→3 (w= +2)`, `3→4 (w= -7)`, `1→4 (w= -4)`.
+
+      Relax all edges repeatedly; `dist` after each full round (finite values only):
+
+      | round | dist[1] | dist[2] | dist[3] | dist[4] |
+      |-------|---------|---------|---------|---------|
+      | start | 0 | ∞ | ∞ | ∞ |
+      | 1 | 0 | -3 | +2 | -5 |
+      | 2 | 0 | -3 | +2 | -5 |
+
+      Round 2 changes nothing (`any = false`), so we stop. `dist[4] = -5`, meaning the
+      best finite score is `-(-5) = 5`, achieved by `1 → 3 → 4` (`-2 + 7 = 5`).
+
+      No edge still improves, so there is no positive cycle on a `1 → n` route; we
+      print `5` (not `-1`).
+
+      Expected (sample) — `5`. Actual — `5`. Match.
+  - type: flowchart
+    title: "Longest path with Bellman-Ford + cycle check"
+    nodes: ["negate every tunnel value", "dist[1]=0, others=INF", "relax all edges n-1 times", "did any edge improve in last round?", "edge on a 1->n path still improves?", "print -1", "print -dist[n]"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 3, to: 6, label: "no"}
+      - {from: 4, to: 5, label: "yes (positive cycle on route)"}
+      - {from: 4, to: 6, label: "no (irrelevant cycle)"}
+  - type: mcq
+    prompt: "How do you know the answer is arbitrarily large (-1) rather than a huge finite number?"
+    options:
+      - "By checking whether any edge is still relaxable on the n-th Bellman-Ford round, but only counting one whose endpoints lie on a path that starts at 1 and ends at n."
+      - "By checking if the graph has any cycle at all."
+      - "By seeing whether dist[n] is negative after n-1 rounds."
+      - "By checking if all edge weights are negative."
+    answer: 0
+    explanation: "An edge that still relaxes on the n-th round proves a negative (original: positive) cycle is reachable. It only blows up the score if you can get onto it from room 1 and still reach room n from it — that is exactly the from1[a] && ton[a] filter. A positive cycle off any 1..n route cannot be exploited, so the finite max stands."

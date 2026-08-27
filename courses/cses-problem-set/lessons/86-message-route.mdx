@@ -1,0 +1,263 @@
+---
+id: message-route
+title: Message Route
+type: content
+difficulty: easy
+order: 86
+tags:
+  - graph-algorithms
+  - bfs
+  - shortest-path
+blocks:
+  - type: markdown
+    content: |
+      # Message Route — shortest path in an unweighted graph with BFS
+
+      A network of `n` computers and `m` undirected connections is given. Send
+      a message from computer `1` to computer `n` using the *fewest* hops, and
+      print one shortest route (or report that none exists).
+
+      The connections are unweighted — every hop costs 1 — so this is shortest
+      path in an **unweighted graph**, and the champion algorithm is **BFS**.
+
+      ## Why BFS, not Dijkstra
+
+      Dijkstra solves weighted shortest paths. Here every edge has weight 1, and
+      BFS does the same job in `O(n + m)` without a priority queue, because it
+      explores vertices in **distance order**: first all nodes one hop away,
+      then two hops, etc. The **first** time BFS reaches vertex `n`, that
+      arrival is along a shortest route — later arrivals are never shorter.
+
+      A single array `parent[]` records, for each vertex, the vertex that
+      discovered it. Following `parent` from `n` back to `1` yields the route
+      reversed; reversing it gives the answer.
+
+      ## Complexity
+
+      Each vertex is enqueued once and each edge relaxed once: `O(n + m)` time,
+      `O(n + m)` space (adjacency list + parent).
+
+      :::tip
+      **Interview tip:** "Fewest hops between two nodes in a network / social
+      graph / word ladder" is BFS plus parent reconstruction. The frequent trap
+      is using DFS or recursion and getting *a* path instead of *the shortest*
+      path — only BFS (or Dijkstra with unit weights) guarantees shortest. The
+      reconstruction-with-reverse is a skill worth drilling until it is
+      mechanical.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Syrjälä's network has `n` computers and `m` connections. Your task is to
+      find out if Uolevi can send a message to Maija, and if it is possible, to
+      find a valid route.
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the number of computers
+      and connections. The computers are numbered `1, 2, ..., n`. Uolevi's
+      computer is `1` and Maija's computer is `n`.
+
+      Then, there are `m` lines describing the connections. Each line has two
+      integers `a` and `b`: there is a connection between those computers. Every
+      connection is between two different computers, and there is at most one
+      connection between any two computers.
+
+      **Constraints:** `2 ≤ n ≤ 10^5`, `1 ≤ m ≤ 2·10^5`
+
+      ## Output
+
+      If it is possible to send a message, first print `k`: the minimum number
+      of computers on a valid route. After this, print an example of such a
+      route. You can print any valid solution.
+
+      If there are no routes, print `IMPOSSIBLE`.
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      5 5
+      1 2
+      1 3
+      1 4
+      2 3
+      5 4
+      ```
+
+      **Output:**
+
+      ```
+      3
+      1 4 5
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — Floyd–Warshall all-pairs shortest paths, O(n³)**
+
+      Compute the shortest path between *every* pair (then read off `1 → n`). A
+      correct, famously simple algorithm — but `O(n³)` is catastrophic when
+      `n = 10^5`, making it ~10^15 operations. Fine conceptually on tiny
+      networks, hopeless here.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          const int INF = 1e9;
+          vector<vector<int>> d(n, vector<int>(n, INF)), nxt(n, vector<int>(n, -1));
+          for (int i = 0; i < n; i++) d[i][i] = 0;
+          for (int i = 0; i < m; i++) { int a, b; cin >> a >> b; a--; b--;
+              d[a][b] = d[b][a] = 1; nxt[a][b] = b; nxt[b][a] = a; }
+          for (int k = 0; k < n; k++)
+              for (int i = 0; i < n; i++)
+                  for (int j = 0; j < n; j++)
+                      if (d[i][k] + d[k][j] < d[i][j]) { d[i][j] = d[i][k] + d[k][j]; nxt[i][j] = nxt[i][k]; }
+          if (d[0][n - 1] == INF) { cout << "IMPOSSIBLE\n"; return 0; }
+          vector<int> path; for (int u = 0; u != n - 1; u = nxt[u][n - 1]) path.push_back(u);
+          path.push_back(n - 1);
+          cout << path.size() << '\n';
+          for (int x : path) cout << x + 1 << ' '; cout << '\n';
+          return 0;
+      }
+      ```
+
+      *O(n³) time, O(n²) space — correct but unusable for `n = 10^5`.*
+
+      **② Optimization — BFS from 1 with parent reconstruction, O(n + m)**
+
+      Explore from `1` in distance order; stop the moment `n` is reached. One
+      `parent[]` array records who discovered each vertex; walk it backwards and
+      reverse.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<int>> adj(n + 1);
+          for (int i = 0; i < m; i++) {
+              int a, b; cin >> a >> b;
+              adj[a].push_back(b);
+              adj[b].push_back(a);
+          }
+          // BFS with parent pointers; par[v] = node that discovered v
+          vector<int> par(n + 1, -1);
+          queue<int> q;
+          q.push(1);
+          par[1] = 0;
+          while (!q.empty()) {
+              int u = q.front(); q.pop();
+              for (int v : adj[u])
+                  if (par[v] == -1) { par[v] = u; q.push(v); }
+          }
+          if (par[n] == -1) { cout << "IMPOSSIBLE\n"; return 0; }
+          vector<int> path;
+          for (int cur = n; cur != 0; cur = par[cur]) path.push_back(cur);
+          reverse(path.begin(), path.end());
+          cout << path.size() << '\n';
+          for (int x : path) cout << x << ' ';
+          cout << '\n';
+          return 0;
+      }
+      ```
+
+      *O(n + m) time, O(n) space — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      Reachability from `1` to `n` must, in the worst case, touch every vertex
+      and edge, so `O(n + m)` is optimal.
+
+      **④ Alternative — bidirectional BFS, O(n + m) with a smaller frontier**
+
+      Run BFS from both `1` and `n` simultaneously, alternating, and stop when a
+      vertex is reached by both. The asymptotic bound is unchanged, but the two
+      growing balls meet in the middle, exploring dramatically fewer vertices on
+      wide graphs. Combine the two half-paths at the meeting vertex.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Key lines of the BFS solution:
+
+      - **`par[1] = 0`.** The source gets a sentinel parent so it is treated as
+        visited and never re-added.
+      - **`if (par[v] == -1) { par[v] = u; q.push(v); }`.** The heart: whoever
+        discovers a vertex first records the parent. Because BFS discovers in
+        distance order, `par[v]` is always on a shortest route to `v`.
+      - **`if (par[n] == -1)`.** After the BFS, `n` unvisited means no route →
+        `IMPOSSIBLE`.
+      - **Backtrack.** From `cur = n`, repeatedly jump to `par[cur]` until
+        `0`; each jump yields one vertex of the route, collected in reverse.
+      - **`reverse` + `path.size()`.** Reversing gives `1 → n`; its length is
+        the minimum number of computers on the route (including both endpoints).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample:
+
+      ```
+      5 5
+      1 2
+      1 3
+      1 4
+      2 3
+      5 4
+      ```
+
+      BFS from `1` (queue order): pop `1`, discover `2, 3, 4` with parents
+      `par[2]=par[3]=par[4]=1`. Pop `2`: neighbour `3` already visited, skip.
+      Pop `3`: neighbours visited. Pop `4`: neighbour `5` unvisited →
+      `par[5]=4`. Pop `5`: we have reached `n = 5`.
+
+      | vertex | parent |
+      |--------|--------|
+      | 1 | 0 (start) |
+      | 2 | 1 |
+      | 3 | 1 |
+      | 4 | 1 |
+      | 5 | 4 |
+
+      Backtrack from `5`: `5 → 4 → 1`; reversed: `1 → 4 → 5`.
+
+      Route length = 3 computers → print first line `3`, then `1 4 5`.
+
+      Expected (sample) — `3` / `1 4 5`. Actual — `3` / `1 4 5`. Match.
+  - type: flowchart
+    title: "BFS shortest route from 1 to n"
+    nodes:
+      - "queue starts with 1; par[1] = 0"
+      - "pop front vertex u"
+      - "for each neighbour v of u"
+      - "v unvisited (par[v] == -1)?"
+      - "set par[v] = u, push v"
+      - "queue empty? (u never reached n)"
+      - "walk parents back from n to 1, reverse, print k and route"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 1, to: 3}
+      - {from: 3, to: 5, label: "yes"}
+      - {from: 3, to: 4, label: "no"}
+      - {from: 4, to: 1, label: "yes, continue BFS"}
+      - {from: 4, to: 6, label: "empty -> unreachable"}
+      - {from: 2, to: 1, label: "all neighbours done"}
+  - type: mcq
+    prompt: "Why can we stop the BFS the moment vertex n is first reached?"
+    options:
+      - "Because n has no neighbours, so nothing more is reachable from it."
+      - "Because BFS visits vertices in non-decreasing distance from 1, so the first arrival at n is along a shortest route."
+      - "Because DFS would require rescanning the whole graph, which BFS avoids."
+      - "Because stopping early is only allowed when n is connected to 1 directly."
+    answer: 1
+    explanation: "BFS processes vertices layer by layer in order of distance from the source. When n is first discovered it has the minimum possible number of hops from 1; any later discovery would be at an equal or greater distance. Recording the parent at discovery and reconstructing therefore yields a shortest route."
+---

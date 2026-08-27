@@ -1,0 +1,288 @@
+---
+id: maximum-subarray-sum
+title: Maximum Subarray Sum
+difficulty: medium
+order: 32
+tags:
+  - kadane
+  - prefix-sums
+  - arrays
+  - greedy
+  - divide-and-conquer
+blocks:
+  - type: markdown
+    content: |
+      # Maximum Subarray Sum
+
+      **The technique: Kadane's algorithm.** A **subarray** is a contiguous run
+      of elements. We want the run with the largest total sum, allowing
+      negative numbers (so the "best" run is not necessarily a long one). The
+      insight is that a subarray either *extends the best subarray that ends at
+      the previous element* or it *starts fresh at the current element*.
+
+      Define `cur = best sum of a subarray ending at position i`. Then:
+
+      ```
+      cur  = max(a[i], cur + a[i])     // start fresh, or extend
+      best = max(best, cur)
+      ```
+
+      **When you reach for it:** stock-profit problems, weather/temperature
+      trends, DNA/chip segment scoring — anywhere you need the contiguous slice
+      with maximum aggregate. It is a greedy/DP hybrid: at each element you make
+      a single local choice (restart vs extend), and it provably captures the
+      global optimum because every maximal subarray ends somewhere.
+
+      **Why `max(a[i], cur + a[i])`?** If adding `a[i]` to the previous best
+      lowers it below `a[i]` alone (i.e. `cur` was negative), better to drop the
+      previous run entirely and begin a new one at `a[i]`. Negative prefixes are
+      never worth keeping.
+
+      **Worked mini-example.** `[-1, 3, -2, 5, 3, -5, 2, 2]`
+
+      | i | a[i] | cur = max(a[i], cur+a[i]) | best |
+      |---|------|---------------------------|------|
+      | 0 | -1 | max(-1, -1) = -1 | -1 |
+      | 1 | 3 | max(3, 2) = 3 | 3 |
+      | 2 | -2 | max(-2, 1) = 1 | 3 |
+      | 3 | 5 | max(5, 6) = 6 | 6 |
+      | 4 | 3 | max(3, 9) = 9 | 9 |
+      | 5 | -5 | max(-5, 4) = 4 | 9 |
+      | 6 | 2 | max(2, 6) = 6 | 9 |
+      | 7 | 2 | max(2, 8) = 8 | 9 |
+
+      Best subarray `3 -2 5 3` sums to **9**. ✓
+
+      **Complexity.** One linear pass keeping two scalar variables → **O(n)**
+      time, **O(1)** space. This is optimal — you cannot know a subarray's sum
+      without reading its elements.
+
+      :::tip
+      **Interview tip:** Kadane's algorithm is one of the most-asked "medium"
+      problems (LeetCode #53). A strong answer states the invariant — `cur` is
+      the best subarray *ending here* — and explains the restart-vs-extend
+      decision. Interviewers often follow up with: "what if all numbers are
+      negative?" (answer: pick the largest single element; Kadane handles it
+      because `max(a[i], cur+a[i])` restarts immediately) and "return the
+      *subarray*, not just the sum" (track start/end indices, reset `cur`'s
+      start whenever you restart). Some ask for `k` disjoint subarrays — that
+      needs DP, a harder variant.
+      :::
+  - type: markdown
+    content: |
+      # Question — Maximum Subarray Sum
+
+      Given an array of `n` integers, find the maximum sum of values in a
+      **contiguous, nonempty** subarray.
+
+      **Constraints:**
+      - `1 ≤ n ≤ 2·10^5`
+      - `-10^9 ≤ x[i] ≤ 10^9`
+
+      **Input:** the first line has an integer `n` (array size). The second
+      line has `n` integers `x[1], ..., x[n]` (the array values — possibly
+      negative).
+
+      **Output:** one integer — the maximum subarray sum.
+
+      Sample input:
+
+      ```
+      8
+      -1 3 -2 5 3 -5 2 2
+      ```
+
+      Sample output:
+
+      ```
+      9
+      ```
+
+      The subarray `3 -2 5 3` (sum `9`) is optimal.
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          vector<long long> a(n);
+          for (int i = 0; i < n; ++i) cin >> a[i];
+
+          long long best = LLONG_MIN;
+          for (int i = 0; i < n; ++i) {
+              long long s = 0;
+              for (int j = i; j < n; ++j) {   // subarray [i..j]
+                  s += a[j];
+                  best = max(best, s);
+              }
+          }
+          cout << best << "\n";
+          return 0;
+      }
+      ```
+      O(n²) — up to `2·10^10` additions for `n = 2·10^5`, far over the limit.
+      Correct: every subarray is summed once.
+
+      **② Optimization — Kadane's algorithm, O(n)** (the chosen solution)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          long long best = LLONG_MIN, cur = 0;
+          for (int i = 0; i < n; ++i) {
+              long long x; cin >> x;
+              cur = max(x, cur + x);   // restart at x, or extend previous run
+              best = max(best, cur);
+          }
+          cout << best << "\n";
+          return 0;
+      }
+      ```
+      O(n) time, O(1) space. Optimal — a single pass, streaming.
+
+      **③ Further optimization — prefix sums + running minimum, O(n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          long long pref = 0, minpref = 0, best = LLONG_MIN;
+          for (int i = 0; i < n; ++i) {
+              long long x; cin >> x;
+              pref += x;                       // prefix sum up to i
+              best = max(best, pref - minpref);// subarray ending here
+              minpref = min(minpref, pref);    // smallest prefix so far
+          }
+          cout << best << "\n";
+          return 0;
+      }
+      ```
+      O(n) time, O(1) space. Same cost as Kadane but framed as
+      `max subarray = pref[hi] - min(pref)` — useful when you must also build a
+      segment tree for range-max queries on subarrays.
+
+      **④ Alternative — divide and conquer, O(n log n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(vector<long long>& a, int lo, int hi) {
+          if (lo == hi) return a[lo];                       // single element
+          int mid = (lo + hi) / 2;
+          long long left = solve(a, lo, mid);               // entirely left
+          long long right = solve(a, mid + 1, hi);          // entirely right
+
+          long long bestL = LLONG_MIN, bestR = LLONG_MIN, s = 0;
+          for (int i = mid; i >= lo; --i) { s += a[i]; bestL = max(bestL, s); } // must cross mid
+          s = 0;
+          for (int i = mid + 1; i <= hi; ++i) { s += a[i]; bestR = max(bestR, s); }
+          long long cross = bestL + bestR;                  // spans the middle
+          return max({left, right, cross});
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          vector<long long> a(n);
+          for (int i = 0; i < n; ++i) cin >> a[i];
+          cout << solve(a, 0, n - 1) << "\n";
+          return 0;
+      }
+      ```
+      O(n log n) time, O(log n) stack space. A recursive "best left / best
+      right / best crossing" split — the classic textbook alternative to Kadane.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② Kadane**. The whole algorithm is two lines:
+
+      - `cur = max(x, cur + x)` — the decision at element `x`:
+        - **Extend:** `cur + x` assumes the best subarray ending at the previous
+          position is worth continuing into `x`.
+        - **Restart:** `x` alone is better when `cur` was negative (or when the
+          run had already been dropped), i.e. keeping the old run would drag the
+          new one below just starting here.
+      - `best = max(best, cur)` — `cur` is useful only if it improves the global
+        best; `best` holds the answer to report.
+      - `best` is initialized to `LLONG_MIN` so the first element (even a very
+        negative one) is picked up correctly — this is what makes the all-
+        negative case return the maximum single element rather than `0`.
+      - Input is streamed: we read one value, update `cur`/`best`, and never
+        store the array, giving O(1) space.
+
+      The prefix-sum tier (③) encodes the same truth differently: any subarray
+      sum is `pref[hi] − pref[lo-1]`, and the best ending at `hi` uses the
+      *smallest* prefix seen before it, so we track `minpref` alongside `pref`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      8
+      -1 3 -2 5 3 -5 2 2
+      ```
+
+      | i | x | cur = max(x, cur+x) | best |
+      |---|-----|----------------------|------|
+      | 0 | -1 | max(-1, -1) = -1 | -1 |
+      | 1 | 3 | max(3, 2) = 3 | 3 |
+      | 2 | -2 | max(-2, 1) = 1 | 3 |
+      | 3 | 5 | max(5, 6) = 6 | 6 |
+      | 4 | 3 | max(3, 9) = 9 | **9** |
+      | 5 | -5 | max(-5, 4) = 4 | 9 |
+      | 6 | 2 | max(2, 6) = 6 | 9 |
+      | 7 | 2 | max(2, 8) = 8 | 9 |
+
+      Result: **9** ✓. The winning subarray is indices `1..4`
+      (`3 -2 5 3 = 9`). Notice the drop to `4` at step 5 (−5) — `cur` stays
+      positive so the run is kept, but it never beats 9 again.
+
+      **Edge cases:**
+      - All negative: `3 / -5 -2 -9` → `cur` restarts at every element;
+        `best = -2` (the largest single value).
+      - All positive: `3 / 1 2 3` → the whole array, `6`.
+      - Single element: `1 / 7` → `7`.
+  - type: flowchart
+    title: "Kadane's decision at each element"
+    nodes:
+      - "Read next value x"
+      - "cur = max(x, cur + x)"
+      - "cur restarted OR extended"
+      - "best = max(best, cur)"
+      - "More elements?"
+      - "Print best"
+    edges:
+      - {from: 0, to: 1, label: "element"}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 0, label: "yes"}
+      - {from: 4, to: 5, label: "done"}
+  - type: mcq
+    prompt: 'In Kadane, why is `cur = max(x, cur + x)` the correct recursive step?'
+    options:
+      - Because it always keeps the largest-value element in the whole array
+      - Because the best subarray ending at the current element either starts fresh at this element, or extends the optimal subarray ending at the previous element — and taking max chooses the better of those two, which is enough to eventually realize every optimal subarray
+      - Because it sorts the array and picks the top two values
+      - Because negative numbers are ignored entirely
+    answer: 1
+    explanation: Any subarray ending at i is either just {a[i]} or a subarray ending at i-1 extended by a[i]. So cur = max(a[i], cur_prev + a[i]) is exactly correct by induction, and best is the max over all end positions. This compresses O(n²) candidate subarrays into a linear pass; the restart branch handles negative prefixes, and even the all-negative case works because best starts at -INF and cur restarts at each x.
+type: content
+---

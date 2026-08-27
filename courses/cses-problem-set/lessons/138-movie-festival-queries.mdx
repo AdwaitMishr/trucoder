@@ -1,0 +1,247 @@
+---
+id: movie-festival-queries
+title: Movie Festival Queries
+type: content
+difficulty: medium
+order: 138
+tags:
+  - range-queries
+  - binary-lifting
+  - greedy
+  - interval-scheduling
+blocks:
+  - type: markdown
+    content: |
+      # Movie Festival Queries — maximum movies in a time window, via backward binary lifting
+
+      We know `n` movies, each a time interval `[s, e]`. For each query `[a, b]`
+      (your arrival `a`, your leaving `b`) we must print the **maximum number of
+      movies** you can watch fully inside that window, where consecutive movies may
+      touch (`end <= start` of the next) and you may start exactly on arrival and
+      leave exactly when the last movie ends.
+
+      Alone, this is the greedy interval-scheduling problem (watch the movie that
+      ends earliest, repeat). The difficulty is answering `q` such queries fast: each
+      greedy run restarts from a different `a` and must stop by `b`.
+
+      ## The key idea: greedy backwards + binary lifting
+
+      First, greedy-by-earliest-end is optimal. Work **backwards** from the leaving
+      time `b`. Define
+
+      ```
+      jump[t] = the latest start time s of any movie whose end e <= t   (0 if none)
+      ```
+
+      `jump[t]` is "the movie ending at-or-before `t` that starts as late as
+      possible" — i.e. the final movie of an optimal chain that ends by time `t`. If
+      you're free at time `t`, `jump[t]` is the best place the previous movie can
+      have left you. Then chaining `jump` moves you one movie further back each
+      time:
+
+      - `jump[0][t] = jump[t]` (one movie back),
+      - `jump[k][t] = jump[k-1][ jump[k-1][t] ]` (chain `2^k` movies back).
+
+      A query asks: *from end-time `y`, how many `jump`-steps can we chain while
+      every reached start stays `>= x`?* Since starts keep strictly decreasing as we
+      chain back, the deepest reacheable start is the smallest one — so we greedily
+      take the largest `2^k` jumps whose landing start is still `>= x`, accumulating
+      the count. Each query takes `O(log n)`.
+
+      **Complexity.** `O(T log T)` preprocessing (`T` = max time `= 10^6`),
+      `O(log n)` per query.
+
+      :::tip
+      **Interview tip:** "Given intervals and queries on a time window, how many can
+      fit?" is the classic trigger for **greedy earliest-end + binary lifting over
+      the `next`/`jump` pointers**. Binary lifting ("doubling") is the go-to when a
+      query is "how many times can I apply this deterministic transition before
+      crossing a boundary" — it's the same tool as LCA and k-th ancestor problems.
+      Sweep-by-end handling of intervals is used in *Movie Festival* and *Restaurant
+      Customers*; the query version is exactly this lesson.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      In a movie festival, `n` movies will be shown. You know the starting and ending
+      time of each movie.
+
+      Your task is to process `q` queries of the form: if you arrive and leave the
+      festival at specific times, what is the maximum number of movies you can watch?
+
+      You can watch two movies if the first movie ends before or exactly when the
+      second movie starts. You can start the first movie exactly when you arrive and
+      leave exactly when the last movie ends.
+
+      ## Input
+
+      The first input line has two integers `n` and `q`: the number of movies and
+      queries.
+
+      After this, there are `n` lines describing the movies. Each line has two
+      integers `a` and `b`: the starting and ending time of a movie.
+
+      Finally, there are `q` lines describing the queries. Each line has two integers
+      `a` and `b`: your arrival and leaving time.
+
+      **Constraints:** `1 <= n, q <= 2*10^5`, `1 <= a < b <= 10^6`.
+
+      ## Output
+
+      Print the maximum number of movies for each query.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 3
+      2 5
+      6 10
+      4 7
+      9 10
+      5 9
+      2 10
+      7 10
+      ```
+      **Output:**
+      ```
+      0
+      2
+      1
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — greedy per query, O(n log n) per query**
+
+      For each query, keep only the movies fully inside `[a, b]`, sort them by end
+      time, and run the earliest-end greedy count. Correct, but each full query
+      re-scans all `n` movies, so `q` queries cost `O(q * n log n)` — too slow.
+
+      ```cpp
+      int brute(int a, int b, vector<pair<int,int>>& mv) {
+          vector<pair<int,int>> cand;
+          for (auto [s, e] : mv)
+              if (s >= a && e <= b) cand.push_back({s, e});
+          sort(cand.begin(), cand.end());                 // by end time
+          int cnt = 0, lastEnd = 0;
+          for (auto [s, e] : cand)
+              if (s >= lastEnd) { cnt++; lastEnd = e; }   // take earliest-ending fit
+          return cnt;
+      }
+      ```
+      *O(n log n) per query, O(q·n log n) total — correct, far too slow.*
+
+      **② Optimization — backward binary lifting, O(log n) per query**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          const int MAXT = 1000000, LOG = 20;
+          vector<int> lastStart(MAXT + 2, 0);
+          for (int i = 0; i < n; i++) {
+              int s, e; cin >> s >> e;
+              lastStart[e] = max(lastStart[e], s);        // movie ending at e, latest start
+          }
+          for (int t = 1; t <= MAXT; t++)                 // suffix prefix-max over end times
+              lastStart[t] = max(lastStart[t], lastStart[t - 1]);
+
+          // jump[k][t] = the start-time we are left at after chaining 2^k movies backwards from end-time t
+          vector<vector<int>> jump(LOG, vector<int>(MAXT + 2, 0));
+          for (int t = 1; t <= MAXT; t++) jump[0][t] = lastStart[t];
+          for (int k = 1; k < LOG; k++)
+              for (int t = 1; t <= MAXT; t++)
+                  jump[k][t] = jump[k - 1][jump[k - 1][t]];
+
+          while (q--) {
+              int x, y; cin >> x >> y;                    // arrival x, leaving y
+              int ans = 0, t = y;
+              for (int k = LOG - 1; k >= 0; k--)
+                  if (jump[k][t] >= x) {                  // chain 2^k movies, still start >= x
+                      ans += (1 << k);
+                      t = jump[k][t];
+                  }
+              cout << ans << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      *O(T log T) preprocessing, O(log n) per query — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      `O(log n)` per query is optimal for a binary-lifting answer.
+
+      **④ Alternative — forward "next pointer" on movies**
+
+      An equivalent formulation sorts the movies by start time and, for each movie,
+      records the next movie to watch via the earliest-end greedy, then binary-lifts
+      over movie indices instead of time coordinates. It answers in `O(log n)` per
+      query too but needs a two-pointer sweep and a Fenwick/segment tree to find each
+      movie's successor. The time-coordinate version above is simpler because it
+      encodes everything in `lastStart`. The two differ only in bookkeeping.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the binary-lifting solution:
+
+      - **`lastStart[e]` = the latest start among movies ending at or before `e`.**
+        Filling `lastStart[e] = max(lastStart[e], s)` for each movie, then prefix-maxing
+        over `e`, gives exactly `jump[t]` — the last watchable movie's start when you
+        are free no later than `t`. This is the dual of *greedy earliest-end*: it
+        always picks the movie that ends latest-but-still-by-`t` and starts as late as
+        possible, which is optimal for counting backwards.
+      - **Free time = a start time.** After watching the movie that starts at
+        `jump[t]`, you are free *at* `jump[t]`, so the next movie back is
+        `jump[ jump[t] ]`. That is the doubling relation `jump[k][t] =
+        jump[k-1][jump[k-1][t]]`.
+      - **`jump[k][t] >= x` is the acceptance test.** Chaining `2^k` movies must keep
+        the final (deepest) start inside `[x, y]`. Because the chain strictly moves
+        left, all intermediate starts are `>=` the deepest; so testing only the landing
+        `jump[k][t]` is sufficient. That is why the `for k := LOG-1..0` greedy — take the
+        largest safe block, repeat from where it landed — yields the exact maximum
+        count.
+      - **Stopping.** When no single jump keeps the start `>= x` (all movies fit before
+        arrival), the answer is the accumulated count; `jump[0][*] == 0` (no movie)
+        automatically falls out.
+
+      The `LOG = 20` bound covers `2^20 > 10^6 >= max time`, so 20 levels are enough
+      to chain the entire timeline.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample. Movies: `[2,5], [6,10], [4,7], [9,10]`.
+      Queries: `[5,9]`, `[2,10]`, `[7,10]`.
+
+      Build `lastStart`: at `end 5` → `2`; `end 10` → `max(6,9)=9`; `end 7` → `4`.
+      Prefix-max over time gives `jump[0][t]` = latest start among movies with `end<=t`.
+
+      | query | chain from y | movies counted | answer |
+      |-------|--------------|----------------|--------|
+      | `[5,9]` | `jump[9]` = movie `[4,7]` start 4. Need start `>=5`; 4 < 5 → stop. | — | **0** |
+      | `[2,10]` | `jump[10]=9` (movie `[9,10]`, start 9). From 9: `jump[9]=4` (movie `[4,7]`). From 4: `jump[4]=0` (no movie ending `<=4`). Chain `9 → 4 → 0` all `>=2`. | `[9,10]`, `[4,7]` = 2 | **2** |
+      | `[7,10]` | `jump[10]=9` (start 9, `>=7`). From 9: `jump[9]=4`, but `4 < 7` → stop after 1. | `[9,10]` = 1 | **1** |
+
+      Output: `0 2 1`. Matches the sample. ✓
+
+      Sanity check `[2,10]`: in the window `[2,10]` the greedy watches `[4,7]` (ends
+      at 7) then `[9,10]` (starts 9, `>=7`) — two movies. The direct early-starting
+      `[2,5]` would have blocked `[4,7]`, so leaving it out is optimal; count `2`. ✓
+  - type: mcq
+    prompt: "When counting movies backwards from leaving time y, why is testing only the landing position jump[k][y] >= x enough to know that the whole 2^k chain stays inside [x, y]?"
+    options:
+      - "Because the chain of start times strictly decreases as you go further back, so the final (deepest) start is the smallest one; if even it is >= x, every earlier start in the chain is also >= x."
+      - "Because jump always returns the same value no matter how many steps you take."
+      - "Because binary lifting ignores the actual movie intervals."
+      - "Because you must check every single intermediate position, which is what makes binary lifting impossible."
+    answer: 0
+    explanation: "Each jump moves to the start of a strictly earlier movie, so jump[0][y] > jump[1][y] > ... > jump[k][y]. The deepest landing jump[k][y] is the minimum of all the starts touched along the chain. If that minimum is still >= x (arrival), then none of the movies started before arrival and none are needed to be cut at the front. So a single comparison at the landing point decides the whole 2^k block."

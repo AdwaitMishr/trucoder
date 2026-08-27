@@ -1,0 +1,231 @@
+---
+id: graph-paths-ii
+title: "Graph Paths II"
+type: content
+difficulty: hard
+order: 183
+tags:
+  - mathematics
+  - graph-algorithms
+  - matrix-exponentiation
+  - min-plus
+  - shortest-walks
+blocks:
+  - type: markdown
+    content: |
+      # Graph Paths II — min-plus exponentiation over weighted edges
+
+      Find the **minimum** length (sum of weights) of a path from node `1` to node
+      `n` using **exactly `k` edges** in a weighted directed graph. This is Graph
+      Paths I with weights and a `min` instead of a count — and the fix is the
+      same matrix power, but with a different "matrix multiplication".
+
+      ## Replacing (+, ×) with (min, +)
+
+      In Graph Paths I we counted walks with `(A·B)[i][j] = sum_t A[i][t]·B[t][j]`.
+      For minima, replace both the outer sum by `min` and the inner product by `+`:
+
+      ```
+      (A ⊗ B)[i][j] = min over t of ( A[i][t] + B[t][j] )
+      ```
+
+      With `A[i][j] = weight of edge i -> j` (or `+INF` if none), iterating the
+      **min-plus product** `k` times gives `(A^k)[i][j]` = minimum total weight of
+      a walk from `i` to `j` using exactly `k` edges. The diagonal is `+INF`
+      (not `0`), so a path cannot "sit still" and must actually consume `k` real
+      edges.
+
+      The min-plus matrix satisfies the same properties needed for binary
+      exponentiation (it is associative, with the "identity" being the diagonal-zero
+      matrix), so we square-and-multiply exactly as before.
+
+      **Time:** `O(n^3 log k)`. **Space:** `O(n^2)`.
+
+      :::tip
+      **Interview tip:** amany graph questions are "the usual graph algorithm, but
+      redefine the operation." Count of walks = `(+, ×)` matrix power; shortest
+      exact-length walk = `(min, +)` matrix power. The same binary-exponentiation
+      loop works for any **associative** combining operation — a great answer to
+      "what's the generalisation?" The classic gotcha is the diagonal: set it to
+      `+INF` to force *exactly* `k` edges, not `<= k`.
+      :::
+  - type: markdown
+    content: |
+      # Question — Graph Paths II
+
+      Consider a directed weighted graph having `n` nodes and `m` edges. Your task
+      is to calculate the minimum path length from node `1` to node `n` with
+      exactly `k` edges.
+
+      **Input**
+
+      The first input line contains three integers `n`, `m` and `k`: the number of
+      nodes and edges, and the length of the path. The nodes are numbered
+      `1, 2, ..., n`.
+
+      Then, there are `m` lines describing the edges. Each line contains three
+      integers `a`, `b` and `c`: there is an edge from node `a` to node `b` with
+      weight `c`.
+
+      **Output**
+
+      Print the minimum path length. If there are no such paths, print `-1`.
+
+      **Constraints**
+
+      - `1 <= n <= 100`
+      - `1 <= m <= n(n-1)`
+      - `1 <= k <= 10^9`
+      - `1 <= a,b <= n`
+      - `1 <= c <= 10^9`
+
+      **Example**
+
+      Input:
+      ```
+      3 4 8
+      1 2 5
+      2 3 4
+      3 1 1
+      3 2 2
+      ```
+
+      Output:
+      ```
+      27
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — DP over edge counts, O(k · m) time, O(n) space**
+
+      Run `k` relaxations: `dist[v] = min over edge (u,v) of dist[u] + c`. Correct,
+      but `k` up to `10^9` makes `10^9` rounds impossible.
+
+      ```cpp
+      // Illustration only — O(k*m), unusable.
+      // dist[v] = min_{edge (u,v)} dist[u] + c, repeated k times starting from node 1.
+      ```
+
+      **② Optimization — min-plus matrix exponentiation, O(n^3 log k) time, O(n^2) space**
+
+      Raise the weighted adjacency matrix to the `k`-th power with the `(min, +)`
+      product and read `(A^k)[0][n-1]`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll INF = 4e18;
+      const int MAXN = 100;
+      using Mat = array<array<ll,MAXN>,MAXN>;
+
+      Mat mul(const Mat& a, const Mat& b, int n){      // min-plus product
+          Mat c;
+          for (int i = 0; i < n; ++i)
+              for (int j = 0; j < n; ++j){
+                  ll best = INF;
+                  for (int k = 0; k < n; ++k)
+                      if (a[i][k] < INF && b[k][j] < INF)
+                          best = min(best, a[i][k] + b[k][j]);
+                  c[i][j] = best;
+              }
+          return c;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; ll k; cin >> n >> m >> k;
+          Mat A;
+          for (int i = 0; i < n; ++i) for (int j = 0; j < n; ++j) A[i][j] = INF;
+          for (int i = 0; i < m; ++i){ int a, b; ll c; cin >> a >> b >> c; --a; --b; A[a][b] = min(A[a][b], c); }
+          Mat R;
+          for (int i = 0; i < n; ++i) for (int j = 0; j < n; ++j) R[i][j] = INF;
+          for (int i = 0; i < n; ++i) R[i][i] = 0;      // min-plus identity: 0 edges
+          Mat base = A;
+          while (k){
+              if (k & 1) R = mul(R, base, n);
+              base = mul(base, base, n);
+              k >>= 1;
+          }
+          ll ans = R[0][n - 1];
+          cout << (ans >= INF / 2 ? -1 : ans) << "\n";  // no such path -> -1
+          return 0;
+      }
+      ```
+
+      `~30` min-plus multiplications; each is `O(n^3)` with `n <= 100`, well within
+      the limit.
+
+      **③ Further optimization** — none needed: `O(n^3 log k)` matches the intended
+      complexity; the weight sum `k·c` up to `10^18` already sets the `long long`
+      bound, and nothing asymptotically better is required for `n, k` this large.
+
+      **④ Alternative** — the min-plus power is the whole technique; a separate,
+      faster algorithm does not exist for *exact* `k` on a general dense graph.
+      Two worthwhile notes: (a) it is precisely Floyd–Warshall's idea of "compose
+      paths through a middle node", generalised to exponentiation; (b) if the
+      problem asked for paths with **at most** `k` edges instead, you would put `0`
+      on the diagonal of `R` as the answer accumulator and let zero-cost "stay put"
+      edges absorb the slack — a subtle but important difference from the exactly-`k`
+      version here.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the min-plus solution **②**:
+
+      - `A[a][b]` is the edge weight, or `INF = 4e18` when there is no edge. Parallel
+        edges keep the smallest weight.
+      - `mul(a, b, n)` computes the min-plus product: for each pair `(i,j)` it takes
+        the minimum over all middle nodes `k` of `a[i][k] + b[k][j]`. Skipping
+        infinity guards against overflow (`INF + INF` would overflow `long long`).
+      - `R` is the min-plus identity (all `INF`, diagonal `0`): it represents the
+        "zero edges" state, so `R ⊗ base` equals `A` (one edge).
+      - Crucially, `A`'s diagonal is `INF`, not `0`: a walk using exactly `k` edges
+        must take `k` real edges. A `0` self-loop would let a shorter walk "pause"
+        and fake the length.
+      - Binary exponentiation over `k` mirrors ordinary matrix power; associativity
+        of the min-plus product is what makes it valid.
+      - `ans >= INF/2` tells us there is no length-`k` walk, so we print `-1`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 3`, edges `1->2(5)`, `2->3(4)`, `3->1(1)`, `3->2(2)`,
+      `k = 8`.
+
+      From node `1` the only outgoing edge is `1->2`, and from `2` only `2->3`, so
+      every walk starts `1 -> 2 -> 3` (2 edges, weight `5 + 4 = 9`). We must then
+      spend **6 more edges** and end at node `3`. From `3` we can loop back with a
+      2-edge cycle `3 -> 2 -> 3` (weight `2 + 4 = 6`) or a 3-edge cycle
+      `3 -> 1 -> 2 -> 3` (weight `1 + 5 + 4 = 10`).
+
+      6 edges = three 2-edge loops: `3 x 6 = 18`, total `9 + 18 = 27`. (Two 3-edge
+      loops would cost `20`; mixing is no cheaper.) So the minimum is `27`, matching
+      the sample output `27`.
+  - type: flowchart
+    title: "Min-plus exact-k shortest walk"
+    nodes: ["Read n,m,k", "A[i][j] = w, else INF (no 0-diagonal)",
+            "R = diag-0 identity", "base = A",
+            "while k > 0", "k odd? R = R ⊗ base",
+            "base = base ⊗ base, k >>= 1",
+            "print R[1][n] or -1 if INF"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: ""}
+      - {from: 5, to: 6, label: "bit set -> R=R⊗base"}
+      - {from: 6, to: 4, label: "loop"}
+      - {from: 4, to: 7, label: "k == 0"}
+  - type: mcq
+    prompt: "In the min-plus solution, what is the role of the matrix diagonal, and why is the product still exponentiable?"
+    options:
+      - "A's diagonal is kept at +INF so a walk must use exactly k real edges (no free 'stay put'), and the min-plus product is associative with a well-defined identity, so binary exponentiation remains valid"
+      - "The diagonal stores the node's own weight, and the product is only used once"
+      - "A's diagonal is set to 0 so paths may use fewer than k edges and still count"
+      - "The diagonal is irrelevant; min-plus power is O(n^2) and needs no identity"
+    answer: 0
+    explanation: "A zero on A's diagonal would act as a free self-loop, letting a shorter path pad its length to k and giving a wrong (too small) answer for 'exactly k'. Keeping it at +INF forces k genuine edges. The min-plus product is associative (compose paths through a middle node) and has the diagonal-zero matrix as its identity, so the standard square-and-multiply exponentiation is correct."

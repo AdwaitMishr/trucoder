@@ -1,0 +1,260 @@
+---
+id: mst-edge-cost
+title: "MST Edge Cost"
+type: content
+difficulty: hard
+order: 307
+tags:
+  - advanced-graph
+  - minimum-spanning-tree
+  - lca
+  - binary-lifting
+blocks:
+  - type: markdown
+    content: |
+      # MST Edge Cost — the cost of forcing one edge into a minimum spanning tree
+
+      An **minimum spanning tree (MST)** of a weighted, connected graph is a spanning
+      tree of minimum total weight. A classic question is: *can a given edge be part
+      of some MST?* Here we ask a stronger one — **what is the minimum possible total
+      weight of an MST that is forced to contain a given edge?** One answer per edge.
+
+      ## The key exchange lemma
+
+      Fix an MST `T` (any one). Take any edge `e = (u, v, w)` of the graph. Adding `e`
+      to `T` creates exactly one cycle, made of `e` plus the unique path `P(u,v)` that
+      `T` already has between `u` and `v`. To recover a spanning tree we must delete
+      one edge of that cycle; to keep the weight minimum we delete the **heaviest** edge
+      `f*` of `P(u,v)`:
+
+      ```
+      cost( best MST containing e ) = cost(T) − weight(f*) + w
+      ```
+
+      Why is this optimal? Any spanning tree containing `e` differs from `T` by a set of
+      swap operations; the cheapest way to include `e` is exactly to add `e` and remove
+      the single heaviest edge on the cycle it closes. Removing less than the max edge
+      would keep a heavier edge unnecessarily, and removing a non-path edge would
+      disconnect the tree.
+
+      If `e` is itself an edge of `T`, then `P(u,v)` is just `e`, so `f* = e` and the
+      formula returns `cost(T)` — forcing an already-present edge costs nothing.
+
+      :::tip
+      **Interview tip:** this "add edge, remove the heaviest edge on the cycle it closes"
+      exchange argument is the single most reusable idea in MST work. It also decides when
+      an edge is *essential* (every MST needs it: `f* = e`, so `w < f*`'s weight — no
+      lighter replacement exists) and produces the **second minimum spanning tree** almost
+      for free. State the lemma, then the LCA-based path max, and you have the whole
+      solution.
+      :::
+  - type: markdown
+    content: |
+      # Question — MST Edge Cost
+
+      Given an undirected weighted graph, determine for each edge the minimum spanning
+      tree cost if the edge **must** be included in the spanning tree.
+
+      **Input**
+
+      The first line has two integers `n` and `m`: the number of nodes and edges. The
+      nodes are numbered `1, 2, ..., n`.
+
+      The following `m` lines describe the edges. Each line has three integers `a`, `b`,
+      `w`: there is an edge between nodes `a` and `b` with weight `w`. You can assume the
+      graph is connected and simple, and each edge appears at most once.
+
+      **Output**
+
+      For each edge in the **input order**, print the minimum spanning tree cost when the
+      edge is included.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `1 <= m <= 2 * 10^5`
+      - `1 <= a, b <= n`
+      - `1 <= w <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 6
+      1 2 4
+      1 3 2
+      2 4 2
+      3 4 1
+      3 5 4
+      4 5 3
+      ```
+
+      Output:
+
+      ```
+      10
+      8
+      8
+      8
+      9
+      8
+      ```
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      **① Brute force — per-edge MST, O(m² log m)**
+
+      For every edge you recompute a forced MST from scratch: seed the DSU by merging the
+      edge's two endpoints (and counting its weight), then run Kruskal over the rest. This
+      is simple and correct, but `m = 2*10^5` forces `2*10^5` full Kruskal runs — impossible.
+
+      ```cpp
+      // O(m^2 log m) — illustration of the naive idea only.
+      // for each edge e in input order:
+      //   dsu = fresh; dsu.union(u,v); tot = e.w
+      //   for edge f in all edges sorted by weight:
+      //       if f != e && merge okay: tot += f.w
+      //   print tot
+      ```
+
+      **② Optimization — one Kruskal + LCA path-max (optimal), O(m log m + (n + m) log n)**
+
+      Compute one MST `T` with Kruskal. Build `T` as a weighted tree. Then the answer for
+      an input edge `(u,v,w)` is `cost(T) − maxEdge(u→v) + w`, where `maxEdge(u→v)` is the
+      maximum weight on the `u`‑`v` path of `T`. Answering that with binary-lifting LCA
+      tables costs `O(log n)` per edge.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      struct E { int u, v; ll w; };
+      int main(){
+        ios::sync_with_stdio(false); cin.tie(nullptr);
+        int n, m; cin >> n >> m;
+        vector<E> edges(m);
+        for (int i = 0; i < m; ++i) cin >> edges[i].u >> edges[i].v >> edges[i].w;
+        vector<int> par(n+1), sz(n+1);
+        for (int i=1;i<=n;i++){par[i]=i;sz[i]=1;}
+        function<int(int)> find = [&](int x){ return par[x]==x?x:par[x]=find(par[x]); };
+        auto unite=[&](int a,int b){ a=find(a); b=find(b); if(a==b)return false;
+            if(sz[a]<sz[b])swap(a,b); par[b]=a; sz[a]+=sz[b]; return true; };
+        vector<array<int,3>> order(m);
+        for (int i=0;i<m;i++) order[i]={(int)edges[i].w,edges[i].u,edges[i].v};
+        sort(order.begin(), order.end());
+        vector<vector<pair<int,int>>> mt(n+1); // MST tree {neighbor, weight}
+        ll mst=0;
+        for (auto &[w,u,v] : order)
+          if (unite(u,v)){ mst += w; mt[u].push_back({v,w}); mt[v].push_back({u,w}); }
+        const int LOG=20;
+        vector<array<int,LOG>> up(n+1), mx(n+1);
+        vector<int> dep(n+1,0);
+        function<void(int,int,int)> dfs=[&](int u,int p,int wu){
+          up[u][0]=p; mx[u][0]=wu;
+          for (int j=1;j<LOG;j++){ up[u][j]=up[up[u][j-1]][j-1];
+              mx[u][j]=max(mx[u][j-1], mx[up[u][j-1]][j-1]); }
+          for (auto [v,w]: mt[u]) if (v!=p){ dep[v]=dep[u]+1; dfs(v,u,w); }
+        };
+        for (int j=0;j<LOG;j++){ up[0][j]=0; mx[0][j]=0; }
+        dfs(1,0,0);
+        auto maxOnPath=[&](int u,int v){
+          int res=0;
+          if (dep[u]<dep[v]) swap(u,v);
+          for (int j=LOG-1;j>=0;j--) if (dep[u]-(1<<j)>=dep[v]){ res=max(res,mx[u][j]); u=up[u][j]; }
+          if (u==v) return res;
+          for (int j=LOG-1;j>=0;j--) if (up[u][j]!=up[v][j]){ res=max({res,mx[u][j],mx[v][j]}); u=up[u][j]; v=up[v][j]; }
+          return max({res,mx[u][0],mx[v][0]});
+        };
+        for (int i=0;i<m;i++){
+          int mxp = maxOnPath(edges[i].u, edges[i].v);
+          cout << mst - (ll)mxp + edges[i].w << "\n";
+        }
+        return 0;
+      }
+      ```
+
+      The single binary-lifting pass answers every path-max in `O(log n)`. This is the
+      whole solution at the given limits.
+
+      **③ Further optimization** — not needed: we must read all `m` edges, so
+      `O((n + m) log n)` is essentially optimal.
+
+      **④ Alternative — Kruskal reconstruction tree**
+
+      Build a Kruskal reconstruction tree: as Kruskal merges components, create a new
+      node holding the merge, and make the two component-roots its children; the value at
+      that new node is the edge weight. Then the maximum edge on the `u-v` path equals the
+      weight stored at `LCA(u,v)` in this binary tree. Same complexity, different
+      structure — a good alternative if you already have an LCA over a reconstruction
+      tree (it also solves MST Edge *Check* and *Set Check* neatly).
+  - type: markdown
+    content: |
+      # Code logic
+
+      Follow the optimal **②** solution:
+
+      - Kruskal over sorted edges builds the MST and records its weight in `mst`, while
+        also storing the MST as a real adjacency list `mt` (with each edge's weight).
+      - `dfs` roots the MST at `1`: `up[u][0]` is the parent, and `mx[u][0]` is the weight
+        of the edge `(u, parent)`.
+      - Lifting: `mx[u][j]` is the maximum edge weight over the `2^j` upward edges from
+        `u`. This is the data structure that makes "max on a path" a `O(log n)` query.
+      - `maxOnPath(u, v)` first aligns depths, then jumps both nodes up together when
+        their `2^j`-ancestors differ, merging the max edges along the way.
+      - For each input edge in order we print `mst − maxOnPath(u,v) + w`. For a tree edge
+        this collapses to `mst` (path is the edge itself, `max = w`).
+
+      Use `long long` for `mst` and every answer: with `m = 2*10^5` and `w = 10^9`, the
+      total can exceed `2*10^14`, far beyond `int`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Run on the sample — `n = 5`, edges in input order with weights:
+
+      | input # | edge | w |
+      |---|---|---|
+      | 1 | 1-2 | 4 |
+      | 2 | 1-3 | 2 |
+      | 3 | 2-4 | 2 |
+      | 4 | 3-4 | 1 |
+      | 5 | 3-5 | 4 |
+      | 6 | 4-5 | 3 |
+
+      Kruskal (sorted) picks the MST edges `3-4(1)`, `1-3(2)`, `2-4(2)`, `4-5(3)`
+      → `mst = 8`. The MST tree paths and answers:
+
+      | input edge | MST path u..v | max | answer = 8 − max + w |
+      |---|---|---|---|
+      | 1-2 (4) | 1-3-4-2 | max(2,1,2)=2 | 10 |
+      | 1-3 (2) | 1-3 | 2 | 8 |
+      | 2-4 (2) | 2-4 | 2 | 8 |
+      | 3-4 (1) | 3-4 | 1 | 8 |
+      | 3-5 (4) | 3-4-5 | max(1,3)=3 | 9 |
+      | 4-5 (3) | 4-5 | 3 | 8 |
+
+      Output: `10 8 8 8 9 8`, matching the sample. Edge `1-2` is the only one whose forced
+      MST is not a minimum: add `1-2(4)`, drop the heaviest cycle edge `1-3` or `2-4`
+      (weight 2), total `8 − 2 + 4 = 10`.
+  - type: flowchart
+    title: "MST Edge Cost"
+    nodes: ["Kruskal: build one MST T + mst cost", "build weighted MST tree (n nodes)", "binary-lifting tables up[] and mx[]",
+            "for each input edge (u,v,w)", "maxEdge = max on u-v path in T", "print mst - maxEdge + w"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: "O(log n)"}
+      - {from: 4, to: 5, label: ""}
+  - type: mcq
+    prompt: "Why is it enough to swap only the single heaviest edge on the MST path, rather than several edges, to get the best MST containing a non-tree edge e = (u,v,w)?"
+    options:
+      - "Because adding e to an MST creates exactly one cycle (e plus the unique u-v path), so removing exactly one edge of that cycle restores a spanning tree; removing the heaviest one maximizes the weight we shed, and exchanging just that edge is provably optimal by the cut/cycle property"
+      - "Because non-tree edges are always heavier than every MST edge, so it never pays to remove anything"
+      - "Because an MST always contains every other non-tree edge too, so no other swap is available"
+      - "Because removing more than one edge would increase the number of components beyond one"
+    answer: 0
+    explanation: "Inserting e into an MST T closes precisely one fundamental cycle — e plus the u-v path in T. Any spanning tree containing e must break that cycle (remove exactly one edge); removing the single heaviest path edge sheds the most weight, and the classic cycle/cut exchange argument guarantees this one-Edge swap yields the minimum-weight spanning tree that includes e. Removing two edges would leave the tree disconnected, and removing a non-path edge would not break the cycle at all."
+---

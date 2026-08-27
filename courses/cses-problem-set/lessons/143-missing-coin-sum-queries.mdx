@@ -1,0 +1,389 @@
+---
+id: missing-coin-sum-queries
+title: "Missing Coin Sum Queries"
+type: content
+difficulty: hard
+order: 143
+tags:
+  - range-queries
+  - merge-sort-tree
+  - greedy
+  - fenwick-tree
+  - offline
+blocks:
+  - type: markdown
+    content: |
+      # Missing Coin Sum Queries — greedy range + a range-data structure
+
+      We have `n` coins with values `x_i`, and `q` queries. A query gives an index
+      interval `[a,b]` (a contiguous subset of coins) and asks: **what is the
+      smallest sum you cannot produce using a subset of those coins?**
+
+      This is the *dynamic-interval* version of the classic "Missing Coin Sum".
+      The static answer for a set of coins is found by a neat greedy; turning it
+      into fast range queries needs a data structure that can answer "sum of the
+      values ≤ T among positions `a..b`" quickly.
+
+      ## The greedy — a reachable interval `[0, R]`
+
+      Sort the coins. Keep `R =` the largest amount you can build *for sure*: you
+      can form every sum `0, 1, ..., R`. Walk the sorted coins; for coin value `c`:
+
+      - if `c > R + 1`, you **cannot** extend — there is a gap at `R + 1` (you can
+        build `≤ R`, but the next coin is too big to connect to `R + 1`); answer is
+        `R + 1`;
+      - else (`c ≤ R + 1`) you can now build everything up to `R + c`, so `R += c`.
+
+      At the end the answer is `R + 1`. This greedy is the famous "missing coin"
+      1D interval argument.
+
+      ## Turning it into a range query
+
+      For an interval of positions `[a,b]`, the greedy becomes an iterative
+      widening of the interval:
+
+      ```
+      R = 0
+      repeat:
+          S = sum of coins in [a,b] with value <= R + 1
+          if S == R: break          # no new coin arrived, R+1 is impossible
+          R = S
+      answer = R + 1
+      ```
+
+      Why it terminates and is correct: `R` is a lower bound you can always reach.
+      Asking for the sum of coins `≤ R+1` inside `[a,b]` throws in every coin that
+      could close the gap at `R+1`; adding all of them widens the reachable
+      interval to exactly `S`. If `S == R`, no coin was between `R` and `R+1`, so
+      `R+1` stays unreachable. Each successful round at least adds the smallest
+      still-unused coin, and in practice `R` at least doubles, so the loop runs
+      `O(log)` times per query.
+
+      Every round needs to answer **"sum of coins in positions `[a,b]` whose value
+      is ≤ T"** — a 2D (position × value) orthogonal range sum. A **merge sort
+      tree** answers it in `O(log² n)`, and an **offline Fenwick** approach answers
+      a batch of such requests faster.
+
+      :::tip
+      **Interview tip:** the "smallest un-creatable sum" greedy — keep the reachable
+      interval `[0,R]` and extend it with every coin `≤ R+1` — is a classic. The
+      range-query twist asks you to combine it with a 2D (position, value) sum
+      structure. Recognising that "sum of values ≤ T inside a range" is a static
+      2D dominance query (answered by merge-sort tree, wavelet tree, or an offline
+      sort + Fenwick) is the senior-hire differentiator.
+      :::
+
+      **Complexities (merge-sort tree):** build `O(n log n)`, each sub-query
+      `O(log² n)`, `O(log)` rounds per query → `O(log³ n)` per query, space `O(n
+      log n)`.
+  - type: markdown
+    content: |
+      # The Problem
+
+      You have `n` coins with positive integer values. The coins are numbered
+      `1, 2, ..., n`.
+
+      Your task is to process `q` queries of the form: *"if you can use coins
+      `a ... b`, what is the smallest sum you cannot produce?"*
+
+      ## Input
+
+      The first input line has two integers `n` and `q`: the number of coins and
+      queries.
+
+      The second line has `n` integers `x_1, x_2, ..., x_n`: the value of each
+      coin.
+
+      Finally, there are `q` lines that describe the queries. Each line has two
+      values `a` and `b`: you can use coins `a ... b`.
+
+      **Constraints:**
+
+      ```
+      1 ≤ n, q ≤ 2·10^5
+      1 ≤ x_i ≤ 10^9
+      1 ≤ a ≤ b ≤ n
+      ```
+
+      ## Output
+
+      Print the answer for each query.
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      5 3
+      2 9 1 2 7
+      2 4
+      4 4
+      1 5
+      ```
+
+      **Output:**
+
+      ```
+      4
+      1
+      6
+      ```
+
+      Explanation: for the first query you can use coins `[9,1,2]`; then `[2]`;
+      then finally `[2,9,1,2,7]`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O((b−a) log(b−a)) per query**
+
+      For each query, copy the subarray's coins, sort them, and run the classic
+      1D greedy (or do a subset-sum check). Sorting a range per query is
+      `O(b−a)` — with `q = 2·10^5` arbitrary ranges that is far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std; typedef long long ll;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<ll> x(n + 1);
+          for (int i = 1; i <= n; i++) cin >> x[i];
+          while (q--) {
+              int a, b; cin >> a >> b;
+              vector<ll> sub(x.begin()+a, x.begin()+b+1);  // O(b-a)
+              sort(sub.begin(), sub.end());
+              ll R = 0;
+              for (ll c : sub) {
+                  if (c > R + 1) break;
+                  R += c;
+              }
+              cout << R + 1 << "\n";       // answer for this query
+          }
+          return 0;
+      }
+      ```
+
+      *Correct greedy, but the per-query copy + sort is too slow.*
+
+      **② Optimization — merge sort tree + greedy doubling, O(log³ n) per query**
+
+      Build a **merge sort tree**: a segment tree over positions where each node
+      stores the *sorted* values of its segment **plus prefix sums** of that sorted
+      list. This answers `sumLE(l, r, T)` = "sum of coins in positions `[l,r]` with
+      value `≤ T`" by decomposing `[l,r]` into `O(log n)` nodes and binary-searching
+      each. Combine it with the interval-widening greedy. This is the optimal tier
+      we compile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int n;
+      vector<vector<ll>> vals;   // sorted values in each node
+      vector<vector<ll>> pre;    // prefix sums of each node's sorted values
+
+      void build(int v, int l, int r, const vector<ll>& a) {
+          if (l == r) { vals[v] = {a[l]}; pre[v] = {0, a[l]}; return; }
+          int m = (l + r) / 2;
+          build(2*v, l, m, a);
+          build(2*v+1, m+1, r, a);
+          vals[v].resize(r - l + 1);
+          merge(vals[2*v].begin(), vals[2*v].end(),
+                vals[2*v+1].begin(), vals[2*v+1].end(), vals[v].begin());
+          pre[v].assign(vals[v].size() + 1, 0);
+          for (size_t i = 0; i < vals[v].size(); i++) pre[v][i+1] = pre[v][i] + vals[v][i];
+      }
+
+      // sum of values in positions [ql,qr] that are <= T
+      ll sumLE(int v, int l, int r, int ql, int qr, ll T) {
+          if (ql > r || qr < l) return 0;
+          if (ql <= l && r <= qr) {
+              int k = (int)(upper_bound(vals[v].begin(), vals[v].end(), T) - vals[v].begin());
+              return pre[v][k];
+          }
+          int m = (l + r) / 2;
+          return sumLE(2*v, l, m, ql, qr, T) + sumLE(2*v+1, m+1, r, ql, qr, T);
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(0);
+          int q; cin >> n >> q;
+          vector<ll> a(n + 1);
+          for (int i = 1; i <= n; i++) cin >> a[i];
+          vals.assign(4*n + 5, {});
+          pre.assign(4*n + 5, {});
+          build(1, 1, n, a);
+          while (q--) {
+              int l, r; cin >> l >> r;
+              ll R = 0;                          // we can build every sum in [0,R]
+              while (true) {
+                  ll S = sumLE(1, 1, n, l, r, R + 1);  // all coins <= R+1 in range
+                  if (S == R) { cout << R + 1 << "\n"; break; }
+                  R = S;                         // reachable interval widens
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`O(log² n)` per `sumLE`, `O(log)` rounds per query → `O(log³ n)` per query,
+      `O(n log n)` space — meets the constraints.*
+
+      **③ Alternative — offline Fenwick, O((n+q) log n · rounds)**
+
+      The per-round `sumLE` requests for *all* queries can be answered offline in
+      one pass. Sort coins by value; sort a round's requests by threshold `T`;
+      walk coins in increasing value, inserting each into a Fenwick tree indexed by
+      *position*; then each request's answer is a Fenwick range-sum over `[a,b]`.
+      Repeat the rounds until every query converges. This avoids the binary search
+      per node and is the approach CSES editorials favour.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std; typedef long long ll;
+      struct FW{ int n; vector<ll> b; void add(int i,ll v){for(;i<=n;i+=i&-i)b[i]+=v;}
+                  ll sum(int i){ll s=0;for(;i>0;i-=i&-i)s+=b[i];return s;}
+                  ll sum(int l,int r){return sum(r)-sum(l-1);} };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,q; cin>>n>>q;
+          vector<pair<ll,int>> coins;
+          for(int i=1;i<=n;i++){ ll v; cin>>v; coins.push_back({v,i}); }
+          sort(coins.begin(),coins.end());
+          vector<int> L(q),Rr(q);
+          for(int i=0;i<q;i++) cin>>L[i]>>Rr[i];
+          vector<ll> R(q,0),ans(q); vector<char> done(q,0);
+          FW bit; bit.n=n; bit.b.assign(n+1,0);
+          while(true){
+              vector<pair<ll,int>> reqs;                  // (threshold, query idx)
+              for(int i=0;i<q;i++) if(!done[i]) reqs.push_back({R[i]+1, i});
+              if(reqs.empty()) break;
+              sort(reqs.begin(),reqs.end());
+              bit.b.assign(n+1,0);                        // fresh BIT this round
+              int ptr=0;
+              for(auto&pr:reqs){
+                  ll th=pr.first; int qi=pr.second;
+                  while(ptr<(int)coins.size() && coins[ptr].first<=th)
+                      { bit.add(coins[ptr].second, coins[ptr].first); ptr++; }
+                  ll S=bit.sum(L[qi],Rr[qi]);
+                  if(S==R[qi]){ ans[qi]=R[qi]+1; done[qi]=1; }
+                  else R[qi]=S;
+              }
+          }
+          for(int i=0;i<q;i++) cout<<ans[i]<<"\n";
+      }
+      ```
+
+      *Each round is `O((n+q) log n)`; there are `O(log)` rounds, so `O((n+q) log²
+      n)` overall.*
+
+      **④ Further optimization**
+
+      A wavelet tree answers `sumLE(l, r, T)` in `O(log V)` instead of `O(log² n)`,
+      shaving the per-query cost to `O(log n · log V)`. For the given limits the
+      merge sort tree already passes comfortably, so the wavelet tree is an optional
+      refinement rather than a requirement.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Two ideas come together — the greedy and the 2D-sum structure:
+
+      - **Reachable interval.** `R` is the largest sum you can *always* build from
+        the query's coins. The invariant "you can build every value in `[0,R]`" is
+        preserved by adding all coins `≤ R+1`: none of them is big enough to skip
+        over `R+1`, so you can combine them to reach every target up to the new
+        `R`.
+
+      - **`sumLE(l, r, R+1)`.** Rather than scanning coins, we ask the merge sort
+        tree to sum the values `≤ R+1` inside the position range. Each covered node
+        contributes its sorted list's prefix sum `pre[k]` where
+        `k = upper_bound(vals, R+1)`, i.e. the count of qualifying values. This is
+        the "sum under a value threshold over a position range" primitive.
+
+      - **The widening loop.** Each round, `S = sumLE(..., R+1)`. If `S == R`, no
+        coin arrived to close the gap, so `R+1` is the answer. Otherwise the
+        interval expands to `[0,S]` and we retry with a bigger threshold. Because
+        `R` grows quickly (usually at least doubling), the loop is short.
+
+      - **The merge sort tree build** uses `std::merge` to produce each node's
+        sorted list from its children and a prefix sum for `O(1)` range-sums within
+        a node. `upper_bound` gives the split point for any threshold `T`.
+
+      Values are `long long` throughout: coin values reach `10^9` and a range sum
+      can reach `10^9 · 2·10^5`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `n = 5`, coins `[2, 9, 1, 2, 7]`, `q = 3`.
+
+      **Query `2 4`** — coins at positions 2,3,4 = `[9, 1, 2]`.
+
+      ```
+      R=0: sumLE(value<=1)  -> coin {1@pos3}        = 1  => R=1
+      R=1: sumLE(value<=2)  -> {1, 2@pos4}          = 3  => R=3
+      R=3: sumLE(value<=4)  -> {1, 2} (9>4)         = 3  == R → stop
+      ```
+
+      **Answer `R + 1 = 4`.** (Produces 1,2,3 but 4 needs a coin `≤4` that isn't
+      there.)
+
+      ```
+      Output 4
+      ```
+
+      **Query `4 4`** — single coin `[2]`.
+
+      ```
+      R=0: sumLE(value<=1) -> none                 = 0  == R → stop
+      ```
+
+      **Answer `R + 1 = 1`.**
+
+      ```
+      Output 1
+      ```
+
+      **Query `1 5`** — all coins `[2, 9, 1, 2, 7]`.
+
+      ```
+      R=0: sumLE(value<=1)  -> {1}                  = 1  => R=1
+      R=1: sumLE(value<=2)  -> {1,2,2}              = 5  => R=5
+      R=5: sumLE(value<=6)  -> {1,2,2} (7,9 >6)     = 5  == R → stop
+      ```
+
+      **Answer `R + 1 = 6`.**
+
+      ```
+      Output 6
+      ```
+
+      Printed output (in order): `4, 1, 6`. Expected (sample) — `4, 1, 6`. Actual —
+      identical. Match.
+  - type: flowchart
+    title: "Greedy doubling on a merge sort tree"
+    nodes: ["build merge sort tree (sorted + prefix sums per node)", "for query [l,r]: R = 0", "S = sumLE(l, r, R+1)", "S == R ?", "no: R = S, loop", "yes: print R+1", "sumLE: split [l,r] into O(log n) nodes, binary search each, add prefix sums"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "grew"}
+      - {from: 4, to: 2}
+      - {from: 3, to: 5, label: "same"}
+      - {from: 2, to: 6, label: "uses"}
+      - {from: 6, to: 2}
+  - type: mcq
+    prompt: "The greedy loop widens a reachable interval R until `sumLE(a,b,R+1) == R`. The loop terminates quickly because…"
+    options:
+      - "…each query has a fixed number of coins, so the loop always runs exactly once."
+      - "…the interval never changes, so only one round is possible."
+      - "…R at least roughly doubles on every successful round, so a bounded number (~log) of rounds reaches the largest sum the range can form, after which the sum of coins ≤ R+1 stops growing."
+      - "…the answer is always R+1 = 1."
+    answer: 2
+    explanation: "On a successful round the newly counted coins each have value ≤ R+1, yet their total closes the whole gap to S; combined with the S==R stopping test, R grows fast (at least doubling in practice) until it equals the total of every coin ≤ R+1 in the range, where the loop stops. That gives O(log) rounds per query, each answered by the merge sort tree."
+---

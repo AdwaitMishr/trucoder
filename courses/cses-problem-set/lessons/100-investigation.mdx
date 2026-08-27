@@ -1,0 +1,269 @@
+---
+id: investigation
+title: "Investigation"
+difficulty: hard
+order: 100
+tags:
+  - graph-algorithms
+  - shortest-paths
+  - dijkstra
+  - counting-paths
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      # Investigation — four answers from one shortest-path run
+
+      From city `1` to city `n`, with one-way flights of given prices, we must
+      simultaneously report four things about the **minimum-price** routes:
+
+      1. the minimum price,
+      2. how many routes achieve it (mod `10^9 + 7`),
+      3. the **minimum** number of flights among those routes,
+      4. the **maximum** number of flights among those routes.
+
+      This is Dijkstra plus a shortest-path **DP** — all on the subgraph of edges
+      that actually lie on some shortest (`1` → `v`) path.
+
+      ## Two-phase strategy
+
+      **Phase 1 — Dijkstra for distances only.** Run ordinary Dijkstra to compute
+      `dist[v]` = minimum price to reach city `v`. This tells us, for every edge
+      `u -> v` of weight `w`, whether it is "useful": it is **on a shortest path
+      iff `dist[u] + w == dist[v]`**.
+
+      **Phase 2 — DP in increasing-distance order.** Order all cities by
+      `dist` ascending (this is a valid topological order of the "shortest-path
+      subgraph", because along an edge `dist[u] + w == dist[v]` we necessarily
+      have `dist[u] < dist[v]` when `w > 0`). Then relax:
+
+      ```
+      ways[1] = 1, minFlights[1] = maxFlights[1] = 0
+      for u by ascending dist:
+          for each edge u->v with dist[u]+w == dist[v]:
+              ways[v]      += ways[u]           (mod M)
+              minFlights[v] = min(minFlights[v], minFlights[u] + 1)
+              maxFlights[v] = max(maxFlights[v], maxFlights[u] + 1)
+      ```
+
+      Because predecessors are processed before successors, `ways[u]` is final
+      when used. The `dist[u] + w == dist[v]` test is exactly the filter that
+      keeps the DP on shortest paths only, so the min/max flight counts described
+      are those of *minimum-price* routes — precisely what is asked.
+
+      **Time:** O((n + m) log n) (Dijkstra) + O(n log n) (sorting) — dominated by
+      Dijkstra. **Space:** O(n + m).
+
+      :::tip
+      **Interview tip:** "do Dijkstra, then run a DP on the shortest-path DAG"
+      is the canonical recipe whenever the question asks for not just the shortest
+      distance but *how many* shortest paths, or the lightest/heaviest among
+      them. The single insight that separates you from a rank-and-file contestant
+      is: *after distances are known, the edges satisfying `dist[u]+w == dist[v]`
+      for positive `w` form a DAG, and any DP you run on that subgraph in
+      increasing-distance order is exact.* Learn this verbatim.
+      :::
+  - type: markdown
+    content: |
+      # Question — Investigation
+
+      You are going to travel from Syrjälä to Lehmälä by plane. You would like to
+      find answers to the following questions:
+
+      - what is the **minimum price** of such a route?
+      - how many **minimum-price routes** are there? (mod `10^9 + 7`)
+      - what is the **minimum number of flights** in a minimum-price route?
+      - what is the **maximum number of flights** in a minimum-price route?
+
+      **Input**
+
+      The first input line contains two integers `n` and `m`: the number of
+      cities and the number of flights. The cities are numbered `1, 2, ..., n`.
+      City `1` is Syrjälä, and city `n` is Lehmälä.
+
+      After this, there are `m` lines describing the flights. Each line has three
+      integers `a`, `b`, and `c`: there is a flight from city `a` to city `b` with
+      price `c`. All flights are one-way. You may assume that there is a route
+      from Syrjälä to Lehmälä.
+
+      **Output**
+
+      Print four integers according to the problem statement.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `1 <= m <= 2*10^5`
+      - `1 <= a, b <= n`
+      - `1 <= c <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      4 5
+      1 4 5
+      1 2 4
+      2 4 5
+      1 3 2
+      3 4 3
+      ```
+
+      Output:
+
+      ```
+      5 2 1 2
+      ```
+
+      Minimum price is 5. Two routes reach it: `1->4` (1 flight) and
+      `1->3->4` (2 flights). So the flight counts are min 1, max 2.
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — enumerate all routes, exponential time**
+
+      List every route from `1` to `n`, compute its price and flight count, then
+      find the minimum price and, among those, count routes and take the
+      min/max flight count (all mod `M` where required). Correct, but the number
+      of routes is exponential and routes may even loop, so for `n` up to `10^5`
+      it is completely infeasible.
+
+      ```cpp
+      // Illustration of the naive idea only — exponential, unusable.
+      // DFS every route, compare price and flight counts.
+      ```
+
+      **② Optimization — Dijkstra + shortest-path DP, O((n + m) log n) time, O(n + m) space**
+
+      Compute distances, then run the count/min/max DP on the shortest-path DAG.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1e9 + 7;
+      const ll INF = 4e18;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<pair<int,ll>>> g(n + 1);
+          for (int i = 0; i < m; ++i) {
+              int a, b; ll c; cin >> a >> b >> c;
+              g[a].push_back({b, c});
+          }
+          // Phase 1: Dijkstra for distances only
+          vector<ll> dist(n + 1, INF); dist[1] = 0;
+          priority_queue<pair<ll,int>, vector<pair<ll,int>>, greater<>> pq;
+          pq.push({0, 1});
+          while (!pq.empty()) {
+              auto [d, u] = pq.top(); pq.pop();
+              if (d > dist[u]) continue;
+              for (auto [v, w] : g[u])
+                  if (dist[u] + w < dist[v]) { dist[v] = dist[u] + w; pq.push({dist[v], v}); }
+          }
+          // Phase 2: DP in increasing-dist order (a topo order of the shortest-path DAG)
+          vector<int> nodes(n);
+          iota(nodes.begin(), nodes.end(), 1);
+          sort(nodes.begin(), nodes.end(), [&](int a, int b){ return dist[a] < dist[b]; });
+          vector<ll> ways(n + 1, 0); ways[1] = 1;
+          vector<int> mn(n + 1, INT_MAX), mx(n + 1, INT_MIN);
+          mn[1] = mx[1] = 0;
+          for (int u : nodes) {
+              if (dist[u] == INF) break;         // unreachable cities can't help
+              for (auto [v, w] : g[u]) {
+                  if (dist[u] + w != dist[v]) continue;   // only shortest-path edges
+                  ways[v] = (ways[v] + ways[u]) % MOD;
+                  mn[v] = min(mn[v], mn[u] + 1);
+                  mx[v] = max(mx[v], mx[u] + 1);
+              }
+          }
+          cout << dist[n] << " " << ways[n] << " " << mn[n] << " " << mx[n] << "\n";
+          return 0;
+      }
+      ```
+
+      **③ Further optimization** — not needed: a single Dijkstra is optimal; one
+      must read all edges, and Dijkstra already gives the distances that phase 2
+      depends on.
+
+      **④ Alternative — single-pass Dijkstra tracking all four values**
+
+      Maintain `dist/ways/mn/mx` and update them inside relaxation, handling the
+      equal-distance case (`dist[u] + w == dist[v]`) by *adding* `ways[u]` and
+      updating `mn/mx` instead of replacing. This is correct only if a node's
+      same-distance contributions are all delivered before it is finalized, which
+      the two-pass method guarantees cleanly; a single-pass implementation must
+      take care (e.g. re-push on equality) and is more error-prone. The two-pass
+      version is the recommended intended solution.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O((n + m) log n) solution in **②**:
+
+      - `dist[1] = 0`; the Dijkstra loop fills `dist[v]` = minimum price. It
+        ignores counts entirely — that is phase 1's only job.
+      - We sort city indices by `dist`. Since edge weights are positive
+        (`c >= 1`), any useful edge `u -> v` has `dist[u] < dist[v]`, so this
+        order is a valid topological order of the shortest-path subgraph.
+      - The DP touches an edge `u -> v` **only if `dist[u] + w == dist[v]`** — the
+        edge lies on at least one cheapest route. Non-shortest edges are skipped,
+        so `ways/mn/mx` stay meaningful for cheapest routes only.
+      - For a useful edge we *add* `ways[u]` (every cheapest route to `u`
+        extends to `v`), and tighten `mn[v]` / loosen `mx[v]` using `mn[u]+1` /
+        `mx[u]+1` (each cheapest route to `u` gains one flight).
+      - `if (dist[u] == INF) break;` — unreachable city `u` cannot affect `n`.
+      - Every city is finalized exactly once in increasing `dist` order, so each
+        route is counted once — no double counting.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 4`, flights `1->4 (5)`, `1->2 (4)`, `2->4 (5)`,
+      `1->3 (2)`, `3->4 (3)`.
+
+      Phase 1 distances: `dist[1]=0`, `dist[3]=2`, `dist[2]=4`, `dist[4]=5`
+      (via both `1->4` and `1->3->4`).
+
+      Phase 2, sorted by distance: `[1(0), 3(2), 2(4), 4(5)]`. `ways[1]=1,
+      mn[1]=mx[1]=0`.
+
+      | u | edges on shortest path | updates |
+      |---|------------------------|---------|
+      | 1 | 1->2 (0+4=4 ✓), 1->3 (0+2=2 ✓), 1->4 (0+5=5 ✓) | ways2=1,mn2=1,mx2=1; ways3=1,mn3=1,mx3=1; ways4=1,mn4=1,mx4=1 |
+      | 3 | 3->4 (2+3=5 ✓) | ways4=1+1=2; mn4=min(1,2)=1; mx4=max(1,2)=2 |
+      | 2 | 2->4 (4+5=9 ≠ 5 → skip) | — |
+      | 4 | — | — |
+
+      Output: `dist[4]=5`, `ways[4]=2`, `mn[4]=1`, `mx[4]=2` → `5 2 1 2`,
+      matching the sample. The two minimum-price routes `1->4` (1 flight) and
+      `1->3->4` (2 flights) account for the min 1 / max 2.
+  - type: flowchart
+    title: "Shortest paths + DP"
+    nodes: ["Dijkstra → dist[]", "sort vertices by dist asc",
+            "for u in order", "pick edge u->v",
+            "dist[u]+w == dist[v]?", "add ways, update mn/mx", "next edge / next u",
+            "print four numbers for n"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: "yes (shortest-path edge)"}
+      - {from: 5, to: 6, label: ""}
+      - {from: 4, to: 6, label: "no → skip"}
+      - {from: 6, to: 2, label: "loop"}
+      - {from: 2, to: 7, label: "after all nodes"}
+  - type: mcq
+    prompt: "In the two-pass method, edges are relaxed in the DP only when dist[u] + w == dist[v]. Why is this the only filter needed, and why is increasing-dist order a valid topological order for it?"
+    options:
+      - "Because only such edges can be part of a cheapest 1->n route, and since all weights are positive they always go from smaller dist[u] to larger dist[v], so sorting by dist puts every predecessor before its successor"
+      - "Because edges must be filtered by price first, then by flight count"
+      - "Because Dijkstra returns edges sorted by destination index"
+      - "Because the graph must be filtered to remove all parallel edges"
+    answer: 0
+    explanation: "An edge lies on some cheapest route between two relevant nodes exactly when following it preserves the shortest distance (dist[u]+w==dist[v]); edges failing this cannot extend a cheapest route to n. With positive weights, such edges strictly increase dist, so ordering vertices by dist makes the shortest-path subgraph a DAG and enables an exact single-pass DP over it."
+type: content
+---

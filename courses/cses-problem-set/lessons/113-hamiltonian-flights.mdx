@@ -1,0 +1,291 @@
+---
+id: hamiltonian-flights
+title: Hamiltonian Flights
+type: content
+difficulty: hard
+order: 113
+tags:
+  - graph
+  - bitmask-dp
+  - hamiltonian-path
+  - dp
+blocks:
+  - type: markdown
+    content: |
+      # Hamiltonian Flights — counting paths with bitmask DP
+
+      We have `n` cities and `m` one-way flights. We want to start at city `1`,
+      end at city `n`, and visit **every** city exactly once. How many such
+      routes exist? A route that touches every vertex exactly once is called a
+      **Hamiltonian path**; we are *counting* them.
+
+      Counting paths is a job for **dynamic programming**, and the tiny bound
+      `n <= 20` tells us the state must encode "which cities have been visited"
+      as a **bitmask**.
+
+      ## The bitmask idea
+
+      Number the cities `0..n-1`. A subset of visited cities is a single
+      integer `mask` whose bit `i` says "city `i` is already on the path".
+      There are only `2^20 = 1,048,576` possible subsets.
+
+      Define `dp[mask][i]` = the number of routes that start at city `0`,
+      visit **exactly** the cities in `mask`, and currently **end at city `i`**.
+      We grow paths one step at a time: if there is a flight `i -> j` and `j` is
+      not yet in `mask`, then every route `dp[mask][i]` can be extended to
+      `dp[mask | (1 << j)][j]`.
+
+      The base case is `dp[1][0] = 1` (the path consisting only of the start
+      city). The answer is `dp[(1 << n) - 1][n - 1]` — every city visited, ending
+      at the destination.
+
+      Because every transition *adds a bit*, `mask | (1 << j) > mask` always, so
+      iterating `mask` from small to large guarantees each state is finalized
+      before it is extended.
+
+      :::tip
+      **Interview tip:** "Count the number of paths that visit all `n` elements
+      exactly once" is the unmistakable calling card of bitmask DP. The tell is
+      a small `n` (≤ 20): that is the author inviting a `2^n` state space. The
+      exact same `dp[mask][last]` skeleton powers problems about visiting all
+      cities (TSP-style costs), covering sets, and counting Hamiltonian paths
+      on directed or undirected graphs. Recognize the small-n constraint and
+      reach for the mask.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` cities and `m` flight connections between them. You want to
+      travel from Syrjälä (city `1`) to Lehmälä (city `n`) so that you visit
+      each city exactly once. How many possible routes are there?
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the number of cities
+      and flights. The cities are numbered `1, 2, ..., n`. City 1 is Syrjälä,
+      and city n is Lehmälä.
+
+      Then, there are `m` lines describing the flights. Each line has two
+      integers `a` and `b`: there is a flight from city `a` to city `b`. All
+      flights are one-way flights.
+
+      **Constraints:** `2 <= n <= 20`, `1 <= m <= n^2`, `1 <= a, b <= n`
+
+      ## Output
+
+      Print one integer: the number of routes modulo `10^9 + 7`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 6
+      1 2
+      1 3
+      2 3
+      3 2
+      2 4
+      3 4
+      ```
+      **Output:**
+      ```
+      2
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate permutations, O((n-2)! · n)**
+
+      The route must start at city 1 and end at city n, so we choose an ordering
+      of the middle `n - 2` cities and check that each consecutive pair has a
+      flight. Every valid ordering is one route; count them all modulo.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007;
+
+      int n, m;
+      bool flight[21][21];
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(0);
+          cin >> n >> m;
+          for (int i = 0; i < m; i++) {
+              int a, b; cin >> a >> b;
+              flight[a][b] = true;
+          }
+          vector<int> mid;
+          for (int c = 2; c <= n - 1; c++) mid.push_back(c);
+          long long ans = 0;
+          sort(mid.begin(), mid.end());
+          do {
+              bool ok = flight[1][mid[0]];
+              for (int i = 1; ok && i < (int)mid.size(); i++)
+                  ok &= flight[mid[i - 1]][mid[i]];
+              if (ok) ok &= flight[mid.back()][n];
+              if (ok) ans++;
+          } while (next_permutation(mid.begin(), mid.end()));
+          cout << ans % MOD << "\n";
+          return 0;
+      }
+      ```
+
+      *For each of the `(n-2)!` permutations we scan its `n-1` edges:
+      `O((n-2)! · n)`. For `n = 20` that is `18! ≈ 6.4e15` — hopeless.*
+
+      **② Optimization — bitmask DP, O(2^n · n²)**
+
+      Replace the permutation explosion with `2^n` masks. `dp[mask][i]` counts
+      runs that visit exactly `mask` and end at `i`; extend along one flight at a
+      time.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(0);
+          int n, m;
+          cin >> n >> m;
+          vector<vector<int>> adj(n);
+          for (int i = 0; i < m; i++) {
+              int a, b; cin >> a >> b; a--; b--;
+              adj[a].push_back(b);
+          }
+          int S = 1 << n;
+          vector<vector<long long>> dp(S, vector<long long>(n, 0));
+          dp[1][0] = 1;                    // path of just the start city 1
+          for (int mask = 1; mask < S; mask++) {
+              if (!(mask & 1)) continue;   // every valid route contains city 1
+              for (int i = 0; i < n; i++) {
+                  if (!(mask & (1 << i))) continue;      // i already visited?
+                  if (dp[mask][i] == 0) continue;
+                  for (int j : adj[i]) {                 // fly i -> j
+                      if (mask & (1 << j)) continue;     // j must be new
+                      int nmask = mask | (1 << j);
+                      dp[nmask][j] = (dp[nmask][j] + dp[mask][i]) % MOD;
+                  }
+              }
+          }
+          cout << dp[S - 1][n - 1] % MOD << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(2^n · n²)` time, `O(2^n · n)` space. At `2^20 · 400 ≈ 4e8` simple steps
+      for `n = 20`, this runs comfortably within the 1 second limit.*
+
+      **③ Further optimization — prune impossible states**
+
+      Two cheap prunings cut real work: skip every `mask` without city `1`
+      (already in the code above), and skip extending a state that has already
+      left the destination city `n` (once `n` is visited and `mask` is not yet
+      full, the route can never become a complete Hamiltonian path, because you
+      can never "unvisit" `n`). This keeps the same big-O but a much smaller
+      constant.
+
+      **④ Alternative — pull-form DP (same cost)**
+
+      The same `dp` can be read *backwards*: instead of pushing from `i` to each
+      neighbor `j`, define `dp[mask][j]` by pulling from all `i` with a flight
+      `i -> j`:
+
+      ```
+      dp[mask][j] = sum over i with edge i->j, i in mask\{j}
+                    of dp[mask \ {j}][i]
+      ```
+
+      It computes the identical answer. The two directions differ only in which
+      dimension you iterate; both are equally valid bitmask DPs, and the choice
+      is a matter of style.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Map the algorithm onto THIS problem line by line:
+
+      - **State.** `dp[mask][i]` = number of routes visiting exactly the cities
+        whose bits are set in `mask` and ending at city `i` (0-indexed). The
+        mask is the only memory of "where we have been" — that is what makes the
+        DP exponential in `n` but correct.
+
+      - **Base case.** `dp[1][0] = 1`: the single-city route that is just the
+        start. No other city has a route that visits nobody else, so every other
+        `dp` starts at `0`.
+
+      - **Transition.** For each state `(mask, i)` pick every neighbor `j` of
+        `i`. If bit `j` is clear we can fly there and record it with
+        `dp[mask | (1 << j)][j] += dp[mask][i]`. This adds exactly one flight to
+        every underlying route, so ordering is never double-counted.
+
+      - **Modulo.** Every write to `dp` takes `% MOD` so values never overflow;
+        `long long` comfortably holds intermediate sums under `10^9 + 7`.
+
+      - **Ordering.** `nmask = mask | (1 << j)` always has one more bit set, so
+        `nmask > mask`; scanning `mask` from `0` upward bottom-up means every
+        state is fully computed before anyone extends it.
+
+      - **Skip line.** `if (!(mask & 1)) continue;` drops masks that never
+        contain the start — no route can arise from them — pruning a whole class
+        of dead states for free.
+
+      - **Answer.** `dp[(1 << n) - 1][n - 1]` is exactly "all cities visited,
+        ending at the destination", which is what the problem asks for, taken
+        modulo.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `n = 4, m = 6` with flights `1->2, 1->3, 2->3, 3->2, 2->4, 3->4`.
+      Index cities as `1=0, 2=1, 3=2, 4=3`. We track non-zero `dp` states:
+
+      | mask | visited      | ends at | count | built from                    |
+      |------|--------------|---------|-------|-------------------------------|
+      | `0001` | {1}        | 1       | 1     | base case                     |
+      | `0011` | {1,2}      | 2       | 1     | 1->2                          |
+      | `0101` | {1,3}      | 3       | 1     | 1->3                          |
+      | `0111` | {1,2,3}    | 2       | 1     | {1,3} + 3->2                  |
+      | `0111` | {1,2,3}    | 3       | 1     | {1,2} + 2->3                  |
+      | `1111` | {1,2,3,4}  | 4       | **2** | {1,2,3}@2 + 2->4; {1,2,3}@3 + 3->4 |
+
+      Reading the last row: there are two orderings that reach city 4 last:
+
+      1. `1 -> 2 -> 3 -> 4` — from the state `{1,2,3}` ending at `3` (built as
+         `1->2` then `2->3`) by flying `3->4`;
+      2. `1 -> 3 -> 2 -> 4` — from the state `{1,2,3}` ending at `2` (built as
+         `1->3` then `3->2`) by flying `2->4`.
+
+      Both visit every city exactly once, so `dp[1111][3] = 2`.
+
+      Expected (sample) — `2`. Actual — `2`. Match. (Note the cyclic edge
+      `2 <-> 3` never allows "re-using" a city, because the transition is only
+      allowed into a bit that is still clear, so every extended route stays
+      a simple path.)
+  - type: flowchart
+    title: "Bitmask DP for Hamiltonian Paths"
+    nodes: ["start: dp[1][0] = 1", "choose mask, city i ending there", "flight i->j with j unvisited?", "add: dp[mask|1<<j][j] += dp[mask][i]", "skip This branch", "all states done?", "answer: dp[full][n-1] % MOD"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "yes"}
+      - {from: 2, to: 4, label: "no"}
+      - {from: 3, to: 5}
+      - {from: 4, to: 5}
+      - {from: 5, to: 1, label: "no"}
+      - {from: 5, to: 6, label: "yes"}
+  - type: mcq
+    prompt: "Why does iterating the bitmask from small to large guarantee correctness in this DP?"
+    options:
+      - "Larger masks always hold larger numbers of cities, which sorts the work automatically."
+      - "Every transition adds exactly one bit, so nmask > mask; scanning upward means each state is finalized before it is ever extended."
+      - "The modulo reduces all values, so order no longer matters."
+      - "The dp array is reset to zero after each mask, so the order is irrelevant."
+    answer: 1
+    explanation: "Because each transition flips one more bit on, the destination mask is numerically greater than its source. A bottom-up sweep over increasing masks therefore always builds a state from strictly smaller states that were already computed, so every dp value is final before it is used. This is the same reason the answer is obtained directly, without memoization or cycles."
+---

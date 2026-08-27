@@ -1,0 +1,208 @@
+---
+id: filled-subgrid-count-ii
+title: Filled Subgrid Count II
+difficulty: medium
+order: 324
+tags:
+  - counting
+  - grid
+  - subgrid
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting fully filled *square* subgrids
+
+      This is the square variant of the ``filled subgrid`` theme: of all the
+      all-`1` subgrids of a binary `n × m` grid, we now keep only the **square**
+      ones (equal height and width). The all-`1` *rectangle* counter of the
+      previous lesson used a histogram + monotonic stack; squares allow a much
+      simpler and elegant **bottom-right-DP**.
+
+      **The recurrence.** Let `dp[i][j]` = the number of all-`1` squares whose
+      **bottom-right corner** is cell `(i, j)`. Claim:
+
+      ```
+      if grid[i][j] == '0' : dp[i][j] = 0
+      else if i==0 or j==0 : dp[i][j] = 1
+      else                 : dp[i][j] = 1 + min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1])
+      ```
+
+      **Why it works.** If cell `(i,j)` is `1`, then the largest all-`1` square with
+      that bottom-right corner has side `s = 1 + min(above, left, diagonal)`. A
+      square of side `s` anchored at `(i,j)` exists iff the three overlapped
+      `(s−1)`-squares ending at `(i−1,j)`, `(i,j−1)` and `(i−1,j−1)` all exist —
+      which is exactly the `min` of their DP values. Summing `dp[i][j]` over all
+      cells counts every all-`1` square exactly once (by its bottom-right corner).
+
+      **Complexity.** Time `O(n·m)`, space `O(n·m)`.
+
+      :::tip
+      **Interview tip:** \"count square submatrices all of whose cells satisfy a
+      condition\" (LeetCode *Count Square Submatrices with All Ones*) is the
+      textbook bottom-right DP. Distinguish it from counting *all rectangles*: the
+      min-of-three neighbours recurrence is *only* valid for squares, and it is
+      O(n·m) with a tiny constant — an interviewer favourite because the recurrence
+      is easy to derive on the whiteboard.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an `n × m` grid of `0` and `1`, count the number of **square** subgrids
+      (contiguous `k × k` blocks of cells, `k ≥ 1`) in which **every cell is `1`**.
+
+      **Input.** The first line has two integers `n` and `m`. After this there are
+      `n` lines, each with `m` characters (`0` or `1`).
+
+      **Output.** Print the number of all-`1` square subgrids.
+
+      **Constraints**
+      - `1 ≤ n, m ≤ 3000`
+
+      **Example**
+
+      Input:
+      ```
+      3 3
+      111
+      111
+      111
+      ```
+
+      Output:
+      ```
+      14
+      ```
+      (Nine `1×1` squares + four `2×2` squares + one `3×3` square = 14.)
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·m·min(n,m)²).** For every bottom-right corner
+      `(i,j)` try every side length `s` and scan the whole `s×s` block checking for
+      `1`s. Correct for tiny grids, but the per-`s` scan makes it far too slow for
+      `n, m ≤ 3000`.
+
+      ```cpp
+      long long brute(int n, int m, const vector<string>& g) {
+          long long ans = 0;
+          for (int i = 0; i < n; i++) for (int j = 0; j < m; j++)
+              for (int s = 1; s <= min(n - i, m - j); s++) {
+                  bool ok = true;
+                  for (int dr = 0; dr < s && ok; dr++)
+                      for (int dc = 0; dc < s; dc++)
+                          if (g[i + dr][j + dc] != '1') { ok = false; break; }
+                  if (ok) ans++;
+              }
+          return ans;
+      }
+      ```
+
+      **② Optimization — O(n·m) bottom-right DP — the intended solution.** Apply the
+      min-of-three recurrence; verified against brute force.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      long long solve(int n, int m, const vector<string>& g) {
+          vector<vector<long long>> dp(n, vector<long long>(m, 0));
+          long long ans = 0;
+          for (int i = 0; i < n; i++) for (int j = 0; j < m; j++) {
+              if (g[i][j] == '1') {
+                  if (i == 0 || j == 0) dp[i][j] = 1;
+                  else dp[i][j] = 1 + min({dp[i-1][j], dp[i][j-1], dp[i-1][j-1]});
+              }
+              ans += dp[i][j];
+          }
+          return ans;
+      }
+      int main() { int n, m; cin >> n >> m; vector<string> g(n);
+                   for (auto& r : g) cin >> r; cout << solve(n, m, g) << "\n"; }
+      ```
+
+      **③ Further optimization — O(m) space rolling DP.** Whereas rectangles needed
+      a stack, squares only ever need the *previous* row: keep just two rows
+      (`cur`/`prev`), so space drops to `O(m)` with `dp[i][j]` depending only on
+      `prev[j]`, `cur[j-1]` and `prev[j-1]`. Time stays `O(n·m)`.
+
+      ```cpp
+      long long solve(int n, int m, const vector<string>& g) {
+          vector<long long> prev(m, 0), cur(m, 0);
+          long long ans = 0;
+          for (int i = 0; i < n; i++) {
+              fill(cur.begin(), cur.end(), 0);
+              for (int j = 0; j < m; j++) {
+                  if (g[i][j] == '1') {
+                      if (i == 0 || j == 0) cur[j] = 1;
+                      else cur[j] = 1 + min({prev[j], cur[j-1], prev[j-1]});
+                  }
+                  ans += cur[j];
+              }
+              swap(prev, cur);
+          }
+          return ans;
+      }
+      ```
+
+      **④ Note on the answer size.** With `n = m = 3000` of all `1`s the total is
+      `Σ_k (3001−k)² ≈ 9·10⁹`, so the count must be a **64-bit** integer and the
+      reference uses `long long` throughout.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      Focus on the **②** bottom-right DP.
+
+      - **Base `i==0 || j==0`:** on the first row/column a `1` cell can only anchor
+        a `1×1` square, so `dp = 1` (and the `else` never indexes `i-1`/`j-1` which
+        would go out of bounds).
+      - **`min({above, left, diagonal})`:** a side-`s` square at `(i,j)` needs the
+        `(s−1)`-squares at `(i−1,j)`, `(i,j−1)` and `(i−1,j−1)` to all be filled.
+        The *bottleneck* is the smallest of the three, so the largest square side is
+        `1 + min` of them, and `dp` *counts* all squares of side `1..that`.
+      - **`g[i][j] == '1'` guard:** a `0` cell anchors no square, `dp` stays `0`.
+      - **`ans += dp[i][j]`:** each cell contributes exactly the number of all-`1`
+        squares for which it is the bottom-right corner; summing covers all squares
+        once.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 3, m = 3`, all `1`s. Fill `dp` row-major:
+
+      | i\\j | 0 | 1 | 2 |
+      |-----|---|---|---|
+      | 0 | 1 | 1 | 1 |
+      | 1 | 1 | 2 | 2 |
+      | 2 | 1 | 2 | 3 |
+
+      - Cells with `dp = 1`: the bottom-right of a single `1×1` square.
+      - Cells with `dp = 2`: e.g. `(1,1)` — it is the corner of the `1×1` and `2×2`
+        squares in the top-left `2×2`.
+      - Cell `(2,2)` has `dp = 3` — corners of the `1×1`, `2×2` and `3×3` squares.
+
+      Running row total `3`, `5`, `6`; cumulative **14**, matching the sample
+      (`9 + 4 + 1`).
+
+      **Sanity with the rolling ③ version:** remove the center `1` (grid
+      `111/101/111`) → `dp[1][1] = 0`, and because every `2×2` and the `3×3` must
+      contain the center `(1,1)`, only the eight single `1` cells survive:
+      `dp = [1,1,1] / [1,0,1] / [1,1,1]`, total `3 + 2 + 3 = 8` — matching brute
+      force. The broken centre poisons every square bigger than `1×1`.
+  - type: mcq
+    prompt: "Why does the min-of-three DP count SQUARES but the histogram+stack of the previous lesson counts RECTANGLES — i.e. why can't the min-of-three recurrence count rectangles too?"
+    options:
+      - "A rectangle needs a pair (width, height) chosen independently; the min of three neighbours pins down a single side length, so it can only describe equal-sided squares, not arbitrary rectangles."
+      - "Because rectangles must be counted modulo a prime and squares need not."
+      - "Because the histogram approach can only handle 0/1 grids, not squares alone."
+      - "Because squares have four corners but rectangles have two."
+    answer: 0
+    explanation: "The min-of-three recurrence computes one number: the largest square side, and thereby the count of squares, anchored at a bottom-right cell. A rectangle's width and height can differ, so it has a 2-D shape that cannot be summarised by a single side-length value; counting all rectangles requires the row-by-row histogram + monotonic stack instead. The two techniques solve different counting problems and are not interchangeable."
+
+type: content
+---

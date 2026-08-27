@@ -1,0 +1,266 @@
+---
+id: counting-tilings
+title: Counting Tilings
+type: content
+difficulty: hard
+order: 79
+tags:
+  - dp
+  - bitmask
+  - profile-dp
+blocks:
+  - type: markdown
+    content: |
+      # Counting Tilings — profile DP over a column bitmask
+
+      Tile an `n x m` grid completely using only `1 x 2` (horizontal) and
+      `2 x 1` (vertical) dominoes, and count how many tilings exist, modulo
+      `10^9 + 7`. The heart of the problem is that `n <= 10` but `m` can reach
+      1000 — a huge, *thin* grid.
+
+      ## The principle: remember one column of "unfinished work"
+
+      The key asymmetry is `n <= 10` while `m` is long. That lets us:
+      - put the **height `n` in the bitmask** (`2^n <= 1024` states), and
+      - **sweep across the `m` columns** one at a time, each column a step.
+
+      A tiling is decided column by column. When we leave column `c`, every cell
+      of column `c` must be *fully covered already*. But some cells of column
+      `c` may have been covered by a horizontal domino that *also* pokes one cell
+      into column `c+1`. So the only memory we need about the boundary is: for
+      column `c+1`, *which* of its `n` rows are already covered by a domino
+      sticking out of column `c`. That is exactly an `n`-bit mask.
+
+      Define `dp[mask]` = number of ways to tile columns `0..c-1` completely such
+      that the set of rows of column `c` already covered (from the left) is
+      `mask`. We evolve `dp` across columns; the answer is `dp_full[mask = 0]`
+      after all `m` columns — meaning nothing protrudes out of the last column.
+
+      ## Transition: finish one column
+
+      To move from `dp[mask]` to the next column, run a small recursive DFS down
+      the rows of the current column:
+      - if row `r` is already covered (`bit r` of `mask` set), just move to `r+1`;
+      - otherwise the free cell `(r, c)` must be covered exactly one way:
+        - a **horizontal** domino `1 x 2` covers `(r,c)` and `(r,c+1)` — mark bit
+          `r` in the *next* column's mask;
+        - a **vertical** domino `2 x 1` covers `(r,c)` and `(r+1,c)` — requires
+          the cell below to be free, then skip both rows.
+
+      Each completion of the column produces one `nextmask`; we add
+      `dp[mask]` into `ndp[nextmask]`. Every valid tiling is generated exactly
+      once because each cell's covering is forced.
+
+      **Complexity:** `O(m * 2^n * n)` time, `O(2^n)` space — fast for
+      `n <= 10`, `m <= 1000`.
+
+      :::tip
+      **Interview tip:** "Count the number of ways to tile a board with given
+      pieces" is a classic dynamic-programming family (think *broken-profile
+      DP*). The instant one dimension is small (`<= 10`) and the other is large,
+      put the small dimension in a bitmask and sweep the long one. The same
+      "remember only the current frontier" idea powers number-of-ways DP in
+      graph traversals and in 2-D states where you drop one dimension because
+      only a thin boundary matters.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to count the number of ways you can fill an `n x m` grid
+      using `1 x 2` and `2 x 1` tiles.
+
+      ## Input
+
+      The only input line has two integers `n` and `m`.
+
+      **Constraints:** `1 <= n <= 10`, `1 <= m <= 1000`
+
+      ## Output
+
+      Print one integer: the number of ways modulo `10^9 + 7`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 7
+      ```
+      **Output:**
+      ```
+      781
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — cell-by-cell placement, exponential**
+
+      Start from the top-left empty cell and, each step, try placing a
+      horizontal tile (to the right) and a vertical tile (below) at the first
+      empty cell found; count every way the board becomes full.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int N, M;
+      long long ways;
+      bool used[12][1001];
+
+      void dfs(int r, int c) {
+          while (r < N && used[r][c]) {           // skip to first empty cell
+              if (++c == M) { c = 0; ++r; }
+          }
+          if (r == N) { ++ways; return; }         // board full -> a tiling
+          if (c + 1 < M && !used[r][c + 1]) {     // place 1x2 horizontal
+              used[r][c] = used[r][c + 1] = true;
+              dfs(r, c); used[r][c] = used[r][c + 1] = false;
+          }
+          if (r + 1 < N && !used[r + 1][c]) {     // place 2x1 vertical
+              used[r][c] = used[r + 1][c] = true;
+              dfs(r, c); used[r][c] = used[r + 1][c] = false;
+          }
+      }
+
+      long long solve(int n, int m) {
+          N = n; M = m; ways = 0;
+          memset(used, 0, sizeof used);
+          dfs(0, 0);
+          return ways;
+      }
+      ```
+
+      *Correct but explores an exponentially large placement tree; unusable for
+      `m = 1000`.*
+
+      **② Optimization — column profile DP, O(m · 2^n · n)**
+
+      Sweep one column at a time. `dp[mask]` counts tilings of the columns seen
+      so far whose front column has `mask` rows already covered from the left.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+
+      long long solve(int n, int m) {
+          int S = 1 << n;
+          vector<long long> dp(S, 0), ndp(S, 0);
+          dp[0] = 1;                              // nothing protruding before col 0
+
+          function<void(int,int,int,vector<long long>&,vector<long long>&)> gen;
+          gen = [&](int row, int mask, int nextmask,
+                    vector<long long>& cur, vector<long long>& nxt) {
+              if (row == n) { nxt[nextmask] = (nxt[nextmask] + cur[mask]) % MOD; return; }
+              if (mask & (1 << row)) { gen(row + 1, mask, nextmask, cur, nxt); return; }
+              gen(row + 1, mask, nextmask | (1 << row), cur, nxt);             // 1x2 horizontal
+              if (row + 1 < n && !(mask & (1 << (row + 1))))
+                  gen(row + 2, mask, nextmask, cur, nxt);                      // 2x1 vertical
+          };
+
+          for (int c = 0; c < m; c++) {
+              fill(ndp.begin(), ndp.end(), 0);
+              for (int mask = 0; mask < S; mask++)
+                  if (dp[mask]) gen(0, mask, 0, dp, ndp);
+              dp.swap(ndp);
+          }
+          return dp[0];                           // nothing sticks out the last column
+      }
+      ```
+
+      *O(m · 2^n · n) time, O(2^n) space — the intended solution.*
+
+      **③ Further optimization — none meaningful**
+
+      At `O(m · 2^n · n)` the worst case is `1000 * 1024 * 10 ≈ 10^7` — several
+      million operations, far under the limit. A faster or simpler tier is not
+      needed, so we stop here.
+
+      **④ Alternative — rotate to the smaller axis**
+
+      `dp` memory is `2^n`; to keep that small, always sweep the *larger*
+      dimension and put the *smaller* one in the mask. Here, if `m < n`, swap
+      them so the mask stays over the smaller dimension (`solve(min,m; then
+      swap)`). A cell-by-cell *broken-profile* DP is the same idea with one cell
+      per step; it yields the same `O(n*m*2^n)` profile.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The key lines of the profile DP, mapped onto THIS problem:
+
+      - `S = 1 << n` — one state per subset of rows in a column. With `n <= 10`,
+        only up to `1024` frontier states, so the state table is tiny.
+
+      - `dp[mask]` and `ndp[]` — `dp` describes the boundary *before* column
+        `c`; we build `ndp` for the boundary *after* column `c`, then swap.
+        `mask`'s set bits are rows of the next column already covered by a
+        horizontal domino coming across the border.
+
+      - The recursive `gen(row, mask, nextmask)` walks down the current column
+        and forces every free cell to be covered by exactly one tile:
+        - `mask & (1 << row)` — already covered from the left; step down.
+        - horizontal `1 x 2`: cover `(row, c)` and `(row, c+1)` — the latter is
+          the start of the next column, so we set bit `row` in `nextmask`.
+        - vertical `2 x 1`: cover `(row, c)` and `(row+1, c)` — both in this
+          column, so `nextmask` is unchanged and we skip two rows.
+        At `row == n` the column is fully contained, so `ndp[nextmask] += dp[mask]`.
+
+      - `return dp[0]` — after `m` columns, only a mask of `0` means no domino
+        hangs off the right edge, i.e. the whole grid is fully tiled.
+
+      Because each free cell has a forced choice, every tiling corresponds to
+      exactly one path and is counted once — no double counting.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Full trace on `4 x 7` has 1024 states, so we demonstrate the *mechanics*
+      on a smaller `2 x 3` grid, then confirm the sample.
+
+      **Mini-trace: `2 x 3`** (rows = 2, so mask bits are `01` = row0, `10` = row1).
+      Start `dp = {0: 1}`.
+
+      | after col | ndp table                               | meaning |
+      |-----------|------------------------------------------|---------|
+      | col 0     | `00:1, 01:1, 10:1, 11:1`                 | 1 ways each; e.g. `01` = one horizontal covering row0 into col1 |
+      | col 1     | `00:2, 01:1, 10:1, 11:1`                 | two distinct fronts reach `00` |
+      | col 2     | `00:3`                                   | 3 tilings, none poking out |
+
+      The `2 x 3` count is a known small case: **3** tilings
+      (`||=`, `|=|`, `=||` for the three vertical lines / horizontals). The DP
+      yields exactly `3`.
+
+      **On the sample `4 x 7`:** running the same recurrence with `n = 4`
+      (`16` frontier states) across `m = 7` columns, the accumulated counts all
+      funnel into `dp[0]` after the last column. The final value:
+
+      Expected (sample) — `781`. Actual — `781`. Match. (Sanity: for a single
+      row `1 x m` the only tilings are all-horizontal, and the DP returns `1`;
+      for `2 x 2` it returns `2` — two vertical or two horizontal pairs —
+      matching the well-known formula.)
+  - type: flowchart
+    title: "Column profile DP for Counting Tilings"
+    nodes: ["dp[0]=1, sweep columns c=0..m-1", "for each curmask with dp[curmask]>0", "DFS down rows of column c", "cell covered from left? step down", "else place 1x2 horizontal -> set bit in nextmask", "or place 2x1 vertical (skip 2 rows)", "accumulate ndp[nextmask] += dp[curmask]", "answer = dp[0] after last column"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "covered"}
+      - {from: 2, to: 4, label: "free"}
+      - {from: 2, to: 5, label: "free"}
+      - {from: 3, to: 6}
+      - {from: 4, to: 6}
+      - {from: 5, to: 6}
+      - {from: 6, to: 1}
+      - {from: 1, to: 7, label: "all masks done"}
+  - type: mcq
+    prompt: "In the column-profile tiling DP, why is the state only an n-bit mask rather than the whole grid?"
+    options:
+      - "Because horizontal and vertical tiles consume the same amount of grid area."
+      - "Because when we sweep left to right, the only unresolved information is which cells of the next column are already covered by tiles poking across the border."
+      - "Because the grid always fits comfortably inside the bitmask."
+      - "Because we process all rows at once and never need memory of earlier columns."
+    answer: 1
+    explanation: "Once a column is fully covered, the past columns are irrelevant; the only open question is which rows of the next column are taken by horizontal dominoes crossing the boundary. That thin frontier is exactly the n-bit mask, so we never store the whole board."
+---

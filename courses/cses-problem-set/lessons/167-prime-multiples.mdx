@@ -1,0 +1,286 @@
+---
+id: prime-multiples
+title: Prime Multiples
+difficulty: medium
+order: 167
+tags:
+  - math
+  - combinatorics
+  - inclusion-exclusion
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — inclusion–exclusion over primes
+
+      We need the count of integers in `[1, n]` divisible by **at least one** of `k`
+      given primes. The sets `A_i = { multiples of a_i in [1,n] }` overlap heavily
+      (a number divisible by `2·3·5` is in three sets), so we cannot just add
+      `n/a_1 + n/a_2 + …`. The tool for counting a **union** is the **inclusion–
+      exclusion principle**:
+
+      ```
+      |A1 ∪ A2 ∪ … ∪ Ak| = Σ|Ai|  − Σ|Ai∩Aj|  + Σ|Ai∩Aj∩Al|  − …
+                         (odd sizes +, even sizes −)
+      ```
+
+      For primes `p_1, …, p_m`, an intersection is exactly the multiples of the
+      product `p_1·p_2·…·p_m` (distinct primes → the lcm is the product), and there
+      are `⌊n / (product)⌋` such numbers in `[1,n]`.
+
+      So iterate over **every subset** of the `k` primes; for a subset of size `s`
+      add `⌊n / product⌋` when `s` is odd and subtract it when `s` is even. Because
+      each prime contributes factor 2 to the subset space, there are `2^k` subsets —
+      and `k ≤ 20`, so `2^20 = 1,048,576` — easily fast enough.
+
+      **Time complexity:** `O(2^k · k)` time, `O(1)` extra space.
+
+      :::tip
+      **Interview tip:** "count numbers not divisible by any of these primes" is the
+      textbook inclusion–exclusion prompt. The moment you see a small `k` (≤ 20) and
+      a huge `n` (up to `10^18`), reach for `2^k` subset enumeration — the count in a
+      subset is just a floor-division, never a loop over `n`. Also remember the
+      overflow guard: if the running product exceeds `n`, that subset contributes
+      nothing.
+      :::
+  - type: markdown
+    content: |
+      ## Question
+
+      You are given `k` distinct prime numbers `a_1, a_2, …, a_k` and an integer `n`.
+
+      Your task is to calculate how many of the first `n` positive integers are
+      divisible by at least one of the given prime numbers.
+
+      **Input**
+
+      The first input line has two integers `n` and `k`.
+
+      The second line has `k` prime numbers `a_1, a_2, …, a_k`.
+
+      **Output**
+
+      Print one integer: the number of integers within the interval `1, 2, …, n`
+      that are divisible by at least one of the prime numbers.
+
+      **Constraints**
+
+      - `1 <= n <= 10^18`
+      - `1 <= k <= 20`
+      - `2 <= a_i <= n`
+
+      **Example**
+
+      Input:
+
+      ```
+      20 2
+      2 5
+      ```
+
+      Output:
+
+      ```
+      12
+      ```
+
+      Explanation: the 12 numbers are
+      `2, 4, 5, 6, 8, 10, 12, 14, 15, 16, 18, 20`.
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n·k) time, O(1) space (trial-check every integer).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          ll n; int k;
+          cin >> n >> k;
+          vector<ll> a(k);
+          for (int i = 0; i < k; i++) cin >> a[i];
+          ll ans = 0;
+          for (ll i = 1; i <= n; i++) {
+              bool ok = false;
+              for (int j = 0; j < k; j++) if (i % a[j] == 0) { ok = true; break; }
+              if (ok) ans++;
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      Walk `1..n` and test each number against every prime. Simple and correct, but it
+      is `O(n·k)` — with `n` up to `10^18` it would run for the age of the universe.
+      It only terminates on the toy sample (`n = 20`).
+
+      **② Optimization — O(2^k · k) time, O(1) space (bitmask subset enumeration).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          ll n; int k;
+          cin >> n >> k;
+          vector<ll> a(k);
+          for (int i = 0; i < k; i++) cin >> a[i];
+
+          ll ans = 0;
+          for (int mask = 1; mask < (1 << k); mask++) {
+              ll prod = 1;
+              int bits = __builtin_popcount((unsigned)mask);
+              bool skip = false;
+              for (int i = 0; i < k; i++) {
+                  if (mask & (1 << i)) {
+                      if (prod > n / a[i]) { skip = true; break; } // prod*a[i] > n
+                      prod *= a[i];
+                  }
+              }
+              if (skip) continue;              // n/prod = 0, contributes nothing
+              ll ways = n / prod;
+              ans += (bits % 2 == 1) ? ways : -ways;   // add odd sizes, subtract even
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      Every subset of primes is tried. For a subset, the multiples of the product are
+      `n / prod`; that count is added for odd-sized subsets and subtracted for even
+      ones (inclusion–exclusion). The guard `prod > n/a[i]` stops the product from
+      ever overflowing `long long` — once it exceeds `n` the subset contributes `0`.
+      `2^k <= 2^20 ≈ 10^6` subsets, trivially fast, and it is the intended solution.
+
+      **③ Further optimization — O(2^k) time, O(1) space (recursive DFS, earlier prune).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      ll n; int k;
+      vector<ll> a;
+      ll ans = 0;
+
+      void dfs(int i, ll prod, int bits) {
+          if (i == k) {
+              if (bits > 0) ans += (bits % 2 == 1) ? n / prod : -(n / prod);
+              return;
+          }
+          dfs(i + 1, prod, bits);                   // exclude a[i]
+          if (prod <= n / a[i]) dfs(i + 1, prod * a[i], bits + 1); // include it
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          cin >> n >> k;
+          a.resize(k);
+          for (int i = 0; i < k; i++) cin >> a[i];
+          dfs(0, 1, 0);
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      The exact same subset sum, but generated with a recursive DFS that refuses to
+      branch into a product already exceeding `n`. Same worst case `2^k`, but many
+      large subsets are pruned before the leaf, giving a smaller real constant.
+
+      **④ Alternative algorithm — none meaningful; skip.**
+
+      Inclusion–exclusion is the natural fit here because `k <= 20` is tiny while
+      `n` is huge. A sieve up to `sqrt(n)` would also work for the *smallest* primes
+      but cannot beat `2^k` when the primes are large, and a window sieve only gains
+      when the primes are consecutive — not the case here.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The heart is the outer loop over `mask` from `1` to `2^k − 1`. Each `mask` is
+      one subset of primes (bit `i` = prime `a[i]` is inside). For that subset we
+      build the product `prod` and the population count `bits`. Then:
+
+      - `ways = n / prod` counts the integers in `[1,n]` divisible by every prime in
+        the subset (since the primes are distinct, the lcm is the product).
+      - Adding `ways` for odd `bits` and subtracting for even `bits` is exactly the
+        alternating sign of inclusion–exclusion and counts each "good" number exactly
+        once (it appears in `m` of the sets, contributing `C(m,1) − C(m,2) + …` = 1).
+      - The early return `if (prod > n / a[i])` prevents `prod` from exceeding `n`
+        and overflowing — and correctly drops subsets whose `n/prod = 0`.
+
+      This avoids the `O(n)` scan entirely: the answer comes from `2^k` floor-divisions
+      instead of `n` individual checks.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      Trace the sample `n = 20, k = 2`, primes `2 5`:
+
+      | mask | primes in | bits | prod | n / prod | sign | running ans |
+      |------|-----------|------|------|----------|------|-------------|
+      | 01   | {2}       | 1    | 2    | 20/2 = 10 | +    | 10          |
+      | 10   | {5}       | 1    | 5    | 20/5 = 4  | +    | 14          |
+      | 11   | {2,5}     | 2    | 10   | 20/10 = 2 | −    | 12          |
+
+      Final answer `12`, matching the sample — the 12 numbers are
+      `2,4,5,6,8,10,12,14,15,16,18,20`. The single-size sets counted 10 (even) + 4
+      (multiples of 5) = 14, and the double-counted multiples of `2·5 = 10`
+      (`10` and `20`) were subtracted once to land on the true union size.
+  - type: flowchart
+    title: Inclusion–exclusion over prime subsets
+    nodes:
+      - Read n, k and the primes
+      - mask = 1 .. (2^k)−1
+      - prod = product of masked primes; bits = size
+      - prod > n ?
+      - 'skip subset (n/prod = 0)'
+      - ways = n / prod; bits odd ? add : subtract
+      - all masks done ?
+      - Print accumulated ans
+    edges:
+      - from: 0
+        to: 1
+        label: ''
+      - from: 1
+        to: 2
+        label: next mask
+      - from: 2
+        to: 3
+        label: build
+      - from: 3
+        to: 4
+        label: yes
+      - from: 3
+        to: 5
+        label: no
+      - from: 4
+        to: 6
+        label: ''
+      - from: 5
+        to: 6
+        label: ''
+      - from: 6
+        to: 7
+        label: yes
+      - from: 6
+        to: 1
+        label: no
+  - type: mcq
+    prompt: Why can the count inside an intersection of primes be a single floor division ⌊n/(p1·p2·…·pm)⌋?
+    options:
+      - 'Because the primes are distinct, so their least common multiple equals their product, and multiples of that product in [1,n] are exactly those n/prod numbers.'
+      - 'Because every prime divides n exactly once.'
+      - 'Because n <= 10^18 forces all subsets to have the same product.'
+      - 'Because the inclusion–exclusion sign is always positive for intersections.'
+    answer: 0
+    explanation: 'For pairwise-distinct primes the lcm is the product, and the integers in [1, n] divisible by all of them are precisely the multiples of that product — a count given by the integer division n/(p1·…·pm), with no need to divide by anything else. This is why the whole problem reduces to summing floor-divisions over 2^k subsets instead of scanning n.'
+type: content
+---

@@ -1,0 +1,192 @@
+---
+id: multiplication-table
+title: "Multiplication Table"
+difficulty: medium
+order: 346
+tags:
+  - binary-search
+  - counting
+  - math
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — the k-th smallest product via binary search over the answer
+
+      We consider the `n×n` multiplication table, i.e. the multiset of all
+      products `i · j` for `1 ≤ i, j ≤ n` (the same product can appear many
+      times). We want the **k-th smallest** product with multiplicity. Since
+      `n ≤ 10^5`, the table holds up to `10^10` entries — far too many to
+      generate.
+
+      The trick is to **binary search the answer** instead of the table.
+      Define `cnt(x)` = number of products that are `≤ x`:
+
+      ```
+      cnt(x) = Σ_{i=1..n} min(n, ⌊x / i⌋)
+      ```
+
+      Why: for a fixed row `i`, the products in that row are `i, 2i, 3i, …, n·i`.
+      The number that are `≤ x` is `⌊x / i⌋`, and there are only `n` columns, so
+      it is capped at `n`.
+
+      `cnt(x)` is **non-decreasing** in `x`. The answer is the smallest `x` such
+      that `cnt(x) ≥ k`. That is monotonic, so binary search over `x` in
+      `[1, n²]` finds it in `O(log(n²))` rounds, each costing `O(n)` to count.
+
+      **Time:** `O(n log n)`. **Space:** `O(1)`.
+
+      :::tip
+      **Interview tip:** "K-th element of an implicitly defined structure"
+      (multiplication table, pairwise sums, matrix with sorted rows) almost
+      always answers to binary search on the *value*: invert the search by
+      counting how many candidates lie below a threshold. The counting rule
+      `Σ min(n, ⌊x/i⌋)` here is the whole insight.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Consider the `n×n` multiplication table: the multiset of all products
+      `i · j` with `1 ≤ i, j ≤ n`, counted with multiplicity. Find the **k-th
+      smallest** product in this multiset (1-indexed).
+
+      **Input.** The only input line has two integers `n` and `k`.
+
+      **Output.** Print the k-th smallest product.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 10^5`
+      - `1 ≤ k ≤ n²`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      3 7
+      ```
+
+      **Output:**
+      ```
+      6
+      ```
+
+      *(Products for `n=3`: `1,2,3,2,4,6,3,6,9`. Sorted: `1,2,2,3,3,4,6,6,9`. The
+      7th is `6`.)*
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n² log n).** Generate all `n²` products, sort them,
+      and take the k-th.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          long long n,k; cin>>n>>k;
+          vector<long long> v;
+          for(long long i=1;i<=n;i++) for(long long j=1;j<=n;j++) v.push_back(i*j);
+          sort(v.begin(),v.end());
+          cout<<v[k-1]<<"\n"; return 0;
+      }
+      ```
+      *Complexity: `O(n² log n)` time, `O(n²)` space — impossible for `n = 10^5`.*
+
+      **② Optimization — O(n log n) binary search on the answer (`n ≤ 10^5`).**
+      Binary-search `x` in `[1, n²]`; the answer is the smallest `x` with
+      `cnt(x) ≥ k`, where `cnt(x) = Σ_i min(n, ⌊x/i⌋)`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          long long n,k; cin >> n >> k;
+          long long lo=1, hi=n*n, ans=-1;
+          auto leq=[&](long long x)->long long{
+              long long cnt=0;
+              for(long long i=1;i<=n;i++) cnt += min(n, x/i);
+              return cnt;
+          };
+          while(lo<=hi){
+              long long mid=(lo+hi)/2;
+              if(leq(mid)>=k){ ans=mid; hi=mid-1; }
+              else lo=mid+1;
+          }
+          cout<<ans<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: `O(n log n)` time (≈ `n · 34` count steps), `O(1)` space — instant.*
+
+      **④ Alternative — quotient-grouped counting (O(√x) per count).** The sum
+      `Σ_i min(n, ⌊x/i⌋)` can be evaluated faster by grouping rows `i` that
+      share the same value of `⌊x/i⌋` (there are only `O(√x)` distinct quotients),
+      shrinking each count step to `O(√x)`. For `n = 10^5` it is unnecessary,
+      but it is the standard upgrade when `n` grows toward `10^6`–`10^7`.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `kthProduct(n, k)` — O(n log n). Key lines:
+
+      1. **`leq(x)`** — counts products `≤ x` as `Σ_i min(n, x/i)`. The `min`
+         with `n` matters: row `i` only has `n` columns, so a huge `⌊x/i⌋` is
+         capped by `n`.
+      2. **`lo`/`hi`** — binary search bounds `[1, n²]`; `k ≤ n²` guarantees a
+         valid answer inside.
+      3. **The monotonic test** — answer is the smallest `x` with `leq(x) ≥ k`.
+         The `ans` snapshot pattern keeps the last valid `mid` when `lo`
+         overtakes `hi`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 3, k = 7`. Products: `1,2,2,3,3,4,6,6,9`; 7th is `6`.
+
+      Binary search in `[1, 9]`:
+
+      | mid | leq(mid) | verdict |
+      |-----|----------|---------|
+      | 5   | i=1:3, i=2:min(3,2)=2, i=3:min(3,1)=1 → 6 < 7 | too small → lo=6 |
+      | 7   | i=1:3, i=2:3, i=3:min(3,2)=2 → 8 ≥ 7 | candidate → hi=6 |
+      | 6   | i=1:3, i=2:3, i=3:min(3,2)=2 → 8 ≥ 7 | candidate → hi=5 |
+
+      `lo` overtakes `hi`, and the last candidate is `ans = 6`. ✓ matches the
+      sample. Note `leq(5)=6 < 7` but `leq(6)=8 ≥ 7`, so `6` is the smallest
+      product with at least 7 products ≤ it.
+
+  - type: flowchart
+    title: "Binary search the k-th product"
+    nodes:
+      - "lo=1, hi=n²"
+      - "mid=(lo+hi)/2"
+      - "cnt=Σ min(n, mid/i)"
+      - "cnt ≥ k?"
+      - "save ans=mid, hi=mid-1"
+      - "lo=mid+1"
+    edges:
+      - {from: 0, to: 1, label: "loop"}
+      - {from: 1, to: 2, label: "count"}
+      - {from: 2, to: 3, label: "check"}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 3, to: 5, label: "no"}
+      - {from: 4, to: 1, label: "repeat"}
+      - {from: 5, to: 1, label: "repeat"}
+
+  - type: mcq
+    prompt: "In the counting rule `cnt(x) = Σ_i min(n, ⌊x/i⌋)`, why is each term capped at `n`?"
+    options:
+      - "Because row `i` has only `n` columns, so at most `n` products in that row can be ≤ x no matter how large ⌊x/i⌋ is."
+      - "Because products are always less than n."
+      - "Because k is at most n²."
+      - "Because binary search should stop at value n."
+    answer: 0
+    explanation: "For a fixed row `i` the candidates are `i,2i,…,n·i`. The count of those ≤ x is `⌊x/i⌋`, but the row only has `n` entries, so the count is `min(n, ⌊x/i⌋)`. Summing this over rows gives the total number of table entries ≤ x."
+
+type: content
+---

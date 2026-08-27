@@ -1,0 +1,271 @@
+---
+id: sliding-window-median
+title: "Sliding Window Median"
+type: content
+difficulty: medium
+order: 266
+tags:
+  - sliding-window
+  - median
+  - multiset
+  - two-heaps
+blocks:
+  - type: markdown
+    content: |
+      # Sliding Window Median — the median of every fixed-length window
+
+      The **median** of a window of length `k` is the element at position
+      `ceil(k/2)` when the window's values are sorted ascending (for odd `k`
+      this is the true middle value; for even `k` it is one of the two middle
+      values — we fix a coherent convention). We slide a size-`k` window over
+      the array and report the median at every position.
+
+      The naive approach sorts the whole window each step. The trick is to keep
+      the window's values split across **two multisets** so that the median is
+      always one cheap lookup away — `O(log k)` per slide instead of
+      `O(k log k)`.
+
+      ## Split the window into a small half and a large half
+
+      Maintain two multisets:
+
+      - `low` — holds the **`ceil(k/2)` smallest** values of the window,
+      - `high` — holds the **remaining `k - ceil(k/2)`** largest values.
+
+      Because of how we rebalance, every element of `low` is `<=` every element
+      of `high`, and the counts are split so that `|low| = ceil(k/2)`. Then the
+      median is simply the **largest element of `low`**:
+
+      ```
+      median = *low.rbegin()
+      ```
+
+      ## Maintaining the split while sliding
+
+      - **Add a value:** insert it into `low`. Then rebalance so
+        `|low| = ceil(k/2)`: if `|low| > |high| + 1`, move `low`'s maximum into
+        `high`; if `|low| < |high|`, move `high`'s minimum into `low`. Finally,
+        while the largest of `low` exceeds the smallest of `high`, swap those
+        two elements so the order invariant `max(low) <= min(high)` always
+        holds.
+      - **Remove a value:** erase it from whichever multiset contains it, then
+        run the same rebalance.
+
+      Every add/remove is a constant number of `O(log k)` multiset operations,
+      so the whole pass costs `O(n log k)`.
+
+      :::tip
+      **Interview tip:** "keep the median of a running window/stream" is the
+      classic *two-heaps* problem (LeetCode 295 Constrained → a max-heap for
+      the small half + a min-heap for the large half). The sliding-window
+      version adds a **removal** operation, which is why an `std::multiset`
+      (heap with deletion) is the natural fit in C++ — name the shift from
+      "insert-only" to "insert + delete" when you explain it.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given an array of `n` integers. A sliding window of length `k`
+      slides over the array from left to right. For each of the `n - k + 1`
+      windows, what is the **median** of the window? (Median = the value at
+      position `ceil(k/2)` when the window's values are sorted ascending.)
+
+      ## Input
+
+      The first input line has two integers `n` and `k`. The next line has `n`
+      integers `a_1, a_2, …, a_n`.
+
+      **Constraints:** `1 <= k <= n <= 2*10^5`, `1 <= a_i <= 10^9`
+
+      ## Output
+
+      Print `n - k + 1` integers separated by spaces: the median of each window
+      in order.
+
+      ## Sample
+
+      **Input:**
+      ```
+      8 3
+      2 4 3 5 8 1 2 1
+      ```
+      **Output:**
+      ```
+      3 4 5 5 2 1
+      ```
+      (This is CSES problem 1076 "Sliding Median"; the sample is taken
+      verbatim from it.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·k log k)**
+
+      Sort each window and pick the `ceil(k/2)`-th element.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<int> a(n); for(auto&x:a) cin>>x;
+          for(int l=0; l<n-k+1; l++){
+              vector<int> w(a.begin()+l, a.begin()+l+k);
+              sort(w.begin(), w.end());
+              cout<<(l?" ":"")<<w[(k+1)/2 - 1];   // ceil(k/2)-th smallest
+          }
+          cout<<"\n"; return 0;
+      }
+      ```
+
+      *`O(n·k log k)` — way too slow for `n = 2*10^5`.*
+
+      **② Optimization — two multisets, O(n log k) (optimal)**
+
+      Split the window into `low` (the `ceil(k/2)` smallest) and `high` (the
+      rest); the median is `*low.rbegin()`. This is the tier we compile and
+      verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<int> a(n); for(auto&x:a) cin>>x;
+          multiset<int> L,R;
+          auto balance=[&](void){ // |L| is ceil(k/2); L holds the smaller half
+              while((int)L.size()>(int)R.size()+1){ int x=*L.rbegin(); R.insert(x); L.erase(prev(L.end())); }
+              while((int)L.size()<(int)R.size()){ int y=*R.begin(); L.insert(y); R.erase(R.begin()); }
+              while(!L.empty() && !R.empty() && *L.rbegin()>*R.begin()){
+                  int x=*L.rbegin(), y=*R.begin();
+                  L.erase(prev(L.end())); R.erase(R.begin());
+                  L.insert(y); R.insert(x);
+              }
+          };
+          auto add=[&](int v){ L.insert(v); balance(); };
+          auto del=[&](int v){
+              auto it=L.find(v); if(it!=L.end()) L.erase(it);
+              else { it=R.find(v); if(it!=R.end()) R.erase(it); }
+              balance();
+          };
+          for(int i=0;i<k;i++) add(a[i]);
+          vector<int> out; out.push_back(*L.rbegin());
+          for(int r=k;r<n;r++){ del(a[r-k]); add(a[r]); out.push_back(*L.rbegin()); }
+          for(int i=0;i<(int)out.size();i++) cout<<(i?" ":"")<<out[i];
+          cout<<"\n"; return 0;
+      }
+      ```
+
+      *`O(n log k)` time, `O(k)` space.*
+
+      **③ Alternative — Fenwick tree with k-th order statistic, O(n log n)**
+
+      Because values can be large, coordinate-compress them, then keep a Fenwick
+      tree of counts for the current window. The median is the value occupying
+      the `ceil(k/2)`-th smallest position — found by **binary lifting** on the
+      Fenwick tree (`order_of_key`). Adds/removes are point updates; the median
+      lookup is O(log n). Same class as ② but a different data structure, and it
+      generalises to "k-th smallest in a window" queries.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct BIT{ int n; vector<int> t; BIT(int n_):n(n_),t(n_+1){}
+          void add(int i,int d){for(++i;i<=n;i+=i&-i)t[i]+=d;}
+          int kth(int kk){ int idx=0,mask=1; while(mask<n) mask<<=1;
+              for(int d=mask>>1; d; d>>=1){ int nx=idx+d; if(nx<=n && t[nx]<kk){ idx=nx; kk-=t[nx]; } }
+              return idx; } };   // returns 0-based compressed rank of the kk-th smallest (1-indexed)
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k; vector<int> a(n); for(auto&x:a) cin>>x;
+          vector<int> c=a; sort(c.begin(),c.end()); c.erase(unique(c.begin(),c.end()),c.end());
+          auto id=[&](int v){return lower_bound(c.begin(),c.end(),v)-c.begin();};
+          BIT bit((int)c.size());
+          int pos=(k+1)/2;                                  // ceil(k/2) (1-indexed)
+          for(int i=0;i<k;i++) bit.add(id(a[i]),1);
+          vector<int> out; out.push_back(c[bit.kth(pos)]);
+          for(int r=k;r<n;r++){ bit.add(id(a[r-k]),-1); bit.add(id(a[r]),1); out.push_back(c[bit.kth(pos)]); }
+          for(int i=0;i<(int)out.size();i++) cout<<(i?" ":"")<<out[i];
+          cout<<"\n"; return 0;
+      }
+      ```
+
+      *`O(n log n)` time, `O(n)` space.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`|L| = ceil(k/2)`, `|R| = floor(k/2)`.** The `balance` function first
+        fixes the counts (push `L`'s max into `R`, or pull `R`'s min into `L`)
+        so the split is exactly right, then fixes the **order** (swap while
+        `*L.rbegin() > *R.begin()`) so every `L` value is at most every `R`
+        value.
+      - **Median is always `*L.rbegin()`.** With `ceil(k/2)` smallest values in
+        `L`, the largest of `L` is exactly the `ceil(k/2)`-th smallest value of
+        the whole window — by definition the median.
+      - **Del uses `find` not `erase(value)` blindly.** `del` erases a *single*
+        occurrence from whichever multiset holds it; `multiset::erase(value)`
+        would erase **all** equal copies, which is wrong for duplicate values.
+      - **O(1) balance-rounds amortised.** Each rebalancing pass moves at most a
+        couple of elements because add/del only ever change one count, so each
+        slide is O(log k) total.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 8, k = 3`, `a = [2, 4, 3, 5, 8, 1, 2, 1]`. `ceil(3/2) = 2`
+      smallest go to `L`; median = `*L.rbegin()`.
+
+      **Build window [2,4,3]:**
+      - add `2` → L `{2}`, R `{}`.
+      - add `4` → L `{2,4}`, R `{}` (|L|=2, |R|=0 ✓). 2 ≤ 4 ✓.
+      - add `3` → L `{2,3,4}`; |L|=3 > |R|+1=1 → move max `4` to R → L `{2,3}`,
+        R `{4}`. Order: 3 ≤ 4 ✓. **median = 3.**
+
+      **Slide → [4,3,5]** (remove `2`, add `5`):
+      - del `2`: it was in L → L `{3}`; |L|=1 < |R|=1? no, equal → 3 < 4 ✓.
+      - add `5`: L `{3,5}`, rebalance → L `{3,4}`, R `{5}`. **median = 4.**
+
+      **Slide → [3,5,8]** (remove `4`, add `8`):
+      - del `4`: in L? no, in R → R `{}`; L `{3,5}`, |L|=2,|R|=0 ✓ order fine.
+      - add `8`: L `{3,5,8}` → |L|=3 > |R|+1 → move `5`? max is `8` → L `{3,5}`,
+        R `{8}`. Order 5 ≤ 8 ✓. **median = 5.**
+
+      **Slide → [5,8,1]** (remove `3`, add `1`):
+      - del `3` (in L): L `{5}`, R `{8}`. Order 5 ≤ 8 ✓.
+      - add `1`: L `{1,5}`, |L|=2 ✓. Order: `*L.rbegin()=5` vs `*R.begin()=8` →
+        5 ≤ 8 ✓. **median = 5.**
+
+      **Slide → [8,1,2]** (remove `5`, add `2`):
+      - del `5` (in L): L `{1}`, R `{8}`. |L|=1 < |R|=1? equal. Order 1 ≤ 8 ✓.
+      - add `2`: L `{1,2}`. **median = *L.rbegin() = 2.**
+
+      **Slide → [1,2,1]** (remove `8`, add `1`):
+      - del `8` (in R): R `{}`, L `{1,2}`. |L|=2,|R|=0 ✓.
+      - add `1`: L `{1,1,2}` → |L|=3 > |R|+1 → move max `2` to R → L `{1,1}`,
+        R `{2}`. Order 1 ≤ 2 ✓. **median = *L.rbegin() = 1.**
+
+      Output: `3 4 5 5 2 1` — matches the sample.
+  - type: flowchart
+    title: "Sliding-window median via two multisets"
+    nodes: ["add new element to low half L", "rebalance counts: |L| = ceil(k/2)", "fix order: swap while L.max > R.min", "median = largest of L", "remove leaving element, rebalance", "slide: next window"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 0}
+  - type: mcq
+    prompt: "When removing an element from the two-multiset median structure, why must you use multiset::find to locate one copy rather than calling erase(value)?"
+    options:
+      - "find is faster than erase in multiset."
+      - "erase(value) removes ALL copies equal to value, which corrupts the count when the window contains duplicate values."
+      - "erase(value) only works on sorted arrays, not multisets."
+      - "find is required to keep |L| = ceil(k/2)."
+    answer: 1
+    explanation: "std::multiset::erase(value) erases every occurrence of that value. The window can (and in the sample does) contain duplicates — erasing value would delete all equal copies and break the size/order invariants, leaving L and R with the wrong split. Erasing through an iterator produced by find removes exactly one copy."
+---

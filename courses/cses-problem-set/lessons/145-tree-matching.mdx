@@ -1,0 +1,228 @@
+---
+id: tree-matching
+title: "Tree Matching"
+type: content
+difficulty: medium
+order: 145
+tags:
+  - tree-algorithms
+  - dynamic-programming
+  - maximum-matching
+  - tree-dp
+blocks:
+  - type: markdown
+    content: |
+      # Tree Matching — maximum matching by tree DP
+
+      A **matching** in a graph is a set of edges no two of which share an
+      endpoint. A **maximum matching** is one with as many edges as possible. In a
+      tree, maximum matching is computable in linear time with a tree DP that
+      tracks just two states per node.
+
+      ## The two-state idea
+
+      For each node `u`, consider its subtree (all descendants). The only decision
+      that couples `u` to the *outside world* is whether the edge from `u` to its
+      parent is taken. That gives two values per node:
+
+      - `b[u]` = best matching inside `u`'s subtree when `u` is **already matched
+        to its parent** — so `u` cannot be matched to any child.
+      - `a[u]` = best matching inside `u`'s subtree when `u` is **free** (the
+        parent edge is *not* used) — `u` may match at most one child.
+
+      Because subtrees are disjoint, the contributions of different children add
+      up cleanly, and this DP is exact (no matching edge crosses between two
+      different subtrees).
+
+      ## Recurrences
+
+      Let `children(u)` be u's direct children.
+
+      ```
+      b[u] = sum over children v of a[v]
+      ```
+
+      If `u` already spends its parent edge, it can take no child edge, so each
+      child `v` (free, since its parent edge to `u` is not used) contributes `a[v]`.
+
+      ```
+      a[u] = max( b[u],
+                  max over children v of ( b[u] - a[v] + 1 + b[v] ) )
+      ```
+
+      The `b[u]` term is the "don't match any child" option. The max-over-children
+      term says: choose one child `v` and take edge `(u,v)` → gain `1 + b[v]`
+      instead of the baseline `a[v]` we had from `v`, all other children keep their
+      `a[·]` contribution. The answer is `a[root]` (the root has no parent, so it
+      is **not** matched upward).
+
+      **Time:** O(n). **Space:** O(n).
+
+      :::tip
+      **Interview tip:** maximum matching on *general* graphs is a heavy problem,
+      but on trees the two-state "matched / free" DP is the canonical pattern —
+      the same `1 + b[v]` swap trick generalizes to matching, independent sets,
+      vertex cover, and maximum-weight variants. State the two states, then the
+      add-swap recurrence, and you have the whole solution.
+      :::
+  - type: markdown
+    content: |
+      # Question — Tree Matching
+
+      You are given a tree consisting of `n` nodes. A matching is a set of edges
+      where each node is an endpoint of at most one edge. What is the maximum
+      number of edges in a matching?
+
+      **Input**
+
+      The first input line contains an integer `n`: the number of nodes. The nodes
+      are numbered `1, 2, ..., n`.
+
+      After this, there are `n-1` lines describing the edges. Each line has two
+      integers `a` and `b`: there is an edge between nodes `a` and `b`.
+
+      **Output**
+
+      Print one integer: the maximum number of edges in a matching.
+
+      **Constraints**
+
+      - `1 <= n <= 2 * 10^5`
+
+      **Example**
+
+      Input:
+
+      ```
+      5
+      1 2
+      1 3
+      3 4
+      3 5
+      ```
+
+      Output:
+
+      ```
+      2
+      ```
+
+      One optimal matching uses edges `1-2` and `3-4` (or `3-5`); adding a third
+      edge would force two edges to share a node, so the maximum is 2.
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — enumerate all matchings, exponential time**
+
+      Try every subset of edges, check it is a valid matching (no shared endpoints),
+      keep the largest. Correct but the number of edge subsets is `2^(n-1)`
+      — impossible for `n = 2 * 10^5`.
+
+      ```cpp
+      // Illustration of the naive idea only — exponential, unusable.
+      // Enumerate all 2^(n-1) subsets of edges; validate; track max size.
+      ```
+
+      **② Optimization — two-state tree DP, O(n) time, O(n) space**
+
+      Root the tree at `1` and compute `a[u]` / `b[u]` in postorder.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<vector<int>> g(n+1);
+          for(int i=0;i<n-1;++i){int a,b;cin>>a>>b;g[a].push_back(b);g[b].push_back(a);}
+          vector<int> par(n+1,0), order; order.reserve(n);
+          vector<int> stk; stk.push_back(1); par[1]=-1;
+          while(!stk.empty()){
+              int u=stk.back(); stk.pop_back(); order.push_back(u);
+              for(int v:g[u]) if(v!=par[u]){ par[v]=u; stk.push_back(v); }
+          }
+          vector<int> a(n+1,0), b(n+1,0);
+          for(int i=order.size()-1;i>=0;--i){
+              int u=order[i]; int sum=0;
+              for(int v:g[u]) if(par[v]==u) sum+=a[v];
+              b[u]=sum; a[u]=sum;
+              for(int v:g[u]) if(par[v]==u)
+                  a[u]=max(a[u], sum - a[v] + 1 + b[v]);
+          }
+          cout << a[1] << "\n";
+          return 0;
+      }
+      ```
+
+      The single pass over the postorder computes both states for every node.
+
+      **③ Further optimization** — not needed: O(n) is optimal since the input tree
+      must be read entirely.
+
+      **④ Alternative — recursive DP**
+
+      The same `a`/`b` recurrence with a recursive `dfs`. Identical result, but it
+      consumes the call stack, so a chain-shaped tree can overflow it; ②'s explicit
+      stack is the robust choice for adversarial trees.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Follow the O(n) solution in **②**:
+
+      - Build an undirected adjacency list `g`. A stack DFS from `1` records `par`
+        and an `order` list; reversing it gives postorder.
+      - For each `u`, `sum` is the baseline `Σ a[v]` over children — that is `b[u]`
+        directly (u is matched to its parent, so no child edge).
+      - `a[u]` starts equal to `sum` (the "match no child" option), then we try
+        each child `v` as *the* matched one: swap `v`'s `a[v]` for `1 + b[v]`.
+      - The swap `sum - a[v] + 1 + b[v]` is the heart of the recurrence; taking
+        the max keeps the best single child to match.
+      - `a[1]` is the answer: the root has no parent, so it is in the *free*
+        state.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, edges `1-2`, `1-3`, `3-4`, `3-5`. Root = 1.
+      Children of 1: `{2, 3}`; children of 3: `{4, 5}`.
+
+      Postorder: `[4, 5, 3, 2, 1]` (one valid choice).
+
+      | u | children | b[u] = Σa[v] | a[u] = max(b[u], swap options) |
+      |---|----------|--------------|---------------------------------|
+      | 4 | — | 0 | 0 |
+      | 5 | — | 0 | 0 |
+      | 3 | 4,5 | a[4]+a[5] = 0 | max(0, 1+b[4]=1, 1+b[5]=1) = 1 |
+      | 2 | — | 0 | 0 |
+      | 1 | 2,3 | a[2]+a[3] = 0+1 = 1 | max(1, 1+b[2]=1, 1+b[3]=1) = 1 → but 1-2: 1-0+1+0=2 ⇒ 2 |
+
+      For node 1: `sum = 1`. Match child 2: `1 - a[2] + 1 + b[2] = 1 - 0 + 1 + 0 = 2`.
+      Match child 3: `1 - a[3] + 1 + b[3] = 1 - 1 + 1 + 0 = 1`. So `a[1] = 2`.
+
+      Output: `2`, matching the sample (edges `1-2` and `3-4`).
+  - type: flowchart
+    title: "Max matching DP"
+    nodes: ["root tree at 1", "postorder via stack + reverse", "next u in postorder",
+            "sum = Σ a[child]", "b[u] = sum; a[u] = sum",
+            "for each child: a[u] = max(a[u], sum - a[v] + 1 + b[v])",
+            "print a[root]"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: "try matching u-v"}
+      - {from: 5, to: 2, label: "next node"}
+      - {from: 2, to: 6, label: "all done"}
+  - type: mcq
+    prompt: "In the two-state recurrence, why must the maximum matching never be greedy (always take an edge when you can), and why does b[u] = Σ a[child] make the two states consistent?"
+    options:
+      - "Because taking an edge always sacrifices the two child edges adjacent to it, so we must compare taking vs. not taking (b[u]) with the best single-child swap (a[u]) — the DP is the only way to resolve that trade-off; b[u] = Σ a[child] is exactly 'u already spent its parent edge, so no child edge is allowed'"
+      - "Because greedily removing edges then re-adding leaves the tree disconnected"
+      - "Because matching is only valid on even-sized trees"
+      - "Because each node can be matched to its parent and two children at once"
+    answer: 0
+    explanation: "A greedy rule fails because choosing an edge (u,v) blocks all other edges incident to u and v; the win of +1 must be weighed against the deleted alternative edges. The two-state DP enumerates exactly the two structural cases — u free to take one child edge (a[u]) vs. u forced to spend its parent edge (b[u], so no child edge) — and the swap term (sum − a[v] + 1 + b[v]) captures the cost/benefit of matching u to child v, making the optimum exact rather than heuristic."
+---

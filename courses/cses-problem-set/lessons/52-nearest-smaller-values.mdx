@@ -1,0 +1,267 @@
+---
+id: nearest-smaller-values
+title: Nearest Smaller Values
+difficulty: easy
+order: 52
+tags:
+  - sorting-and-searching
+  - monotonic-stack
+blocks:
+  - type: markdown
+    content: |
+      # Nearest Smaller Values — monotonic stack
+
+      Given an array, for every position `i` find the **nearest** position `j < i`
+      (to the left) such that `a[j] < a[i]`. If no such `j` exists, the answer is
+      `0`.
+
+      The naive scan walks left from each `i` looking for a smaller value:
+      `O(n²)`. The efficient tool is the **monotonic stack** — a stack that keeps
+      values in strictly increasing order.
+
+      **The idea.** As we sweep left to right, maintain a stack of `(value,
+      position)` pairs, stored so values strictly increase from bottom to top.
+      For the current `a[i]`:
+
+      1. **Pop** every element `>= a[i]` off the stack. Those elements can never
+         be the "nearest smaller" for this or any later element — any later query
+         would prefer `a[i]` (smaller value *and* closer).
+      2. The **top** of the stack is now the nearest smaller element to the left
+         (if the stack is empty, answer is `0`).
+      3. **Push** `(a[i], i)`.
+
+      **Why the popped elements are safe to forget.** Suppose `a[k] >= a[i]` with
+      `k < i`. For any future position `p > i`, both `k` and `i` are to its left,
+      but `a[i] <= a[k]` and `i > k`, so `i` is strictly better (further right,
+      value not larger). Hence `a[k]` never wins again — drop it.
+
+      **Worked mini-example.** `a = [2, 5, 1]`. Start empty:
+      - `i=1 (2)`: stack empty → answer 0. Push `(2,1)`. Stack: `[2]`.
+      - `i=2 (5)`: top `2 < 5` → answer 1. Push `(5,2)`. Stack: `[2,5]`.
+      - `i=3 (1)`: pop `5, 2` (both `>= 1`) → empty → answer 0. Push `(1,3)`.
+
+      Answers: `0 1 0`.
+
+      **Complexity:** each element is pushed and popped at most once, so it's
+      `O(n)` time and `O(n)` space (amortized linear).
+
+      :::tip
+      **Interview tip:** the monotonic stack is THE structure for "nearest greater
+      / smaller element to the left or right" problems (stock span, largest
+      rectangle in a histogram, trapping rain water). Recognize it by the phrase
+      *"for each element, find the nearest … to the left/right"*. The signature
+      move is proving that the elements you pop are dominated and never needed
+      again — that amortized argument is what makes it O(n).
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given an array of `n` integers `a[1], a[2], ..., a[n]`, your task is to
+      calculate for each position `i` the **nearest position to the left** that
+      is **strictly smaller** than `a[i]`. If there is no such position, report
+      `0`.
+
+      **Constraints:** `1 <= n <= 2*10^5`, `1 <= a[i] <= 10^9`
+
+      ## Input
+
+      The first input line has an integer `n`. The second line has `n` integers
+      `a[1], ..., a[n]`.
+
+      ## Output
+
+      Print `n` integers: for each `i`, `0` if no position to the left is
+      smaller, otherwise the index of the nearest such position (1-based,
+      closest to `i`).
+
+      ## Sample
+
+      **Input:**
+      ```
+      8
+      2 5 1 4 3 7 4 6
+      ```
+      **Output:**
+      ```
+      0 1 0 3 3 5 5 7
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n²)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      std::vector<int> solve(int n, const std::vector<long long>& a) {
+          std::vector<int> ans(n);
+          for (int i = 0; i < n; i++) {
+              ans[i] = 0;
+              for (int j = i - 1; j >= 0; j--)
+                  if (a[j] < a[i]) { ans[i] = j + 1; break; }  // nearest smaller
+          }
+          return ans;
+      }
+      ```
+      For each `i`, walk leftwards to the nearest smaller. `O(n²)` in the worst
+      case (e.g. a strictly increasing array makes every query walk all the way
+      back) — too slow for `n = 2·10^5`.
+
+      **② Optimization — monotonic stack, O(n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      std::vector<int> solve(int n, const std::vector<long long>& a) {
+          std::vector<int> ans(n);
+          std::vector<pair<long long,int>> st;      // (value, pos+1); increasing by value
+          for (int i = 0; i < n; i++) {
+              while (!st.empty() && st.back().first >= a[i]) st.pop_back();
+              ans[i] = st.empty() ? 0 : st.back().second;
+              st.push_back({a[i], i + 1});
+          }
+          return ans;
+      }
+      ```
+      Each element enters and leaves the stack once: amortized `O(n)` time,
+      `O(n)` space. This is the intended, optimal solution.
+
+      **③ Further optimization — none needed.**
+      `O(n)` is best possible: we must inspect every element at least once.
+
+      **④ Alternative — segment tree over compressed values, O(n log n).**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      std::vector<int> solve(int n, const std::vector<long long>& a) {
+          // Compress values so a[?] map into [0, m-1].
+          std::vector<long long> vals = a;
+          sort(vals.begin(), vals.end());
+          vals.erase(unique(vals.begin(), vals.end()), vals.end());
+          auto comp = [&](long long v){ return int(lower_bound(vals.begin(), vals.end(), v) - vals.begin()); };
+
+          int m = (int)vals.size();
+          std::vector<int> seg(4 * m, 0);            // max rightmost index per value range
+          std::function<void(int,int,int,int,int)> upd =
+              [&](int node, int l, int r, int p, int idx){
+                  if (l == r) { seg[node] = idx; return; }
+                  int mid = (l + r) / 2;
+                  if (p <= mid) upd(node*2, l, mid, p, idx);
+                  else upd(node*2+1, mid+1, r, p, idx);
+                  seg[node] = max(seg[node*2], seg[node*2+1]);
+              };
+          std::function<int(int,int,int,int,int)> qry =
+              [&](int node, int l, int r, int ql, int qr){
+                  if (qr < l || r < ql) return 0;
+                  if (ql <= l && r <= qr) return seg[node];
+                  int mid = (l + r) / 2;
+                  return max(qry(node*2, l, mid, ql, qr), qry(node*2+1, mid+1, r, ql, qr));
+              };
+
+          std::vector<int> ans(n);
+          for (int i = 0; i < n; i++) {
+              int c = comp(a[i]);
+              ans[i] = qry(1, 0, m - 1, 0, c - 1);   // rightmost index with a smaller value
+              upd(1, 0, m - 1, c, i + 1);            // record this index for its value
+          }
+          return ans;
+      }
+      ```
+      The nearest smaller to the left is the **maximum index** having a smaller
+      value. Compress values, keep a segment tree where each leaf stores the
+      rightmost index seen for that compressed value, then range-query the max
+      over `[0, comp(a[i])-1]`. Correct and different in structure, `O(n log n)`
+      time and space — a valid alternative that's slower than the `O(n)` stack.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Stack invariant.** `st` holds `(value, 1-based index)` pairs with
+        strictly increasing values from bottom to top. The top is the *smallest*
+        value of all that came before, and — crucially — the *nearest* one that
+        is still useful for the current `i`.
+      - **Pop dominates.** `while (!st.empty() && st.back().first >= a[i]) pop`.
+        Any stored element with value `>= a[i]` is beaten for every future query
+        by `a[i]` itself: same-or-smaller value and closer. So it can never be
+        an answer again and is safely removed.
+      - **Read the answer.** After popping, the top (if any) is the nearest
+        strictly smaller value; record its stored 1-based index, or `0` if the
+        stack is empty.
+      - **Push.** Add the current element — it may become the answer for later
+        elements that are larger than it.
+
+      The amortized `O(n)` bound comes from counting work by *elements*: each of
+      the `n` pushes and each of the (at most `n`) pops is one operation.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 8`, `a = [2, 5, 1, 4, 3, 7, 4, 6]`.
+
+      **Expected output (sample):** `0 1 0 3 3 5 5 7`.
+
+      **Actual run.** Stack is `(value, pos)`; we show the trace.
+
+      | i | a[i] | pop while top >= a[i] | stack after pop | answer (top pos / 0) |
+      |----|------|------------------------|-----------------|------------------------|
+      | 1 | 2 | (none) | [(2,1)] | 0 |
+      | 2 | 5 | (none) | [(2,1),(5,2)] | 1 |
+      | 3 | 1 | pop (5,2),(2,1) | [] | 0 |
+      | 4 | 4 | (none) | [(1,3),(4,4)] | 3 |
+      | 5 | 3 | pop (4,4) | [(1,3),(3,5)] | 3 |
+      | 6 | 7 | (none) | [(1,3),(3,5),(7,6)] | 5 |
+      | 7 | 4 | pop (7,6) | [(1,3),(3,5),(4,7)] | 5 |
+      | 8 | 6 | (none) | [(1,3),(3,5),(4,7),(6,8)] | 7 |
+
+      Answers: `0 1 0 3 3 5 5 7` — exactly the sample output ✓. Note how popping
+      `(4,4)` at `i=5` and `(7,6)` at `i=7` never hurts: those values are
+      dominated by `3` and `4` respectively for all later queries.
+  - type: flowchart
+    title: Monotonic stack scan
+    nodes:
+      - 'For each index i (left to right)'
+      - Pop while top value >= a[i]
+      - Stack empty?
+      - 'Answer[i] = 0'
+      - 'Answer[i] = top position'
+      - Push (a[i], i)
+      - next i
+    edges:
+      - from: 0
+        to: 1
+        label: ''
+      - from: 1
+        to: 2
+        label: ''
+      - from: 2
+        to: 3
+        label: yes
+      - from: 2
+        to: 4
+        label: no
+      - from: 3
+        to: 5
+        label: ''
+      - from: 4
+        to: 5
+        label: ''
+      - from: 5
+        to: 6
+        label: ''
+      - from: 6
+        to: 0
+        label: loop
+  - type: mcq
+    prompt: Why is popping elements >= a[i] safe (why can't they be answers later)?
+    options:
+      - Because the stack must stay small for memory reasons
+      - 'Because a[i] is smaller-or-equal in value and strictly closer, so any future element that could use a popped k < i would prefer a[i]; the popped element is dominated and unreachable as "nearest" again'
+      - Because values are guaranteed distinct
+      - Because a[i] is always the minimum of the whole array
+    answer: 1
+    explanation: 'If a[k] >= a[i] with k < i, then for any future position p > i both k and i are to the left, but a[i] <= a[k] and i is closer. So k never wins as "nearest smaller" again, and dropping it loses nothing. This dominance is exactly what makes the algorithm O(n) amortized.'
+type: content
+---

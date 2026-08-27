@@ -1,0 +1,203 @@
+---
+id: coding-company
+title: "Coding Company"
+type: content
+difficulty: medium
+order: 399
+tags:
+  - dynamic-programming
+  - knapsack
+  - assignment
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — capacity DP for role assignment
+
+      "Coding Company" is an **assignment / knapsack-style DP**: every person must be
+      placed into exactly one of two roles, there is a fixed *capacity* of roles of
+      each type, and the objective is to maximize the sum of scores. The natural
+      formulation keeps one counter as the state and leaves the other implicit.
+
+      Concretely: each employee contributes `C[i]` if hired as a coder and `D[i]` if
+      hired as a designer. We must pick exactly `a` coders (all remaining `b = n−a`
+      employees become designers). The answer is
+
+      ```
+      max over choices of the 'a' coders of  Σ( chosen : C[i] ) + Σ( not chosen : D[i] )
+      ```
+
+      **DP over a single counter.** Let `dp[i][j]` = best total skill when we have
+      processed the first `i` people and made exactly `j` of them coders
+      (`i − j` are designers). Then person `i` either becomes a designer
+      (`dp[i][j] = dp[i−1][j] + D[i]`) or a coder
+      (`dp[i][j] = dp[i−1][j−1] + C[i]`). We take the max of the two. Since only the
+      previous row is needed, a length-`(a+1)` array suffices (rolling DP). This is
+      `O(n·a)` time — efficient even for `n` up to a few thousand.
+
+      :::tip
+      **Interview tip:** "Partition people into two groups with quotas to maximize a
+      sum" is the *assignment knapsack* and appears constantly (team formation,
+      scheduling, allocation). The clean signal is **two roles, one quota** — keep the
+      quota counter in the state and the second role becomes whatever remains.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      :::note
+      **Concrete formulation.** The set lists "Coding Company". We fix this coherent
+      version: every employee is assigned one of two roles (coder / designer) with
+      known per-role skill, the number of coders is fixed, and we maximize total
+      skill. (This mirrors the classic CSES-style *Programmers and Artists* problem.)
+      :::
+
+      There are `n` employees. Employee `i` has coding skill `C[i]` and designing
+      skill `D[i]`. The company must assign exactly `a` employees as coders and the
+      remaining `b = n − a` as designers. Every employee works (in exactly one role),
+      and contributes the skill of their assigned role. Maximize the total skill.
+
+      **Input.** The first line has two integers `n` and `a`. Then `n` lines each have
+      two integers `C[i]` and `D[i]`.
+
+      **Output.** Print the maximum possible total skill.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 2000`
+      - `0 ≤ a ≤ n`
+      - `1 ≤ C[i], D[i] ≤ 10^9`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      5 2
+      10 5
+      1 8
+      3 6
+      6 7
+      2 9
+      ```
+
+      **Output:**
+      ```
+      39
+      ```
+
+      (Best: coders = employees 1 and 4 with `C = 10 + 6`; designers = the other three
+      with `D = 8 + 6 + 9`; total `16 + 23 = 39`.)
+
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2ⁿ · n).** Try every subset of size `a` as the coders,
+      compute the total, keep the best.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n,a; cin>>n>>a; vector<long long> C(n),D(n);
+          for(int i=0;i<n;i++) cin>>C[i]>>D[i];
+          long long best=LLONG_MIN;
+          for(int mask=0; mask<(1<<n); mask++){
+              if(__builtin_popcount(mask)!=a) continue;
+              long long tot=0;
+              for(int i=0;i<n;i++) tot += (mask>>i&1)? C[i]:D[i];
+              best=max(best,tot);
+          }
+          cout<<best<<"\n";
+      }
+      ```
+      *Complexity: O(2ⁿ · n) — only for `n ≤ ~20`.*
+
+      **② Optimization — O(n·a) DP (the solution).** Rolling-row capacity DP.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n,a; cin>>n>>a; vector<long long> C(n),D(n);
+          for(int i=0;i<n;i++) cin>>C[i]>>D[i];
+          const long long NEG=LLONG_MIN/4;
+          vector<long long> dp(a+1, NEG), ndp(a+1, NEG);
+          dp[0]=0;                              // 0 people, 0 coders
+          for(int i=1;i<=n;i++){
+              fill(ndp.begin(), ndp.end(), NEG);
+              for(int j=0;j<=min(i,a);j++){
+                  long long best=NEG;
+                  if(j <= i-1 && dp[j]>NEG)   best=max(best, dp[j]+D[i-1]);    // designer
+                  if(j>0 && dp[j-1]>NEG)      best=max(best, dp[j-1]+C[i-1]);  // coder
+                  ndp[j]=best;
+              }
+              dp.swap(ndp);
+          }
+          cout<<dp[a]<<"\n";
+      }
+      ```
+      *Complexity: O(n·a) time, O(a) memory — instant for `n,a ≤ 2000`.*
+
+      **③ A tempting but WRONG shortcut — sorting by the difference.** It feels
+      natural to sort people by `C[i] − D[i]` descending and take the top `a` as
+      coders. This greedy is **not** always optimal: skill magnitudes matter, not just
+      differences. Example `n=2, a=1` with `(C,D)` = `(100, 0)` and `(51, 50)` — the
+      best one coder is employee 1 (`100 + 50 = 150`) even though employee 2 has the
+      larger difference `51−50 = 1 > 100−0`. A difference-sort would pick the wrong
+      person. Only the DP accounts for both the difference *and* the base magnitude.
+
+      **④ Alternative — no meaningful second optimization.** A matroid / exchange
+      formulation proves the assignment is non-crossing in a certain sense, but it
+      leads back to the same DP; there is no simpler optimal rule than evaluating the
+      counts, so the DP of tier ② stands.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n·a). Key lines of tier ②:
+
+      1. **`dp[0] = 0`**, everything else `NEG` — the empty prefix with `0` coders
+         contributes nothing; unreachable states stay negative so max never picks
+         them.
+      2. **`ndp[j] = max(ndp[j] via designer, ndp[j] via coder)`** — the designer
+         transition keeps `j` fixed and adds `D[i]`; the coder transition raises `j`
+         by one and adds `C[i]`. The `if` guards keep `j` within the reachable range
+         for the current prefix length `i`.
+      3. **`final = dp[a]`** — a valid final state must have chosen exactly `a`
+         coders overall; `dp[n][a]` is the answer.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5, a = 2`; `(C,D)`:
+      `(10,5) (1,8) (3,6) (6,7) (2,9)`.
+
+      DP rows `dp[j]` (`j = 0..2` coders), `NEG` shown as `-`:
+
+      | after person | dp0 | dp1 | dp2 |
+      |---|---|---|---|
+      | start | 0 | - | - |
+      | 1 (10,5) | 5 | 10 | - |
+      | 2 (1,8) | 13 | **18** | 11 |
+      | 3 (3,6) | 19 | 24 | 21 |
+      | 4 (6,7) | 26 | 31 | 30 |
+      | 5 (2,9) | 35 | 40 | **39** |
+
+      The final state for exactly `a = 2` coders is **`dp[2] = 39`**.
+
+      ✓ `39` matches the sample. The optimal assignment — coders employees 1 (`10`)
+      and 4 (`6`), designers 2,3,5 (`8+6+9`) — totals `16 + 23 = 39`. The brute tier
+      (①) enumerates all `C(5,2)=10` coder subsets and reports the same `39`.
+
+  - type: mcq
+    prompt: "Why can a greedy that sorts people by C[i] − D[i] and takes the top a fail?"
+    options:
+      - "Because a large base skill can matter more than a large difference, so ranking by difference alone can skip the best coder."
+      - "Because DP rows must be recomputed after sorting."
+      - "Because C[i] and D[i] are always equal."
+      - "Because the number of coders a must equal n."
+    answer: 0
+    explanation: "The decision depends on both the difference C−D and the absolute magnitudes (every unchosen person still contributes D). A difference-sort greedily assumes only relative advantage matters, which the counterexample (100,0) vs (51,50) breaks. The capacity DP evaluates counts jointly and is always optimal; the difference heuristic is a classic interview trap."
+---

@@ -1,0 +1,340 @@
+---
+id: grid-coloring
+title: Grid Coloring I
+difficulty: easy
+order: 24
+tags:
+  - intro
+  - grid
+  - dfs
+  - bfs
+  - components
+blocks:
+  - type: markdown
+    content: |
+      # Grid Coloring I
+
+      **The technique: flood fill / connected components.** A grid of coloured
+      cells separated by walls can be partitioned into **connected components**:
+      two empty cells are in the same region if you can walk between them
+      through empty cells, moving **up / down / left / right** (4-connectivity —
+      diagonals do *not* connect). If painters must give every cell of a region
+      the same colour and different regions different colours, the number of
+      colours needed is exactly the number of components.
+
+      **When you reach for it:** counting islands / regions in a matrix,
+      measuring the area of a lake, or any "colour the connected areas" task.
+      The standard engine is **flood fill**: from each unvisited empty cell,
+      start a traversal (DFS via recursion, or BFS via a queue) that visits —
+      and marks visited — every cell reachable by stepping to valid, empty
+      neighbours. Each time we *start* a new traversal we have found one more
+      component.
+
+      **Worked mini-example.** Grid:
+
+      ```
+      .#.
+      #.#
+      .#.
+      ```
+
+      Empty cells `(0,0)`, `(0,2)`, `(1,1)`, `(2,0)`, `(2,2)` are all isolated
+      by `#` cells — none share an orthogonal edge with another empty cell (each
+      is surrounded by walls). That is **5** separate components — so 5 colours
+      are required.
+
+      **Complexity.** Every cell is looked at a constant number of times
+      (once when it becomes the start of a fill, plus once per wall check) →
+      **O(w·h)** time and **O(w·h)** space for the visited flags. This is
+      optimal for a matrix.
+
+      :::tip
+      **Interview tip:** counting connected regions (like LeetCode's "Number of
+      Islands") is one of the most common grid questions. The move is to iterate
+      top-left → bottom-right, and whenever you hit unvisited empty cell, do a
+      full fill and increment the counter. Interviewers probe the *visited*
+      handling and the 4 vs 8-neighbour distinction — keep the visited set
+      explicit and state that diagonals are not counted. Both DFS and BFS
+      traversals are acceptable; recursion is simpler to read, a queue avoids
+      stack depth on huge grids.
+      :::
+  - type: markdown
+    content: |
+      # Question — Grid Coloring I
+
+      You are given an `h × w` grid of cells. A cell is either `.` (empty — to
+      be coloured) or `#` (a wall — cannot be coloured).
+
+      Two empty cells are in the **same region** if they are connected through
+      a sequence of empty cells where consecutive cells share an edge (moves up,
+      down, left, or right — not diagonally).
+
+      Find the **number of distinct regions** of empty cells. Each region must
+      be painted a different colour, so the answer is also the number of colours
+      required and the count of connected components of `.` cells.
+
+      **Constraints:** `1 ≤ h, w ≤ 10^3`.
+
+      **Input:** `h` lines, each a string of length `w` of `.` and `#`.
+      **Output:** a single integer — the number of regions (connected
+      components) of empty cells.
+
+      Sample input:
+
+      ```
+      #.#
+      ###
+      #.#
+      ```
+
+      Sample output:
+
+      ```
+      2
+      ```
+
+      The two empty cells `(0,1)` and `(2,1)` are each fully surrounded by
+      walls, so they form two separate regions → answer `2`.
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — recursive DFS flood fill, O(h·w)**
+
+      The most readable version: scan for an unvisited `.`, then a recursive
+      DFS marks every cell reachable from it. Each new fill start is one more
+      component.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int dr[4] = {-1, 1, 0, 0}, dc[4] = {0, 0, -1, 1};
+
+      void fillRec(int r, int c, int h, int w, const vector<string>& g,
+                   vector<vector<int>>& vis) {
+          for (int k = 0; k < 4; ++k) {
+              int nr = r + dr[k], nc = c + dc[k];
+              if (nr < 0 || nr >= h || nc < 0 || nc >= w) continue;
+              if (g[nr][nc] != '.' || vis[nr][nc]) continue;
+              vis[nr][nc] = 1;
+              fillRec(nr, nc, h, w, g, vis);
+          }
+      }
+
+      int solve(const vector<string>& g) {
+          int h = (int)g.size(); if (h == 0) return 0;
+          int w = (int)g[0].size(); if (w == 0) return 0;
+          vector<vector<int>> vis(h, vector<int>(w, 0));
+          int comps = 0;
+          for (int i = 0; i < h; ++i)
+              for (int j = 0; j < w; ++j)
+                  if (g[i][j] == '.' && !vis[i][j]) {
+                      comps++;                        // found a new region
+                      vis[i][j] = 1;
+                      fillRec(i, j, h, w, g, vis);
+                  }
+          return comps;
+      }
+      ```
+
+      **O(h·w)** time, O(h·w) + recursion-stack space. Correct and simple, but
+      on a `10^3 × 10^3` grid the recursion depth can reach ~10^6 → stack
+      overflow risk.
+
+      **② Optimization — BFS flood fill, O(h·w) (submission)**
+
+      Same idea with an explicit queue instead of recursion. No call stack to
+      overflow on huge grids, and the count is identical.
+
+      ```cpp
+      int solve(const vector<string>& g) {
+          int h = (int)g.size(); if (h == 0) return 0;
+          int w = (int)g[0].size(); if (w == 0) return 0;
+          vector<vector<int>> vis(h, vector<int>(w, 0));
+          int dr[4] = {-1, 1, 0, 0}, dc[4] = {0, 0, -1, 1};
+          int comps = 0;
+          for (int i = 0; i < h; ++i)
+              for (int j = 0; j < w; ++j) {
+                  if (g[i][j] != '.' || vis[i][j]) continue;
+                  comps++;
+                  queue<pair<int,int>> q;
+                  q.push({i, j}); vis[i][j] = 1;
+                  while (!q.empty()) {
+                      auto [r, c] = q.front(); q.pop();
+                      for (int k = 0; k < 4; ++k) {
+                          int nr = r + dr[k], nc = c + dc[k];
+                          if (nr < 0 || nr >= h || nc < 0 || nc >= w) continue;
+                          if (g[nr][nc] != '.' || vis[nr][nc]) continue;
+                          vis[nr][nc] = 1; q.push({nr, nc});
+                      }
+                  }
+              }
+          return comps;
+      }
+      ```
+
+      **O(h·w)** time, O(h·w) space — no recursion-stack risk. This is the tier
+      you'd submit.
+
+      **③ Further optimization — in-place marking, O(1) extra space**
+
+      Instead of a separate `vis` array, mutate the grid itself: mark a visited
+      `.` by rewriting it to a private sentinel (e.g. `'v'`). The visited flag
+      disappears, leaving O(1) auxiliary space.
+
+      ```cpp
+      int solve(vector<string> g) {                 // take grid by value to mutate it
+          int h = (int)g.size(); if (h == 0) return 0;
+          int w = (int)g[0].size(); if (w == 0) return 0;
+          int dr[4] = {-1, 1, 0, 0}, dc[4] = {0, 0, -1, 1};
+          int comps = 0;
+          queue<pair<int,int>> q;
+          for (int i = 0; i < h; ++i)
+              for (int j = 0; j < w; ++j) {
+                  if (g[i][j] != '.') continue;
+                  comps++; q.push({i, j}); g[i][j] = 'v';      // mark in place
+                  while (!q.empty()) {
+                      auto [r, c] = q.front(); q.pop();
+                      for (int k = 0; k < 4; ++k) {
+                          int nr = r + dr[k], nc = c + dc[k];
+                          if (nr < 0 || nr >= h || nc < 0 || nc >= w) continue;
+                          if (g[nr][nc] != '.') continue;
+                          g[nr][nc] = 'v'; q.push({nr, nc});
+                      }
+                  }
+              }
+          return comps;
+      }
+      ```
+
+      **O(h·w)** time, **O(1)** extra space — trading a read-only grid and a
+      `vis` array for a mutated copy.
+
+      **④ Alternative — Union-Find / disjoint set union**
+
+      A completely different mechanism: union every `.` with its right and down
+      `.`-neighbours, then count the distinct roots among `.` cells. This is the
+      DSU take on component counting and is *near-constant* amortized per
+      operation.
+
+      ```cpp
+      struct DSU {
+          vector<int> p;
+          DSU(int n){ p.resize(n); iota(p.begin(), p.end(), 0); }
+          int find(int x){ while (p[x] != x) { p[x] = p[p[x]]; x = p[x]; } return x; }
+          void unite(int a, int b){ int ra = find(a), rb = find(b); if (ra != rb) p[ra] = rb; }
+      };
+
+      int solve(const vector<string>& g) {
+          int h = (int)g.size(); if (h == 0) return 0;
+          int w = (int)g[0].size(); if (w == 0) return 0;
+          DSU dsu(h * w);
+          auto id = [w](int r, int c){ return r * w + c; };
+          for (int i = 0; i < h; ++i)
+              for (int j = 0; j < w; ++j) {
+                  if (g[i][j] != '.') continue;
+                  if (i + 1 < h && g[i + 1][j] == '.') dsu.unite(id(i, j), id(i + 1, j));
+                  if (j + 1 < w && g[i][j + 1] == '.') dsu.unite(id(i, j), id(i, j + 1));
+              }
+          set<int> roots;
+          for (int i = 0; i < h; ++i) for (int j = 0; j < w; ++j)
+              if (g[i][j] == '.') roots.insert(dsu.find(id(i, j)));
+          return (int)roots.size();
+      }
+      ```
+
+      **O(h·w · α)** ≈ **O(h·w)** time, O(h·w) space — a distinct algorithm
+      that scales well and is handy when the same connectivity queries repeat.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The tiers all return the same component count; they differ in the
+      traversal or the data structure.
+
+      - **Tier ① (recursive DFS).** The outer scan visits every cell; on an
+        unvisited `.` it bumps `comps` and calls `fillRec`, which marks and
+        recurses over the 4 orthogonal neighbours. `vis` is set *before*
+        recursing so a cell is never enqueued twice through long chains. Simple,
+        but the recursion depth bounds the grid size in practice.
+      - **Tier ② (BFS).** Identical outer scan and counting, but a FIFO queue
+        replaces the call stack. Marking `vis` at enqueue time (not pop time)
+        guarantees no cell is ever enqueued twice, and there's no recursion to
+        overflow on `10^6`-cell grids.
+      - **Tier ③ (in-place).** Same BFS loop, but `vis` no longer exists —
+        a visited `.` becomes the sentinel `'v'`. The `g[i][j] != '.'` test
+        doubles as the visited check, so auxiliary space drops to O(1). We take
+        the grid by value so the caller's copy stays untouched.
+      - **Tier ④ (DSU).** `.` cells are unioned only with their down/right
+        neighbours — checking both directions covers every edge exactly once.
+        Counting distinct `find()` roots among `.` cells equals the number of
+        components.
+
+      4-connectivity is enforced everywhere by the 4-element `dr`/`dc` array —
+      diagonals never connect — which is exactly what produces two separate
+      regions in the sample. Empty-input edge cases return `0` before any work.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+
+      ```
+      #.#
+      ###
+      #.#
+      ```
+
+      Scan cells left-to-right, top-to-bottom.
+
+      | scan cell | action | components |
+      |-----------|--------|------------|
+      | `(0,0)='#'` | skip (wall) | 0 |
+      | `(0,1)='.'` | unvisited → start fill; its only neighbours `(0,0)`,`(0,2)`,`(1,1)` are walls → fill ends | 1 |
+      | `(0,2)='#'` | skip | 1 |
+      | row 1 (`###`) | all walls, skip | 1 |
+      | `(2,1)='.'` | unvisited → start fill; neighbours `(2,0)`,`(2,2)`,`(1,1)` walls → fill ends | 2 |
+      | others | walls | 2 |
+
+      Result: **2** ✓. Each of the two `.` cells is isolated, giving two
+      separate regions, matching the required colours. All four tiers agree on
+      this count.
+
+      **Input:**
+
+      ```
+      .#.
+      #.#
+      .#.
+      ```
+
+      All five `.` cells are surrounded by walls (orthogonally), so each starts
+      its own fill → components = **5**.
+
+      **Input:**
+
+      ```
+      ....
+      ....
+      ```
+
+      `(0,0)` starts a fill that sweeps every cell (all `.`, all connected) →
+      components = **1**.
+
+      | grid | components |
+      |------|------------|
+      | `#.# / ### / #.#` | 2 |
+      | `.... / ....` | 1 |
+      | `### / ### / ###` | 0 |
+      | `.#. / #.# / .#.` | 5 |
+  - type: mcq
+    prompt: 'In Grid Coloring, why is the number of colours required equal to the number of connected components of ''.'' cells?'
+    options:
+      - Because every wall counts as one colour
+      - 'Because cells connected by an orthogonal path of ''.'' are forced to share a colour, while cells in different components are separated by walls and must differ, so the colour count equals the component count'
+      - Because the grid is always painted with exactly h colours
+      - Because each row is painted independently of others
+    answer: 1
+    explanation: A single flood fill must use one colour (its cells are connected). Two distinct components have no orthogonal '.' path between them — a wall blocks any walk — so they can be painted independently and must be given different colours. Hence colours required = number of components, and the BFS/DSU tiers compute exactly that count.'
+type: content
+---

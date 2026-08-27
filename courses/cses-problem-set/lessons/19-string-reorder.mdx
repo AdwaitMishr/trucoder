@@ -1,0 +1,306 @@
+---
+id: string-reorder
+title: String Reorder
+difficulty: easy
+order: 19
+tags:
+  - intro
+  - greedy
+  - string
+  - heap
+blocks:
+  - type: markdown
+    content: |
+      # String Reorder
+
+      **The technique: greedy by frequency.** To build a string in which no two
+      adjacent characters are equal, we "use up" characters so that the most
+      frequent leftover character is the one we place next — but never the same
+      character we just placed. Reaching for the most frequent character first
+      is the key idea: it prevents any character from piling up to the point
+      where the last copies become forced into neighbours.
+
+      **When you reach for it:** any problem that asks you to *rearrange* a
+      multiset so that some pairwise "no two adjacent X" rule holds, with a
+      count of copies per symbol. The greedy is: at each step place the symbol
+      that is (a) different from the previously placed symbol and (b) has the
+      largest remaining count (ties broken by a fixed order so the output is
+      deterministic).
+
+      **Why greedy works — the feasibility test.** If a symbol appears more than
+      `(n + 1) / 2` times (with `n` the total length), it is impossible: even
+      alternating that symbol with every other character leaves two copies next
+      to each other. Conversely, when *every* symbol appears at most
+      `(n + 1) / 2` times, always picking the largest remaining symbol that is
+      not the previous one succeeds — this is the classic rearrangement bound.
+      We can simply attempt the greedy and declare "IMPOSSIBLE" if it ever
+      stalls.
+
+      **Worked mini-example.** `s = "aabc"`. Counts: `a=2, b=1, c=1`.
+      Place `a` (max, no previous) → `a`. Then cannot place `a`, so next max of
+      `{b,c}` is `b` → `ab`. Now `a` is the max again and `b` is not the
+      previous, so place `a` → `aba`. Count remaining: `c` → `abac`. No two
+      adjacent letters are equal. ✓
+
+      **Complexity.** One pass to count (O(n)), then O(n · 26) = O(n) placement
+      steps. So **O(n) time** and O(26) extra space.
+
+      :::tip
+      **Interview tip:** greedy rearrangement with a "most frequent, but not the
+      same as last" rule is a recurring on-site problem (Rearrange String, and
+      the "no two closer than distance k" variant). When asked to *prove*
+      impossibility, say it clearly: a character that appears more than
+      `(n+1)/2` times cannot be spaced far enough apart. Also be ready to
+      mention a `std::priority_queue` variant for the "no two adjacent equal" +
+      tie-breaking family.
+      :::
+  - type: markdown
+    content: |
+      # Question — String Reorder
+
+      You are given a string `s` consisting of `n` lowercase letters. Rearrange
+      the characters of `s` into any order such that **no two adjacent
+      characters are equal**. If several valid arrangements exist, output the
+      one found by the **canonical greedy**: repeatedly choose the character
+      with the *largest remaining count* that is *not* the previously placed
+      character, breaking ties toward the smaller letter. If no such
+      arrangement exists, output `IMPOSSIBLE`.
+
+      **Constraints:** `1 ≤ n ≤ 10^5`. `s` contains only lowercase English
+      letters.
+
+      **Input:** one line, the string `s`.
+      **Output:** a single line — a valid reordering of `s` (the canonical
+      greedy one), or the word `IMPOSSIBLE`.
+
+      Sample input:
+
+      ```
+      aab
+      ```
+
+      Sample output:
+
+      ```
+      aba
+      ```
+
+      Second sample — a case with no valid arrangement:
+
+      ```
+      aaab
+      ```
+
+      Output:
+
+      ```
+      IMPOSSIBLE
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n! · n)**
+
+      The simplest correct idea: try every reordering of the multiset (all
+      permutations of the sorted string) and return the first one with no equal
+      neighbours. `std::next_permutation` enumerates distinct permutations of
+      the multiset in sorted order.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      std::string solve(const std::string& s) {
+          string t = s;
+          sort(t.begin(), t.end());                 // first permutation, smallest
+          do {
+              bool ok = true;
+              for (int i = 1; i < (int)t.size(); ++i)
+                  if (t[i] == t[i - 1]) { ok = false; break; }
+              if (ok) return t;                     // first valid arrangement
+          } while (next_permutation(t.begin(), t.end()));
+          return "IMPOSSIBLE";
+      }
+      ```
+
+      **O(n! · n)** time — for `n = 10^5` the number of permutations is
+      astronomically large. Correct, but only usable for the tiniest inputs.
+
+      **② Greedy by frequency — O(26·n)**
+
+      The canonical solution: at each output position scan `a..z`, skip the
+      previously placed letter, and pick the letter with the largest remaining
+      count. If nothing qualifies, the greedy stalls → `IMPOSSIBLE`.
+
+      ```cpp
+      std::string solve(const std::string& s) {
+          int cnt[26] = {0};
+          for (char c : s) cnt[c - 'a']++;
+          int n = (int)s.size();
+          string res; res.reserve(n);
+          for (int step = 0; step < n; ++step) {
+              int best = -1;
+              for (int c = 0; c < 26; ++c) {
+                  if (cnt[c] == 0) continue;
+                  if (!res.empty() && res.back() == char('a' + c)) continue; // no equal neighbours
+                  if (best == -1 || cnt[c] > cnt[best]) best = c;
+              }
+              if (best == -1) return "IMPOSSIBLE"; // stalled → no valid arrangement
+              res.push_back(char('a' + best));
+              cnt[best]--;
+          }
+          return res;
+      }
+      ```
+
+      **O(26 · n) = O(n)** time, O(26) space. Fast enough for `n = 10^5` and the
+      tier you'd submit to CSES.
+
+      **③ Max-heap / priority_queue — O(n log 26)**
+
+      A slightly more general variant: keep a max-heap of `(remaining count,
+      letter)` and each step pull the largest count that isn't the previously
+      placed letter, holding the previous letter aside for one round. This
+      extends cleanly to "no two closer than distance k" problems.
+
+      ```cpp
+      std::string solve(const std::string& s) {
+          int cnt[26] = {0}; for (char c : s) cnt[c - 'a']++;
+          priority_queue<pair<int,int>> pq;          // (count, letter)
+          for (int c = 0; c < 26; ++c) if (cnt[c]) pq.push({cnt[c], c});
+          string res; int prev = -1;
+          while (!pq.empty()) {
+              auto cur = pq.top(); pq.pop();
+              if (cur.second == prev) {              // same as last — set aside
+                  if (pq.empty()) return "IMPOSSIBLE";
+                  auto nxt = pq.top(); pq.pop();     // take the next best instead
+                  res.push_back(char('a' + nxt.second));
+                  if (nxt.first > 1) pq.push({nxt.first - 1, nxt.second});
+                  pq.push(cur);                      // put the held one back
+                  prev = nxt.second;
+              } else {
+                  res.push_back(char('a' + cur.second));
+                  if (cur.first > 1) pq.push({cur.first - 1, cur.second});
+                  prev = cur.second;
+              }
+          }
+          if ((int)res.size() != (int)s.size()) return "IMPOSSIBLE";
+          return res;
+      }
+      ```
+
+      **O(n log 26) ≈ O(n)** time, O(26) space.
+
+      **④ Alternative — feasibility bound + interleave**
+
+      A different *construction*: first test the `(n+1)/2` bound directly (a
+      letter appearing more than `(n+1)/2` times makes it impossible). If
+      feasible, sort the letters by descending frequency into a string `T`
+      and place `T` into the even output slots, then wrap the remainder into
+      the odd slots. Because the most frequent letter occupies at most
+      `(n+1)/2` slots and always lands in every-other position, no two equal
+      letters end up adjacent.
+
+      ```cpp
+      std::string solve(const std::string& s) {
+          int n = (int)s.size();
+          int cnt[26] = {0}; for (char c : s) cnt[c - 'a']++;
+          for (int c = 0; c < 26; ++c)
+              if (cnt[c] > (n + 1) / 2) return "IMPOSSIBLE";  // can't space it apart
+          vector<pair<int,int>> v;                             // (count, letter)
+          for (int c = 0; c < 26; ++c) if (cnt[c]) v.push_back({cnt[c], c});
+          sort(v.begin(), v.end(), greater<pair<int,int>>());
+          string T; for (auto& p : v) T.append(p.first, char('a' + p.second));
+          string res(n, ' '); int idx = 0;
+          for (int e = 0; e < n; e += 2) res[e] = T[idx++];   // even slots first
+          for (int o = 1; o < n; o += 2) res[o] = T[idx++];   // odd slots second
+          return res;
+      }
+      ```
+
+      **O(n log 26) ≈ O(n)** time, O(n) space — a different (equally valid)
+      arrangement technique from the greedy, useful when you want to *prove*
+      feasibility before constructing.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      All four tiers solve "rearrange so no two adjacent are equal"; they differ
+      only in how they build (or search for) the answer.
+
+      - **Tier ① (brute).** `next_permutation` walks every distinct ordering of
+        the sorted multiset. For each, a linear scan checks for equal
+        neighbours; the first clean permutation is returned. This is a correct
+        *definition-satisfying* search but enumerates `n!` orderings, so it is
+        useless at `n = 10^5` — it is the baseline you improve from.
+      - **Tier ② (greedy).** A fixed-size array `cnt[26]` records how many
+        copies of each letter remain. Each of the `n` iterations scans `a..z`
+        and picks the letter with a copy left, that is *not* equal to
+        `res.back()` (so we never build "aa"), with the largest remaining
+        count. Scanning 26 letters per character → O(26·n) total, fine for
+        `n = 10^5`. If no letter qualifies (`best == -1`) we are stuck: by the
+        `(n+1)/2` bound no valid arrangement exists, so we return
+        `"IMPOSSIBLE"`. We let the *loop itself* discover failure instead of
+        pre-checking — the effect is identical and simpler.
+      - **Tier ③ (heap).** Same decision rule, but the "largest remaining
+        count" is answered by a max-heap in O(1) instead of a 26-entry scan.
+        When the top equals `prev` we temporarily set it aside and take the
+        next-largest, then put the held letter back. This is the version that
+        generalizes to more elaborate distance constraints.
+      - **Tier ④ (interleave).** Instead of choosing one letter at a time, we
+        test feasibility up front with the exact `(n+1)/2` bound, then *place*
+        all letters in frequency order into every other slot (even indices)
+        before filling the odd indices. The popular character's copies are
+        never next to each other because they occupy alternate positions.
+
+      Regardless of tier, values are single lowercase letters, so a fixed
+      `cnt[26]` (or the heap) handles the bookkeeping without any hashing.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `s = "aab"`. Counts become `a=2, b=1`, max count `2 ≤ (3+1)/2`.
+
+      **Tier ② (greedy) trace:**
+
+      | step | remaining counts | last placed | best pick | result so far |
+      |------|------------------|-------------|-----------|---------------|
+      | 1    | a=2 b=1          | –           | a         | `a`           |
+      | 2    | a=1 b=1          | a           | b         | `ab`          |
+      | 3    | a=1 b=0          | b           | a         | `aba`         |
+
+      After step 3 the loop has run `n = 3` times and we return `"aba"` — no
+      two adjacent letters are equal. ✓
+
+      **Tier ④ (interleave) trace:** sorted by frequency, `T = "aab"`. Even
+      slots: `res[0]='a'`, `res[2]='b'`; odd slot: `res[1]='a'` → `"aba"`. Same
+      valid result through a completely different construction.
+
+      **Input:** `s = "aaab"`. Counts `a=3, b=1`, max count `3 > (4+1)/2 = 2`.
+
+      **Tier ② greedy trace:**
+
+      | step | remaining | last | best | result |
+      |------|-----------|------|------|--------|
+      | 1    | a=3 b=1   | –    | a    | `a`    |
+      | 2    | a=2 b=1   | a    | b    | `ab`   |
+      | 3    | a=2 b=0   | b    | a    | `aba`  |
+      | 4    | a=1 b=0   | a    | **none** | stuck → `IMPOSSIBLE` |
+
+      At step 4 only `a` remains but the previous character is also `a`, and
+      nothing else is left — so the greedy stalls and we return `IMPOSSIBLE`.
+      Tier ④ reaches the same verdict instantly via the `(n+1)/2` bound, without
+      placing a single letter. This matches the impossibility rule: `a` appears
+      3 times > 2, so no valid arrangement exists.
+  - type: mcq
+    prompt: Which statement about the String Reorder greedy is correct?
+    options:
+      - Always placing the smallest remaining letter guarantees success
+      - A symbol appearing more than (n+1)/2 times makes the rearrangement impossible
+      - The greedy must backtrack to find a valid arrangement
+      - The greedy only works when all characters are distinct
+    answer: 1
+    explanation: 'If a character occurs more than (n+1)/2 times it cannot be spaced far enough to avoid adjacency, so no valid arrangement exists (return IMPOSSIBLE). The greedy never needs to backtrack — it either succeeds or correctly reports impossibility, and tier ④ can test exactly this bound before constructing.'
+type: content
+---

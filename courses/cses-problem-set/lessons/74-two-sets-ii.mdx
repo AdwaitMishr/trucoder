@@ -1,0 +1,252 @@
+---
+id: two-sets-ii
+title: "Two Sets II"
+difficulty: medium
+order: 74
+tags:
+  - dynamic-programming
+  - subset-sum
+  - counting
+blocks:
+  - type: markdown
+    content: |
+      # Two Sets II — how many ways to split 1..n into two equal-sum halves
+
+      Count the number of ways to partition `{1, 2, ..., n}` into **two sets with
+      equal sum** (each set non-empty; `{A,B}` and `{B,A}` count once). This is a
+      *counting* variant of subset-sum: not "can we?", but "how many subsets reach
+      exactly half the total?".
+
+      ## Reduce to: count subsets with sum = total/2
+
+      The whole set has sum `T = n(n+1)/2`. A partition into two equal-sum sets
+      exists only if `T` is even, and then each part must sum to `half = T/2`.
+      Every valid partition corresponds to choosing one of the two parts — a
+      subset of `{1..n}` summing to `half` — and its partner (the complement) is
+      automatically the other part. Because the two parts are unordered, each
+      partition is counted **twice** by "subsets with sum = half" (once per part).
+
+      So:
+
+      ```
+      answer = ( number of subsets of {1..n} with sum = half ) / 2
+      ```
+
+      For `n ≥ 1` a subset can never equal its own complement (that would require
+      sum `half` = sum `T`, impossible), so the "subsets with sum half" count is
+      always even and halving is exact.
+
+      ## The counting DP
+
+      Let `dp[s]` = number of subsets (of the numbers seen so far) that sum to
+      exactly `s`. Process each number `i = 1..n` in order and, as in 0/1
+      knapsack, update capacities **backwards** so each `i` is used at most once:
+
+      ```
+      dp[0] = 1
+      for i = 1..n:
+          for s = half down to i:
+              dp[s] += dp[s - i]        (mod 10^9+7)
+      ```
+
+      `dp[s-i]` counts ways to reach `s` *without* `i`; adding `i` to each of
+      those subsets yields `dp[s]` ways that *include* `i`. Summing over all `i`
+      accumulates every subset, each credited exactly once (at the moment its
+      largest element is processed).
+
+      **Time:** O(n · half) — with n ≤ 500, half ≤ ~62500, so ≤ ~3·10^7 steps.
+      **Space:** O(half). All arithmetic is modulo `10^9+7`; the final `/2` is done
+      by multiplying by the modular inverse of 2.
+
+      :::tip
+      **Interview tip:** "count the ways to partition / split / balance" reduces
+      to a counting subset-sum. The two moves interviewers watch for: halve the
+      total and count subsets that hit exactly half, and **handle the double
+      count** of the two unordered halves (divide by 2, or force one part to
+      contain element 1). Counting-DP across `dp[s] += dp[s-i]` with a modulus is
+      the standard idiom.
+      :::
+  - type: markdown
+    content: |
+      # Question — Two Sets II
+
+      Your task is to count the number of ways to split the numbers `1, 2, ...,
+      n` into two sets of equal sum, where the order of the sets does not matter
+      and the sets are non-empty. Print the answer modulo `10^9+7`.
+
+      **Input**
+
+      The only input line has an integer `n`.
+
+      **Output**
+
+      Print one integer: the number of ways modulo `10^9+7`.
+
+      **Constraints**
+
+      - `1 <= n <= 500`
+
+      **Example**
+
+      Input:
+
+      ```
+      3
+      ```
+
+      Output:
+
+      ```
+      1
+      ```
+
+      (The only way: `{1, 2}` and `{3}`.)
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — enumerate the set's power set, O(2^n · n) time, O(2^n) space**
+
+      Try every subset via bitmask, sum it, and count those whose sum equals
+      `half`; halve at the end. Only tractable for tiny `n` (`2^500` is impossible).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          int n;
+          cin >> n;
+          int total = n * (n + 1) / 2;
+          if (total % 2) { cout << 0 << "\n"; return 0; }
+          int half = total / 2;
+          int cnt = 0;
+          for (long long mask = 0; mask < (1LL << n); ++mask) {
+              long long s = 0;
+              for (int i = 0; i < n; ++i)
+                  if (mask & (1LL << i)) s += (i + 1);
+              if (s == half) ++cnt;
+          }
+          cout << cnt / 2 << "\n";      // exact (always even)
+      }
+      ```
+
+      **② Optimisation — counting subset-sum, O(n·half) time, O(half) space**
+
+      dp[s] = number of subsets of `{1..n}` with sum exactly `s`, modulo 1e9+7.
+      The backward capacity loop keeps the 0/1 (use each number once) semantics.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      const long long MOD = 1000000007LL;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n;
+          cin >> n;
+          long long total = 1LL * n * (n + 1) / 2;
+          if (total % 2) { cout << 0 << "\n"; return 0; }
+          long long half = total / 2;
+
+          vector<long long> dp(half + 1, 0);
+          dp[0] = 1;
+          for (long long i = 1; i <= n; ++i)
+              for (long long s = half; s >= i; --s)
+                  dp[s] = (dp[s] + dp[s - i]) % MOD;
+
+          // divide the "subsets with sum = half" count by 2 (unordered halves)
+          const long long inv2 = (MOD + 1) / 2;   // modular inverse of 2
+          cout << dp[half] * inv2 % MOD << "\n";
+      }
+      ```
+
+      **③ Alternative — count only subsets containing element 1, O(n·half)**
+
+      Avoid the division entirely by counting subsets of `{1..n}` that sum to
+      `half` **and contain element 1**. Every partition has exactly one part
+      containing element 1 (the two parts are disjoint and cover everything), and
+      that part is exactly the half-sum subset containing 1. So the answer equals
+      `dp[n][half]` restricted to subsets that include `1`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      const long long MOD = 1000000007LL;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n;
+          cin >> n;
+          long long total = 1LL * n * (n + 1) / 2;
+          if (total % 2) { cout << 0 << "\n"; return 0; }
+          long long half = total / 2;
+          if (half < 1 || n < 2) { cout << 0 << "\n"; return 0; }
+
+          // count subsets of {2..n} with sum = half - 1 and add the forced element 1
+          vector<long long> dp(half + 1, 0);
+          dp[0] = 1;
+          for (long long i = 2; i <= n; ++i)
+              for (long long s = half; s >= i; --s)
+                  dp[s] = (dp[s] + dp[s - i]) % MOD;
+          cout << dp[half - 1] << "\n";
+      }
+      ```
+
+      **④ Alternative algorithm** — no closed-form / faster exact count is known
+      that beats knapsack-DP here; the modulus keeps the count small and O(n·half)
+      is already well within limits (`n ≤ 500`). Both ② and ③ give the same answer;
+      ③ needs no modular division and is arguably the cleanest.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the counting DP in **②**:
+
+      - If `total = n(n+1)/2` is odd, no equal split exists → print `0` and stop.
+      - `dp[0] = 1`: the empty subset is the single way to sum to 0.
+      - Outer loop over each element `i = 1..n`. For `s` from `half` down to `i`,
+        `dp[s] += dp[s-i]`: every way to reach `s-i` becomes a way to reach `s`
+        by including `i`. Iterating `s` downward ensures `dp[s-i]` is still from
+        the previous element's pass, so `i` is used at most once (0/1 semantics).
+      - The modulus keeps every cell `< 10^9+7`, avoiding overflow in
+        `dp[s] + dp[s-i]`.
+      - After all elements, `dp[half]` counts all half-sum subsets, and every
+        partition was counted twice (once for each part). Multiplying by
+        `inv2 = (MOD+1)/2` divides modulo the prime — exact because the true
+        count is even.
+      - Variant ③ skips element 1 in the DP and forces it in (sum `half-1`),
+        counting each partition exactly once with no division.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the counting DP on `n = 3` (total = 6, half = 3). Initialize
+      `dp[0]=1`. Processing elements `1, 2, 3` (values shown only where they hit a
+      target):
+
+      | element i | s walk | resulting dp (nonzero) |
+      |-----------|--------|------------------------|
+      | 1 | s=3..1 | dp1 = dp1+dp0 = 1 → `{0:1, 1:1}` |
+      | 2 | s=3..2 | dp2 += dp0 → 1; dp3 += dp1 → 1 → `{0:1, 1:1, 2:1, 3:1}` |
+      | 3 | s=3..3 | dp3 += dp0 → 2 → `{2:1, 3:2, 1:1}` |
+
+      After processing, `dp[3] = 2` — the half-sum subsets are `{3}` and `{1,2}`.
+      `2 * inv2 = 1`, and the output is `1`, matching the sample (there is exactly
+      one partition, `{1,2} | {3}`). Note the elements are values `i`, not array
+      slots, which is why the inner loop runs `s` down to `i` and uses `dp[s-i]`.
+  - type: mcq
+    prompt: 'Why is the final count divided by 2 (or equivalently counted with element 1 forced in)?'
+    options:
+      - 'Because every equal-sum partition {A,B} is counted twice by "subsets with sum = half" — once as A and once as B — so unordering the parts halves the count'
+      - 'Because half of all subsets are invalid'
+      - 'To reduce the numbers so they fit in 32-bit ints'
+      - 'Because the DP counts each subset twice by construction'
+    answer: 0
+    explanation: 'A partition into two unordered equal-sum sets is represented by either of its two parts, each summing to half. Counting all half-sum subsets therefore counts each partition twice; dividing by 2 (or forcing element 1 into the counted part) collapses to one per partition.'
+type: content
+---

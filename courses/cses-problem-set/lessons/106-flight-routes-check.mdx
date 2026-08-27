@@ -1,0 +1,225 @@
+---
+id: flight-routes-check
+title: "Flight Routes Check"
+type: content
+difficulty: medium
+order: 106
+tags:
+  - graph-algorithms
+  - strongly-connected-components
+  - reachability
+  - dfs
+blocks:
+  - type: markdown
+    content: |
+      # Flight Routes Check — is the whole network strongly connected?
+
+      We have `n` cities and one-way flights. Can you travel from **every** city
+      to **every other** city? If not, we must also print an explicit pair
+      `(a, b)` such that you cannot travel from `a` to `b`.
+
+      This is *strong connectivity* of a directed graph. Rather than checking
+      all `O(n^2)` ordered pairs, we use a single deep fact:
+
+      > A directed graph is **strongly connected** iff city `1` can reach every
+      > city, **and** every city can reach city `1`.
+
+      Why: if `1` reaches all and all reach `1`, then for any `u, v` you can go
+      `u -> 1 -> v`. So the whole check is two reachability traversals from node
+      `1` — one over the original graph (does `1` reach everything?) and one
+      over the **reversed** graph (does everything reach `1`?).
+
+      ## Producing a failing pair
+
+      - If some city `v` is *not reachable from* `1`: `1` cannot reach `v`, so
+        print `NO` plus `1 v`.
+      - Otherwise all cities are reachable from `1`. If the graph is still not
+        strongly connected, some city `u` cannot reach `1` (it is unreachable
+        from `1` in the reversed graph) — print `NO` plus `u 1`.
+      - If both passes cover everything, print `YES`.
+
+      The statement allows **any** valid pair, so different correct programs
+      may print different (a, b) — both the official sample's and ours are
+      accepted.
+
+      **Time:** `O(n + m)` (two DFS/BFS). **Space:** `O(n + m)`.
+
+      :::tip
+      **Interview tip:** "can everyone reach everyone" or "is there a path from
+      every node to every other node" is strong connectivity. The two-DFS
+      trick — reachability from a fixed root on `G` and on `G_reversed` — is
+      the elegant `O(n + m)` test, and it is also the intuition behind
+      **Kosaraju's algorithm** for enumerating strongly connected components.
+      The SCC-condensation formulation ("condense to a DAG; strongly connected
+      iff one component") is the higher-level mental model interviewers love to
+      hear.
+      :::
+  - type: markdown
+    content: |
+      # Question
+
+      There are `n` cities and `m` flight connections. Your task is to check if
+      you can travel from any city to any other city using the available
+      flights.
+
+      **Input**
+
+      The first input line has two integers `n` and `m`: the number of cities
+      and flights. The cities are numbered `1, 2, ..., n`.
+
+      After this, there are `m` lines describing the flights. Each line has two
+      integers `a` and `b`: there is a flight from city `a` to city `b`. All
+      flights are one-way flights.
+
+      **Output**
+
+      Print `YES` if all routes are possible, and `NO` otherwise. In the latter
+      case also print two cities `a` and `b` such that you cannot travel from
+      city `a` to city `b`. If there are several possible solutions, you can
+      print any of them.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `1 <= m <= 2*10^5`
+
+      **Example**
+
+      Input:
+
+      ```
+      4 5
+      1 2
+      2 3
+      3 1
+      1 4
+      3 4
+      ```
+
+      Output:
+
+      ```
+      NO
+      4 2
+      ```
+
+      (Any valid pair is accepted; see below.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — all-pairs BFS, O(n (n + m))**
+
+      From every city, run a BFS/DFS to find all reachable cities; check the
+      reachability matrix is complete. Correct, but `n` BFS runs over a graph
+      with `m <= 2*10^5` edges is far too slow.
+
+      **② Optimization — two DFS from city 1, O(n + m)**
+
+      Traverse the original graph (does 1 reach every city?) and the reversed
+      graph (does every city reach 1?). Use the failure to emit a valid pair.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<int>> g(n + 1), rg(n + 1);
+          for (int i = 0; i < m; ++i){
+              int a, b; cin >> a >> b;
+              g[a].push_back(b);   // flight a -> b
+              rg[b].push_back(a);  // reversed flight: b can reach a
+          }
+
+          // Which cities is city 1 able to reach (original flights)?
+          vector<char> vis(n + 1, 0);
+          function<void(int)> dfs = [&](int u){ vis[u] = 1; for (int v : g[u]) if (!vis[v]) dfs(v); };
+          dfs(1);
+          for (int u = 1; u <= n; ++u)
+              if (!vis[u]){ cout << "NO\n" << 1 << ' ' << u << '\n'; return 0; }
+
+          // Which cities CAN reach city 1? run DFS on the reversed graph from 1.
+          fill(vis.begin(), vis.end(), 0);
+          function<void(int)> dfsr = [&](int u){ vis[u] = 1; for (int v : rg[u]) if (!vis[v]) dfsr(v); };
+          dfsr(1);
+          for (int u = 1; u <= n; ++u)
+              if (!vis[u]){ cout << "NO\n" << u << ' ' << 1 << '\n'; return 0; }
+
+          cout << "YES\n";
+          return 0;
+      }
+      ```
+
+      *O(n + m) time, O(n + m) space — the intended solution.*
+
+      **③ Alternative algorithm — SCC condensation, O(n + m)**
+
+      Run Tarjan's (or Kosaraju's) algorithm to decompose into strongly
+      connected components. The graph is strongly connected **iff** it forms
+      exactly **one** component. If there are several, pick `u` and `v` from
+      two different components without a connecting path (e.g. a sink
+      component's node and a source component's node) and print `NO u v`. This
+      is the same idea, made explicit through condensation.
+
+      **④ Further optimization** — none needed; `O(n + m)` is optimal.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The clearest lines of the `O(n + m)` solution:
+
+      - **Two adjacency lists.** `g[a]` holds flights leaving `a`;
+        `rg[b]` holds flights into `b` — i.e. traversing `rg` from a node walks
+        the original edges *backwards*.
+      - **First DFS on `g`** marks every city reachable from city `1`. If any
+        city `u` is left unmarked, `1` cannot reach it — a genuine failing
+        pair is `(1, u)`.
+      - **Second DFS on `rg`** from city `1` marks exactly the cities that can
+        reach city `1` in the original graph. If `u` is unmarked here, then
+        `u` cannot reach `1` — pair `(u, 1)` fails.
+      - If both DFS runs cover everything, strong connectivity is guaranteed by
+        the `u -> 1 -> v` argument.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 4`, flights `1→2, 2→3, 3→1, 1→4, 3→4`.
+
+      Reversed graph: `2→1, 3→2, 1→3, 4→1, 4→3`.
+
+      **First DFS on `g` from 1** reaches `{1, 2, 3, 4}` — every city. So no
+      `(1, u)` failure.
+
+      **Second DFS on `rg` from 1:** from city 1 we can only go to city 3
+      (edge `1→3` in the reversed graph), then city 2 (`3→2`), then back to
+      city 1. So the reversed-reachable set is `{1, 2, 3}`. City **4** is not
+      reached — meaning city 4 cannot reach city 1 (it has no outgoing flight).
+
+      So we print `NO` and a failing pair. Our code emits `4 1` (city 4 cannot
+      travel to city 1). The official sample prints `4 2` — equally valid,
+      since city 4 has no outgoing flights and therefore cannot reach city 2
+      either; the statement accepts any valid pair.
+
+      Expected (sample) — `NO` with a valid pair. Actual — `NO 4 1` (valid). ✔
+  - type: flowchart
+    title: "Strong connectivity via two DFS passes"
+    nodes: ["build g and reversed rg", "DFS(g) from 1", "all cities reached?", "print NO, 1 v", "DFS(rg) from 1", "all cities reached?", "print NO, u 1", "print YES"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "no"}
+      - {from: 2, to: 4, label: "yes"}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6, label: "no"}
+      - {from: 5, to: 7, label: "yes"}
+  - type: mcq
+    prompt: "Why is checking that city 1 reaches every city AND every city reaches city 1 sufficient to conclude the entire graph is strongly connected?"
+    options:
+      - "Because if both hold, then for any u and v the route u -> 1 -> v exists, so every ordered pair is reachable."
+      - "Because it guarantees the graph has exactly n edges."
+      - "Because DFS from 1 always visits every city in a directed graph."
+      - "Because two reachability passes is the definition of connectedness in undirected graphs, which applies here too."
+    answer: 0
+    explanation: "Given city 1 reaches v (first condition) and u reaches city 1 (second condition), composing them gives u -> 1 -> v for every ordered pair (u, v), which is precisely strong connectivity. This is why two DFS runs from a single root replace O(n^2) pair checks."
+---

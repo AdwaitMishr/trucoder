@@ -1,0 +1,236 @@
+---
+id: inversion-probability
+title: "Inversion Probability"
+difficulty: medium
+order: 190
+tags:
+  - mathematics
+  - probability
+  - expected-value
+  - linearity-of-expectation
+blocks:
+  - type: markdown
+    content: |
+      # Inversion Probability — expected inversions via per-pair expectation
+
+      An array has `n` integers `x_1, x_2, ..., x_n`, but the values are **not
+      fixed**: each `x_i` is chosen uniformly at random from the integers
+      `1, 2, ..., r_i`. An *inversion* is a pair `(a, b)` with `a < b` and
+      `x_a > x_b`. You must compute the **expected number of inversions**,
+      correct to six decimal places.
+
+      ## Linearity of expectation
+
+      The key idea is that the number of inversions is a **sum of indicator
+      variables** — one per pair. For a pair `(a, b)` define
+
+      ```
+      I_(a,b) = 1  if x_a > x_b,  else 0
+      ```
+
+      Linearity of expectation lets us add expectations even though the
+      indicators are not independent:
+
+      ```
+      E[ #inversions ]  =  Σ_{a<b} E[ I_(a,b) ]
+                        =  Σ_{a<b} P( x_a > x_b )
+      ```
+
+      So the whole problem reduces to computing, for every pair of ranges
+      `(r_a, r_b)`, the probability that one uniform value exceeds the other.
+      That leaves an `O(n²)` algorithm with `O(1)` work per pair.
+
+      ## Probability that one uniform value beats another
+
+      `x_a` is uniform over `[1, r_a]` and `x_b` uniform over `[1, r_b]`. There
+      are `r_a · r_b` equally likely ordered pairs `(u, v)`. We need the count
+      `c(r_a, r_b)` of pairs with `u > v`, then the probability is `c / (r_a·r_b)`.
+
+      - If `r_b ≤ r_a`: for each `v = 1..r_b` there are `r_a - v` larger values
+        of `u`, so
+        `c = Σ_{v=1}^{r_b} (r_a - v) = r_a·r_b - r_b·(r_b+1)/2`.
+      - If `r_b > r_a`: the largest `u` is `r_a`, so `u` can only exceed `v` for
+        `v ≤ r_a`, giving `c = r_a·(r_a-1)/2`.
+
+      Sum these per-pair probabilities and round to six decimals. Values and the
+      final answer fit comfortably in `double`/`long double` for `r_i ≤ 100`.
+
+      **Time:** O(n²), **Space:** O(n). For `n ≤ 100` this is at most ~5,000
+      pair evaluations — instant.
+
+      :::tip
+      **Interview tip:** "expected number of inversions / pairs satisfying a
+      relation under randomness" is a classic linearity-of-expectation task.
+      The instinct to reach for is *write the total as a sum of indicators and
+      add their expectations* — interviewers look for exactly this reduction,
+      not for building the full joint distribution.
+      :::
+  - type: markdown
+    content: |
+      # Question — Inversion Probability
+
+      An array has `n` integers `x_1, x_2, ..., x_n`, and each of them has been
+      randomly chosen between `1` and `r_i`. An inversion is a pair `(a, b)`
+      where `a < b` and `x_a > x_b`.
+
+      What is the expected number of inversions in the array?
+
+      **Input**
+
+      The first input line contains an integer `n`: the size of the array.
+
+      The second line contains `n` integers `r_1, r_2, ..., r_n`: the range of
+      possible values for each array position.
+
+      **Output**
+
+      Print the expected number of inversions rounded to six decimal places
+      (rounding half to even).
+
+      **Constraints**
+
+      - `1 <= n <= 100`
+      - `1 <= r_i <= 100`
+
+      **Example**
+
+      Input:
+
+      ```
+      3
+      5 2 7
+      ```
+
+      Output:
+
+      ```
+      1.057143
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — enumerate every value pair, O(n² · 100²) time, O(1) space**
+
+      For each pair `(a, b)` iterate over all `u` in `[1, r_a]` and all `v` in
+      `[1, r_b]`, count the case `u > v`, and divide by `r_a·r_b`. It is clearly
+      correct but does up to `100 · 100` work per pair and, more importantly,
+      misses the structure that lets us *add* the pairs' expectations:
+
+      ```cpp
+      double brute(int n, const vector<int>& r) {
+          double ans = 0;
+          for (int a = 0; a < n; a++)
+              for (int b = a + 1; b < n; b++) {
+                  long long good = 0;
+                  for (int u = 1; u <= r[a]; u++)
+                      for (int v = 1; v <= r[b]; v++)
+                          if (u > v) good++;
+                  ans += (double)good / ((double)r[a] * r[b]);
+              }
+          return ans;
+      }
+      ```
+
+      **② Optimization — closed-form per-pair probability, O(n²) time, O(1) space**
+
+      Replace the inner double loop with the arithmetic-series formula for the
+      count `c`. The pair probability is `c / (r_a·r_b)`, and the answer is the
+      sum of these `O(1)` terms:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+
+          int n;
+          cin >> n;
+          vector<int> r(n);
+          for (auto &v : r) cin >> v;
+
+          long double ans = 0;
+          for (int a = 0; a < n; a++)
+              for (int b = a + 1; b < n; b++) {
+                  long double ra = r[a], rb = r[b], c;
+                  if (rb <= ra)              // sum_{v=1..rb} (ra - v)
+                      c = ra * rb - rb * (rb + 1) / 2.0L;
+                  else                       // u can't exceed ra anyway
+                      c = ra * (ra - 1) / 2.0L;
+                  ans += c / (ra * rb);
+              }
+
+          cout << fixed << setprecision(6) << (double)ans << "\n";
+      }
+      ```
+
+      **③ Alternative — exact rational accumulation for perfect rounding**
+
+      If you must guarantee "round half to even" with zero floating drift, keep
+      the per-pair contribution as an exact fraction `c / (ra·rb)` and sum them
+      with a shared scaled denominator. With `r_i ≤ 100`, `lcm` of all
+      `ra·rb` is bounded, so the final value is an exact rational you can round
+      deterministically:
+
+      ```cpp
+      // maintain a fractional total: num/den
+      long double num = 0, den = 1;      // rational accumulator
+      // after computing a term c/(ra*rb):
+      //   num/den += c/(ra*rb)  =>  num/den = (num*ra*rb + den*c) / (den*ra*rb)
+      ```
+
+      In practice `long double` precision is far beyond the needed `1e-6`, so
+      tier **②** is the code you submit; the fraction trick is a robustness
+      fallback if a judge demands byte-exact rounding.
+
+      All three tiers agree; **②** is the runnable optimal.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walk through the `O(n²)` closed-form code:
+
+      - `ans` accumulates `E[#inversions]` via linearity of expectation: each
+        pair contributes exactly `P(x_a > x_b)`, and the indicators are added
+        without ever needing their (unknown) dependence.
+      - For `x_a` uniform in `[1, ra]` and `x_b` uniform in `[1, rb]`, the pair
+        probability is `c/(ra·rb)` where `c` counts `u > v` pairs.
+      - If `rb ≤ ra`, every `v` has bigger `u`'s stacked above it; summing
+        `ra - v` over `v = 1..rb` collapses to the closed form
+        `ra·rb - rb·(rb+1)/2`.
+      - If `rb > ra`, values of `u` stop at `ra`, so the only favorable `v` are
+        `1..ra`, giving `ra·(ra-1)/2`.
+      - Uses `long double` for accuracy; `fixed << setprecision(6)` prints the
+        required six decimals. The cast to `double` on output is safe because
+        the accumulated `long double` error is far below `1e-7`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the closed-form code on the sample `r = [5, 2, 7]`.
+
+      | pair (a,b) | ranges | count c | probability c/(ra·rb) |
+      |-----------|--------|-----------|----------------------|
+      | (1,2) | ra=5, rb=2 | 5·2 − 2·3/2 = 10−3 = 7 | 7/10 = 0.700 |
+      | (1,3) | ra=5, rb=7 | 5·4/2 = 10 | 10/35 ≈ 0.285714 |
+      | (2,3) | ra=2, rb=7 | 2·1/2 = 1 | 1/14 ≈ 0.0714286 |
+
+      - Pair (1,2): `rb=2 ≤ ra=5`, so `c = 5·2 − 2·3/2 = 7`, probability `0.7`.
+      - Pair (1,3): `rb=7 > ra=5`, so `c = 5·4/2 = 10`, probability `10/35`.
+      - Pair (2,3): `rb=7 > ra=2`, so `c = 2·1/2 = 1`, probability `1/14`.
+
+      Total expectation `= 0.7 + 10/35 + 1/14 ≈ 1.0571428...`. Rounded to six
+      decimals this is **`1.057143`**, exactly matching the sample output.
+  - type: mcq
+    prompt: 'The expected number of inversions can be computed without knowing how the random X_a and X_b are jointly distributed because...'
+    options:
+      - 'the total count is a sum of indicators and linearity of expectation adds E[I_(a,b)] = P(x_a > x_b), which needs only the two marginal ranges'
+      - 'the values are always independent and identically distributed'
+      - 'sampling is done with replacement so the joint distribution is uniform over a small set'
+      - 'the answer is the same for any distribution with the same mean'
+    answer: 0
+    explanation: 'Linearity of expectation is the lever: E[#inversions] = sum over pairs of P(x_a > x_b), and that probability only needs the marginal ranges r_a and r_b, not the joint distribution.'
+type: content
+---

@@ -1,0 +1,237 @@
+---
+id: two-knights
+title: Two Knights
+difficulty: medium
+order: 7
+tags:
+  - intro
+  - combinatorics
+  - math
+blocks:
+  - type: markdown
+    content: |
+      ## Counting with "total minus invalid"
+
+      When a problem asks *how many ways to arrange things under a
+      restriction*, a very effective reflex is: **count everything, then
+      subtract what violates the rule.** You avoid enumerating the valid
+      configurations directly (which is usually the expensive part) and
+      instead count two easier quantities.
+
+      For `k = 1..n`, the number of ways to place **two knights** on a
+      `k x k` board so they *do not* attack each other is:
+
+      ```
+      total ways  -  attacking pairs
+      ```
+
+      - **Total ways**: choose any two squares out of `k²` squares:
+        `C(k², 2) = k²(k² - 1) / 2`.
+      - **Attacking pairs**: a knight jumps in an `L` shape (`+2/-1` rows
+        and columns). Two knights attack precisely when they occupy the two
+        end cells of a `2 x 3` or `3 x 2` rectangle. On a `k x k` board the
+        number of such attacking placements is `4(k - 1)(k - 2)`.
+
+      So the closed form per board size is:
+
+      ```
+      ans(k) = k²(k² - 1)/2  -  4(k - 1)(k - 2)
+      ```
+
+      Here is a tiny worked mini-example, `k = 3`. There are `9` squares, so
+      `C(9,2) = 36` total placements. Attacking pairs:
+      `4(3-1)(3-2) = 8`. Answer: `36 - 8 = 28`.
+
+      **Time complexity:** `O(n)` to produce answers for `k = 1..n` (we use
+      the formula, so each `k` is constant time). **Space:** `O(n)` for the
+      output list.
+
+      :::tip
+      **Interview tip:** "All configurations minus invalid ones" is the
+      combinatorics sibling of the *principle of counting complements*, and
+      it shows up everywhere — Derangements, arrangements where no two
+      people sit together, and lattice paths avoiding a region. Interviewers
+      love asking you to spot the cheaper way to count the *bad* ones.
+      :::
+  - type: markdown
+    content: |
+      ## Question
+
+      Your task is to count for `k = 1,2,...,n` the number of ways two
+      knights can be placed on a `k x k` chessboard so that they do not
+      attack each other.
+
+      **Input**
+
+      The only input line contains an integer `n`.
+
+      **Output**
+
+      Print `n` integers: the result for each board size.
+
+      **Constraints**
+
+      - `1 <= n <= 10000`
+
+      **Example**
+
+      Input:
+
+      ```
+      8
+      ```
+
+      Output:
+
+      ```
+      0
+      6
+      28
+      96
+      252
+      550
+      1056
+      1848
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n⁵) time, O(1) extra space (enumerate every placement).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      vector<long long> solve(long long n) {
+          vector<long long> ans;
+          for (long long k = 1; k <= n; k++) {
+              long long valid = 0;
+              // check every unordered pair of distinct squares
+              for (long long i = 0; i < k * k; i++) {
+                  for (long long j = i + 1; j < k * k; j++) {
+                      long long r1 = i / k, c1 = i % k;
+                      long long r2 = j / k, c2 = j % k;
+                      long long dr = abs(r1 - r2), dc = abs(c1 - c2);
+                      bool attack = (dr == 2 && dc == 1) || (dr == 1 && dc == 2);
+                      if (!attack) valid++;
+                  }
+              }
+              ans.push_back(valid);
+          }
+          return ans;
+      }
+      ```
+
+      For each board size `k` it checks every unordered pair of squares (there are
+      `C(k², 2)` of them) and directly applies the knight-move rule. Trivially correct,
+      but over all boards `1..n` it examines about `sum C(k²,2) ~ n⁵/10 ≈ 10^19` pairs for
+      `n = 10^4` — hopeless. It only survives on the tiny sample.
+
+      **② Optimization — O(n) time, O(n) space (total-minus-invalid closed form).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      vector<long long> solve(long long n) {
+          vector<long long> ans;
+          for (long long k = 1; k <= n; k++) {
+              long long total = k * k * (k * k - 1) / 2; // C(k^2, 2)
+              long long attacks = 4 * (k - 1) * (k - 2); // attacking pairs
+              ans.push_back(total - attacks);
+          }
+          return ans;
+      }
+      ```
+
+      Count all placements `C(k², 2)`, then subtract the attacking pairs. Every attack
+      lives inside a `2×3` or `3×2` rectangle, and there are `4(k-1)(k-2)` such
+      placements. Constant work per `k`, so the whole run is `O(n)` — this is the
+      intended fast solution.
+
+      **④ Alternative algorithm — O(k²) per board, O(n³) total (local neighbour check).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      vector<long long> solve(long long n) {
+          vector<long long> ans;
+          for (long long k = 1; k <= n; k++) {
+              long long attacks = 0;
+              vector<pair<int,int>> mv = {{1,2},{2,1},{2,-1},{1,-2},
+                                          {-1,-2},{-2,-1},{-2,1},{-1,2}};
+              for (long long r = 0; r < k; r++) {
+                  for (long long c = 0; c < k; c++) {
+                      for (auto& d : mv) {
+                          long long nr = r + d.first, nc = c + d.second;
+                          if (nr >= 0 && nr < k && nc >= 0 && nc < k) attacks++;
+                      }
+                  }
+              }
+              long long total = k * k * (k * k - 1) / 2;
+              ans.push_back(total - attacks / 2); // each attacking pair counted twice
+          }
+          return ans;
+      }
+      ```
+
+      Instead of a closed form, walk every square and count how many of its 8 knight
+      moves land on the board. Summing counts each attacking pair from both endpoints,
+      so halve it. This is a genuinely different approach and it is perfectly correct,
+      but `O(k²)` per board is far too slow for `n = 10^4` — its value is showing how
+      the formula is derived.
+
+      Reason through the code above with the next block — then trace it on the sample input below.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The function computes the closed form for every board size `k` from
+      `1` up to `n` and pushes each result into a vector.
+
+      `long long` matters here: `k²(k² - 1)` for `k = 10⁴` is about
+      `10¹⁶`, far beyond a 32-bit `int`. We compute the total in two
+      steps to keep every intermediate well within 64-bit range:
+
+      - `total   = k * k * (k * k - 1) / 2` — choose two squares.
+      - `attacks = 4 * (k - 1) * (k - 2)` — how many pairs attack.
+
+      The answer is simply `total - attacks`. For small boards this equals
+      what you get by hand: `k = 1` and `k = 2` give `0` (two knights on a
+      `1x1` or `2x2` board cannot even be placed in attacking positions, and
+      on `2x2` there are just `C(4,2)=6` placements, all non-attacking).
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      Trace the CSES sample: `n = 8`. The loop fills the output with one
+      value per `k`:
+
+      | k | k² | total = C(k²,2) | attacks = 4(k-1)(k-2) | answer |
+      |---|------|-------------------|--------------------------|--------|
+      | 1 | 1  | 0                | 4·0·(−1) = 0             | 0      |
+      | 2 | 4  | 6                | 4·1·0 = 0                | 6      |
+      | 3 | 9  | 36               | 4·2·1 = 8                | 28     |
+      | 4 | 16 | 120              | 4·3·2 = 24               | 96     |
+      | 5 | 25 | 300              | 4·4·3 = 48               | 252    |
+      | 6 | 36 | 630              | 4·5·4 = 80               | 550    |
+      | 7 | 49 | 1176             | 4·6·5 = 120              | 1056   |
+      | 8 | 64 | 2016             | 4·7·6 = 168              | 1848   |
+
+      Compare the `answer` column with the expected sample output `0 6 28
+      96 252 550 1056 1848` — they match exactly, confirming both `total` and
+      the attacking-pair correction `4(k-1)(k-2)` are correct.
+  - type: mcq
+    prompt: Why is a direct brute-force (iterating over every pair of squares) infeasible for the largest case in this problem?
+    options:
+      - There are too few squares on a 10000x10000 board to fill a result.
+      - 'There are roughly (k^2)(k^2-1)/2 ~ 5 x 10^15 pairs of squares for k=10000, far too many to enumerate.'
+      - Knights cannot attack on a board larger than 8x8.
+      - 'Pairs of squares must be stored, and memory is limited to 512 MB.'
+    answer: 1
+    explanation: 'For k=10000 there are about 5 x 10^15 square pairs. Enumerating them all is hopeless, but the closed form C(k²,2) - 4(k-1)(k-2) computes each answer in O(1), making the whole program O(n).'
+type: content
+---
+

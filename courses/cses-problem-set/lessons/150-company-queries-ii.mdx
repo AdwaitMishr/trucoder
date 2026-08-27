@@ -1,0 +1,318 @@
+---
+id: company-queries-ii
+title: Company Queries II
+difficulty: medium
+order: 150
+tags:
+  - tree
+  - lca
+  - binary-lifting
+blocks:
+  - type: markdown
+    content: |
+      # Company Queries II — Lowest Common Ancestor via binary lifting
+
+      A company's `n` employees form a rooted tree: employee `1` is the general
+      director, and every other employee has exactly one boss. Recalling the
+      tree, for queries `(a, b)` you need the **lowest common boss** — the node
+      that is an ancestor of *both* `a` and `b` and is as deep as possible. That
+      node is called the **Lowest Common Ancestor (LCA)** of `a` and `b`.
+
+      **The technique: binary lifting.** The naive way to find the LCA is to
+      climb both nodes upward one parent at a time until they meet — up to
+      `O(depth)` per query, which is `O(n)` and too slow for `q = 2·10^5`
+      queries on a deep tree. Binary lifting turns each query into **`O(log n)`**
+      by precomputing, for every node, all of its "jump by `2^k`" ancestors.
+
+      Define `up[k][u]` = the ancestor you reach after climbing `2^k` edges from
+      `u`. These are cheap to build from a base case and a recurrence:
+
+      - `up[0][u]` = the direct parent of `u` (the boss, given in the input);
+        the root's parent is itself.
+      - `up[k][u] = up[k-1][ up[k-1][u] ]` — climb `2^(k-1)` twice to climb `2^k`.
+
+      With this table, two steps answer an LCA query:
+
+      1. **Equalize depths.** Climb `a` up by `depth[a] - depth[b]` using the
+         binary decomposition (its bits tell you exactly which powers of two to
+         jump). Now `a` and `b` are at the same depth.
+      2. **Lift both together.** Walk `k` from the top down; if
+         `up[k][a] != up[k][b]`, jump both up by `2^k` (this keeps them from
+         overshooting past the LCA). At the end the LCA is the parent
+         `up[0][a]`.
+
+      **Why it's `O(log n)`:** each query only inspects ~`log n` table entries,
+      and the whole table has `n·log n` entries that each cost `O(1)` to build.
+
+      **Worked mini-example.** Tree: `2` works for boss `1`, `3` for boss `1`,
+      `4` works for `3`, `5` works for `3` (so parent `4` = `3`, parent `5` =
+      `3`). To find `LCA(4, 5)`:
+      - `depth[4] = depth[5] = 2`, no depth fix needed.
+      - From `k` high to `0`: `up[k][4]` and `up[k][5]` are equal whenever the
+        jump is `1` (`3`) so we don't move except when the ancestors differ.
+        Directly, `4` and `5` both jump to `3` from the top → their LCA is `3`.
+
+      **Complexity.** Precompute **O(n log n)** time / **O(n log n)** space;
+      each query **O(log n)**.
+
+      :::tip
+      **Interview tip:** binary lifting is the textbook tool for any tree where
+      you repeatedly need ancestor relationships — LCA, "the `k`-th ancestor of
+      `u`" (Company Queries I), distances, and path sums. The "raise by powers
+      of two" pattern also shows up in arrays (sparse tables, range queries)
+      and in linked-list cycle detection. Interviewers will assume you can
+      write the `up` table and the two-phase `lca` in minutes.
+      :::
+  - type: markdown
+    content: |
+      # Question — Company Queries II
+
+      A company has `n` employees, who form a tree hierarchy where each
+      employee has a boss, except for the general director.
+
+      Your task is to process `q` queries of the form: who is the **lowest
+      common boss** of employees `a` and `b` in the hierarchy?
+
+      **Constraints**
+
+      - `1 ≤ n, q ≤ 2·10^5`
+      - `1 ≤ e_i ≤ i-1` (the boss of employee `i`)
+      - `1 ≤ a, b ≤ n`
+
+      **Input.** Line 1: `n q`. Line 2: `n-1` integers `e_2 .. e_n` — the boss of
+      each employee `2..n`. Then `q` lines, each `a b`.
+
+      **Output.** For each query, print the lowest common ancestor of `a` and `b`.
+
+      Time limit 1.00 s, memory 512 MB.
+
+      Sample input:
+
+      ```
+      5 3
+      1 1 3 3
+      4 5
+      2 5
+      1 4
+      ```
+
+      Sample output:
+
+      ```
+      3
+      1
+      1
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — climb parents one at a time, O(n) per query**
+
+      For each query, bring the two nodes to equal depth by climbing the deeper
+      one, then climb both together until they meet. Each climb step is `O(1)`
+      but a query can walk `O(n)` edges on a deep tree.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<int> par(n + 1, 1), depth(n + 1, 0);
+          for(int i = 2; i <= n; i++) cin >> par[i];
+          for(int i = 2; i <= n; i++) depth[i] = depth[par[i]] + 1;
+          while(q--){
+              int a, b; cin >> a >> b;
+              while(depth[a] > depth[b]) a = par[a];
+              while(depth[b] > depth[a]) b = par[b];
+              while(a != b){ a = par[a]; b = par[b]; }
+              cout << a << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      **O(n) time per query, O(nq) overall** — on a chain of `2·10^5` nodes a
+      query climbs the whole tree. Correct but far too slow.
+
+      **② Optimization — binary lifting, O(log n) per query (submission)**
+
+      Precompute the `up[k][u] = 2^k`-th ancestor table, then answer each LCA
+      with the two-phase jump described above.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int LOG = 20;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<vector<int>> up(n + 1, vector<int>(LOG));
+          up[1][0] = 1;                       // root's parent is itself
+          for(int i = 2; i <= n; i++) cin >> up[i][0];   // direct boss
+          vector<int> depth(n + 1, 0);
+          for(int i = 2; i <= n; i++) depth[i] = depth[up[i][0]] + 1;
+          // since boss e_i < i, parent is processed before child
+          for(int k = 1; k < LOG; k++)
+              for(int i = 1; i <= n; i++)
+                  up[i][k] = up[ up[i][k-1] ][k-1];
+          auto lca = [&](int a, int b){
+              if(depth[a] < depth[b]) swap(a, b);
+              int diff = depth[a] - depth[b];
+              for(int k = 0; k < LOG; k++) if(diff & (1 << k)) a = up[a][k];
+              if(a == b) return a;
+              for(int k = LOG - 1; k >= 0; k--)
+                  if(up[a][k] != up[b][k]){ a = up[a][k]; b = up[b][k]; }
+              return up[a][0];
+          };
+          while(q--){ int a, b; cin >> a >> b; cout << lca(a, b) << "\n"; }
+          return 0;
+      }
+      ```
+
+      **O(n log n)** precompute, **O(log n)** per query. This is the submission
+      tier.
+
+      **③ Alternative — Euler tour + RMQ sparse table, O(1) per query**
+
+      Do a DFS and append a node *every* time you reach it (before descending
+      into a child *and* when you come back). This gives an Euler array of
+      length `2n-1`. The key fact: the **LCA of `a` and `b` is the node with
+      minimum depth** in the window of the Euler array that spans from `a`'s
+      first appearance to `b`'s first appearance. Query that window with a
+      sparse table that answers range-minimum by depth in `O(1)`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<int> parent(n + 1, 1);
+          for(int i = 2; i <= n; i++) cin >> parent[i];
+          vector<vector<int>> ch(n + 1);
+          for(int i = 2; i <= n; i++) ch[parent[i]].push_back(i);
+          int m = 0;
+          vector<int> euler(2*n), ed(2*n), first(n + 1, -1);
+          vector<int> depth(n + 1, 0);
+          function<void(int)> visit = [&](int u){
+              if(first[u] == -1) first[u] = m;
+              euler[m] = u; ed[m] = depth[u]; m++;
+              for(int c : ch[u]){ depth[c] = depth[u] + 1; visit(c);
+                  euler[m] = u; ed[m] = depth[u]; m++; }      // return to u
+          };
+          visit(1);
+          int L = m;
+          int LOGN = 1; while((1 << LOGN) <= L) LOGN++;
+          vector<vector<int>> st(LOGN, vector<int>(L));
+          for(int i = 0; i < L; i++) st[0][i] = i;            // min index by depth
+          for(int k = 1; k < LOGN; k++)
+              for(int i = 0; i + (1 << k) <= L; i++){
+                  int l = st[k-1][i], r = st[k-1][i + (1<<(k-1))];
+                  st[k][i] = (ed[l] <= ed[r]) ? l : r;
+              }
+          auto queryMin = [&](int l, int r){                  // inclusive, by index
+              int len = r - l + 1; int k = 31 - __builtin_clz(len);
+              int a = st[k][l], b = st[k][r - (1<<k) + 1];
+              return (ed[a] <= ed[b]) ? a : b;
+          };
+          while(q--){
+              int a, b; cin >> a >> b;
+              int x = first[a], y = first[b]; if(x > y) swap(x, y);
+              cout << euler[queryMin(x, y)] << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      **O(n log n)** build, **O(1)** per query — faster queries than binary
+      lifting but a longer code. Binary lifting is simpler to write, gives
+      `O(log n)` queries, and is reused in the LCA-based problems that follow;
+      the Euler+RMQ variant is the go-to when you need `O(1)` LCA inside a
+      heavier outer algorithm.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The submission is the binary-lifting tier. Three pieces map directly onto
+      the problem:
+
+      - **Base table.** `up[i][0]` is `i`'s boss from the input. Because the
+        boss `e_i` is always `< i`, a single forward loop `i = 2..n` gives every
+        node's depth after its parent's is known — no explicit DFS needed for a
+        tree given as parent pointers.
+      - **Flip-up recurrence.** `up[i][k] = up[ up[i][k-1] ][k-1]`: jump
+        `2^(k-1)` then `2^(k-1)` again. This one line builds all `n·LOG`
+        entries.
+      - **The `lca` walk.** First raise the deeper node to match, using the bits
+        of `depth[a]-depth[b]`. Then, to avoid landing exactly on a node that is
+        merely a common (not lowest) ancestor, only jump up while `up[k][a] !=
+        up[k][b]`; the walk stops one step *below* the true LCA, so the answer
+        is `up[a][0]`. This same `lca` routine is reused verbatim in the next
+        lesson (Distance Queries) and in every tree-path problem that follows.
+
+      `LOG` is fixed at `20` because `2^18 = 262144 > 2·10^5`, covering any
+      chain depth in this problem's range.
+
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):**
+
+      ```
+      5 3
+      1 1 3 3
+      4 5
+      2 5
+      1 4
+      ```
+
+      **Parse.** Bosses: `e_2=1, e_3=1, e_4=3, e_5=3`. Tree: node `1` is root;
+      `2` and `3` report to `1`; `4` and `5` report to `3`.
+
+      | node | parent | depth |
+      |------|--------|-------|
+      | 1 | 1 (root) | 0 |
+      | 2 | 1 | 1 |
+      | 3 | 1 | 1 |
+      | 4 | 3 | 2 |
+      | 5 | 3 | 2 |
+
+      **`up` table (relevant rows):**
+
+      | node | up[0] | up[1] (2^1) | up[2] (2^2) |
+      |------|-------|------|------|
+      | 4 | 3 | 1 | 1 |
+      | 5 | 3 | 1 | 1 |
+      | 2 | 1 | 1 | 1 |
+
+      **Query 1 — `4 5`.**
+      - `depth[4] = depth[5] = 2`, no depth fix.
+      - `k=2`: `up[2][4]=1`, `up[2][5]=1` equal → don't jump.
+      - `k=1`: `up[1][4]=1`, `up[1][5]=1` equal → don't jump.
+      - `k=0`: `up[0][4]=3`, `up[0][5]=3` equal → don't jump.
+      - Answer `up[4][0] = 3`.
+
+      **Query 2 — `2 5`.**
+      - `depth[2]=1`, `depth[5]=2` → raise `5` by `2-1=1` → `5 → 3`.
+      - Now `2` and `3` both have depth `1`. `up[k][2]` vs `up[k][3]`: `up[0][2]=1`, `up[0][3]=1` equal → never jump.
+      - Answer `up[2][0] = 1`.
+
+      **Query 3 — `1 4`.**
+      - Equalize: `depth[4]=2`, `depth[1]=0` → raise `4` by `2` → `4 → 3 → 1`. Now `a = 1`.
+      - `a == b` immediately → answer `1`.
+
+      Output: **3, 1, 1** — matches the sample. **Expected — actual: match.**
+  - type: mcq
+    prompt: 'Why does the binary-lifting LCA loop only jump up when up[k][a] != up[k][b], instead of jumping whenever the ancestors are equal?'
+    options:
+      - Because jumping while the 2^k ancestors are equal could overshoot past the LCA to a node that is a common but not the lowest common ancestor
+      - Because equal ancestors are never on the path to the root
+      - Because it makes the nodes swap depths
+      - Because the up table only stores odd powers of two
+    answer: 0
+    explanation: If up[k][a] == up[k][b] we do NOT move, even though that node is a common ancestor, because jumping there could skip past the deepest such node. Instead we only lift `a` and `b` while their 2^k ancestors differ; that keeps both nodes below the true LCA, and when no more differing jumps remain their parent up[0][a] is exactly the lowest common ancestor. Jumping on equality would land on a shallower common ancestor and lose the answer.
+type: content
+---

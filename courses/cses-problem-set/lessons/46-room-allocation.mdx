@@ -1,0 +1,271 @@
+---
+id: room-allocation
+title: Room Allocation
+difficulty: medium
+order: 46
+tags:
+  - interval-scheduling
+  - greedy
+  - min-heap
+blocks:
+  - type: markdown
+    content: |
+      # Room Allocation
+
+      **The technique: greedy interval scheduling with a min-heap of end times.** We have
+      `n` customers, each wanting a room from arrival day `a` to departure day `b`. Two
+      customers may share a room only if the first one's **departure day is strictly
+      earlier than** the second's arrival day (`b₁ < a₂`) — otherwise they overlap. We want
+      the **minimum number of rooms** and a valid assignment (which room each customer
+      uses).
+
+      This is a classic greedy: **sort customers by arrival day and, at each arrival,
+      reuse the room that frees up earliest if it is actually free.** "Freeing earliest"
+      means picking, among all rooms that have been assigned, the one whose occupant
+      departs first — exactly what a **min-heap keyed by departure day** gives us. If the
+      earliest departure is `<` the new customer's arrival, that room is free: reuse it.
+      Otherwise every occupied room still holds someone past this arrival, so we must open
+      a brand-new room.
+
+      **Why greedy is optimal:** the helper fact is that a *fixed subset* of customers can
+      share one room iff they can be ordered so each arrival is strictly after the previous
+      departure — i.e. no pair overlaps. Minimizing rooms = partitioning the set into the
+      fewest overlap-free chains, and the earliest-finish-first greedy is provably optimal
+      for this (it's the "minimum number of resources to schedule all intervals" problem).
+      The min-heap version computes both the count and a concrete assignment in one pass.
+
+      **When you reach for it:** any "minimum number of labs/staff/rooms/machines needed
+      so that intervals sharing a resource don't overlap" problem — conference rooms,
+      lecture theatres, table bookings. The min-heap-of-end-times sweep is the canonical
+      solution.
+
+      **Worked mini-example.** Customers `[1,2]`, `[2,4]`, `[4,4]`, arriving in order.
+
+      - `[1,2]`: no rooms → open room 1.
+      - `[2,4]`: room 1's occupant departs day 2; `2 < 2`? No — so room 1 is *not* free at
+        day 2 → open room 2.
+      - `[4,4]`: earliest departure in the heap is day 2 (room 1); `2 < 4` → free → reuse
+        room 1.
+
+      Result: 2 rooms; assignment `1 2 1`.
+
+      **Complexity.** Sorting is `O(n log n)`; each customer does one heap push and at
+      most one pop, all `O(log n)` → **O(n log n)** time, **O(n)** space.
+
+      :::tip
+      **Interview tip:** The two-line heuristic interviewers want to hear: *"sort by start
+      time; at each start, if the room with the earliest end time is free (its end < the
+      new start), reuse it — else allocate a new room."* The strictness matters: sharing
+      requires `b₁ < a₂` (not `≤`), so compare the heap top with `<`. Keep the room's id in
+      the heap (as a `(end, room)` pair) so you can both test availability and immediately
+      reuse a specific room.
+      :::
+  - type: markdown
+    content: |
+      # Question — Room Allocation
+
+      There is a large hotel, and `n` customers will arrive soon. Each customer wants a
+      single room. You know each customer's arrival `a` and departure `b` day. Two
+      customers can stay in the same room if the **departure day of the first is earlier
+      than the arrival day of the second**.
+
+      What is the **minimum number of rooms** needed to accommodate everyone, and how can
+      the rooms be allocated?
+
+      **Constraints:** `1 ≤ n ≤ 2 * 10^5`, `1 ≤ a ≤ b ≤ 10^9`.
+
+      **Input:** first line `n`; then `n` lines, each `a b` (arrival and departure).
+      **Output:** first line `k` = the minimum number of rooms; second line the room
+      number of each customer in input order (rooms numbered `1..k`; any valid assignment
+      is accepted).
+
+      Sample input:
+
+      ```
+      3
+      1 2
+      2 4
+      4 4
+      ```
+
+      Sample output:
+
+      ```
+      2
+      1 2 1
+      ```
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      All versions below produce a *valid* minimum-room assignment; they differ in speed.
+
+      **① Brute force — O(n²)**
+
+      Sort by arrival. For each arriving customer, scan *every existing room* to find one
+      whose latest departure is `<` the new arrival; take the first such room, else open a
+      new one. Each arrival costs `O(#rooms) = O(n)` → `O(n²)` total. Correct but ~4·10¹⁰
+      operations at `n = 2·10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct C { int a, b, id; };
+      int main() {
+          int n; cin >> n;
+          vector<C> c(n);
+          for (int i = 0; i < n; i++) { cin >> c[i].a >> c[i].b; c[i].id = i; }
+          sort(c.begin(), c.end(), [](const C& x, const C& y) { return x.a < y.a; });
+          vector<int> roomEnd{};     // latest departure per room
+          vector<int> roomOf(n);
+          for (C& x : c) {
+              bool reused = false;
+              for (int r = 0; r < (int)roomEnd.size(); r++) {
+                  if (roomEnd[r] < x.a) { roomEnd[r] = x.b; roomOf[x.id] = r + 1; reused = true; break; }
+              }
+              if (!reused) { roomEnd.push_back(x.b); roomOf[x.id] = (int)roomEnd.size(); }
+          }
+          cout << roomEnd.size() << "\n";
+          for (int i = 0; i < n; i++) cout << roomOf[i] << (i + 1 == n ? '\n' : ' ');
+      }
+      ```
+
+      Time: **O(n²)**. Space: **O(n)**.
+
+      **② Optimization — min-heap of end times, O(n log n)**
+
+      The wasteful part above is scanning *all* rooms to find any free one. We only ever
+      want the room that frees up **earliest** — that's a min-heap keyed by departure day.
+      Keep `(departure, room)` pairs in a min-heap; at each arrival, peek the root:
+      - if `root.departure < x.a`, that room is free → pop it, reuse that room (update its
+        end to `x.b`, push back).
+      - else, no room is free → open a new room.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct C { int a, b, id; };
+      int main() {
+          int n; cin >> n;
+          vector<C> c(n);
+          for (int i = 0; i < n; i++) { cin >> c[i].a >> c[i].b; c[i].id = i; }
+          sort(c.begin(), c.end(), [](const C& x, const C& y) { return x.a < y.a; });
+
+          priority_queue<pair<int,int>, vector<pair<int,int>>, greater<pair<int,int>>> pq; // (end, room#)
+          vector<int> room(n);
+          int rooms = 0;
+          for (C& x : c) {
+              if (!pq.empty() && pq.top().first < x.a) {   // earliest-free room is free
+                  int rr = pq.top().second; pq.pop();
+                  room[x.id] = rr;
+                  pq.push({x.b, rr});
+              } else {                                     // nobody has left yet
+                  rooms++;
+                  room[x.id] = rooms;
+                  pq.push({x.b, rooms});
+              }
+          }
+          cout << rooms << "\n";
+          for (int i = 0; i < n; i++) cout << room[i] << (i + 1 == n ? '\n' : ' ');
+      }
+      ```
+
+      Time: **O(n log n)**. Space: **O(n)**.
+
+      **③ Further optimization — possible in theory, O(n log n) is the practical floor**
+
+      The sort and the heap both contribute a `log n` factor; no meaningfully different
+      *optimal* asymptotic improvement exists for producing a concrete assignment (an
+      `O(n log n)` bound is tight here, since sorting at minimum is needed to know which
+      customer arrives when). You can micro-optimize the constant (e.g. reuse a custom
+      indexed heap), but the complexity stays `O(n log n)`.
+
+      Time: **O(n log n)**. Space: **O(n)**.
+
+      **④ Alternative — sweep-line by sorted events, O(n log n)**
+
+      A different framing that highlights *why* the answer is a minimum: treat every
+      range as a *+1* "active" event at its arrival and a *−1* "inactive" event just after
+      its departure, then sweep the timeline keeping a running active count. The maximum
+      active count equals the **minimum number of rooms** (it's the peak "overlap depth").
+      This answers the *count* beautifully but doesn't directly give per-customer room ids,
+      so for this problem (which demands an assignment) the heap `②` is the preferred full
+      solution — the sweep is best when only the number of rooms is needed.
+
+      Time: **O(n log n)**. Space: **O(n)**.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      Focus on the **② min-heap** version — the standard full answer for this problem.
+
+      - `sort(...)` by `x.a < y.a`: process customers in order of arrival so that when we
+        look at a customer, every "already-allocated" room has an occupant who arrived no
+        later — we know the true set of currently occupied rooms.
+      - `priority_queue< pair<int,int>, ..., greater<...> >` is the **min-heap**: the root
+        is the pair with the smallest departure day (we never need any other room's end).
+        `greater` flips the default max-heap into a min-heap.
+      - `pq.top().first < x.a` is the **strict** check required by "departure earlier than
+        arrival". Using `<=` would wrongly allow same-day handover (`b₁ = a₂`) and could
+        produce invalid (overlapping) assignments.
+      - On reuse: pop the freed room, record its number for this customer, and **push it
+        back with the new end time** `x.b` — rooms are shared across many customers over
+        time, so a room enters/leaves the heap as its latest occupant changes.
+      - On no-free-room: increment `rooms`, assign, push. Because `rooms` is monotonic, the
+        final value is by construction the minimum — the greedy never opens a room unless
+        all existing ones are genuinely occupied at that arrival.
+      - `room[x.id]` stores by original index so that, after the sort, the output line
+        prints each customer's room in the original input order.
+
+      Total: `O(n log n)`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 3`, customers in input order: `[1,2]`, `[2,4]`, `[4,4]`.
+      Expected: `2` rooms; assignment `1 2 1`.
+
+      Processing (sorted by arrival — already in order):
+
+      | step | customer | heap root (end,room) before | free? (end < a) | action | rooms |
+      |------|----------|-----------------------------|-----------------|--------|-------|
+      | 1 | `[1,2]` | ∅ | — (empty) | open room 1 → heap `{(2,1)}` | 1 |
+      | 2 | `[2,4]` | `(2,1)` | `2 < 2`? no | open room 2 → heap `{(2,1),(4,2)}` | 2 |
+      | 3 | `[4,4]` | `(2,1)` | `2 < 4`? yes | reuse room 1 → heap `{(4,2),(4,1)}` | 2 |
+
+      Assignment by customer id: `room[0]=1, room[1]=2, room[2]=1` → **`1 2 1`** ✓
+      Minimum rooms: **2** ✓
+
+      Output:
+
+      ```
+      2
+      1 2 1
+      ```
+
+      Sanity checks: customer 0 departs day 2 and customer 2 arrives day 4 — `2 < 4`, so
+      they can share room 1, and since they do, the hotel only needs 2 rooms, not 3. ✓
+  - type: flowchart
+    title: "Room Allocation — greedy with a min-heap"
+    nodes: ["Sort customers by arrival", "Take next customer (a,b)", "Heap non-empty and top.end < a?", "Yes → reuse that room, push (b, room)", "No → open new room, push (b, new)", "All customers processed?", "No → next", "Yes → print room count and per-id assignment"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: "yes"}
+      - {from: 2, to: 4, label: "no"}
+      - {from: 3, to: 5, label: ""}
+      - {from: 4, to: 5, label: ""}
+      - {from: 5, to: 6, label: "no"}
+      - {from: 5, to: 7, label: "yes"}
+      - {from: 6, to: 1, label: ""}
+  - type: mcq
+    prompt: 'In Room Allocation, why is it safe to reuse only the room that frees up earliest, and how is that guaranteed to keep the number of rooms minimal?'
+    options:
+      - 'Because if the earliest-freeing room is still occupied (its end >= new arrival), then every other room is occupied too, so a new room is genuinely required; reusing the earliest room is a greedy that provably yields the minimum number of rooms'
+      - Because reusing is never actually safe and all rooms should always be new
+      - Because the earliest-freeing room always has the smallest room number
+      - Because sorting by arrival makes any valid assignment automatically optimal
+    answer: 0
+    explanation: "Sorting by arrival plus 'if the min-end room is free reuse it, else open a new one' is the standard greedy for partitioning intervals into the fewest overlap-free sets. The min-heap root is the soonest a room can become available, so checking only it is sufficient: if it's still occupied, none is free. The greedy is optimal by the exchange argument for interval-resource scheduling."
+type: content
+---

@@ -1,0 +1,265 @@
+---
+id: factory-machines
+title: Factory Machines
+difficulty: easy
+order: 47
+tags:
+  - sorting-and-searching
+  - binary-search
+  - greedy
+blocks:
+  - type: markdown
+    content: |
+      # Factory Machines — binary search on the answer
+
+      We have `n` machines running in parallel; machine `i` makes one product
+      every `k[i]` seconds. We want the **shortest time `T`** such that all
+      machines together produce at least `t` products.
+
+      The classic move for "minimum X such that a condition holds" is to turn
+      the question around: instead of *finding* the answer, **guess a time `T`
+      and *check* whether it is enough**. The check is cheap and monotonic:
+
+      - If time `T` is enough, every larger time `T' > T` is also enough.
+      - If `T` is not enough, every smaller time is also not enough.
+
+      So the predicate "can we make `t` products within time `T`" forms a
+      `… false, false, false, true, true …` prefix, and the first `true` is the
+      answer. That is exactly the shape binary search targets.
+
+      **The check.** In time `T`, machine `i` finishes `floor(T / k[i])`
+      products. The total is
+
+      ```
+      produced(T) = floor(T/k[1]) + floor(T/k[2]) + ... + floor(T/k[n])
+      ```
+
+      and it is monotone non-decreasing in `T`. We binary-search the smallest
+      `T` with `produced(T) >= t`.
+
+      **Bounds.** `lo = 1`. The absolute fastest possible is if the fastest
+      machine alone made all `t` products, so `hi = t * min(k[i])` — time can
+      never exceed that.
+
+      **Worked mini-example.** `k = [3, 2, 5]`, `t = 7`:
+      - `T = 7` → `floor(7/3)+floor(7/2)+floor(7/5) = 2+3+1 = 6` (not enough)
+      - `T = 8` → `floor(8/3)+floor(8/2)+floor(8/5) = 2+4+1 = 7` (enough)
+
+      Answer: `8`.
+
+      **Complexity.** Each check scans all `n` machines, and binary search runs
+      `O(log(t·min k))` iterations, so time is `O(n log(t·min k))` ≈ `O(n log)`
+      and space is `O(1)` extra.
+
+      :::tip
+      **Interview tip:** "find the minimum amount of time/water/load such that …"
+      is the single most common binary-search-on-answer pattern. Any time you can
+      *verify* a candidate in polynomial time and the predicate is monotone,
+      binary search turns "find the optimum" into "check O(log) candidates".
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      A factory has `n` machines which can be used to make products. Your goal
+      is to make a total of `t` products.
+
+      For each machine, you know the number of seconds it needs to make a single
+      product. The machines can work simultaneously, and you can freely decide
+      their schedule.
+
+      **What is the shortest time needed to make `t` products?**
+
+      **Constraints:** `1 <= n <= 2*10^5`, `1 <= t <= 10^9`, `1 <= k[i] <= 10^9`
+
+      ## Input
+
+      The first input line has two integers `n` and `t`: the number of machines
+      and the number of products. The next line has `n` integers `k[1], ..., k[n]`.
+
+      ## Output
+
+      One integer: the minimum time needed to make `t` products.
+
+      ## Sample
+
+      **Input:**
+      ```
+      3 7
+      3 2 5
+      ```
+      **Output:**
+      ```
+      8
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(t·n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(long long n, long long t, const std::vector<long long>& k) {
+          long long T = 1;
+          while (true) {
+              long long made = 0;
+              for (long long x : k) made += T / x;   // total products in time T
+              if (made >= t) return T;
+              T++;
+          }
+      }
+      ```
+      Scans `T = 1, 2, …` until enough products. Correct but can run up to
+      `t·min(k) ≈ 10^18` iterations — hopeless for the real limits.
+
+      **② Optimization — binary search on the answer, O(n log)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(long long n, long long t, const std::vector<long long>& k) {
+          long long lo = 1;
+          long long hi = *min_element(k.begin(), k.end()) * t; // upper bound
+          long long ans = hi;
+          while (lo <= hi) {
+              long long mid = lo + (hi - lo) / 2;
+              long long made = 0;
+              for (long long x : k) {
+                  made += mid / x;
+                  if (made >= t) break;          // early exit (also avoids overflow)
+              }
+              if (made >= t) {
+                  ans = mid;
+                  hi = mid - 1;                  // can we do even better?
+              } else {
+                  lo = mid + 1;                  // not enough time yet
+              }
+          }
+          return ans;
+      }
+      ```
+      Each check is `O(n)`; there are `O(log(t·min k)) ≈ 60` iterations at most.
+      This is the intended solution — it passes comfortably.
+
+      **③ Further optimization — none needed.**
+      Binary search already shrinks the search space to ~60 checks of `O(n)` each;
+      no amount of cleverness beats `O(n)` per probe, and you cannot avoid reading
+      the `n` machines. There is no meaningful third tier.
+
+      **④ Alternative — min-heap simulation, O(t log n).**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      // Each heap item is (when that machine's NEXT product finishes, its cycle time).
+      long long solve(long long n, long long t, const std::vector<long long>& k) {
+          using P = pair<long long,long long>;
+          priority_queue<P, vector<P>, greater<P>> pq;
+          for (long long x : k) pq.push({x, x});
+          long long T = 0;
+          for (long long p = 0; p < t; p++) {
+              T = pq.top().first;                // next product finishes at time T
+              auto [fin, cycle] = pq.top(); pq.pop();
+              pq.push({fin + cycle, cycle});     // set that machine's next finish
+          }
+          return T;
+      }
+      ```
+      A different (event-simulation) view: always pop the machine whose next
+      product finishes earliest and schedule its following product. Correct, but
+      it steps once per product (`t` can be `10^9`) — too slow for the limits.
+      Useful only to reason about the structure.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The binary-search solution is two pieces.
+
+      - **Bounds.** `lo = 1` is optimistic; `hi = t * min(k)` is the time the
+        fastest machine alone would need for all `t` products, so no schedule can
+        require more than that (extra machines only help). `ans` starts at `hi`
+        so that if the whole range is feasible we still return a valid answer.
+      - **The loop.** Standard binary search. `mid` sits halfway between the
+        current bounds. We compute `made = sum(mid / k[i])` and compare with `t`.
+        - `made >= t`: `mid` is achievable, so record it as `ans` and try to
+          push `hi` below it (`hi = mid - 1`).
+        - `made < t`: `mid` is too small, so move `lo` up (`lo = mid + 1`).
+      - **Early exit.** Inside the product sum we `break` as soon as `made >= t`.
+        This both short-circuits long `n` and — critically for the case where
+        `n = 1` and everything fits — prevents any chance of overflow before we
+        clamp the sum.
+
+      The monotonicity is what licenses binary search: more time can never
+      produce *fewer* products, so the "enough?" predicate is a monotone prefix.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 3`, `t = 7`, `k = [3, 2, 5]`.
+
+      **Expected output:** `8`.
+
+      **Actual run.** `lo = 1`, `hi = min(3,2,5)·7 = 2·7 = 14`, `ans = 14`.
+
+      | mid | made = Σ⌊mid/k⌋ | enough? | action | lo | hi | ans |
+      |-----|------------------|---------|--------|----|----|-----|
+      | 7 | 2+3+1 = 6 | no | lo↑ | 8 | 14 | 14 |
+      | 11 | 3+5+2 = 10 | yes | hi↓ | 8 | 10 | 11 |
+      | 9 | 3+4+1 = 8 | yes | hi↓ | 8 | 8 | 9 |
+      | 8 | 2+4+1 = 7 | yes | hi↓ | 8 | 7 | 8 |
+      | loop ends (lo > hi) | — | — | — | — | — | **8** |
+
+      `mid=7` gives only 6 products, `mid=8` gives exactly 7, so the minimum
+      feasible time — and the returned answer — is **8** ✓ (matches the sample).
+  - type: flowchart
+    title: Binary search on answer
+    nodes:
+      - 'lo=1, hi=t·min(k)'
+      - lo <= hi?
+      - mid = (lo+hi)/2
+      - Compute made = Σ ⌊mid/k⌋
+      - made >= t?
+      - 'Record ans = mid; hi = mid-1'
+      - 'lo = mid+1'
+      - Return ans
+    edges:
+      - from: 0
+        to: 1
+        label: ''
+      - from: 1
+        to: 2
+        label: yes
+      - from: 1
+        to: 7
+        label: no
+      - from: 2
+        to: 3
+        label: ''
+      - from: 3
+        to: 4
+        label: ''
+      - from: 4
+        to: 5
+        label: yes
+      - from: 4
+        to: 6
+        label: no
+      - from: 5
+        to: 1
+        label: loop
+      - from: 6
+        to: 1
+        label: loop
+  - type: mcq
+    prompt: Why is binary search on the answer valid here (and not, say, a linear scan)?
+    options:
+      - Because the answer is always a power of two
+      - 'Because the predicate "can we make >= t products within time T" is monotone in T (more time never yields fewer products), so the set of feasible T is a contiguous suffix and we can bisect it'
+      - Because minimum_element(k) is always Fibonacci
+      - Because the machines all have the same production time
+    answer: 1
+    explanation: 'The crucial property is monotonicity: produced(T) is non-decreasing in T. Feasible times form one contiguous suffix, so binary search can home in on the first feasible T in O(log) probes instead of a linear scan up to 10^18.'
+type: content
+---

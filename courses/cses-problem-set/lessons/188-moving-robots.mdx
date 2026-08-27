@@ -1,0 +1,241 @@
+---
+id: moving-robots
+title: "Moving Robots"
+difficulty: medium
+order: 188
+tags:
+  - mathematics
+  - probability
+  - expectation
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      # Moving Robots — expectation, and independent random walks by DP
+
+      An `8×8` board starts with **one robot on every square**. Each robot takes
+      `k` independent steps; on every step it moves to a uniformly chosen
+      neighbouring square that stays on the board (so corners have fewer options).
+      Robots may pile up. You must compute the **expected number of empty
+      squares** after `k` turns.
+
+      The slick idea: the expected number of empty squares equals the **sum, over
+      all squares, of the probability that square is empty.**
+
+      ## Linearity of expectation saves us
+
+      For each square `s` let `X_s = 1` if square `s` is empty after `k` steps
+      (else `0`). The number of empty squares is `Σ_s X_s`, so by linearity:
+
+      ```
+      E[#empty] = Σ_s P(square s is empty)
+      ```
+
+      A square is empty iff **none** of the 64 robots lands on it. Because the
+      robots' random walks are independent, that joint probability factorises:
+
+      ```
+      P(s empty) = Π_over_all_robots (1 − P(that robot ends on s))
+      ```
+
+      ## How to get each robot's landing distribution
+
+      A single robot is a **random walk on the grid grid with reflecting-ish
+      boundaries** (it always moves to a valid neighbour, uniformly among them).
+      We compute its distribution with a probability DP: start `dist[start] = 1`,
+      and for each of the `k` steps spread each cell's probability equally over
+      its valid neighbours. That spreads one cell of probability into
+      `moves(c) / moves(c)` = exactly `1 · 1/moves(c)` per neighbour — it stays a
+      probability distribution.
+
+      There are 64 starting squares; we run this DP once per start (exploiting
+      board symmetry is possible but unnecessary — `64 · k · 64` is tiny).
+
+      **Complexity.** `64` starts × `k` steps × `64` cells × `≤4` moves =
+      `O(64² · k)` time, `O(64²)` space. For `k ≤ 100` this is ~`2.6 × 10^6` ops.
+
+      :::tip
+      **Interview tip:** this is the canonical "random walk meets expectation"
+      problem. Three habits transfer to any interview: (1) convert "expected
+      count" into "sum of indicator probabilities" via linearity; (2) factorise a
+      joint "all robots avoid s" event into a product because the walks are
+      independent; (3) track a probability *distribution* with a DP rather than
+      enumerating paths. Expectation questions almost always reward the
+      indicator-sum reframing.
+      :::
+  - type: markdown
+    content: |
+      # Question — Moving Robots
+
+      Each square of an `8 × 8` chessboard has a robot. Each robot independently
+      moves `k` steps, and there can be many robots on the same square. On each
+      turn, a robot moves one step left, right, up or down — but not outside the
+      board. It randomly chooses a direction among those where it can move.
+
+      Your task is to calculate the **expected number of empty squares** after `k`
+      turns.
+
+      **Input:** The only input line has an integer `k`.
+
+      **Output:** Print the expected number of empty squares rounded to six
+      decimal places (rounding half to even).
+
+      **Constraints**
+
+      - `1 ≤ k ≤ 100`
+
+      **Example**
+
+      Input:
+
+      ```
+      10
+      ```
+
+      Output:
+
+      ```
+      23.120740
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — Monte Carlo, approximate**
+
+      Simulate the board many times: run all 64 random walks `k` steps and count
+      empty squares, averaging over millions of trials. Approximates the answer
+      but never exactly matches the required rounding. Not acceptable for a judge.
+
+      ```cpp
+      // conceptual — approximate only
+      double mc(int k){ double empty=0; int TRIALS=1000000;
+          for(int tr=0;tr<TRIALS;tr++){ /* simulate 64 walks, count empties */ empty += e; }
+          return empty/TRIALS;
+      }
+      ```
+
+      **② Optimization — per-robot DP over steps + linearity, O(64² · k)**
+
+      For each of the 64 starting squares, evolve the robot's probability
+      distribution over the `k` steps, then combine all robots at each destination.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int N=8;
+      int dr[4]={-1,1,0,0}, dc[4]={0,0,-1,1};
+
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          int k; cin>>k;
+          const int S=N*N;
+          // Pgo[start][end] = P(robot starting at `start` ends at `end` in k steps)
+          vector<vector<long double>> Pgo(S, vector<long double>(S, 0.0));
+          for(int start=0; start<S; start++){
+              vector<long double> dist(S,0.0);
+              dist[start]=1.0;
+              for(int step=0; step<k; step++){
+                  vector<long double> nd(S,0.0);
+                  for(int c=0;c<S;c++){
+                      if(dist[c]==0) continue;
+                      int r=c/N, col=c%N, moves=0;
+                      for(int d=0;d<4;d++)
+                          if(r+dr[d]>=0 && r+dr[d]<N && col+dc[d]>=0 && col+dc[d]<N) moves++;
+                      for(int d=0;d<4;d++){
+                          int nr=r+dr[d], nc=col+dc[d];
+                          if(nr>=0 && nr<N && nc>=0 && nc<N)
+                              nd[nr*N+nc] += dist[c]/moves;   // uniform among valid
+                      }
+                  }
+                  dist=nd;
+              }
+              for(int e=0;e<S;e++) Pgo[start][e]=dist[e];
+          }
+          long double ans=0;
+          for(int e=0;e<S;e++){
+              long double pEmpty=1.0;
+              for(int s=0;s<S;s++) pEmpty *= (1.0 - Pgo[s][e]);   // all robots avoid e
+              ans += pEmpty;                      // linearity of expectation
+          }
+          cout<<fixed<<setprecision(6)<<(double)ans<<"\n";
+          return 0;
+      }
+      ```
+
+      Time `O(64² · k)`, space `O(64²)`. Exact, and instantaneous for `k ≤ 100`.
+
+      **③ Further optimization — exploit board symmetry.**
+
+      The four corners are equivalent, the `24` edge and `36` interior square
+      types are equivalent under the dihedral group, so we only need the DP for
+      one representative of each of the `10` distinct square classes and reuse
+      its distribution for every robot in the same class. This cuts the
+      per-robot factor `~6×` but the asymptotic complexity is unchanged — the
+      `②` version is already fast.
+
+      **④ Alternative — closed-form stationary distribution reasoning.**
+
+      Qualitatively, as `k → ∞` the distribution of any interior-starting robot
+      flattens toward the board's stationary measure, and nearly every square
+      becomes populated, so `E[#empty]` decays toward `0`. No useful closed form
+      exists for finite `k`; the DP is the definitive tool.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Per-robot DP.** `dist` holds the probability mass over the `64` cells
+        for one robot. Each step creates `nd`: for every occupied cell, its mass
+        is split equally among its valid neighbours (`moves` counts those). This
+        maintains a proper distribution (each cell's mass is fully redistributed).
+      - **Valid-move count.** At a corner there are only 2 valid moves, so each
+        gets `1/2` of the mass; at an interior cell, 4 moves each get `1/4`. This
+        matches "randomly chooses among the directions where it can move".
+      - **Collect into `Pgo`.** After all `k` steps, `Pgo[start][e]` holds the
+        probability robot from `start` is on square `e`.
+      - **Combine at each destination.** `pEmpty = Π_s (1 − Pgo[s][e])` is the
+        probability that *no* robot (from any start `s`) lands on `e`. It is a
+        product precisely because the 64 walks are independent.
+      - **Linearity.** `ans = Σ_e pEmpty` sums the per-square empty-probabilities
+        — the expected count of empty squares.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `k = 10`.
+
+      **Expected output (sample):** `23.120740`.
+
+      The DP produces, for every pair `(start, end)`, the probability `Pgo`
+      that a robot travels there in 10 steps. A few qualitative checks confirm
+      the machinery before the final sum:
+
+      | start | after 1 step | behaviour |
+      |-------|--------------|-----------|
+      | corner `(0,0)` | `1/2` to `(1,0)`, `1/2` to `(0,1)` | only 2 moves, mass splits in two |
+      | edge `(0,3)` | `1/3` each to `(1,3),(0,2),(0,4)` | 3 valid moves |
+      | interior `(3,3)` | `1/4` each to 4 neighbours | full 4-way spread |
+
+      After 10 steps, most robots are no longer near their start. For a near-edge
+      destination `e`, corner starts are very unlikely to reach it, so those
+      robots contribute a `(1 − tiny)` factor ~1; robots starting adjacent to `e`
+      have large `Pgo`, making their `(1 − Pgo)` factor small. Multiplying all 64
+      factors and summing over the 64 squares gives
+
+      ```
+      => 23.120740
+      ```
+
+      which matches the sample. The answer is the *sum* of 64 probabilities, not
+      a single probability — expected values add even when the events are
+      correlated.
+  - type: mcq
+    prompt: Why can we compute the expected number of empty squares as a sum of per-square empty probabilities, without simulating the robots jointly?
+    options:
+      - 'Because of linearity of expectation: the indicator of "square s is empty" has expectation P(s empty), and E of a sum of indicators is the sum of their expectations, even though the X_s are dependent'
+      - 'Because the squares are independent of each other, so we multiply their probabilities'
+      - 'Because robots never interact, so each square behaves exactly like a single-robot board'
+      - 'Because empty squares cannot share probability mass'
+    answer: 0
+    explanation: 'The count of empty squares is Σ_s X_s. Linearity of expectation lets us move the expectation inside the sum without requiring independence of the X_s. Each term is just P(square s is empty), which we evaluate per square and then add. This is exactly why the 64 walks can be handled separately.'
+type: content
+---

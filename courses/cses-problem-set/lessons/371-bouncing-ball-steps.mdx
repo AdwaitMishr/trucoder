@@ -1,0 +1,243 @@
+---
+id: bouncing-ball-steps
+title: Bouncing Ball Steps
+difficulty: medium
+order: 371
+tags:
+  - additional
+  - math
+  - reflection
+  - lcm
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — unfold the grid, then mirror
+
+      A ball in an `n × m` grid moving diagonally and bouncing off the borders
+      seems hard to reason about, but there is a classic reframing: **unfold
+      the grid into the reflection of itself.** Instead of reflecting the
+      direction at a border, let the ball continue straight into a mirrored
+      copy of the grid. The actual cell is then recovered by folding the grid
+      back.
+
+      **Mirror function.** Along a single axis with `L` labels `1..L`, a ball
+      bouncing between the two ends has a position that is a periodic
+      sawtooth. After `k` unit steps from cell `1`, the coordinate is
+
+      ```
+      w = k mod (2·(L-1))
+      coord = 1 + w                       if w <= L-1
+      coord = 2·L - 1 - w                 otherwise
+      ```
+
+      The period is `2·(L-1)`: from `1` to `L` takes `L-1` steps, and back
+      takes `L-1` more. The row and column coordinates evolve independently, so
+      the position after `k` steps is `(mirror(n, k), mirror(m, k))` — closed
+      form in `O(1)`.
+
+      **Direction changes = bounces.** A change of direction happens exactly when
+      the ball hits a border. Along the row axis a bounce occurs every time the
+      unfolded row-distance is a multiple of `n-1` (the ball reaches the top or
+      bottom), i.e. `floor(k/(n-1))` times in `k` steps. Similarly the column
+      axis bounces `floor(k/(m-1))` times. At a corner both happen in the same
+      step and that single event is counted once: the number of corner events
+      is `floor(k / lcm(n-1, m-1))`. Therefore
+
+      ```
+      changes = floor(k/(n-1)) + floor(k/(m-1)) - floor(k / lcm(n-1, m-1))
+      ```
+
+      :::tip
+      **Interview tip:** "Ball bouncing on the border of a rectangle" is the
+      sign to unfold/reflect — you convert a bouncing trajectory into a single
+      straight ray. The count of direction changes is then a count of how often
+      a *one-axis* coordinate crosses a multiple of a period, i.e. floor
+      divisions, with the corner double-count corrected by a `lcm`.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      There is a ball at the top-left corner of an `n × m` grid. The rows are
+      numbered `1, 2, …, n` and the columns `1, 2, …, m`. The ball is initially
+      moving diagonally away from the top-left corner. At every step it moves one
+      cell. Whenever the ball hits the border of the grid, it changes direction.
+
+      What is the location of the ball after `k` steps, and how many times has it
+      changed direction?
+
+      **Input.** The first line has an integer `t`: the number of tests. Each of
+      the following `t` lines has three integers `n`, `m`, `k`: the grid size and
+      the number of steps.
+
+      **Output.** For each test, print three integers: the location of the ball
+      and the number of direction changes.
+
+      **Constraints**
+      - `1 ≤ t ≤ 1000`
+      - `2 ≤ n, m ≤ 10^9`
+      - `0 ≤ k ≤ 10^18`
+
+      **Sample**
+
+      Input:
+      ```
+      6
+      3 4 0
+      3 4 1
+      3 4 2
+      3 4 3
+      3 4 4
+      42 1337 123456789
+      ```
+
+      Output:
+      ```
+      1 1 0
+      2 2 0
+      3 3 1
+      2 4 2
+      1 3 3
+      34 300 3101295
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(k) per test.** Simulate the ball step by step; after
+      each move, if we step outside a border we bounce the affected component and
+      count one direction change. Correct, but `k` can be `10^18` — the loop would
+      never finish.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int t; cin >> t;
+          while(t--){
+              long long n, m, k; cin >> n >> m >> k;
+              long long r=1, c=1, dr=1, dc=1, ch=0;
+              for(long long step=1; step<=k; ++step){
+                  if(r+dr<1||r+dr>n){ dr=-dr; ch++; }
+                  if(c+dc<1||c+dc>m){ dc=-dc; ch++; }
+                  r+=dr; c+=dc;
+              }
+              cout << r << " " << c << " " << ch << "\n";
+          }
+      }
+      ```
+      *Complexity: O(k) per test — impossible for k = 10^18.*
+
+      **② Optimization — O(1) per test.** Apply the mirror function to get the
+      position directly, and count bounces with floor divisions and one `lcm`
+      correction.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      ll mirror(int L, ll k){
+          ll P = 2ll*((ll)L - 1);
+          ll w = (k % P + P) % P;
+          return (w <= (ll)L - 1) ? 1 + w : 2ll*L - 1 - w;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int t; cin >> t;
+          while(t--){
+              ll n, m, k; cin >> n >> m >> k;
+              cout << mirror((int)n, k) << " " << mirror((int)m, k) << " ";
+              ll a = n-1, b = m-1;
+              ll g = std::gcd(a,b);
+              ll l = (a/g) * b;              // lcm(a,b)
+              cout << (k/a + k/b - k/l) << "\n";
+          }
+      }
+      ```
+      *Complexity: O(1) per test (a few divisions and modular arithmetic) — handles 10^18 steps and 10^9 grids instantly.*
+
+      **③ Further optimization — none.** The closed form is already a handful of
+      arithmetic operations. The only practical simplification is computing
+      `lcm` carefully via `(a/g)*b` to avoid overflow: `a, b ≤ 10^9` so
+      `(a/g)*b ≤ 10^18`, which fits in 64 bits.
+
+      **④ Alternative — reduce `k` by periodicity.** Note the full state (position
+      + direction) repeats every `2·lcm(n-1, m-1)` steps, so one could reduce `k`
+      modulo that period and simulate only a bounded number of steps. That view is
+      pedagogically nice but is *not* faster than the closed form here; we reach
+      for it in the companion **Bouncing Ball Cycle** problem instead.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(1) mirror + bounce count. Key lines:
+
+      1. **`mirror(L, k)`.** With period `P = 2·(L-1)`, `w = k mod P`. If `w` is in
+         the first half, the ball is on the way "down/right" and the coordinate
+         is `1 + w`; otherwise it is returning and the coordinate is
+         `2·L - 1 - w`. The `(k%P + P)%P` guard handles the `w < 0` case (k≥0
+         here, so it is harmless but safe).
+      2. **Isolation of axes.** The row only depends on `n` and the column only
+         on `m`; there is no crossed coupling, which is why two independent
+         `mirror` calls give the whole position.
+      3. **Bounce count.** `k/a` counts row bounces (multiples of `n-1`), `k/b`
+         counts column bounces, and `k/l` subtracts the corners counted twice,
+         where `l = lcm(n-1, m-1)`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Inputs:** `3 4 0 … 3 4 4` → expected `1 1 0`, `2 2 0`, `3 3 1`, `2 4 2`,
+      `1 3 3`.
+
+      For `n = 3, m = 4` we have `a = 2, b = 3`, `lcm = 6`.
+
+      | k | row `mirror(3,k)` | col `mirror(4,k)` | row bounces `k/2` | col bounces `k/3` | corners `k/6` | changes | pos |
+      |---|------------------|-------------------|-------------------|-------------------|---------------|---------|-----|
+      | 0 | 1 | 1 | 0 | 0 | 0 | 0 | 1 1 |
+      | 1 | 2 | 2 | 0 | 0 | 0 | 0 | 2 2 |
+      | 2 | 3 | 3 | 1 | 0 | 0 | 1 | 3 3 |
+      | 3 | 2 | 4 | 1 | 1 | 0 | 2 | 2 4 |
+      | 4 | 1 | 3 | 2 | 1 | 0 | 3 | 1 3 |
+
+      For the large case `42 1337 123456789`:
+      `a = 41, b = 1336`, `lcm = 41·1336 = 54776`. Row bounce `⌊k/41⌋ =
+      3011141`, column bounce `⌊k/1336⌋ = 92407`, corners `⌊k/54776⌋ = 2253` →
+      `changes = 3011141 + 92407 − 2253 = 3101295`. Row `mirror`: `k mod 82 = 49
+      > 41` → `83 − 49 = 34`. Column: `k mod 2672 = 2373 > 1336` → `2673 − 2373 =
+      300`. Output `34 300 3101295` ✓.
+
+      The brute tier (①) reaches the same answers by simulating; the closed form
+      (②) computes them instantly and matches the CSES sample exactly.
+
+  - type: flowchart
+    title: "Position and direction changes after k steps"
+    nodes:
+      - Unfold grid into straight diagonal ray
+      - Row coord = mirror(n,k)
+      - Col coord = mirror(m,k)
+      - changes = floor(k/(n-1)) + floor(k/(m-1)) - floor(k/lcm)
+      - Output position and changes
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 0, to: 2, label: ""}
+      - {from: 1, to: 4, label: ""}
+      - {from: 2, to: 4, label: ""}
+      - {from: 3, to: 4, label: ""}
+
+  - type: mcq
+    prompt: "What is the maximum number of direction changes possible after k steps, and why is subtracting floor(k/lcm) correct?"
+    options:
+      - "Row bounces plus column bounces, minus the corner steps where both axes bounce in the same step; that single event is one direction change, exactly floor(k/lcm(n-1,m-1)) times."
+      - "Always exactly k, because the ball changes direction every step."
+      - "Row bounces plus column bounces, with no correction, because corners never occur."
+      - "The minimum of the row and column bounce counts."
+    answer: 0
+    explanation: "Each boundary arrival on the row axis adds one bounce (k/(n-1) of them), and likewise for columns (k/(m-1)). When both axes hit a border simultaneously (a corner), the ball still changes direction only once, so counting both axes double-counts that step. Such corners occur exactly at common multiples of n-1 and m-1, i.e. multiples of lcm(n-1,m-1), so floor(k/lcm) removes the duplication."
+
+type: content
+---

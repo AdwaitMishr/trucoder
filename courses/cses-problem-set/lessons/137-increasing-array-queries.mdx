@@ -1,0 +1,274 @@
+---
+id: increasing-array-queries
+title: Increasing Array Queries
+type: content
+difficulty: hard
+order: 137
+tags:
+  - range-queries
+  - offline
+  - segment-tree
+  - monotonic-stack
+blocks:
+  - type: markdown
+    content: |
+      # Increasing Array Queries — minimum raises per subarray, offline sweep
+
+      We can increase any element by `1` (one operation each). For a query
+      `[a, b]` we want the **minimum number of operations** to make the subarray
+      `A[a..b]` *increasing* (each element `>=` the previous).
+
+      Per query alone this is the classic greedy: start at `A[a]`, scan right, and
+      whenever an element is below the running maximum, raise it up to that maximum.
+      The hard part is answering many such queries fast, because each query's
+      "running maximum" restarts at a different `a`.
+
+      ## Turning the cost into a closed form
+
+      Let `RM(a, i) = max(A[a..i])` be the running maximum from `a` up to `i`. The
+      greedy raises `A[i]` to exactly `RM(a, i)` (never need to go higher), so the
+      cost for `[a, b]` is
+
+      ```
+      cost(a, b)  =  ( sum of RM(a, i) over i = a..b )  -  ( sum of A[i] over i = a..b )
+      ```
+
+      The second term is a plain prefix sum. The first term — the *sum of range
+      maxima of every prefix* — is the hard part. The key realisation: when we extend
+      the window one step to the **left** (from `a+1` to `a`), only a contiguous band
+      of positions changes their running maximum.
+
+      Precompute `nxt[a]` = the first index `> a` with `A[j] >= A[a]` (via a
+      monotonic stack). Then for `a`:
+
+      - `RM(a, i) = A[a]` for every `i` in `[a, nxt[a]-1]` (nothing in that prefix is
+        `>= A[a]`, so `A[a]` is the max),
+      - `RM(a, i) = RM(a+1, i)` for every `i >= nxt[a]` (already `>= A[a]`, unchanged).
+
+      So moving `a` one left is a **range-assign** `[a, nxt[a]-1] = A[a]` in a
+      running-max array, and answering a query is a **range-sum** over `[a, b]`.
+      Sorting the queries by `a` descending and maintaining a lazy range-assign +
+      range-sum segment tree gives `O((n + q) log n)`.
+
+      **Worked mini-example.** `A = [2, 10, 4]`, query `[1, 3]`: greedy running max
+      `2, 10, 10`; cost `(2 + 10 + 10) - (2 + 10 + 4) = 22 - 16 = 6`. Correct (raise
+      the `4` up to `10`, six operations).
+
+      **Complexity.** `O((n + q) log n)` — a correct optimal approach.
+
+      :::tip
+      **Interview tip:** The move that cracks hard subarray-cost queries is rewriting
+      "*minimum ops to make a subarray non-decreasing*" as a **difference of sums**,
+      then sweeping queries offline and updating structure on the *left-moving*
+      boundary. Whenever a running maximum governs a cost, expect a monotonic stack
+      (to find `nxt`) plus a lazy segment tree. This exact "extend left → range
+      assign" pattern also underlies maximum-subarray and histogram-cost variants.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given an array that consists of `n` integers. The array elements are
+      indexed `1, 2, ..., n`.
+
+      You can modify the array using the following operation: choose an array element
+      and increase its value by one.
+
+      Your task is to process `q` queries of the form: when we consider a subarray
+      from position `a` to position `b`, what is the **minimum number of operations**
+      after which the subarray is increasing? An array is increasing if each element
+      is greater than or equal to the previous element.
+
+      ## Input
+
+      The first input line has two integers `n` and `q`: the size of the array and the
+      number of queries.
+
+      The next line has `n` integers `x_1, x_2, ..., x_n`: the contents of the array.
+
+      Finally, there are `q` lines that describe the queries. Each line has two
+      integers `a` and `b`: the starting and ending position of a subarray.
+
+      **Constraints:** `1 <= n, q <= 2*10^5`, `1 <= x_i <= 10^9`,
+      `1 <= a <= b <= n`.
+
+      ## Output
+
+      For each query, print the minimum number of operations.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 3
+      2 10 4 2 5
+      3 5
+      2 2
+      1 4
+      ```
+      **Output:**
+      ```
+      2
+      0
+      14
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — greedy per query, O(len) per query**
+
+      For each query, scan `A[a..b]` keeping the running maximum; whenever an element
+      is below it, add the gap. Correct, but `q` full-range queries cost `O(n*q)`.
+
+      ```cpp
+      long long brute(int a, int b, vector<long long>& A) {
+          long long cur = A[a], cost = 0;
+          for (int i = a + 1; i <= b; i++) {
+              if (A[i] < cur)      cost += cur - A[i];   // raise A[i] up to cur
+              else                 cur = A[i];           // new running maximum
+          }
+          return cost;
+      }
+      ```
+      *O(len) per query — correct, far too slow.*
+
+      **② Optimization — offline sweep + lazy range-assign segment tree,
+      O((n + q) log n)**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      struct Seg {                              // lazy range-assign + range-sum, 1-indexed
+          int n; vector<ll> sum, lazy;          // lazy = -1 means "no pending assign"
+          Seg(int n_) : n(n_), sum(4*n_+5,0), lazy(4*n_+5,-1) {}
+          void apply(int p,int l,int r,ll v){ sum[p]=v*(r-l+1); lazy[p]=v; }
+          void push(int p,int l,int r){
+              if(lazy[p]==-1||l==r)return; int m=(l+r)/2;
+              apply(p*2,l,m,lazy[p]); apply(p*2+1,m+1,r,lazy[p]); lazy[p]=-1;
+          }
+          void assign(int p,int l,int r,int ql,int qr,ll v){
+              if(qr<l||r<ql)return;
+              if(ql<=l&&r<=qr){ apply(p,l,r,v); return; }
+              push(p,l,r); int m=(l+r)/2;
+              assign(p*2,l,m,ql,qr,v); assign(p*2+1,m+1,r,ql,qr,v);
+              sum[p]=sum[p*2]+sum[p*2+1];
+          }
+          ll query(int p,int l,int r,int ql,int qr){
+              if(qr<l||r<ql)return 0;
+              if(ql<=l&&r<=qr)return sum[p];
+              push(p,l,r); int m=(l+r)/2;
+              return query(p*2,l,m,ql,qr)+query(p*2+1,m+1,r,ql,qr);
+          }
+      };
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,q; cin>>n>>q;
+          vector<ll> a(n+1);
+          for(int i=1;i<=n;i++) cin>>a[i];
+          vector<ll> pref(n+1,0);
+          for(int i=1;i<=n;i++) pref[i]=pref[i-1]+a[i];
+
+          // nxt[i] = first index j>i with a[j] >= a[i]  (n+1 if none) — monotonic stack
+          vector<int> nxt(n+1,n+1), stk;
+          for(int i=n;i>=1;i--){
+              while(!stk.empty() && a[stk.back()] < a[i]) stk.pop_back();
+              nxt[i]=stk.empty()? n+1 : stk.back();
+              stk.push_back(i);
+          }
+
+          vector<array<int,3>> qs(q);              // {a, b, original id}
+          for(int i=0;i<q;i++){ cin>>qs[i][0]>>qs[i][1]; qs[i][2]=i; }
+          sort(qs.begin(),qs.end(),[](const auto&x,const auto&y){ return x[0]>y[0]; });
+
+          Seg seg(n); vector<ll> ans(q);
+          int ptr=0;
+          for(int a_=n; a_>=1; a_--){
+              seg.assign(1,1,n, a_, nxt[a_]-1, a[a_]);        // RM(a,i)=a[a_] on [a_,nxt-1]
+              while(ptr<q && qs[ptr][0]==a_){
+                  int b=qs[ptr][1];
+                  ll S=seg.query(1,1,n, a_, b);                // sum of running maxima
+                  ans[qs[ptr][2]]=S-(pref[b]-pref[a_-1]);      // minus actual sum
+                  ptr++;
+              }
+          }
+          for(ll x:ans) cout<<x<<"\n";
+          return 0;
+      }
+      ```
+
+      *O((n + q) log n) time, O(n) memory — a correct optimal approach for the
+      constraints.*
+
+      **③ Further optimization — none needed**
+
+      `O((n + q) log n)` is optimal for this sweep structure.
+
+      **④ Alternative — the online merge-segment-tree approach**
+
+      The official CSES reference solves each query *online* in `O(log n)` with a
+      single segment tree whose node stores `{mx, sum, res}` and a `walk()` that
+      threads the incoming running maximum through a node's children, reusing
+      precomputed per-node answers. It avoids sorting queries, at the cost of a more
+      intricate recursive merge. Both are correct; the offline sweep above keeps the
+      idea (extend left → range assign → range sum) easier to follow, which we
+      recommend learning first.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the offline solution:
+
+      - **`nxt[i]` via monotonic stack.** Scanning right-to-left, every element on the
+        stack above a smaller value is popped, so the stack bottom is the first index
+        to the right with `a[j] >= a[i]`. This single precomputation tells us exactly
+        how far the new running maximum `a[a_]` will "spread".
+      - **The lazy segment tree holds current running maxima.** After step `a_`, `seg`
+        stores `RM(a_, i)` for every `i >= a_`. The move from `a_+1` down to `a_` is
+        the range-assign `[a_, nxt[a_]-1] = a[a_]`; everything from `nxt[a_]` onward is
+        already `>= a[a_]` and keeps its value.
+      - **Answer = `seg.query(a_, b) - (pref[b]-pref[a_-1])`.** The first term sums the
+        running maxima (= what we must raise each element *up to*), the second sums the
+        actual values (= what they already were). Their difference is exactly the total
+        number of `+1` operations. Because `RM(a_,i) >= A[i]`, every term is a valid
+        non-negative raise.
+      - **Query grouping.** Queries are bucketed by their left endpoint and answered
+        the moment that `a_` is processed, keeping the total work `O((n+q) log n)`.
+
+      Try tracing `nxt` on the sample to see the ranges: it is the same "nearest
+      greater-or-equal on the right" stack you use for histogram problems.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample. `A = [2,10,4,2,5]`. Prefix sums:
+      `pref = [0,2,12,16,18,23]`.
+
+      Compute `nxt` (first `>` to the right with value `>=`): `nxt[1]=2` (10),
+      `nxt[2]=6` (none), `nxt[3]=5` (5, since 4), `nxt[4]=5` (5), `nxt[5]=6`.
+
+      Process `a_` descending:
+
+      | a_ | range-assign | window's running maxima | query answered |
+      |----|--------------|--------------------------|----------------|
+      | 5 | `[5,5]=5` | `—` | — |
+      | 4 | `[4,4]=2` | `{2:2, 4:2, 5:5}` | — |
+      | 3 | `[3,4]=4` | `{3:4, 4:4, 5:5}` | `[3,5]`: S=`4+4+5=13`, A=`4+2+5=11`, ⇒ `13-11=2` → **2** |
+      | 2 | `[2,5]=10` | `{2:10,3:10,4:10,5:10}` | `[2,2]`: S=`10`, A=`10` ⇒ `0` → **0** |
+      | 1 | `[1,1]=2` | `{1:2,2:10,3:10,4:10,5:10}` | `[1,4]`: S=`2+10+10+10=32`, A=`2+10+4+2=18` ⇒ `14` → **14** |
+
+      Output: `2 0 14`. Matches the sample. ✓
+
+      Check `[1,4]` by hand: greedy running maxima `2,10,10,10` cost `(2+10+10+10)-(2+10+4+2)=32-18=14` (raise `A[3]=4` by 6 and `A[4]=2` by 8). And `[3,5]` = `[4,2,5]`: running maxima `4,4,5`, cost `(4+4+5)-(4+2+5)=13-11=2` — the greedy raises `A[4]=2` up to the running max `4`, i.e. `4-2=2` operations. Output `2`. ✓
+  - type: mcq
+    prompt: "Why is cost(a,b) = (sum of running maxima RM(a,i) for i in [a,b]) minus (sum of A[i] for i in [a,b])?"
+    options:
+      - "Because the greedy raises each A[i] to exactly the running maximum RM(a,i), so each element's raise is RM(a,i)-A[i], and summing those non-negative gaps equals the total operation count."
+      - "Because the greedy always raises every element to the global maximum of the whole array."
+      - "Because running maxima are always equal to the element values, so the difference is zero."
+      - "Because raising elements does not change the sum of the subarray."
+    answer: 0
+    explanation: "The optimal greedy keeps a running maximum and only lifts dips. Each position i is boosted to RM(a,i) (never higher — going higher only adds work), giving a raise of RM(a,i) - A[i], which is >= 0 since RM(a,i) = max(A[a..i]) >= A[i]. Summing these gaps over the range gives the exact minimum. The two closing forms — sum of RM minus sum of A — are what make an offline sweep possible."

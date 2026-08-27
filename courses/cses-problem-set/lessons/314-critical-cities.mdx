@@ -1,0 +1,235 @@
+---
+id: critical-cities
+title: "Critical Cities"
+type: content
+difficulty: hard
+order: 314
+tags:
+  - dominators
+  - dominator-tree
+  - dfs
+  - reachability
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — the cities on every route are the *dominators* of the destination
+
+      A **critical city** for the pair `(1, n)` is a vertex that lies on **every** directed path from city `1` to
+      city `n`. (The statement phrases it as "appears on every route from one city to another"; for the
+      `1 → n` problem the endpoints `1` and `n` are always critical.) These vertices are exactly the
+      **dominators** of `n` with respect to the source `1`: `v` *dominates* `u` iff every path from `1` to `u`
+      passes through `v`.
+
+      Key facts:
+      - `dom(1) = { 1 }`; for any other reachable `u`, `dom(u) = { u } ∪ (⋂_{p : p→u} dom(p))` — a vertex dominates
+        `u` exactly when it dominates *all* of `u`'s predecessors too.
+      - The dominators of every vertex form chains; the *immediate dominator* `idom(u)` (the closest strict
+        dominator) arranges all vertices into the **dominator tree** rooted at `1`. `v` dominates `u` ⟺ `v` is an
+        ancestor of `u` in this tree.
+      - Hence the critical cities are precisely the **ancestors of `n` in the dominator tree**, which include `1`
+        and `n`.
+
+      The clean `O((n+m)α)` construction is the **Lengauer–Tarjan** algorithm: a DFS numbering, a union-find with
+      path compression over a "semi-dominator" forest, and a final pass that resolves immediate dominators.
+
+      :::tip
+      **Interview tip:** "Which vertices must every path from A to B use?" is the *dominator* question — rarely a
+      niche: it powers control-flow graphs, single points of failure in networks, and "remove the minimum set that
+      disconnects a pair". Say the word *dominator* and the obstacle becomes a known graph problem.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      :::note
+      **Concrete formulation.** This is the CSES problem *Critical Cities* (Advanced Graph Problems).
+      :::
+
+      There are `n` cities and `m` (one-way) flight connections between them. A city is called **critical** if it
+      appears on **every route** from one city to another. Your task: find all critical cities on the routes from
+      **Syrjälä (city 1)** to **Lehmälä (city n)**.
+
+      **Input.** First line: `n` and `m`. City `1` is Syrjälä and city `n` is Lehmälä. Then `m` lines `a b`: a
+      one-way flight from `a` to `b`. A route from `1` to `n` is guaranteed.
+
+      **Output.** First print an integer `k`, then `k` integers: the critical cities in **increasing** order.
+
+      **Constraints.**
+      - `2 ≤ n ≤ 10^5`, `1 ≤ m ≤ 2·10^5`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      5 5
+      1 2
+      2 3
+      2 4
+      3 5
+      4 5
+      ```
+
+      **Output:**
+      ```
+      3
+      1 2 5
+      ```
+
+      *Explanation:* every route from 1 to 5 must pass through cities 1, 2 and 5.
+
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n(n+m)).** For each candidate vertex, delete it (temporarily) and BFS/DFS from `1`;
+      if `n` becomes unreachable, the vertex appears on every route. Correct but `O(n·(n+m)) ≈ 10^10` for the
+      limits.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n,m; vector<int> g[100005];
+      bool reachableWithout(int skip){ vector<char> v(n+1,0); stack<int>st; st.push(1); v[1]=1;
+          while(!st.empty()){ int u=st.top(); st.pop(); for(int w:g[u]) if(w!=skip&&!v[w]){v[w]=1;st.push(w);} }
+          return v[n]; }
+      int main(){ cin>>n>>m; for(int i=0;i<m;i++){int a,b;cin>>a>>b;g[a].push_back(b);}
+          vector<int> res; res.push_back(1); res.push_back(n);
+          for(int v=2;v<=n-1;v++) if(!reachableWithout(v)) res.push_back(v);
+          sort(res.begin(),res.end()); cout<<res.size()<<"\n"; for(int x:res)cout<<x<<" "; cout<<"\n"; }
+      ```
+      *Complexity: O(n(n+m)) — far too slow for `n,m = 10^5`.*
+
+      **② Optimization — iterative bitset dominators, O(k·n²/64).** Restrict to `S` = vertices that are reachable
+      from `1` and can reach `n` (these are the only ones on *some* route). Repeatedly apply
+      `dom(u) = {u} ∪ (⋂_{p→u} dom(p))` until a fixpoint, each set a `bitset`. All dominators of `n` are the
+      answer.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){ ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; cin>>n>>m; vector<vector<int>> g(n+1), pred(n+1);
+          for(int i=0;i<m;i++){int a,b;cin>>a>>b; g[a].push_back(b); pred[b].push_back(a);}
+          vector<char> vis(n+1,0); { stack<int>st; st.push(1); vis[1]=1;
+              while(!st.empty()){int u=st.top();st.pop(); for(int v:g[u])if(!vis[v]){vis[v]=1;st.push(v);}} }
+          vector<char> canN(n+1,0);
+          if(vis[n]){ stack<int>st; st.push(n); canN[n]=1;
+              while(!st.empty()){int u=st.top();st.pop(); for(int v:pred[u])if(vis[v]&&!canN[v]){canN[v]=1;st.push(v);}} }
+          vector<int> nodes; for(int i=1;i<=n;i++) if(canN[i]) nodes.push_back(i);
+          vector<bitset<100001>> dom(n+1);
+          for(int i=1;i<=n;i++) if(canN[i]) dom[i].set();
+          dom[1].reset(); dom[1].set(0);
+          bool changed=true;
+          while(changed){ changed=false;
+              for(int u: nodes){ if(u==1) continue; bitset<100001> inter; bool first=true;
+                  for(int p: pred[u]) if(canN[p]){ if(first){inter=dom[p];first=false;} else inter&=dom[p]; }
+                  if(first) inter.reset(); inter.set(u-1);
+                  if(inter!=dom[u]){ dom[u]=inter; changed=true; } } }
+          vector<int> res; for(int i=0;i<n;i++) if(dom[n][i]) res.push_back(i+1);
+          cout<<res.size()<<"\n"; for(int x:res)cout<<x<<" "; cout<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: O(k·n²/64) with `k` fixpoint rounds (small in practice) — fine for moderate `n`, not the limits.*
+
+      **③ Further optimization — Lengauer–Tarjan dominator tree, O((n+m)·α) (the solution).** Compute the
+      dominator tree in near-linear time; the critical cities are the ancestors of `n` walking up `idom` edges.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int MAXN = 100005;
+      int n;
+      vector<int> g[MAXN], rg[MAXN], bucket[MAXN];
+      int sdom[MAXN], idom[MAXN], par[MAXN], dsu[MAXN], label[MAXN];
+      int tin[MAXN], rev[MAXN], timer;
+      int Find(int u, int x=0){                     // union-find with path compression
+          if(u==dsu[u]) return x?-1:u;
+          int v = Find(dsu[u], x+1);
+          if(v<0) return u;
+          if(sdom[label[dsu[u]]] < sdom[label[u]]) label[u]=label[dsu[u]];
+          dsu[u]=v;
+          return x?v:label[u];
+      }
+      void Union(int u,int v){ dsu[v]=u; }
+      void dfs0(int u){                              // DFS numbering
+          ++timer; rev[timer]=u;
+          tin[u]=sdom[timer]=label[timer]=dsu[timer]=timer;
+          for(int w: g[u]){
+              if(!tin[w]){ dfs0(w); par[tin[w]]=tin[u]; }
+              rg[tin[w]].push_back(tin[u]);
+          }
+      }
+      int main(){ ios::sync_with_stdio(false); cin.tie(nullptr);
+          int m; cin>>n>>m;
+          for(int i=0;i<m;i++){int a,b;cin>>a>>b;g[a].push_back(b);}
+          dfs0(1);
+          for(int i=timer;i>=1;i--){                 // compute semi-dominators
+              for(int j: rg[i]) sdom[i]=min(sdom[i], sdom[Find(j)]);
+              if(i>1) bucket[sdom[i]].push_back(i);
+              for(int w: bucket[i]){ int v=Find(w);
+                  if(sdom[w]==sdom[v]) idom[w]=sdom[w]; else idom[w]=v; }
+              if(i>1) Union(par[i], i);
+          }
+          static int papa[MAXN];
+          for(int i=2;i<=timer;i++){                 // resolve immediate dominators
+              if(idom[i]!=sdom[i]) idom[i]=idom[idom[i]];
+              papa[rev[i]] = rev[idom[i]];
+          }
+          papa[1]=0;
+          vector<int> res; int c=n; res.push_back(c);
+          while(c!=1){ c=papa[c]; res.push_back(c); }
+          sort(res.begin(),res.end());
+          cout<<res.size()<<"\n"; for(int x:res) cout<<x<<" "; cout<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: O((n+m)·α(n+m)) time for Lengauer–Tarjan — comfortably handles `n,m = 10^5`.*
+
+      **④ Note.** No simpler correct method beats dominators for the general (cyclic) case; hashing-based counting
+      would only be valid if the relevant subgraph were a DAG, which is not guaranteed. Lengauer–Tarjan is the
+      intended and optimal tool.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The key block (tier ③), `solve` — Lengauer–Tarjan:
+      1. **`dfs0(1)`** assigns the DFS numbers `tin[]`, builds the reverse-number graph `rg`, and records the
+         DFS-tree parent `par[]`.
+      2. **The `i = timer … 1` pass** computes `sdom[i]` (semi-dominator) using `Find` over a union-find, buckets
+         nodes by their semi-dominator, and establishes either the immediate dominator directly or a placeholder
+         resolved later.
+      3. **The `i = 2 … timer` pass** fixes `idom[i] = idom[idom[i]]` for non-trivial cases and records
+         `papa[rev[i]] = rev[idom[i]]`.
+      4. **Walking `c = n` up through `papa`** collects exactly the dominators of `n` — sorted, that is the answer.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5, m = 5`, edges `1→2, 2→3, 2→4, 3→5, 4→5`.
+
+      Reachable-from-1 ∩ can-reach-5 = `{1,2,3,4,5}` (the whole graph is a DAG here).
+
+      Dominator sets by the tier-② recurrence:
+      - `dom(1) = {1}`
+      - `dom(2) = {2} ∪ dom(1) = {1,2}`
+      - `dom(3) = {3} ∪ (dom(2)) = {1,2,3}`
+      - `dom(4) = {4} ∪ dom(2) = {1,2,4}`
+      - `dom(5) = {5} ∪ (dom(3) ∩ dom(4)) = {5} ∪ {1,2} = {1,2,5}`
+
+      The dominators of `5` — i.e. the critical cities — are `{1, 2, 5}`, sorted. ✓ matches the expected `3 / 1 2 5`
+      (city 3 and city 4 are each avoidable: `1→2→4→5` skips 3, `1→2→3→5` skips 4).
+
+  - type: mcq
+    prompt: "Which set is exactly the set of critical cities from 1 to n?"
+    options:
+      - "The ancestors of n in the dominator tree (all vertices that dominate n, including 1 and n)."
+      - "All vertices in the longest path from 1 to n."
+      - "All vertices reachable from 1, minus those that can reach n."
+      - "Every vertex in a cycle of the graph."
+    answer: 0
+    explanation: "By definition a vertex is critical exactly when every path from 1 to n passes through it, which is precisely the definition of dominating n. In the dominator tree, v dominates n iff v is an ancestor of n, so the ancestor chain from n to the root collects exactly the critical cities."
+---

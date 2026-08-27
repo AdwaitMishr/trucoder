@@ -1,0 +1,249 @@
+---
+id: string-transform
+title: String Transform
+difficulty: medium
+order: 214
+tags:
+  - string
+  - bwt
+  - burrows-wheeler
+  - lf-mapping
+blocks:
+  - type: markdown
+    content: |
+      # String Transform — the Burrows-Wheeler transform and its inverse
+
+      The **Burrows-Wheeler transform (BWT)** is a reversible string transform:
+      it rearranges a string (bringing together places where the same character
+      is followed by similar suffixes) without losing any information. This
+      problem asks you to run it **backwards** — given the transformed string,
+      recover the original.
+
+      **The transform.** Given a string `s`, the BWT is built in four steps:
+
+      1. append the termination symbol `#` to the string (assume `#` is
+         lexicographically **smallest** of all characters),
+      2. generate **all rotations** of `s#`,
+      3. sort the rotations in increasing order,
+      4. read off the **last character** of each rotation.
+
+      For `s = babc` → `s# = babc#`; the sorted rotations are `#babc`, `abc#b`,
+      `babc#`, `bc#ba`, `c#bab`, so the transform is `cb#ab`.
+
+      **Why it's invertible (and why this works).** Sort the *last* column too:
+      the multiset of last characters equals the multiset of first characters,
+      so the **first column** `F` is just the **sorted** transformed string.
+      The crucial invariant is the **LF-mapping** (*Last-to-First*): the
+      *k-th* occurrence of a character `c` in the last column corresponds — in
+      the exact same relative order — to the *k-th* occurrence of `c` in the
+      first column. That stable pairing lets us walk the rotation matrix one
+      character at a time and recover the original in **O(n)**.
+
+      **Complexity.** Build `F` by sorting the transformed string, build the LF
+      mapping by counting occurrences, then follow pointers: **O(n)** time,
+      **O(n)** space. The BWT's relevance: it powers `bzip2` compression, FM
+      index / text searching, and suffix-array construction.
+
+      :::tip
+      **Interview tip:** "reconstruct from the BWT" is a classic FM-index-style
+      question. The single sentence to know: **"first column = sorted last
+      column, and the LF-mapping pairs equal characters in the order they
+      appear."** Once you can state and use that, the inverse falls out in a
+      linear pass — and so does the whole FM-index idea behind it.
+      :::
+  - type: markdown
+    content: |
+      # Question — String Transform
+
+      Consider the following string transformation:
+
+      1. append the character `#` to the string (assume `#` is lexicographically
+         smaller than all other characters of the string),
+      2. generate all rotations of the string,
+      3. sort the rotations in increasing order,
+      4. based on this order, construct a new string that contains the **last
+         character of each rotation**.
+
+      For example, the string `babc` becomes `babc#`. Then, the sorted list of
+      rotations is `#babc`, `abc#b`, `babc#`, `bc#ba`, and `c#bab`. This yields
+      a string `cb#ab`.
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 10^6`
+
+      **Input.** The only input line contains the transformed string of length
+      `n + 1`. Each character of the original string is one of `a`–`z`.
+
+      **Output.** Print the original string of length `n`.
+
+      Sample input:
+
+      ```
+      cb#ab
+      ```
+
+      Sample output:
+
+      ```
+      babc
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — rebuild the sorted rotation matrix, O(n² log n)**
+
+      We don't know the rotations, but we know their **last column** `L` (the
+      input). Reconstruct the matrix column-by-column from the right: prepend
+      the last-column character to every row and re-sort the rows; after `n+1`
+      rounds the rows are the (sorted) rotation matrix. The row starting with
+      `#` is `#original`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string L; cin >> L;
+          int m = (int)L.size();
+
+          vector<string> rows(m, "");
+          for (int step = 0; step < m; ++step) {
+              for (int i = 0; i < m; ++i) rows[i] = L.substr(i, 1) + rows[i];
+              sort(rows.begin(), rows.end());
+          }
+          for (auto& r : rows)
+              if (r[0] == '#') { cout << r.substr(1) << "\n"; return 0; }
+          return 0;
+      }
+      ```
+
+      **O(n² log n)** time, **O(n²)** space — correct, but a single string with
+      `n = 10^6` needs a trillion-character matrix. Way too slow.
+
+      **② Optimization — LF-mapping, O(n) (submission)**
+
+      Use the LF-mapping instead of materialising the matrix:
+
+      - `F` = sorted `L` (the first column). It starts with `#` at index `0`.
+      - `nxt[i]` maps row `i` to the row that is the same rotation shifted by
+        one character. For each character, `nxt` pairs its occurrences in `L`
+        with the same-ranked occurrences in `F`: `nxt[i] =
+        base[L[i]] + (occurrences of L[i] already seen)`.
+      - Starting from the `#`-row (`0`) and repeatedly following `nxt` walks the
+        matrix, reading the original string **backwards**; reverse the result.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string L; cin >> L;
+          int m = (int)L.size();                    // n + 1 (includes '#')
+
+          string F = L; sort(F.begin(), F.end());   // first column
+
+          int occ[256] = {0}, base[256] = {0};
+          for (char ch : L) occ[(int)ch]++;
+          int cum = 0;
+          for (int c = 0; c < 256; ++c) { base[c] = cum; cum += occ[c]; }
+
+          vector<int> nxt(m);
+          int cnt[256] = {0};
+          for (int i = 0; i < m; ++i) {
+              int ch = (int)L[i];
+              nxt[i] = base[ch] + cnt[ch];          // k-th 'ch' in L -> k-th 'ch' in F
+              cnt[ch]++;
+          }
+
+          // '#' is the smallest char, so the '#'-first row is at index 0.
+          string out;
+          int r = 0;
+          for (int i = 0; i < m - 1; ++i) { r = nxt[r]; out += F[r]; }
+          reverse(out.begin(), out.end());          // LF-forward walk reads backward
+          cout << out << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n)** time and **O(n)** space. This is the submission tier.
+
+      **③ Alternative — the forward transform (for intuition)**
+
+      If you need the *forward* direction instead, it is exactly the four steps
+      of the statement: build the `n+1` rotations of `s#`, sort them, and read
+      the last column. It is O(n² log n) with plain strings (or O(n) with a
+      suffix array), but the inverse above — recovering `s` from `L` — is the
+      part this problem actually asks for.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **The two columns.** `L` is the input (last column). `F = sorted(L)` is
+        the first column. The rotation matrix has, in every column, the same
+        multiset of characters; this is why `F` can be obtained by sorting `L`.
+      - **`base[ch]` and `nxt`.** `base[c]` is the index in `F` where the first
+        occurrence of `c` starts (`F` is grouped by increasing character). For
+        each position `i`, `nxt[i] = base[L[i]] + cnt` pairs the *k*-th `L[i]`
+        in the last column with the *k*-th `L[i]` in the first column — the LF
+        invariant.
+      - **What `nxt` does.** Row `i` = rotation `a0 a1 ... a_{m-1}` with
+        `a_{m-1} = L[i]`. Row `nxt[i]` is that same rotation shifted so `L[i]`
+        moves to the front: `L[i] a0 a1 ... a_{m-2}`. So walking `nxt` cycles
+        through the rotation — each `F[nxt[r]]` is the next character of the
+        rotation.
+      - **Backwards reading.** Starting at the `#`-row (row `0`, whose rotation
+        is `# + original`), following `nxt` yields the rotation's characters
+        from the *end*, so the raw walk reads `original` in reverse; one
+        `reverse` fixes it.
+      - **Handling `n = 10^6`.** `base`/`cnt` are arrays of 256 ints; everything
+        else is a vector sized `n+1`. The single pass is trivially within a
+        1-second budget.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `cb#ab` (m = 5, so n = 4).
+
+      **Build `F`.** `sorted("cb#ab") = #abbc` → `F = # a b b c`.
+
+      **Next pointers.** Counting occurrences in `L = c b # a b`:
+
+      | i | L[i] | cnt before | nxt[i] |
+      |---|------|-----------|--------|
+      | 0 | c | 0 of `c` | base[c]=4 → 4 |
+      | 1 | b | 0 of `b` | base[b]=2 → 2 |
+      | 2 | # | 0 of `#` | base[#]=0 → 0 |
+      | 3 | a | 0 of `a` | base[a]=1 → 1 |
+      | 4 | b | 1 of `b` | base[b]=2+1 → 3 |
+
+      **Walk from row 0.** `F = [ #, a, b, b, c ]`:
+
+      | hop | r = nxt[r] | F[r] |
+      |-----|-----------|------|
+      | 1 | nxt[0]=4 | c |
+      | 2 | nxt[4]=3 | b |
+      | 3 | nxt[3]=1 | a |
+      | 4 | nxt[1]=2 | b |
+
+      Raw sequence = `c b a b` → `reverse` = **`babc`**.
+
+      **Expected `babc` — Actual `babc`. Match.**
+
+      Sanity: applying the forward transform to `babc` indeed gives `#babc`,
+      `abc#b`, `babc#`, `bc#ba`, `c#bab` → last column `cb#ab` (verified by the
+      compiled program).
+  - type: mcq
+    prompt: 'Why can the first column of the sorted rotation matrix be obtained by simply sorting the transformed (last) string?'
+    options:
+      - Because every column of the rotation matrix contains the same multiset of characters
+      - Because the last column is already sorted
+      - Because the first and last columns are always identical
+      - Because the original string is sorted before transforming
+    answer: 0
+    explanation: Each row of the rotation matrix is a cyclic rotation of the same string s#, so across all rows, every column contains exactly the same characters as every other column — just in different orders. Therefore the first column's multiset equals the last column's multiset, and sorting the last column gives the first column.
+type: content
+---

@@ -1,0 +1,247 @@
+---
+id: distributing-apples
+title: Distributing Apples
+difficulty: medium
+order: 172
+tags:
+  - combinatorics
+  - stars-and-bars
+  - binomial-coefficients
+  - modular-arithmetic
+  - mathematics
+blocks:
+  - type: markdown
+    content: |
+      # Distributing Apples
+
+      **The technique: stars and bars (weak compositions).** You have `m`
+      *identical* apples to give to `n` *distinct* children, and any child may
+      receive zero or more apples. The number of ways is the number of **weak
+      compositions** of `m` into `n` non-negative parts — the classic
+      **stars-and-bars** formula:
+
+      ```
+      ways = C(m + n - 1, n - 1) = C(m + n - 1, m)
+      ```
+
+      **Why it works.** Think of the `m` apples as `m` identical **stars**.
+      To split them among `n` children we slide `n - 1` **bars** between the
+      stars; the stars between consecutive bars (and at the ends) go to one
+      child. Every layout of `m` stars and `n - 1` bars is exactly one
+      distribution, so we count layouts: from the `m + n - 1` total positions
+      we choose the `n - 1` positions for the bars (or equivalently the `m`
+      star positions).
+
+      ```
+      example m = 2 stars (* *), n = 3 children (need 2 bars | |):
+      * | * |      -> child1 gets 2? No: positions n-1=2 bars
+      ```
+
+      A distribution `[a1, a2, …, an]` with `Σai = m` maps to the string
+      `*…*|*…*|…|*…*` where the `i`-th block has `ai` stars. Counting these
+      strings is `C(m + n - 1, m)` (choose which `m` of the `m + n - 1`
+      positions are stars).
+
+      **When you reach for it.** Any time a problem says "distribute/place/share
+      `m` identical objects among `n` distinct bins (allow empty)" — the closed
+      form `C(m + n - 1, n - 1)` answers it. Reduce "at least `k`" cases by
+      handing out `k` to everyone first (`m - nk` remains). Pair it with
+      **modular inverses** (Fermat) because `n, m ≤ 10^6` means factorials
+      always fit, but `C(m+n-1, m)` is astronomically large and must be reduced
+      mod `10^9 + 7`.
+
+      **Complexity.** Precompute factorials up to `m + n - 1` and their inverse
+      factorials once: **O(m + n)** time and memory.
+
+      :::tip
+      **Interview tip:** Stars and bars is the single most-asked counting
+      idiom. The two variants to remember: *identical→distinct* is
+      `C(m+n-1, n-1)`; *distinct→distinct* is `n^m` (each of `m` objects picks
+      one of `n` bins). Interviews drill the difference between "identical
+      apples" and "distinct objects" — always check whether the objects are
+      distinguishable before reaching for the formula.
+      :::
+  - type: markdown
+    content: |
+      # Question — Distributing Apples (CSES 1716)
+
+      There are `n` children and `m` apples that are distributed to them. Your
+      task is to count the number of ways this can be done. A child can receive
+      any number of apples (including zero).
+
+      For example, if `n = 3` and `m = 2`, there are `6` ways:
+      `[0,0,2]`, `[0,1,1]`, `[0,2,0]`, `[1,0,1]`, `[1,1,0]` and `[2,0,0]`.
+
+      **Input:** the only input line has two integers `n` and `m`.
+
+      **Output:** print the number of ways modulo `10^9 + 7`.
+
+      **Constraints:**
+      - `1 ≤ n, m ≤ 10^6`
+
+      Sample input:
+
+      ```
+      3 2
+      ```
+
+      Sample output:
+
+      ```
+      6
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate every distribution**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      ll n, m, ans;
+      void rec(int k, ll rem) {
+          if (k == n - 1) {                 // last child takes everything left
+              if (rem >= 0) ans++;
+              return;
+          }
+          for (ll v = 0; v <= rem; v++) rec(k + 1, rem - v);
+      }
+      int main() {
+          cin >> n >> m;
+          rec(0, m);
+          cout << ans << '\n';
+      }
+      ```
+      Visits `C(m + n - 1, n - 1)` leaves — up to `C(2·10^6, 10^6)`, far too
+      many. Correct only for tiny inputs.
+
+      **② Optimization — stars-and-bars closed form, O(m + n)** (the chosen solution)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll MOD = 1e9 + 7;
+
+      ll modpow(ll a, ll e) {
+          ll r = 1;
+          while (e) { if (e & 1) r = r * a % MOD; a = a * a % MOD; e >>= 1; }
+          return r;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          ll n, m; cin >> n >> m;            // n children, m apples
+          int N = (int)(n + m);
+          vector<ll> fact(N + 1), invf(N + 1);
+          fact[0] = 1;
+          for (int i = 1; i <= N; i++) fact[i] = fact[i - 1] * i % MOD;
+          invf[N] = modpow(fact[N], MOD - 2);
+          for (int i = N; i >= 1; i--) invf[i - 1] = invf[i] * i % MOD;
+          auto comb = [&](ll a, ll b) -> ll {
+              if (b < 0 || b > a) return 0;
+              return fact[a] * invf[b] % MOD * invf[a - b] % MOD;
+          };
+          cout << comb(n + m - 1, m) << '\n';
+          return 0;
+      }
+      ```
+      O(m + n). One factorial precompute, then a single `C(n+m-1, m)` lookup.
+      Optimal — every input value must be read once.
+
+      **③ Further optimization — none needed**
+      The answer is a single formula, so O(m + n) (building the factorial
+      table) is already the best possible. There is nothing faster to reach for.
+
+      **④ Alternative — composition DP, O(n·m)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      int main() {
+          int n, m; cin >> n >> m;
+          vector<ll> dp(m + 1, 0);
+          dp[0] = 1;
+          for (int c = 0; c < n; c++) {         // one child at a time
+              ll run = 0;
+              for (int j = 0; j <= m; j++) { run += dp[j]; dp[j] = run; }
+          }
+          cout << dp[m] << '\n';
+      }
+      ```
+      `dp[j]` = ways to split `j` apples among the children seen so far; adding a
+      child turns it into the prefix sum (the new child may take `0..j`). A
+      *different* algorithm that builds the table bottom-up instead of using a
+      closed form — correct, but O(n·m) is too slow for `10^12`-scale pairs.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② the closed form**. It has three parts:
+
+      - **Factorial table:** `fact[i]` collects `i! mod MOD`. Factorials give us
+        the machinery to compute any binomial coefficient.
+      - **Modular inverses:** `invf[N] = modpow(fact[N], MOD - 2)` uses Fermat's
+        little theorem (since `MOD = 10^9 + 7` is prime) so
+        `invf[i-1] = invf[i] * i`. This is how we *divide* by `b!` and `(a-b)!`
+        under a prime modulus without fractions.
+      - **The one formula:** `comb(n + m - 1, m)` = the number of stars-and-bars
+        layouts. The precompute is sized `n + m` because the optional top of the
+        coefficient is `n + m - 1`.
+
+      Note we read `n` and `m` as `long long` but bound the table by `int`
+      (`n + m ≤ 2·10^6` fits comfortably). The guard `if (b < 0 || b > a)`
+      returns 0 so a degenerate input never indexes out of range.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `3 2`  (n = 3 children, m = 2 apples expected answer 6)
+
+      Precompute up to `N = n + m = 5`:
+      `fact = [1, 1, 2, 6, 24, 120]`,
+
+      `invf[5] = 120^(MOD-2)`, then read backwards:
+      `invf = [1, 1, 500000004, 166666668, 41666667, 120]` (mod values).
+
+      Compute:
+
+      ```
+      comb(n + m - 1, m) = comb(3 + 2 - 1, 2) = comb(4, 2)
+      = fact[4] · invf[2] · invf[4-2]
+      = 24 · invf[2] · invf[2]
+      = 24 · 500000004 · 500000004  mod MOD
+      = 6
+      ```
+
+      Check against the brute-force tier (enumerate weak compositions of 2 into
+      3 parts): `[0,0,2] [0,1,1] [0,2,0] [1,0,1] [1,1,0] [2,0,0]` → **6**. ✓
+
+      Both the closed-form tier and the DP tier print `6` on this sample — the
+      brute force, DP and formula all agree, confirming the optimization is
+      equivalent to the correct naive answer.
+  - type: flowchart
+    title: "Stars and bars counting pipeline"
+    nodes:
+      - "Read n children, m apples"
+      - "Build factorial table fact[0..n+m]"
+      - "Build inverse-factorials via Fermat"
+      - "ways = C(n+m-1, m)"
+      - "Print ways mod 1e9+7"
+    edges:
+      - {from: 0, to: 1, label: "O(m+n)"}
+      - {from: 1, to: 2, label: "modpow"}
+      - {from: 2, to: 3, label: "closed form"}
+      - {from: 3, to: 4, label: "single lookup"}
+  - type: mcq
+    prompt: 'Which formula counts distributing m identical apples among n distinct children, when any child may receive zero apples?'
+    options:
+      - C(m + n, n)
+      - C(m + n - 1, n - 1)
+      - n^m
+      - m^n
+    answer: 1
+    explanation: By stars and bars, place m identical stars (apples) and n-1 bars (dividers between the n children) in a line; choosing the positions of the n-1 bars among m+n-1 slots gives every non-negative distribution exactly once, so the count is C(m+n-1, n-1). n^m would be the count if the apples were distinct (each of m objects picks a child).
+type: content
+---

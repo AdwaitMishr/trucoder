@@ -1,0 +1,278 @@
+---
+id: bracket-sequences-ii
+title: Bracket Sequences II
+difficulty: hard
+order: 177
+tags:
+  - combinatorics
+  - ballot-problem
+  - reflection-principle
+  - binomial-coefficients
+  - mathematics
+blocks:
+  - type: markdown
+    content: |
+      # Bracket Sequences II
+
+      **The technique: counting valid bracket sequences under a fixed prefix —
+      the generalized ballot / reflection formula.** We must count regular
+      bracket sequences of length `n` whose **first `m` characters are already
+      fixed** by a given prefix string. The remaining `n − m` positions are
+      free.
+
+      Let the prefix contain `open` `(` and `close` `)`. The total must hold
+      exactly `n/2` open brackets, so among the
+      `freec = n − open − close` free positions we must place
+      `need = n/2 − open` more `(` (the rest become `)`). Ignoring the
+      "never dip below zero" rule, the count would simply be `C(freec, need)`.
+
+      The **reflection principle** subtracts the invalid ones. A valid sequence
+      never has more `)` than `(` in any prefix; an invalid one first reaches
+      balance `−1`. By the ballot reflection, the number of *bad* completions
+      equals `C(freec, need − 1)` (reflect the offending prefix across the
+      `−1` line — it maps bijectively onto a completion with one fewer `(`).
+      Hence:
+
+      ```
+      answer = C(freec, need) − C(freec, need − 1),   freec = n − open − close
+      ```
+
+      **Why it works.** Think of the free positions as `2·freec`'s worth of
+      possible `(` / `)` signs forming a lattice path whose shape is constrained
+      to stay at height ≥ 0. The unconstrained count `C(freec, need)` minus the
+      reflected bad count is exactly the number of non-negative excursions —
+      the same reflection we used to derive Catalan, now with a forced prefix.
+
+      **Feasibility checks.** The prefix itself must never drop below zero
+      (else answer 0); `n` must be even; and `open` can't already exceed `n/2`.
+
+      **When you reach for it.** Whenever "count regular bracket sequences" is
+      constrained by a fixed starting segment (or fixed counts at given
+      positions), the prefix-fixed ballot formula — or the equivalent generalized
+      Catalan `C^(k)ₙ = (k+1)/(n+k+1)·C(2n+k, n)` — answers it. Basic
+      feasibility logic plus one combination difference.
+
+      **Modulo.** Build factorial + inverse-factorial tables to `n`, evaluate the
+      two combinations mod `10^9 + 7`. Total **O(n)** time and memory.
+
+      :::tip
+      **Interview tip:** The moment a counting problem says "all regular
+      bracket sequences with a given prefix / first k symbols fixed", the answer
+      is not Catalan but a single difference of two binomial coefficients
+      `C(freec, need) − C(freec, need−1)`. Interviewers like probing the two
+      trap cases: (1) the prefix is itself already invalid (a `)` before enough
+      `(`) → answer 0; (2) the prefix fixes too many `(` → answer 0. Nail the
+      feasibility checks first, then the formula.
+      :::
+  - type: markdown
+    content: |
+      # Question — Bracket Sequences II (CSES 2187)
+
+      Your task is to calculate the number of **valid bracket sequences** of
+      length `n` **when a prefix of the sequence is given**.
+
+      A bracket sequence is valid (regular) if it contains exactly the same
+      number of `(` and `)` symbols, and every prefix of the sequence contains
+      at least as many `(` as `)`.
+
+      **Input:** the first line has an integer `n`. The second line has a string
+      consisting of `n` characters `(` and `)` — this is the given prefix.
+
+      **Output:** print the number of sequences modulo `10^9 + 7`.
+
+      **Constraints:**
+      - `1 ≤ k ≤ n ≤ 10^6` (where `k` is the length of the prefix)
+
+      Sample input:
+
+      ```
+      6
+      (()
+      ```
+
+      Sample output:
+
+      ```
+      2
+      ```
+
+      Explanation: there are two possible valid sequences matching the prefix
+      `(()`: `(())()` and `(()())`.
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate every completion, O(2^(n-m))**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      int n; string s; ll ans = 0;
+      void rec(int i, int bal) {
+          if (i == n) { if (bal == 0) ans++; return; }
+          if (s[i] != '?') {                         // fixed position
+              bal += (s[i] == '(' ? 1 : -1);
+              if (bal >= 0) rec(i + 1, bal);
+              return;
+          }
+          rec(i + 1, bal + 1);                       // free: try '('
+          if (bal > 0) rec(i + 1, bal - 1);          // free: try ')' if valid
+      }
+      int main() {
+          cin >> n >> s;
+          while ((int)s.size() < n) s.push_back('?'); // pad the free suffix
+          rec(0, 0);
+          cout << ans << '\n';
+      }
+      ```
+      Up to `2^(n-m)` branches — `2^10^6` is unreachable. Correct only for tiny
+      `n`.
+
+      **② Optimization — ballot reflection, O(n)** (the chosen solution)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll MOD = 1e9 + 7;
+
+      ll modpow(ll a, ll e) {
+          ll r = 1;
+          while (e) { if (e & 1) r = r * a % MOD; a = a * a % MOD; e >>= 1; }
+          return r;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; string s;
+          cin >> n >> s;
+          int open = 0, closed = 0;
+          for (char c : s) {
+              if (c == '(') open++; else closed++;
+              if (closed > open) { cout << 0 << '\n'; return 0; }  // prefix invalid
+          }
+          if (n % 2 || open > n / 2) { cout << 0 << '\n'; return 0; }
+
+          vector<ll> fact(n + 1), invf(n + 1);
+          fact[0] = 1;
+          for (int i = 1; i <= n; i++) fact[i] = fact[i - 1] * i % MOD;
+          invf[n] = modpow(fact[n], MOD - 2);
+          for (int i = n; i >= 1; i--) invf[i - 1] = invf[i] * i % MOD;
+          auto comb = [&](int a, int b) -> ll {
+              if (b < 0 || b > a) return 0;
+              return fact[a] * invf[b] % MOD * invf[a - b] % MOD;
+          };
+
+          int freec = n - open - closed;              // free (unfixed) positions
+          ll total = comb(freec, n / 2 - open);       // ignore prefix>=0
+          ll bad   = comb(freec, n / 2 - open - 1);   // reflected (dip below 0)
+          cout << ((total - bad) % MOD + MOD) % MOD << '\n';
+          return 0;
+      }
+      ```
+      O(n). One factorial precompute, one subtraction of two choices.
+
+      **③ Further optimization — none needed**
+      The answer is a single combination difference, so O(n) (building the
+      factorial table) is optimal. Nothing faster exists.
+
+      **④ Alternative — ballot DP under the forced prefix, O(n²)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      int main() {
+          int n; string s; cin >> n >> s;
+          vector<vector<ll>> dp(n + 1, vector<ll>(n + 1, 0));
+          dp[0][0] = 1;
+          for (int i = 0; i < n; i++)
+              for (int bal = 0; bal <= n; bal++) if (dp[i][bal]) {
+                  char c = (i < (int)s.size() ? s[i] : '?');
+                  if (c != ')') dp[i + 1][bal + 1] += dp[i][bal]; // add '('
+                  if (c != '(' && bal > 0) dp[i + 1][bal - 1] += dp[i][bal]; // add ')'
+              }
+          cout << dp[n][0] << '\n';
+      }
+      ```
+      Builds the lattice path position by position: fixed characters force one
+      transition, `?` (the free suffix) offers both. No modules/inverses needed
+      and it exactly handles the prefix — but O(n²) is far too slow for
+      `10^6`. Good for small-n intuition.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② the ballot-reflection formula**. Steps:
+
+      - **Feasibility:** scan the prefix keeping the running balance; the moment
+        `closed > open` the string is dead (`0`). Also reject odd `n` and
+        `open > n/2` (too many `(` already fixed).
+      - **Count free positions:** `freec = n - open - closed`.
+      - **Total:** `comb(freec, n/2 - open)` = all ways to assign the remaining
+        `(` among the free slots, ignoring any prefix dips.
+      - **Subtract bad:** `comb(freec, n/2 - open - 1)` = the reflected
+        (invalid) completions.
+      - Print the difference, unwrapped to non-negative.
+
+      The `comb` guard (`b < 0 || b > a → 0`) keeps degenerate cases (e.g.
+      `n/2 - open - 1 < 0`) safe.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Sample:** `n = 6`, prefix `(()` → expected `2`.
+
+      `open = 2`, `closed = 1`, no prefix dip. `freec = 6 - 2 - 1 = 3`,
+      `need = 6/2 - 2 = 1`.
+
+      ```
+      total = C(3, 1)     = 3
+      bad   = C(3, 1 - 1) = C(3, 0) = 1
+      answer = 3 - 1 = 2
+      ```
+
+      The 3 total ways to place 1 more `(` among the 3 free slots are the
+      completions of `(()`:
+      `(() ( ) ( )`? enumerate: free rest `???` → completing to length 6 with
+      one more `(` among positions 3,4,5:
+      - `()` at rest as `( ))` → `(()())`… let's enumerate.
+
+      | completion | valid? |
+      |------------|--------|
+      | `(()())` | yes |
+      | `(())()` | yes |
+      | `(()() )`… | choose the 1 `(` at position 3 → `(() ( )())`? |
+
+      The three ways to place the extra `(` give `(() )()` etc.; exactly two are
+      balanced-with-no-dip — `(())()` and `(()())` — matching the statement.
+      The bad one dips below zero and is exactly the 1 we subtract.
+
+      All tiers agree: ① enumerates the 2 completions, ② gives `3 − 1 = 2`,
+      ④ ballot DP `dp[6][0] = 2`. ✓
+  - type: flowchart
+    title: "Prefix-fixed ballot count"
+    nodes:
+      - "Read n, prefix s"
+      - "Feasible? (no dip, even n, open<=n/2)"
+      - "freec = n - open - closed"
+      - "total = C(freec, n/2-open)"
+      - "bad = C(freec, n/2-open-1)"
+      - "print (total-bad) mod P"
+    edges:
+      - {from: 0, to: 1, label: "validate"}
+      - {from: 1, to: 2, label: "OK"}
+      - {from: 2, to: 3, label: "fact table"}
+      - {from: 3, to: 4, label: "reflect"}
+      - {from: 4, to: 5, label: "subtract"}
+      - {from: 1, to: 5, label: "print 0"}
+  - type: mcq
+    prompt: 'In Bracket Sequences II, why do we subtract C(freec, need-1) from C(freec, need) to count valid completions of a given prefix?'
+    options:
+      - Because the total number of '(' is fixed at n/2, so only the prefix-height constraint remains; by the reflection principle the invalid completions (first dip below 0) correspond one-to-one to completions with one fewer '(' — exactly C(freec, need-1)
+      - Because exactly one completion is always invalid
+      - Because we must remove all sequences with an even number of '('
+      - Because C(freec, need-1) counts the prefix characters themselves
+    answer: 0
+    explanation: With the prefix fixed (open '(' and close ')'), we must place need = n/2 - open more '(' among the freec free positions, so the unconstrained count is C(freec, need). The only remaining constraint is never dropping below balance 0. The reflection principle maps each invalid completion (first reach of -1) bijectively to a completion using one fewer '(' — C(freec, need-1) — so valid = C(freec, need) - C(freec, need-1). Feasibility (no prefix dip, even n, open <= n/2) must be checked first.
+type: content
+---

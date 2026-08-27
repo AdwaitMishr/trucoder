@@ -1,0 +1,225 @@
+---
+id: ferris-wheel
+title: Ferris Wheel
+difficulty: easy
+order: 27
+tags:
+  - sorting-and-searching
+  - two-pointers
+  - greedy
+blocks:
+  - type: markdown
+    content: |
+      # Ferris Wheel
+
+      **The technique: sort + two pointers (greedy pairing).** There are `n`
+      children, each with a weight. Every gondola holds **at most two** children
+      and its total weight may not exceed `x`. We must put every child on a
+      gondola and minimize the number of gondolas used.
+
+      **When you reach for it:** any "pair items up, each pair has a capacity
+      limit, minimize the number of containers" problem. Because a gondola can
+      hold at most two children, the greedy is clean: pair the heaviest child
+      with the *lightest* child that can ride along.
+
+      **Why it works (the lightest-with-heaviest rule).** Sort the weights. Put
+      a pointer `l` on the lightest remaining child and `r` on the heaviest.
+      - If `weight[l] + weight[r] <= x`, the lightest can ride with the
+        heaviest — pairing them is optimal because the lightest child is the
+        *least* likely to fit with any heavier partner, so using it now never
+        hurts. Send both: `l++`, `r--`.
+      - Otherwise the heaviest cannot share with *anybody* (every other child
+        is at least as heavy as the lightest), so it must ride alone: `r--`.
+      Each iteration emits exactly one gondola.
+
+      This is a classic exchange-argument greedy: any optimal solution that
+      doesn't pair the heaviest with a possible lightest partner can be
+      rearranged to one that does without increasing the gondola count.
+
+      **Worked mini-example.** `x = 10`, weights `[7, 2, 3, 9]`. Sorted:
+      `[2, 3, 7, 9]`.
+      - `2 + 9 = 11 > 10` → `9` rides alone (1 gondola).
+      - `2 + 7 = 9 ≤ 10` → `2` and `7` share (2 gondolas).
+      - `3` remains → rides alone (3 gondolas).
+      Result: **3** gondolas.
+
+      **Complexity.** Sorting **O(n log n)**; the pairing pass is a single
+      O(n) scan. Total **O(n log n)** time, O(1) extra space.
+
+      :::tip
+      **Interview tip:** this is the canonical "boats to save people" pattern
+      (LeetCode's Boats to Save People). The move is: sort, then two pointers
+      from both ends; always try to pair the lightest with the heaviest that
+      fits. Interviews probe the strict-inequality gadget — when the pair
+      exceeds the limit the heaviest must go alone (`else --r`), and you must
+      not forget the case where `l == r` (a single leftover child) still needs
+      its own gondola. State the exchange argument: using the lightest child
+      with the heaviest is never worse than saving the lightest for later.
+      :::
+  - type: markdown
+    content: |
+      # Question — Ferris Wheel
+
+      There are `n` children who want to go to a Ferris wheel, and your task is
+      to find a gondola for each child.
+
+      Each gondola may have one or two children in it, and in addition, the
+      total weight in a gondola may not exceed `x`. You know the weight of every
+      child.
+
+      What is the minimum number of gondolas needed for the children?
+
+      **Constraints:** `1 ≤ n ≤ 2·10^5`, `1 ≤ x ≤ 10^9`, `1 ≤ p_i ≤ x`.
+
+      **Input:** The first input line contains two integers `n` and `x`: the
+      number of children and the maximum allowed weight. The next line contains
+      `n` integers `p_1, ..., p_n`: the weight of each child.
+
+      **Output:** Print one integer: the minimum number of gondolas.
+
+      Sample input:
+
+      ```
+      4 10
+      7 2 3 9
+      ```
+
+      Sample output:
+
+      ```
+      3
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²)**
+
+      Sort, then repeatedly place the heaviest remaining child into a new
+      gondola and scan left to right for the lightest child that can ride with
+      it. Correct, but scans cost O(n) per gondola.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(vector<long long> p, long long x) {
+          sort(p.begin(), p.end());
+          int n = (int)p.size();
+          vector<bool> used(n, false);
+          long long gondolas = 0;
+          for (int r = n - 1; r >= 0; --r) {
+              if (used[r]) continue;
+              used[r] = true;
+              gondolas++;
+              for (int l = 0; l < r; ++l) {          // find lightest partner
+                  if (!used[l] && p[l] + p[r] <= x) {
+                      used[l] = true;
+                      break;
+                  }
+              }
+          }
+          return gondolas;
+      }
+      ```
+
+      **O(n²)** time — each gondola rescans the front of the array, giving
+      ~`n²/2` operations for `n = 2·10^5`. Too slow.
+
+      **② Sort + two pointers — O(n log n) (the solution)**
+
+      Pair lightest-with-heaviest in a single linear pass.
+
+      ```cpp
+      long long solve(vector<long long> p, long long x) {
+          sort(p.begin(), p.end());
+          long long gondolas = 0;
+          int l = 0, r = (int)p.size() - 1;
+          while (l <= r) {
+              if (l != r && p[l] + p[r] <= x)
+                  l++;           // the lightest rides with the heaviest
+              r--;               // the heaviest is now placed
+              gondolas++;
+          }
+          return gondolas;
+      }
+      ```
+
+      **O(n log n)** time, O(1) extra space. This is the CSES submission.
+
+      **③ Further optimization — none (the scan is already linear)**
+
+      After sorting, pairing runs in O(n); reading and sorting the weights is
+      the unavoidable O(n log n) bound. No faster asymptotic approach exists.
+      Skip.
+
+      **④ Alternative algorithm — none meaningful (skip)**
+
+      The greedy is optimal by the exchange argument, and any reimplementation
+      (e.g. a balanced search structure to always find the best partner) would
+      only add an O(log n) factor without changing the answer. There is no
+      genuinely different algorithm worth teaching. Skip.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The two-pointer pair-up is the whole algorithm.
+
+      - **Sort first.** With sorted weights, the lightest child is always at
+        `l` and the heaviest at `r`, so pairing decisions are local and cheap.
+      - **The `while (l <= r)` loop** emits one gondola per iteration. There
+        are two branches:
+        - `l != r && p[l] + p[r] <= x`: the heaviest child at `r` *can* share
+          with the lightest at `l`. Send both — `l++` (lightest consumed) and
+          `r--` (heaviest consumed). They make one gondola.
+        - otherwise: the two are either the same child (`l == r`, a leftover)
+          or their combined weight exceeds `x`. In the exceed case, since every
+          remaining child is at least as heavy as `p[l]`, the heaviest at `r`
+          can share with *nobody*, so it rides alone — only `r--`.
+      - **Counting.** We increment `gondolas` every loop iteration, exactly once
+        per gondola created, in all branches.
+
+      **Why it's minimal.** If the heaviest cannot fit with the lightest, it
+      fits with no one (all partners are heavier), so sending it alone is
+      forced — no better solution exists. If it *can* fit with the lightest,
+      using that pairing is optimal because the lightest is the cheapest
+      partner to pair away and we never gain anything by hoarding it.
+
+      Edge case: exactly one child left (`l == r`) → `l != r` is false, so it
+      rides alone and `gondolas` increments correctly.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+
+      ```
+      4 10
+      7 2 3 9
+      ```
+
+      Expected output: `3`.
+
+      Sorted weights `[2, 3, 7, 9]`, `x = 10`.
+
+      | iteration | l | r | p[l] + p[r] | action | gondolas |
+      |-----------|---|---|--------------|--------|----------|
+      | 1 | 0 | 3 | 2 + 9 = 11 > 10 | 9 rides alone → `r=2` | 1 |
+      | 2 | 0 | 2 | 2 + 7 = 9 ≤ 10 | 2 and 7 share → `l=1, r=1` | 2 |
+      | 3 | 1 | 1 | l == r | 3 rides alone → `r=0` | 3 |
+
+      Loop ends (`l = 1 > r = 0`). Total gondolas = **3**, matching expected. ✓
+
+      Gondola breakdown: `[9]`, `[2, 7]`, `[3]` — every child placed, none
+      exceeds weight limit `10`.
+  - type: mcq
+    prompt: When p[l] + p[r] > x (the heaviest child cannot share with the lightest), why is it correct to send the heaviest child alone instead of trying to pair it with a slightly lighter-but-still-large child?
+    options:
+      - Because the heaviest child always weighs more than x, so it can never share.
+      - Because all remaining children are at least as heavy as the lightest child p[l], so if even p[l] cannot fit with p[r], then no remaining child can fit either; pairing p[r] is impossible and it must ride alone.
+      - Because the lightest child should always be saved for last.
+      - Because two pointers must always move toward each other by one each step.
+    answer: 1
+    explanation: After sorting, the pointer l points at the lightest leftover child and r at the heaviest. Every other leftover child has weight >= p[l]. If p[l] + p[r] > x, then p[j] + p[r] >= p[l] + p[r] > x for every j >= l, so the heaviest child cannot share with anyone and must occupy a gondola by itself. This is the exchange argument that makes the greedy optimal.
+type: content
+---

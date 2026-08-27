@@ -1,0 +1,331 @@
+---
+id: forest-queries-ii
+title: "Forest Queries II"
+type: content
+difficulty: medium
+order: 139
+tags:
+  - range-queries
+  - fenwick-tree
+  - 2d-bit
+  - point-update
+  - rectangle-sum
+blocks:
+  - type: markdown
+    content: |
+      # Forest Queries II — 2D Fenwick tree
+
+      We have an `n × n` grid where each cell is empty (`.`) or a tree (`*`).
+      Two kinds of operations arrive online: flip one cell, or ask how many
+      trees sit inside an axis-aligned rectangle. This is the **dynamic 2D
+      range-sum** problem: point updates plus 2D rectangle sum queries.
+
+      The right tool is the **2D Fenwick tree** (2D Binary Indexed Tree). You
+      already know the 1D BIT: an array where a point update and a prefix sum
+      both cost `O(log n)`. The 2D version stores *rows of BITs*: `bit[i]` is a
+      BIT over columns that aggregates the row-BITs whose index participates in
+      the usual `i += i&-i` / `i -= i&-i` chain.
+
+      ## Why a plain prefix-sum grid fails
+
+      A static 2D prefix table answers rectangle sums in `O(1)` — but the first
+      operation here **changes** a cell. Rebuilding the prefix table after each
+      update is `O(n²)`, so with `q = 2·10^5` updates that is far too slow. We
+      need a structure that supports both a point update and a rectangle query
+      in polylogarithmic time.
+
+      ## The 2D Fenwick pattern
+
+      - **Update `(y,x)` by `+Δ`.** Walk rows with `i += i&-i`; inside each, walk
+        columns with `j += j&-j` and add `Δ` to `bit[i][j]`. O(log² n).
+      - **Prefix sum `pref(y,x)`** (sum over `[1..y] × [1..x]`). Walk rows with
+        `i -= i&-i`; inside each, walk columns with `j -= j&-j`, accumulating.
+        O(log² n).
+      - **Rectangle sum `[y1..y2] × [x1..x2]`.** Inclusion–exclusion of four
+        prefix calls:
+
+        ```
+        rect = pref(y2,x2) - pref(y1-1,x2) - pref(y2,x1-1) + pref(y1-1,x1-1)
+        ```
+
+      A rectangle query costs 4 × O(log² n) — comfortably fast for `q = 2·10^5`
+      and `n = 1000`.
+
+      :::tip
+      **Interview tip:** whenever a problem says "grid + toggle a cell + count
+      inside a rectangle", reach immediately for the 2D Fenwick tree. It is the
+      canonical example of the 2D prefix-sum idea made dynamic. A follow-up that
+      separates candidates is realising you must keep the *current* state of each
+      cell separately (a `n × n` boolean grid) so a toggle `+1/-1` knows which
+      direction to flip — the BIT alone cannot tell you a cell's state.
+      :::
+
+      **Complexities:** build `O(n² log² n)` (or `O(n²)` by seeding), update
+      `O(log² n)`, rectangle query `O(log² n)`, space `O(n² log² n)` (2D BIT
+      nodes) plus the `n × n` state grid.
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given an `n × n` grid representing the map of a forest. Each
+      square is either empty or has a tree. Your task is to process `q` queries
+      of the following types:
+
+      - **Change the state (empty/tree) of a square.**
+      - **How many trees are inside a rectangle in the forest?**
+
+      ## Input
+
+      The first input line has two integers `n` and `q`: the size of the forest
+      and the number of queries.
+
+      Then, there are `n` lines describing the forest. Each line has `n`
+      characters: `.` is an empty square and `*` is a tree.
+
+      Finally, there are `q` lines describing the queries. The format of each
+      line is either `1 y x` (change the state of square `(y,x)`) or
+      `2 y1 x1 y2 x2` (count trees in the rectangle with corners `(y1,x1)` and
+      `(y2,x2)`).
+
+      **Constraints:**
+
+      ```
+      1 ≤ n ≤ 1000
+      1 ≤ q ≤ 2·10^5
+      1 ≤ y, x ≤ n
+      1 ≤ y1 ≤ y2 ≤ n
+      1 ≤ x1 ≤ x2 ≤ n
+      ```
+
+      ## Output
+
+      Print the answer to each query of the second type.
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      4 3
+      .*..
+      *.**
+      **..
+      ****
+      2 2 2 3 4
+      1 3 3
+      2 2 2 3 4
+      ```
+
+      **Output:**
+
+      ```
+      3
+      4
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²) per query**
+
+      Maintain the grid directly. For a type-1 query, flip the cell in `O(1)`.
+      For a type-2 query, scan every cell of the rectangle and count the `*`. On
+      a worst-case full `n × n` rectangle that is `O(n²)`; with `q = 2·10^5` and
+      `n = 1000` that is up to `2·10^11` cells — far over the 1-second limit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<string> g(n);
+          for (int i = 0; i < n; i++) cin >> g[i];
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) {                        // flip (y,x), 1-indexed
+                  int y, x; cin >> y >> x;
+                  g[y-1][x-1] = (g[y-1][x-1] == '*') ? '.' : '*';
+              } else {                             // count trees in rectangle
+                  int y1, x1, y2, x2; cin >> y1 >> x1 >> y2 >> x2;
+                  int cnt = 0;
+                  for (int i = y1-1; i < y2; i++)
+                      for (int j = x1-1; j < x2; j++)
+                          if (g[i][j] == '*') cnt++;
+                  cout << cnt << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *O(n²) per rectangle query — correct but too slow for the real limits.*
+
+      **② Optimization — 2D Fenwick tree, O(log² n) per operation**
+
+      Store the grid's prefix structure in a 2D BIT so both a cell toggle and a
+      rectangle sum cost `O(log² n)`. We also keep the `n × n` grid of current
+      states so a toggle knows which way to flip. This is the optimal tier we
+      compile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int n, q;
+      vector<vector<int>> bit;   // 2D Fenwick tree (1-indexed)
+      vector<string> g;          // current state, g[row][col-1]
+
+      void upd(int y, int x, int delta) {
+          for (int i = y; i <= n; i += i & -i)
+              for (int j = x; j <= n; j += j & -j)
+                  bit[i][j] += delta;
+      }
+
+      int pref(int y, int x) {          // sum over [1..y] x [1..x]
+          if (y < 1 || x < 1) return 0;
+          int s = 0;
+          for (int i = y; i > 0; i -= i & -i)
+              for (int j = x; j > 0; j -= j & -j)
+                  s += bit[i][j];
+          return s;
+      }
+
+      int rect(int y1, int x1, int y2, int x2) {
+          return pref(y2, x2) - pref(y1-1, x2) - pref(y2, x1-1) + pref(y1-1, x1-1);
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(0);
+          cin >> n >> q;
+          g.assign(n + 1, "");
+          bit.assign(n + 1, vector<int>(n + 1, 0));
+          for (int i = 1; i <= n; i++) {
+              cin >> g[i];
+              for (int j = 1; j <= n; j++)
+                  if (g[i][j-1] == '*') upd(i, j, 1);
+          }
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) {                            // toggle square (y,x)
+                  int y, x; cin >> y >> x;
+                  int delta = (g[y][x-1] == '*') ? -1 : 1;
+                  g[y][x-1] = (g[y][x-1] == '*') ? '.' : '*';
+                  upd(y, x, delta);
+              } else {
+                  int y1, x1, y2, x2; cin >> y1 >> x1 >> y2 >> x2;
+                  cout << rect(y1, x1, y2, x2) << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`O(log² n)` per update and per query — this meets the constraints.*
+
+      **③ Note on further optimization — none needed**
+
+      The 2D Fenwick tree is already optimal here at `O(log² n)` per operation.
+      A 2D **segment tree** also achieves `O(log² n)` and would only be worth
+      the extra complexity if the problem asked for *range updates* or a
+      non-invertible aggregate; for point updates + rectangle sums the 2D BIT is
+      shorter and better, so we skip that alternative.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The key mapping from the problem to the data structure:
+
+      - **The grid is the ground truth.** `g[y]` holds row `y` of the current
+        forest. We read the whole forest once and seed the BIT by calling
+        `upd(i, j, 1)` for each tree. `g` is the ONLY structure that remembers a
+        cell's state — the BIT only remembers aggregate counts.
+
+      - **Update (type 1).** We first read the current state from `g` to decide
+        the direction: a tree becomes empty (`delta = -1`), an empty square
+        becomes a tree (`delta = +1`). We flip `g` and push `delta` into the 2D
+        BIT. The double loop `i += i&-i`, `j += j&-j` touches `O(log² n)` nodes.
+
+      - **Rectangle sum (type 2).** Rather than scanning, we use
+        inclusion–exclusion on four prefix sums. `pref(y, x)` answers "trees in
+        the top-left rectangle `[1..y] × [1..x]`"; combining the four corners
+        exactly yields the sub-rectangle's count. The `if (y<1 || x<1) return 0`
+        guard makes the formula safe at the borders of the grid.
+
+      This gives `O(log² n)` for both operation types, so all `q = 2·10^5`
+      queries run in time.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample. `n = 4`, the grid is:
+
+      ```
+      Row 1: . * . .      Row 3: * * . .
+      Row 2: * . * *      Row 4: * * * *
+      ```
+
+      **Initial build.** Every `*` is inserted into the 2D BIT with `upd(+1)`.
+
+      **Query `2 2 2 3 4`** — count trees in `rows 2..3, cols 2..4`:
+
+      ```
+      rect(2,2,3,4) = pref(3,4) - pref(1,4) - pref(3,1) + pref(1,1)
+      ```
+
+      - Trees in `[1..3] × [1..4]`: rows 1-3 all columns = `1 + 3 + 2 = 6`
+        (row 1 has 1, row 2 has 3, row 3 has 2).
+      - `pref(1,4)` (row 1) = `1`.
+      - `pref(3,1)` (column 1, rows 1-3) = `0 + 1 + 1 = 2`.
+      - `pref(1,1)` = `0`.
+
+      ```
+      rect = 6 - 1 - 2 + 0 = 3
+      ```
+
+      **Output `3`** — matches the sample. (Manually: (2,2)=.,(2,3)=*,(2,4)=*,
+      (3,2)=*,(3,3)=.,(3,4)=. → 3 trees.)
+
+      **Update `1 3 3`.** `g[3][3]` is `.`, so `delta = +1`; flip it to `*` and
+      `upd(3,3,+1)`.
+
+      **Query `2 2 2 3 4`** again. Now (3,3) is a tree, so:
+
+      - (2,2)=.,(2,3)=*,(2,4)=* → 2; (3,2)=*,(3,3)=*,(3,4)=. → 2; total **4**.
+
+      The BIT reflects the toggle, so the same `rect` formula returns `4`.
+
+      **Output `4`.**
+
+      Final printed output:
+
+      ```
+      3
+      4
+      ```
+
+      Expected (sample) — `3, 4`. Actual — `3, 4`. Match.
+  - type: flowchart
+    title: "2D Fenwick for dynamic grid sums"
+    nodes: ["read n×n forest, seed 2D BIT with trees", "query type? read y x", "type 2: rect sum = 4 prefix calls (O(log²n))", "type 1: read state from grid, flip it", "upd(y,x,±1) into 2D BIT (O(log²n))", "print rectangle answer"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 3, label: "type 1"}
+      - {from: 3, to: 4}
+      - {from: 1, to: 2, label: "type 2"}
+      - {from: 2, to: 5}
+      - {from: 4, to: 1}
+      - {from: 5, to: 1}
+  - type: mcq
+    prompt: "A 2D Fenwick tree answers each rectangle sum by…"
+    options:
+      - "…precomputing an O(1) 2D prefix table and rebuilding it after every update."
+      - "…scanning every cell of the rectangle and counting the trees each query."
+      - "…combining four prefix sums (each O(log² n)) via inclusion–exclusion, so both a cell toggle and a rectangle query cost O(log² n)."
+      - "…storing a BIT for every row and summing all n rows on each rectangle query."
+    answer: 2
+    explanation: "pref(y,x) gives the trees in the top-left corner [1..y]×[1..x] in O(log² n) via the 2D BIT. A rectangle is that prefix minus the three excluded corner rectangles, so rect(y1,x1,y2,x2) = pref(y2,x2) − pref(y1−1,x2) − pref(y2,x1−1) + pref(y1−1,x1−1). Point updates are also O(log² n), unlike rebuilding a static prefix table."
+---

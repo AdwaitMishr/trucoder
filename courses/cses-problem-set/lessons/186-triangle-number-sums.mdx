@@ -1,0 +1,230 @@
+---
+id: triangle-number-sums
+title: "Triangle Number Sums"
+difficulty: medium
+order: 186
+tags:
+  - mathematics
+  - number-theory
+  - gauss-theorem
+  - search
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      # Triangle Number Sums — Gauss's Eureka theorem + a fast two-term check
+
+      A **triangle number** is `T_k = 1 + 2 + … + k = k(k+1)/2`: the sequence
+      starts `1, 3, 6, 10, 15, …`. The question: for a given `n`, what is the
+      **smallest number** of triangle numbers that add up to `n`?
+
+      With `n` as large as `10^12`, a coin-change DP over sums is impossible —
+      the sum space is a trillion wide. The trick is to **shrink the answer set
+      first**.
+
+      ## Gauß's Eureka theorem shrinks everything
+
+      In 1796 Gauß proved:
+
+      > Every non-negative integer is the sum of **three** triangle numbers.
+
+      So for any `n ≥ 1` the answer is at most **3**. The whole search collapses
+      to:
+
+      1. Is `n` itself a triangle number? → answer `1`.
+      2. Is `n` a sum of **two** triangle numbers? → answer `2`.
+      3. Otherwise → answer `3` (guaranteed by Eureka).
+
+      ## Testing "is it a triangle number" in O(1)
+
+      `T_k = k(k+1)/2 = m` is a quadratic in `k`: `k^2 + k − 2m = 0`, whose
+      positive root is `k = (−1 + √(1+8m)) / 2`. So `m` is a triangle number iff
+      `1 + 8m` is a perfect square `s^2` and `s` is odd (so that `(s−1)/2` is an
+      integer). Both checks are O(1) with an exact integer square root.
+
+      ## The two-term check in O(√n)
+
+      To test step 2, iterate `a` from `0` up to `T_a ≤ n` and ask whether
+      `n − T_a` is itself a triangle number. There are only `~√(2n)` such `a`, so a
+      single test costs `O(√n)` — about `1.4 × 10^6` iterations for `n = 10^12`,
+      well within the time limit even for `t = 100` tests.
+
+      **Complexity.** `O(√n)` per test, `O(1)` space. This is the intended,
+      mathematically tight solution.
+
+      :::tip
+      **Interview tip:** triangle numbers and the Eureka theorem are a favourite
+      "spot the theorem" question. The transferable move is *bound the answer
+      before optimizing*: because every number is a sum of three triangle numbers
+      (and four squares, by Lagrange), you only ever check tiny answer sizes
+      instead of running a full DP over `n`. Always ask "what is the largest the
+      answer can possibly be?" first.
+      :::
+  - type: markdown
+    content: |
+      # Question — Triangle Number Sums
+
+      A triangle number is a positive integer of the form `1 + 2 + … + k`. The
+      first triangle numbers are `1, 3, 6, 10, 15, …`. Every positive integer can
+      be represented as a sum of triangle numbers. For example, `42 = 21 + 21`
+      and `1337 = 1326 + 10 + 1`.
+
+      Given a positive integer `n`, determine the **smallest number** of triangle
+      numbers that sum to `n`.
+
+      **Input:** The first line has an integer `t`. After that, each line has a
+      positive integer `n`.
+
+      **Output:** For each test, print the smallest number of triangle numbers.
+
+      **Constraints**
+
+      - `1 ≤ t ≤ 100`
+      - `1 ≤ n ≤ 10^12`
+
+      **Example**
+
+      Input:
+
+      ```
+      5
+      1
+      2
+      3
+      42
+      1337
+      ```
+
+      Output:
+
+      ```
+      1
+      2
+      1
+      2
+      3
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — coin-change DP, O(n√n) time, O(n) space**
+
+      Model each triangle number as an unlimited coin and run the classic "min
+      coins to reach sum `n`" DP: `dp[s] = min over T_k ≤ s of dp[s − T_k] + 1`.
+
+      ```cpp
+      int solve_brute(long long n, const vector<long long>& T){
+          const long long INF = 1e18;
+          vector<long long> dp(n+1, INF); dp[0]=0;
+          for(long long s=1;s<=n;s++)
+              for(long long Tk : T)
+                  if(Tk<=s) dp[s]=min(dp[s], dp[s-Tk]+1);
+          return dp[n];
+      }
+      ```
+
+      Counting `T` down to `n` is `O(√n)` values, so the DP is `O(n√n)` time,
+      `O(n)` space. For `n = 10^12` this is impossible — a trillion `dp` cells.
+
+      **② Optimization — Eureka bound + O(√n) two-term scan (intended)**
+
+      Bound the answer by 3 using Eureka's theorem, then test sizes 1 and 2 by
+      triangle-number membership tests. This is fast and exact.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      ll isqrtll(ll x){ ll r=(ll)sqrtl((long double)x); while(r*r>x)r--; while((r+1)*(r+1)<=x)r++; return r; }
+      // m is a triangle number  <=>  1+8m is a perfect square with odd root
+      bool isTriangle(ll m){
+          ll d2 = 1 + 8*m;
+          ll s = isqrtll(d2);
+          if(s*s != d2) return false;
+          ll k = (s-1)/2;
+          return k >= 0 && k*(k+1)/2 == m;
+      }
+
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          int t; cin>>t;
+          while(t--){ ll n; cin>>n;
+              if(isTriangle(n)){ cout<<1<<"\n"; continue; }
+              int ans=3;                       // Eureka: always fits in three
+              for(ll a=0; a*(a+1)/2 <= n; a++){
+                  if(isTriangle(n - a*(a+1)/2)){ ans=2; break; }
+              }
+              cout<<ans<<"\n";
+          }
+          return 0;
+      }
+      ```
+
+      `O(√n)` per test — about `1.4×10^6` iterations at the max `n`, trivial.
+
+      **③ Further optimization — reduce the two-term scan.**
+
+      Because `T_a` grows quadratically, only `a` up to `⌊√(2n)⌋` matters; we can
+      also fold the `ans=1` test into the same loop (start `a` such that the
+      leftover is itself triangular). The constant factor is already negligible;
+      no further asymptotic gain is needed.
+
+      **④ Alternative — full factorisation / closed form.**
+
+      There is no closed-form count that beats the membership tests here. The
+      slender structure (answer ∈ {1,2,3}) is the entire point — a "DP" over a
+      bounded answer set, or direct tight membership checks, are the only two
+      reasonable routes. For tiny `n`, the `①` DP is a fine cross-check.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`isTriangle(m)`** solves `k^2+k−2m=0`: it computes `s = ⌊√(1+8m)⌋`,
+        verifies `s·s == 1+8m` (so the discriminant is a perfect square), then
+        derives `k = (s−1)/2`. The final `k*(k+1)/2 == m` guard removes any doubt
+        from rounding.
+      - **Answer 1:** if `n` is triangular, print `1`.
+      - **Answer 2:** scan `a` over all triangle numbers `T_a ≤ n`. If
+        `n − T_a` is triangular, we have `n = T_a + T_b` → print `2`.
+      - **Answer 3:** if neither holds, Eureka's theorem guarantees three
+        triangle numbers sum to `n` → print `3`.
+      - **Order matters:** we *must* test size 1 and 2 before declaring 3, and
+        the loop uses `long long` throughout since `n` reaches `10^12` and
+        `1 + 8n` even exceeds that.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+
+      ```
+      1
+      2
+      3
+      42
+      1337
+      ```
+
+      | n | isTriangle(n)? | two-term scan finds? | answer |
+      |----|---------------|----------------------|--------|
+      | 1 | T1=1 ✓ | — | **1** |
+      | 2 | 1+8·2=17, not a square ✗ | a=1: n−T1=1=triangular ✓ | **2** (1+1) |
+      | 3 | T2=3 ✓ | — | **1** |
+      | 42 | 1+8·42=337 ✗ | a=3: n−T3=36, T8=36 ✓ | **2** (6+36) |
+      | 1337 | 1+8·1337=10697 ✗ | no a makes leftover triangular | **3** |
+
+      The sample answer `1337 → 3` matches the statement's own decomposition
+      `1337 = 1326 + 10 + 1` (`T51 + T4 + T1`). Even though `n = 10^12` is far
+      above the sample, the `O(√n)` scan handles it in well under a second.
+  - type: mcq
+    prompt: Why is the answer guaranteed to be at most 3, and why does that make the search fast?
+    options:
+      - 'Because Gauß''s Eureka theorem says every integer is a sum of three triangle numbers, so we only ever answer 1, 2, or 3 and test the first two sizes directly rather than running a DP over all n sums'
+      - 'Because triangle numbers are dense enough that any two of them already sum to n'
+      - 'Because the answer is always exactly 3 for large n, so we can stop immediately'
+      - 'Because n up to 10^12 forces the answer to be tiny regardless of the theorem'
+    answer: 0
+    explanation: 'Eureka bounds the answer to the set {1,2,3}. We check 1 and 2 by membership tests (each O(√n) because only that many triangle numbers fit below n), and fall back to 3 otherwise. No DP over the n-sized sum space is ever needed, which is what makes n = 10^12 feasible.'
+type: content
+---

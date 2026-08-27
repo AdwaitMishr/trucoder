@@ -1,0 +1,272 @@
+---
+id: nested-ranges-check
+title: Nested Ranges Check
+difficulty: medium
+order: 44
+tags:
+  - sorting
+  - sweep-line
+  - intervals
+blocks:
+  - type: markdown
+    content: |
+      # Nested Ranges Check
+
+      **The technique: sweep a sorted list of intervals.** We have `n` ranges
+      `[a, b]`. Range `[a, b]` **contains** range `[c, d]` when `a ≤ c` and `d ≤ b` — in
+      words, one range completely wraps another (shared endpoints allowed, so it's
+      "*contains or equals*", but we only count *other* ranges). For every range we want
+      one bit: **does it contain some other range?** and **is it contained by some other
+      range?**
+
+      The trick that makes this trivial is to **sort by left endpoint ascending, and for
+      equal left endpoints by right endpoint descending**. With that order, think of
+      sweeping left to right: any range we've already seen has a left endpoint to the
+      left of (or equal to) the current one. So "is the current range contained by
+      something earlier?" reduces to a single running value — the **maximum right
+      endpoint seen so far**. If that max is `≥` the current range's `b`, then some
+      earlier, earlier-starting range also ends at or beyond the current range, so it
+      wraps it. The mirrored sweep (sort by left descending, right ascending, track the
+      **minimum** right endpoint) answers "does the current range contain some other
+      range?".
+
+      **When you reach for it:** interval problems asking about covering / nesting /
+      overlap relationships. The "sort by `L` asc, `R` desc and keep a running extremum"
+      pattern is the workhorse for everything from interval nesting to merging and
+      activity-selection follow-ups.
+
+      **Worked mini-example.** Ranges `[1,6]`, `[2,4]`, `[3,6]`. Sorted by `L` asc / `R`
+      desc: `[1,6]`, `[2,4]`, `[3,6]`.
+
+      - Process `[1,6]`: no earlier range → not contained; running max `R` = 6.
+      - Process `[2,4]`: max `R` so far is 6 ≥ 4 → `[2,4]` *is contained* (by `[1,6]`).
+      - Process `[3,6]`: max `R` is 6 ≥ 6 → `[3,6]` *is contained* (by `[1,6]`).
+
+      **Complexity.** One sort + one linear sweep → **O(n log n)** time, **O(n)** space.
+
+      :::tip
+      **Interview tip:** Containment over intervals is one of those problems where the
+      *tie-break matters*. Sorting by `L` ascending and `R` descending means that among
+      equal left endpoints the bigger range comes first, so the running `maxR` sweep is
+      correct even with shared endpoints. State that ordering explicitly in an interview
+      — interviewers specifically probe whether you break equal `L` the right way.
+      :::
+  - type: markdown
+    content: |
+      # Question — Nested Ranges Check
+
+      Given `n` ranges, determine for each range if it **contains some other range**, and
+      if **some other range contains it**.
+
+      Range `[a,b]` contains range `[c,d]` if `a ≤ c` and `d ≤ b`.
+
+      **Constraints:** `1 ≤ n ≤ 2 * 10^5`, `1 ≤ x < y ≤ 10^9`. No range appears more
+      than once.
+
+      **Input:** the first line has `n`; then `n` lines, each with `x y` (the range
+      `[x,y]`).
+      **Output:** two lines of `n` integers each, in the input order.
+      - Line 1: for each range, `1` if it contains some other range, else `0`.
+      - Line 2: for each range, `1` if some other range contains it, else `0`.
+
+      Sample input:
+
+      ```
+      4
+      1 6
+      2 4
+      4 8
+      3 6
+      ```
+
+      Sample output:
+
+      ```
+      1 0 0 0
+      0 1 0 1
+      ```
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      All versions below are *correct*; they differ only in how fast the containment
+      queries are.
+
+      **① Brute force — O(n²)**
+
+      For each range, scan every *other* range and test the two containment inequalities
+      directly. Two nested loops → `O(n²)`, which is fine for small `n` but about 4·10¹⁰
+      comparisons at `n = 2·10^5` — far over the 1-second limit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          int n; cin >> n;
+          vector<int> a(n), b(n);
+          for (int i = 0; i < n; i++) cin >> a[i] >> b[i];
+          vector<int> contains(n, 0), contained(n, 0);
+          for (int i = 0; i < n; i++)
+              for (int j = 0; j < n; j++) {
+                  if (i == j) continue;
+                  if (a[i] <= a[j] && b[j] <= b[i]) contains[i] = 1;      // i contains j
+                  if (a[j] <= a[i] && b[i] <= b[j]) contained[i] = 1;    // j contains i
+              }
+          for (int i = 0; i < n; i++) cout << contains[i] << (i + 1 == n ? '\n' : ' ');
+          for (int i = 0; i < n; i++) cout << contained[i] << (i + 1 == n ? '\n' : ' ');
+      }
+      ```
+
+      Time: **O(n²)**. Space: **O(n)**.
+
+      **② Optimization — sort once, sweep both answers, O(n log n)**
+
+      The insight: containment relationships between intervals are decided by comparing
+      left endpoints *and* right endpoints, and a single lexicographic sort lets us read
+      them off in one linear pass.
+
+      - **Does some earlier range contain me?** Sort by `L` asc, `R` desc. While sweeping
+        to the right, keep `maxR` = largest right endpoint seen so far. Every earlier
+        range has left endpoint `≤` mine, so if `maxR ≥ myB` then that earlier range also
+        ends at or beyond me — it contains me. (Equal-`L`, larger-`R` ranges are processed
+        earlier because of the `R` desc tie-break, so they're in `maxR` when we get here.)
+      - **Do I contain some other range?** Mirror it: sort by `L` desc, `R` asc, sweep,
+        keep `minR` = smallest right endpoint seen. Every earlier range now has left
+        endpoint `≥` mine; if `minR ≤ myB` then some later-starting range ends no later
+        than I do — it is fully inside me.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct R { int l, r, id; };
+      int main() {
+          int n; cin >> n;
+          vector<R> a(n);
+          for (int i = 0; i < n; i++) { cin >> a[i].l >> a[i].r; a[i].id = i; }
+          vector<int> contains(n, 0), contained(n, 0);
+
+          sort(a.begin(), a.end(), [](const R& x, const R& y) {
+              if (x.l != y.l) return x.l < y.l; return x.r > y.r; }); // L asc, R desc
+          int maxR = -1;
+          for (R& x : a) {
+              contained[x.id] = (maxR >= x.r);          // earlier range already wraps me?
+              maxR = max(maxR, x.r);
+          }
+
+          sort(a.begin(), a.end(), [](const R& x, const R& y) {
+              if (x.l != y.l) return x.l > y.l; return x.r < y.r; }); // L desc, R asc
+          int minR = INT_MAX;
+          for (R& x : a) {
+              contains[x.id] = (minR <= x.r);           // do I wrap this earlier range?
+              minR = min(minR, x.r);
+          }
+
+          for (int i = 0; i < n; i++) cout << contains[i] << (i + 1 == n ? '\n' : ' ');
+          for (int i = 0; i < n; i++) cout << contained[i] << (i + 1 == n ? '\n' : ' ');
+      }
+      ```
+
+      Time: **O(n log n)** (two sorts dominate). Space: **O(n)**.
+
+      **③ Further optimization — single-sort with an index array, O(n log n)**
+
+      If you'd rather not sort twice, sort *once* by `(L asc, R desc)` and record each
+      range's rank; then run both sweeps from the same original order using the rank
+      array. Same `O(n log n)`; it just trades a second sort for an extra `O(n)` index
+      array. The two-pass `②` is usually clearer — both are fine.
+
+      Time: **O(n log n)**. Space: **O(n)**.
+
+      **④ Alternative — coordinate compression + Fenwick, O(n log n)**
+
+      Different route to the same bits: compress right endpoints into ranks and sweep
+      sorted by `L`. To test "is `[c,d]` contained by some `[a,b]` with `a ≤ c`?", insert
+      each finished range's `R` into a Fenwick over ranks and ask whether any inserted
+      `R ≥ d` exists (a suffix query). This is the exact machinery needed for the *count*
+      version of this problem (next lesson), where we must quantify how many ranges are
+      contained — here it only decides a boolean, so the running-`maxR` sweep of `②` is
+      cheaper and simpler. Prefer `②` for this *check* problem; reach for Fenwick when the
+      output must be a *count*.
+
+      Time: **O(n log n)**. Space: **O(n)**.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      Focus on the **② optimization** — two sweeps, each a single running value.
+
+      - `struct R { int l, r, id; }` keeps a range together with its **original input
+        index** (`id`), because we must print answers in the original order even though
+        we sort.
+      - First sort: `L` **asc**, then `R` **desc**. Sweeping this order, every range
+        already seen starts no later than the current one. `contained[x.id] = (maxR >=
+        x.r)` reads: *if the furthest-reaching range before me ends at or beyond my right
+        endpoint, it contains me.* We then fold `x.r` into `maxR`. Equal-`L` ranges with
+        bigger `R` arrive first (the `R` desc tie-break), so they're folded into `maxR`
+        before any narrower same-`L` range is checked — no self-containment false positive.
+      - Second sort: `L` **desc**, `R` **asc**. Now every previously seen range starts no
+        earlier than the current one. `contains[x.id] = (minR <= x.r)` reads: *if the
+        earliest-ending range before me ends at or before my right endpoint, I contain it.*
+      - Both loops write into `contains` / `contained` by `id`, so order is restored for
+        output regardless of sort order.
+
+      The correctness hinge is the tie-break: without `R` descending (ascending `L`),
+      two ranges with the same `L` would be compared in the wrong order and the bigger one
+      could be falsely marked "contained" by the smaller one.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 4`, ranges in order: `[1,6]`, `[2,4]`, `[4,8]`, `[3,6]`.
+      Expected output line 1 (`contains`): `1 0 0 0`; line 2 (`contained`): `0 1 0 1`.
+
+      **Contained sweep** (`L` asc, `R` desc): `[1,6]`, `[2,4]`, `[3,6]`, `[4,8]` —
+
+      | step | range (id) | maxR before | maxR ≥ r? → contained | maxR after |
+      |------|------------|-------------|-----------------------|------------|
+      | 1 | `[1,6]` (0) | -1 | no → 0 | 6 |
+      | 2 | `[2,4]` (1) | 6 | 6 ≥ 4 → 1 | 6 |
+      | 3 | `[3,6]` (3) | 6 | 6 ≥ 6 → 1 | 6 |
+      | 4 | `[4,8]` (2) | 6 | 6 ≥ 8 → 0 | 8 |
+
+      `contained` by id: `[0,1,0,1]` → **`0 1 0 1`** ✓
+
+      **Contains sweep** (`L` desc, `R` asc): `[4,8]`, `[3,6]`, `[2,4]`, `[1,6]` —
+
+      | step | range (id) | minR before | minR ≤ r? → contains | minR after |
+      |------|------------|-------------|----------------------|------------|
+      | 1 | `[4,8]` (2) | ∞ | no → 0 | 8 |
+      | 2 | `[3,6]` (3) | 8 | 8 ≤ 6 → 0 | 6 |
+      | 3 | `[2,4]` (1) | 6 | 6 ≤ 4 → 0 | 4 |
+      | 4 | `[1,6]` (0) | 4 | 4 ≤ 6 → 1 | 4 |
+
+      `contains` by id: `[1,0,0,0]` → **`1 0 0 0`** ✓
+
+      Combined output:
+
+      ```
+      1 0 0 0
+      0 1 0 1
+      ```
+
+      Sanity: `[1,6]` wraps `[2,4]` and `[3,6]`, and is itself wrapped by nothing → its
+      `contains` is 1, its `contained` is 0. ✓
+  - type: flowchart
+    title: "Nested Ranges Check — two sweeps"
+    nodes: ["Sort by L asc, R desc", "Sweep, track maxR: contained[i] = maxR >= r", "Sort by L desc, R asc", "Sweep, track minR: contains[i] = minR <= r", "Restore original order by id and print", "Done: two binary strings ready"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+  - type: mcq
+    prompt: 'In the "contains some other range" sweep, why do we sort by left endpoint descending (and right endpoint ascending)?'
+    options:
+      - 'So that every range processed earlier starts no earlier than the current one — then keeping the minimum right endpoint lets us detect whether some earlier range ends within the current range, i.e. is contained by it'
+      - Because sorting descending always runs faster than ascending
+      - So that ranges that never overlap get skipped automatically
+      - It is only a cosmetic choice and has no effect on correctness
+    answer: 0
+    explanation: 'Sorting by L desc means every earlier range has L_j >= L_i; combined with the R asc tie-break (smaller later-starting ranges first), if the smallest R among earlier ranges is <= R_i then that earlier range has L_j >= L_i and R_j <= R_i — exactly the containment condition — so range i contains some other range. The ordering is what makes a single running minR equivalent to the pairwise test.'
+type: content
+---

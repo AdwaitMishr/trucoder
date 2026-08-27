@@ -1,0 +1,207 @@
+---
+id: minimum-cost-pairs
+title: "Minimum Cost Pairs"
+type: content
+difficulty: hard
+order: 393
+tags:
+  - sorting
+  - greedy
+  - priority-queue
+  - linked-list
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — a pairing is cheapest on adjacent values, and the marginal cost is a "weight on a path"
+
+      After sorting, no two numbers that end up paired can benefit from crossing: if `x ≤ y ≤ z ≤ w`, then
+      pairing `(x,w)` and `(y,z)` costs `(w−x)+(z−y)`, which is never better than the nested pairing
+      `(x,y)+(z,w)`. So we can assume the `k` pairs always connect **adjacent elements in the sorted order**.
+
+      Let the sorted array be `a[1..n]` and define the adjacent differences `d[i] = a[i+1] − a[i]` for
+      `i = 1..n−1`. Choosing pair `(a[i], a[i+1])` costs `d[i]`. Two differences `d[i]` and `d[j]` are
+      **compatible** exactly when they share no endpoint, i.e. `|i − j| ≠ 1`, because a number can be used in
+      at most one pair.
+
+      So the whole problem reduces to:
+
+      > Choose `k` indices of `d` that are pairwise non-adjacent (`|i−j| ≥ 2`), minimising their sum —
+      > output that minimum for every `k = 1..⌊n/2⌋`.
+
+      :::tip
+      **Interview tip:** "Pick `k` items, no two touching, minimising the sum" is a recurring pattern (seating
+      in a row, scheduling, picking socks). The regret/heap trick below — where you can "undo" a previous pick
+      and take its two neighbours instead — is a general hammer that answers *all* `k` in `O(n log n)`. Recognise
+      it by the words *at most one of each, adjacent are incompatible*.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      :::note
+      **Concrete formulation.** This is the CSES problem *Minimum Cost Pairs* (Additional Problems II).
+      :::
+
+      You are given an array of `n` integers. Consider pairings of `k` pairs: each number may appear in at most
+      **one** pair, and the cost of a pair `(a, b)` is `|a − b|`. The cost of a pairing is the sum of all pair
+      costs. Output the **minimum pairing cost for every `k = 1, 2, …, ⌊n/2⌋`**, one integer per `k`.
+
+      **Input.** The first line has an integer `n`. The second line has `n` integers `x_1, x_2, …, x_n`.
+
+      **Output.** Print `⌊n/2⌋` integers: the minimum costs for `k = 1, 2, …, ⌊n/2⌋`.
+
+      **Constraints.**
+      - `2 ≤ n ≤ 2·10^5`
+      - `1 ≤ x_i ≤ 10^9`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      8
+      3 1 2 7 9 3 4 7
+      ```
+
+      **Output:**
+      ```
+      0 0 1 6
+      ```
+
+      *Explanation:* minimum-cost pairings are `[(3,3)]`, `[(3,3),(7,7)]`, `[(1,2),(3,3),(7,7)]` and
+      `[(1,2),(3,3),(4,7),(7,9)]`.
+
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      Sort, reduce to non-adjacent differences, then track the minimal cost as `k` grows.
+
+      **① Brute force — O(n²) DP.** Let `dp[i][j]` = minimum cost choosing `j` compatible differences from the
+      first `i` differences (`d[1..i]`). `dp[i][j] = min(dp[i−1][j], dp[i−2][j−1] + d[i])`. Computing all `k`
+      costs `O(n·⌊n/2⌋) = O(n²)`, far too slow for `n = 2·10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin>>n; vector<ll>a(n);
+          for(auto&x:a) cin>>x;
+          sort(a.begin(),a.end());
+          int N=n-1; vector<ll>d(N);
+          for(int i=0;i<N;i++) d[i]=a[i+1]-a[i];
+          int K=n/2; const ll INF=4e18;
+          vector<vector<ll>>dp(N+1, vector<ll>(K+1, INF));
+          for(int i=0;i<=N;i++) dp[i][0]=0;
+          for(int i=1;i<=N;i++) for(int j=1;j<=K;j++){
+              dp[i][j]=dp[i-1][j];                      // skip d[i-1]
+              if(i>=2) dp[i][j]=min(dp[i][j], dp[i-2][j-1]+d[i-1]);
+              else if(j==1) dp[i][j]=min(dp[i][j], d[i-1]);
+          }
+          for(int k=1;k<=K;k++) cout<<dp[N][k]<<(k==K?'\n':' ');
+          return 0;
+      }
+      ```
+      *Complexity: O(n²) time, O(n·K) memory — only for tiny `n`.*
+
+      **② Optimization — greedy + "regret" with a min-heap and a linked list, O(n log n) (the solution).**
+      The DP transition `k → k+1` costs one *marginal*. Two moves can increase the number of pairs by one:
+      - add a brand-new difference `d[v]` that touches none of the chosen ones;
+      - **undo** a previously chosen `d[u]` and instead take both its neighbours `d[l], d[r]` — net change
+        `d[l] + d[r] − d[u]` (same number of neighbours, +1 pair).
+
+      Maintain a min-heap of candidate marginal costs and a doubly-linked list of surviving difference indices.
+      Each round pop the smallest live candidate; it adds one pair at that marginal cost. When we pick an internal
+      node, its two live neighbours become unusable, and we push the *combined* regret node with value
+      `d[l]+d[r]−d[u]` so the heap accounts for undoing this choice later. Boundary nodes (one or zero surviving
+      neighbours) are simply discarded with their neighbour.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      struct Node{ ll val; int idx; bool operator<(const Node&o)const{return val>o.val;} };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin>>n; vector<ll>a(n); for(auto&x:a) cin>>x;
+          sort(a.begin(),a.end());
+          int N=n-1; vector<ll>d(N);
+          for(int i=0;i<N;i++) d[i]=a[i+1]-a[i];
+          vector<int> pre(N),nxt(N),alive(N,1);
+          for(int i=0;i<N;i++){ pre[i]=i-1; nxt[i]=(i+1<N?i+1:-1); }
+          priority_queue<Node> pq;
+          for(int i=0;i<N;i++) pq.push({d[i],i});
+          vector<ll>ans; ll cur=0; int K=n/2;
+          for(int k=1;k<=K;k++){
+              while(!pq.empty()&&!alive[pq.top().idx]) pq.pop();
+              Node t=pq.top(); pq.pop(); int i=t.idx;
+              cur+=t.val;
+              int l=pre[i], r=nxt[i];
+              bool L=(l>=0&&alive[l]), R=(r>=0&&alive[r]);
+              if(L&&R){
+                  ll nv=d[l]+d[r]-d[i];
+                  alive[l]=0; alive[r]=0;
+                  pre[i]=(l>=0?pre[l]:-1); nxt[i]=(r>=0?nxt[r]:-1);
+                  if(pre[i]>=0) nxt[pre[i]]=i;
+                  if(nxt[i]>=0) pre[nxt[i]]=i;
+                  d[i]=nv; pq.push({nv,i});
+              } else {
+                  alive[i]=0;
+                  if(L) alive[l]=0;
+                  if(R) alive[r]=0;
+              }
+              ans.push_back(cur);
+          }
+          for(int k=0;k<K;k++){ if(k)cout<<" "; cout<<ans[k]; }
+          cout<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: O(n log n) time, O(n) memory — each difference is pushed/popped a constant number of times.*
+
+      **③ Further optimization.** The heap in ② runs in `O(n log n)`, dominated by the `O(n log n)` sort, so it is
+      already optimal up to constant factors. No asymptotically better general solution exists — reading and
+      sorting the input alone costs `O(n log n)`.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The key block (tier ②), `solve` — O(n log n):
+      1. **Sort, then `d[i] = a[i+1] − a[i]`** turns pairing into picking non-adjacent differences.
+      2. **`priority_queue<Node> pq`** keeps the smallest live marginal cost at the front; stale entries (dead
+         indexes) are skipped with `while(!pq.empty() && !alive[pq.top().idx]) pq.pop()`.
+      3. **Internal pick with two neighbours:** `nv = d[l]+d[r]−d[i]` is the cheapest way to reach `k+1` pairs by
+         replacing the pick at `i` with its two neighbours. We kill `l, r`, re-link `i`, and push `{nv, i}`.
+      4. **Boundary pick:** only one (or zero) surviving neighbour — no regret exists, so just kill `i` and any
+         live neighbour.
+      5. `cur` accumulates; each round appends the answer for that `k`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 8`, `x = 3 1 2 7 9 3 4 7` → sorted `a = 1 2 3 3 4 7 7 9`, differences
+      `d = [1,1,0,1,3,0,2]` (indices 0..6), `K = 4`.
+
+      - **k=1:** heap min is `d[2]=0` → `ans=[0]`. Kill neighbours 1,3; node 2 becomes `d[1]+d[3]−d[2]=1+1−0=2`.
+      - **k=2:** heap min among live is `d[5]=0` (node 5) → `ans=[0,0]`. Kill 4,6; node 5 becomes
+        `d[4]+d[6]−d[5]=3+2−0=5`.
+      - **k=3:** live nodes 0,2,5 hold `1,2,5`; min is node 0 (`d[0]=1`). It is a boundary (no left neighbour),
+        so kill it and its neighbour node 2 → `ans=[0,0,1]`.
+      - **k=4:** only node 5 (`5`) remains live → `cur = 1+5 = 6`, `ans=[0,0,1,6]`.
+
+      Output `0 0 1 6` ✓ matches the sample (pairs `(1,2),(3,3),(4,7),(7,9)`).
+
+  - type: mcq
+    prompt: "After sorting, why may we only ever pair adjacent elements in an optimal solution?"
+    options:
+      - "Non-crossing pairs are never more expensive than crossing pairs, so some optimal solution uses only adjacent (nested) pairs."
+      - "The problem rule forbids pairing any two numbers that are adjacent in the sorted order."
+      - "Pairing non-adjacent numbers is always cheaper, so we must avoid adjacency."
+      - "There are always enough numbers to pair only adjacent ones regardless of k."
+    answer: 0
+    explanation: "For x ≤ y ≤ z ≤ w, the crossing cost (w−x)+(z−y) is always ≥ the nested cost (x−y)+(z−w); hence we can restrict to adjacent pairs, reducing the problem to selecting k pairwise non-adjacent adjacent-differences d[i]. Nested pairs never cost more, so an optimal pairing always exists among the adjacent ones."
+---

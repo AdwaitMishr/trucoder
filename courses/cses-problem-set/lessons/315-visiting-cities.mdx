@@ -1,0 +1,195 @@
+---
+id: visiting-cities
+title: "Visiting Cities"
+type: content
+difficulty: hard
+order: 315
+tags:
+  - dijkstra
+  - shortest-path-dag
+  - articulation-points
+  - tarjan
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — cities on *every* cheapest route sit on a DAG of tight edges and are its articulation points
+
+      We must list the cities that lie on **every minimum-price route** from city `1` to city `n`. Notice this is
+      different from Critical Cities: here "route" means *shortest* route, so we only care about edges on some
+      shortest `1→n` path.
+
+      Let `dist1[u]` be the cheapest cost from `1`, and `distN[u]` the cheapest cost from `u` to `n`. A vertex `v`
+      lies on **some** shortest path iff `dist1[v] + distN[v] = dist1[n]`. An edge `u→v` is part of some shortest
+      path exactly when it is **tight**: `dist1[u] + w = dist1[v]` and both endpoints qualify.
+
+      Restrict the graph to qualifying vertices and tight edges. Since every tight edge strictly increases
+      `dist1`, this subgraph is a **DAG**, directed from smaller to larger distance, with the single source `1` and
+      single sink `n`. In a DAG, a vertex `(≠1, n)` is on *every* `1→n` path exactly when removing it separates `1`
+      from `n` — that is, it is an **articulation point** of the subgraph (viewed as undirected). The endpoints
+      `1` and `n` are always required, so the answer is `{1, n} ∪ { articulation points }`, sorted.
+
+      :::tip
+      **Interview tip:** Dijkstra gives you a DAG of shortest paths for free (`dist` is a valid topological
+      order). "Everything on every shortest path" then becomes "articulation points inside that DAG", and
+      "how many shortest paths go through v" becomes a DP product. Always build the shortest-path DAG first.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      :::note
+      **Concrete formulation.** This is the CSES problem *Visiting Cities* (Advanced Graph Problems).
+      :::
+
+      You want to travel from **Syrjälä (city 1)** to **Lehmälä (city n)** by plane using a **minimum-price
+      route**. Some cities are *certain* to be visited: they lie on **every** minimum-price route. Print the
+      number of certain cities and the cities themselves, in increasing order.
+
+      **Input.** First line: `n` and `m` (cities and one-way flights). Then `m` lines `a b c`: a one-way flight
+      from `a` to `b` costing `c`. A route from `1` to `n` is guaranteed.
+
+      **Output.** First print `k`: the number of certain cities. Then print the `k` cities sorted increasing.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 10^5`, `1 ≤ m ≤ 2·10^5`, `1 ≤ c ≤ 10^9`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      5 6
+      1 2 3
+      1 3 4
+      2 3 1
+      2 4 5
+      3 4 1
+      4 5 8
+      ```
+
+      **Output:**
+      ```
+      4
+      1 3 4 5
+      ```
+
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate every shortest path.** If the number of shortest paths is small, list them all
+      and intersect their vertex sets. Correct but the path count can be exponential.
+
+      ```cpp
+      // conceptual: DFS with dist1[] pruning, collecting every path with total == dist1[n]
+      // answer = intersection of all such path vertex sets  (only feasible for tiny graphs)
+      ```
+      *Complexity: O(#shortest-paths · n) — infeasible for the real limits.*
+
+      **② Optimization — Dijkstra × 2 + articulation points on the shortest-path DAG, O((n+m) log n) (the
+      solution).** Build the tight-edge DAG, then run Tarjan's articulation-point DFS on it (as an undirected
+      graph); combine with the mandatory endpoints.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll INF = 4e18;
+      int main(){ ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; cin>>n>>m;
+          vector<vector<pair<int,ll>>> g(n), rg(n);
+          for(int i=0;i<m;i++){int a,b;ll c;cin>>a>>b>>c;--a;--b; g[a].push_back({b,c}); rg[b].push_back({a,c});}
+          auto dij=[&](int s, vector<vector<pair<int,ll>>>& gr){ vector<ll> d(n,INF); d[s]=0;
+              priority_queue<pair<ll,int>,vector<pair<ll,int>>,greater<>> pq; pq.push({0,s});
+              while(!pq.empty()){ auto[du,u]=pq.top(); pq.pop(); if(du>d[u])continue;
+                  for(auto[v,w]:gr[u]) if(du+w<d[v]){d[v]=du+w; pq.push({d[v],v});} } return d; };
+          vector<ll> d1=dij(0,g), dn=dij(n-1,rg); ll D=d1[n-1];
+          vector<char> on(n,0); for(int i=0;i<n;i++) on[i]=(d1[i]+dn[i]==D);
+          vector<vector<int>> adj(n);
+          for(int u=0;u<n;u++) if(on[u]) for(auto[v,w]:g[u])
+              if(on[v] && d1[u]+w==d1[v]) { adj[u].push_back(v); adj[v].push_back(u); }
+          vector<int> tin(n,-1), low(n,0); vector<char> isArt(n,0); int timer=0;
+          function<void(int,int)> dfs=[&](int u,int p){ tin[u]=low[u]=timer++; int ch=0;
+              for(int v: adj[u]){ if(v==p) continue;
+                  if(tin[v]!=-1) low[u]=min(low[u],tin[v]);
+                  else{ dfs(v,u); low[u]=min(low[u],low[v]);
+                        if(p!=-1 && low[v]>=tin[u]) isArt[u]=1; ch++; } }
+              if(p==-1 && ch>1) isArt[u]=1; };
+          dfs(0,-1); isArt[0]=1; isArt[n-1]=1;
+          vector<int> cuts; for(int i=0;i<n;i++) if(on[i]&&isArt[i]) cuts.push_back(i+1);
+          sort(cuts.begin(),cuts.end()); cout<<cuts.size()<<"\n"; for(int x:cuts)cout<<x<<" "; cout<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: two Dijkstras O((n+m) log n) + Tarjan O(n+m). Deterministic — no hashing.*
+
+      **③ Alternative — count shortest paths through each vertex, O((n+m) log n).** On the shortest-path DAG,
+      compute `ways1[v]` = number of shortest paths `1→v`, and `waysN[v]` = number of shortest paths `v→n`, by
+      strictly-increasing/·decreasing `dist1` order. If `ways1[v] · waysN[v] = total` (number of shortest `1→n`
+      paths), then *every* shortest path passes through `v`, so it is certain. (Use two large moduli to make
+      collisions negligible.)
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll; const ll INF=4e18;
+      int main(){ ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; cin>>n>>m; vector<vector<pair<int,ll>>> g(n), rg(n);
+          for(int i=0;i<m;i++){int a,b;ll c;cin>>a>>b>>c;--a;--b;g[a].push_back({b,c});rg[b].push_back({a,c});}
+          auto dij=[&](int s, vector<vector<pair<int,ll>>>& gr){ vector<ll>d(n,INF); d[s]=0;
+              priority_queue<pair<ll,int>,vector<pair<ll,int>>,greater<>> pq; pq.push({0,s});
+              while(!pq.empty()){auto[du,u]=pq.top();pq.pop(); if(du>d[u])continue;
+                  for(auto[v,w]:gr[u]) if(du+w<d[v]){d[v]=du+w;pq.push({d[v],v});}} return d;};
+          vector<ll> d1=dij(0,g), dn=dij(n-1,rg); ll D=d1[n-1];
+          const ll M=1000000007; vector<ll> w1(n,0), wn(n,0);
+          vector<pair<ll,int>> ord; for(int i=0;i<n;i++) if(d1[i]+dn[i]==D) ord.push_back({d1[i],i});
+          sort(ord.begin(),ord.end()); w1[0]=1;
+          for(auto[d,u]:ord) for(auto[v,w]:g[u])
+              if(d1[u]+w==d1[v] && d1[v]+dn[v]==D) w1[v]=(w1[v]+w1[u])%M;
+          wn[n-1]=1;
+          for(auto it=ord.rbegin(); it!=ord.rend(); ++it){ auto[d,u]=*it; for(auto[p,w]:rg[u])
+              if(dn[u]+w==dn[p] && d1[p]+dn[p]==D) wn[p]=(wn[p]+wn[u])%M; }
+          ll total=w1[n-1]; vector<int> res;
+          for(int i=0;i<n;i++) if(d1[i]+dn[i]==D && (w1[i]*wn[i])%M==total) res.push_back(i+1);
+          sort(res.begin(),res.end()); cout<<res.size()<<"\n";
+          for(int x:res)cout<<x<<" "; cout<<"\n"; return 0;
+      }
+      ```
+      *Complexity: O((n+m) log n). Elegant but modular — hash collisions are vanishingly unlikely with two primes.*
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The key block (tier ②), `solve` — Dijkstra × 2 + Tarjan:
+      1. **Two Dijkstras** give `d1[]` (from 1) and `dn[]` (from n on the reversed graph), so `D = d1[n-1]`.
+      2. **`on[u] = (d1[u]+dn[u] == D)`** selects vertices on *some* shortest path.
+      3. **Tight edges** `d1[u]+w == d1[v]` build the undirected adjacency `adj` of the shortest-path DAG.
+      4. **Tarjan `dfs`** marks articulation points (`low[to] >= tin[u]`), then `isArt[0]=isArt[n-1]=1` adds the
+         endpoints. Sorted, `{1, n} ∪ articulation points` is the answer.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5, m = 6`, edges `1→2(3), 1→3(4), 2→3(1), 2→4(5), 3→4(1), 4→5(8)`.
+
+      `D = dist1[5] = 13`. On-path vertices and shortest-path DAG: `1→2→3→4→5` (3+1+1+8=13) and `1→3→4→5`
+      (4+1+8=13). Vertex `2` is on the first path but **not** on `1→3→4→5`, so it is *not* certain.
+
+      Undirected tight-edge subgraph edges: `1-2, 1-3, 2-3, 3-4, 4-5`. Tarjan articulation points: removing `3`
+      disconnects `{1,2}` from `{4,5}`; removing `4` disconnects `{1,2,3}` from `{5}` → articulation points `{3,4}`
+      plus endpoints `{1,5}`, sorted = `1 3 4 5`. ✓ matches the expected `4 / 1 3 4 5`.
+
+      (Tier ③ agrees: `ways1·waysN/ways1[5]` is 1 exactly for vertices 1,3,4,5.)
+
+  - type: mcq
+    prompt: "Which invariant identifies a vertex that is certainly visited by every minimum-price 1→n route?"
+    options:
+      - "ways1[v] · waysN[v] equals the total number of minimum-price 1→n routes (v is on all of them)."
+      - "dist1[v] equals distN[v]."
+      - "v has the largest dist1 value among on-path vertices."
+      - "v appears in at least one minimum-price route."
+    answer: 0
+    explanation: "Every minimum-price path splits at v into a shortest 1→v part and a shortest v→n part, so the number of such paths through v is ways1[v]·waysN[v]. If that equals the total number of cheapest 1→n routes, every one of them uses v — v must appear on every route. Merely lying on one route (or having equal distances) is not enough."
+---

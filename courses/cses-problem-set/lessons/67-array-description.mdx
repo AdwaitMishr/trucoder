@@ -1,0 +1,319 @@
+---
+id: array-description
+title: Array Description
+difficulty: medium
+order: 67
+tags:
+  - dynamic-programming
+  - dp-over-values
+  - counting
+  - modular-arithmetic
+blocks:
+  - type: markdown
+    content: |
+      # Array Description
+
+      **The technique: DP over positions and values.** When an array must satisfy a
+      *local* rule (here: adjacent values differ by at most 1) and you must *count*
+      how many arrays match a partial description, keep a DP state for "what value do
+      I put at position `i`". The transition only looks at the neighbouring value, so
+      `dp[i][v]` — the number of valid prefixes of length `i` ending with the value
+      `v` — is all you need.
+
+      **The rule.** `abs(x[i] − x[i-1]) ≤ 1`, so the value at position `i` can be
+      `v − 1`, `v`, or `v + 1` if the previous value was `v`. Therefore:
+
+      ```
+      dp[i][v] = dp[i-1][v-1] + dp[i-1][v] + dp[i-1][v+1]
+      ```
+
+      summed over the valid neighbours, and taken modulo `10^9+7`. Unknown positions
+      run over *every* `v` in `1..m`; known positions only over the single fixed value.
+
+      **Why counting mod `10^9+7`?** The number of arrays explodes exponentially
+      (each of `n` slots can hold up to `m` values), way beyond 64-bit integers. The
+      problem asks for the count *modulo* `10^9+7`, and the recurrence is a plain sum,
+      so we take the modulo at every addition step.
+
+      **Worked mini-example.** `m = 1` never drops below 1 and never exceeds `m`, so
+      neighbours are clamped to `[1, m]`. For `x = [2, 0, 2]`, `m = 5`: the middle 0
+      may be any value that is within 1 of both surrounding 2s — i.e. `{1, 2, 3}` —
+      giving 3 arrays. (This is exactly the sample.)
+
+      **Complexity.** There are `n` positions and `m` values, and each transition
+      sums 3 previous states: **O(n·m)** time. Storing just the previous row of `m`
+      values keeps memory at **O(m)**. With `n ≤ 10^5` and `m ≤ 100` that is only
+      `10^7` operations.
+
+      **When you reach for it:** counting sequences that satisfy local/adjacency
+      constraints (e.g. "no two equal adjacent", "values must differ by at least k"),
+      broken test data, and "count arrays consistent with partial info" — the state
+      is the last value, and the transition is a sum over the allowed previous values.
+
+      :::tip
+      **Interview tip:** "count ways" with a local constraint is a DP-counting
+      signal. Interviewers look for (1) a crisp state definition (`dp[i][v]` =
+      prefixes ending at value `v`), (2) the correct neighbour-sum transition, and
+      (3) clamping to `[1, m]` so indices never leave bounds. A common follow-up is
+      "there are `t` queries with different `m`" — precompute or spot reuse instead
+      of recomputing. Modular counting (not min/max) is the twist that separates
+      counting problems from optimization ones.
+      :::
+  - type: markdown
+    content: |
+      # Question — Array Description
+
+      You know that an array has `n` integers **between 1 and `m`**, and the absolute
+      difference between two adjacent values is **at most 1**. Some values of the
+      array may be unknown. Count the number of arrays that match the description.
+
+      **Constraints:**
+      - `1 ≤ n ≤ 10^5`
+      - `1 ≤ m ≤ 100`
+      - `0 ≤ x[i] ≤ m` (where `0` denotes an unknown value)
+
+      **Input:** the first line has two integers `n` and `m`. The next line has `n`
+      integers `x[1], ..., x[n]`: the contents of the array. Value `0` denotes an
+      unknown value.
+
+      **Output:** one integer — the number of arrays **modulo `10^9+7`**.
+
+      Sample input:
+
+      ```
+      3 5
+      2 0 2
+      ```
+
+      Sample output:
+
+      ```
+      3
+      ```
+
+      Explanation: the arrays `[2, 1, 2]`, `[2, 2, 2]` and `[2, 3, 2]` match the
+      description.
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(m^n)** *(only for tiny n)*
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      const long long MOD = 1000000007LL;
+      int n, m; vector<int> x; long long ans = 0;
+
+      void gen(int i, int prev) {
+          if (i == n) { ans = (ans + 1) % MOD; return; }
+          if (x[i] != 0) {                       // fixed value
+              if (abs(x[i] - prev) <= 1) gen(i + 1, x[i]);
+              return;
+          }
+          for (int v = 1; v <= m; ++v) {         // unknown: try every value
+              if (abs(v - prev) <= 1) gen(i + 1, v);
+          }
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          cin >> n >> m;
+          x.resize(n);
+          for (int i = 0; i < n; ++i) cin >> x[i];
+          for (int v = 1; v <= m; ++v)
+              if (x[0] == 0 || x[0] == v) gen(1, v);   // first value free or fixed
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+      O(m^n) sequences to enumerate — unusable once `n` grows past ~15. Correct but
+      only a baseline.
+
+      **② Optimization — DP over values, O(n·m) time, O(m) space** *(the chosen
+      solution)*
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      const long long MOD = 1000000007LL;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<int> x(n);
+          for (int i = 0; i < n; ++i) cin >> x[i];
+
+          vector<long long> dp(m + 1, 0);
+          // first position: one way per allowed fixed value, or all values if unknown
+          if (x[0] != 0) dp[x[0]] = 1;
+          else for (int v = 1; v <= m; ++v) dp[v] = 1;
+
+          for (int i = 1; i < n; ++i) {
+              vector<long long> ndp(m + 1, 0);
+              if (x[i] != 0) {                       // fixed value
+                  int v = x[i];
+                  if (v > 1)     ndp[v] = (ndp[v] + dp[v - 1]) % MOD;
+                  ndp[v] = (ndp[v] + dp[v]) % MOD;
+                  if (v < m)     ndp[v] = (ndp[v] + dp[v + 1]) % MOD;
+              } else {                              // unknown: sum over neighbours per v
+                  for (int v = 1; v <= m; ++v) {
+                      if (v > 1) ndp[v] = (ndp[v] + dp[v - 1]) % MOD;
+                      ndp[v] = (ndp[v] + dp[v]) % MOD;
+                      if (v < m) ndp[v] = (ndp[v] + dp[v + 1]) % MOD;
+                  }
+              }
+              dp.swap(ndp);
+          }
+
+          long long ans = 0;
+          for (int v = 1; v <= m; ++v) ans = (ans + dp[v]) % MOD;
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+      O(n·m) time, O(m) memory. Every position costs one pass over `m` values, each
+      summing 3 neighbours. 10^7 ops for the max constraints — instant.
+
+      **③ Further optimization — prefix-sum convolution, O(n·m) time, O(m) space.**
+      The recurrence `ndp[v] = dp[v-1] + dp[v] + dp[v+1]` is a *sliding window sum*
+      of width 3. Compute a prefix-sum array `pref` of `dp` once per position, then
+      `ndp[v] = pref[v+1] - pref[v-2]` (clamped), an O(1) lookup per value. Same
+      O(n·m) cost but cleaner when the "difference ≤ k" rule generalizes to a window
+      of width `2k+1` (e.g. differ by at most 5 → window 11). Memory stays O(m).
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<int> x(n);
+          for (int i = 0; i < n; ++i) cin >> x[i];
+          vector<long long> dp(m + 1, 0);
+          if (x[0] != 0) dp[x[0]] = 1;
+          else for (int v = 1; v <= m; ++v) dp[v] = 1;
+          for (int i = 1; i < n; ++i) {
+              vector<long long> pref(m + 2, 0);
+              for (int v = 1; v <= m; ++v) pref[v] = (pref[v - 1] + dp[v]) % MOD;
+              vector<long long> ndp(m + 1, 0);
+              if (x[i] != 0) {
+                  int v = x[i];
+                  ndp[v] = ((pref[min(v + 1, m)] - pref[max(v - 2, 0)] + MOD) % MOD);
+              } else {
+                  for (int v = 1; v <= m; ++v)
+                      ndp[v] = ((pref[min(v + 1, m)] - pref[max(v - 2, 0)] + MOD) % MOD);
+              }
+              dp.swap(ndp);
+          }
+          long long ans = 0;
+          for (int v = 1; v <= m; ++v) ans = (ans + dp[v]) % MOD;
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+      O(n·m) time, O(m) space. Same complexity class, easier to extend to wider
+      difference windows.
+
+      **④ Alternative — none meaningful.** There is no closed-form shortcut; the
+      partial description (fixed arbitrary positions) breaks any formula. The DP over
+      values is the intended and optimal solution.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② the two-row DP over values.** Key pieces:
+
+      - **`dp[v]` = number of valid prefixes so far that end with the value `v`.** Only
+        the *previous* value matters for the adjacency rule, so one row of `m` slots
+        fully describes the state.
+      - **Initialization.** Position 0 has no predecessor, so every value is a valid
+        start. If `x[0]` is fixed, only that value has 1 way; if unknown (`0`), every
+        value `1..m` has 1 way.
+      - **Transition for each later position.** A new value `v` at position `i` is
+        legal only if the previous value was `v-1`, `v`, or `v+1`. So `ndp[v]` sums
+        those three `dp` entries. Reading `v` from `1..m`, clamping `v-1 ≥ 1` and
+        `v+1 ≤ m` keeps indices in bounds.
+      - **Fixed vs unknown.** A fixed `x[i] = c` means `ndp[v]` is 0 for every `v ≠ c`
+        and the c-entry is the three-neighbour sum. Unknown means we fill all `m`
+        entries. This is encoded as one summed-`v` case vs a loop.
+      - **Modulo.** Every addition is `% MOD`. The running total is always < `2·MOD`
+        before reduction, so `(a + b) % MOD` is numerically exact.
+      - **Final answer.** Sum `dp[1..m]` — a valid full array can end with any value.
+      - **Memory.** Only the previous row and the next row exist at any time → O(m).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      3 5
+      2 0 2
+      ```
+      `n = 3`, `m = 5`, `x = [2, 0, 2]`.
+
+      **Initialization (position 0 → `dp`):** `x[0] = 2` is fixed, so
+      `dp = [_, 0, 1, 0, 0, 0]` (values 1..5).
+
+      **Position 1 (unknown):** for each `v`, `ndp[v] = dp[v-1] + dp[v] + dp[v+1]`.
+
+      | v | dp[v-1] + dp[v] + dp[v+1] | ndp[v] |
+      |---|---------------------------|--------|
+      | 1 | 0 + 0 + 1 | 1 |
+      | 2 | 0 + 1 + 0 | 1 |
+      | 3 | 1 + 0 + 0 | 1 |
+      | 4 | 0 + 0 + 0 | 0 |
+      | 5 | 0 + 0 + 0 | 0 |
+
+      `dp = [_, 1, 1, 1, 0, 0]`.
+
+      **Position 2 (fixed = 2):** `ndp[2] = dp[1] + dp[2] + dp[3] = 1 + 1 + 1 = 3`; all
+      other `ndp[v] = 0`.
+
+      `dp = [_, 0, 3, 0, 0, 0]`.
+
+      **Answer:** `sum(dp[1..5]) = 0 + 3 + 0 + 0 + 0 = **3**`. ✓ (matches the sample).
+
+      The three arrays are exactly `[2,1,2]`, `[2,2,2]`, `[2,3,2]` — the middle value
+      being any neighbour of 2 within distance 1.
+
+      **Edge cases:**
+      - All unknown (`x = [0,0]`, `m = 2`): position 0 gives `dp = [1,1]`; position 1
+        gives 2+1+0 walks → `ndp[1] = dp[1]+dp[2] = 2`, `ndp[2] = dp[1]+dp[2] = 2`,
+        answer 4 (all of `[1,1] [1,2] [2,1] [2,2]`).
+      - `m = 1`: values only ever 1, answer is 1 whenever that is consistent with
+        fixed entries, else 0.
+      - Contradiction (e.g. `[2, 0, 5]` with `m = 5`): no value is within 1 of both 2
+        and 5, so `ndp[5] = 0` and the answer is 0.
+  - type: flowchart
+    title: "Counting arrays consistent with adjacency rule"
+    nodes:
+      - "Initialize dp after position 0"
+      - "Next position i"
+      - "For value v: ndp[v] = dp[v-1]+dp[v]+dp[v+1]"
+      - "Fixed x[i]? keep only that v"
+      - "Unknown? fill all v = 1..m"
+      - "All positions done?"
+      - "Sum dp[1..m] mod 1e9+7"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "fixed"}
+      - {from: 2, to: 4, label: "unknown"}
+      - {from: 3, to: 5}
+      - {from: 4, to: 5}
+      - {from: 5, to: 1, label: "no"}
+      - {from: 5, to: 6, label: "yes"}
+  - type: mcq
+    prompt: In the O(n·m) solution, why is storing only the PREVIOUS row of m values sufficient?
+    options:
+      - Because the answer only depends on the last position, not intermediate ones
+      - Because the transition for position i's value v only depends on the m values at position i-1 (v-1, v, v+1), so no earlier row is ever read again
+      - Because m values always fit in registers
+      - Because the adjacency rule makes position i independent of all others
+    answer: 1
+    explanation: 'dp[i][v] sums only dp[i-1][v-1], dp[i-1][v] and dp[i-1][v+1]. Nothing before position i-1 is referenced, so rows 0..i-2 are dead once row i-1 is built — a two-row rolling update (dp and ndp swapped each step) is sufficient. This is the classic O(m) memory optimization for first-order recurrences; the change is invisible to the final answer because the complete solution is the sum over the last row.'
+type: content
+---

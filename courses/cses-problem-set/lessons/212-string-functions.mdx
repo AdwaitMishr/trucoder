@@ -1,0 +1,273 @@
+---
+id: string-functions
+title: String Functions
+difficulty: medium
+order: 212
+tags:
+  - string
+  - kmp
+  - prefix-function
+  - z-function
+blocks:
+  - type: markdown
+    content: |
+      # String Functions — the KMP prefix function and the Z-array
+
+      Two of the most reused string primitives are the **Z-array** and the
+      **prefix function (π)**. Both answer the same meta-question — *how much of
+      the start of the string is repeated here?* — from opposite directions, and
+      both are computable in **O(n)**.
+
+      - **π(i)** (KMP, "prefix function"): the length of the **longest proper
+        border** of the prefix `s[1..i]` — the largest `L < i` such that the
+        first `L` characters equal the last `L` characters. By convention
+        `π(1) = 0`.
+      - **z(i)** (Z-algorithm): the length of the **longest common prefix** of
+        the whole string and the suffix starting at position `i`. By convention
+        `z(1) = 0`.
+
+      When you *reach* for them:
+
+      - **Pattern matching** (does `p` occur in `t`?) in linear time: build
+        `p + '#' + t` and read π or z.
+      - **Finding borders** (longest proper prefix that is also a suffix) and
+        **periods** of a string.
+      - **Counting legal placements** / compression problems, and as a building
+        block inside many harder string DP problems.
+
+      Both algorithms share the same trick: instead of re-comparing from scratch
+      at every position, they **reuse the information from earlier in the string**
+      (a "box" you have already matched) to skip comparisons.
+
+      **Mini-example.** For `s = abacaba`:
+
+      | i | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+      |---|-----|-----|-----|-----|-----|-----|-----|
+      | s | a | b | a | c | a | b | a |
+      | π(i) | 0 | 0 | 1 | 0 | 1 | 2 | 3 |
+      | z(i) | 0 | 0 | 1 | 0 | 3 | 0 | 1 |
+
+      *(z values are 0-indexed here with `z(1)=0` as the CSES convention.)*
+
+      **Complexity.** Both are **O(n)** time, **O(n)** space. `π` needs just the
+      previous value to bootstrap. `z` tracks a `[l, r]` box and each extension
+      of `r` happens at most `n` times overall.
+
+      :::tip
+      **Interview tip:** the prefix function is the single most-asked string
+      topic after hashing — it's the core of KMP substring search, string
+      periodicity, and the failure function of Aho-Corasick. Watch for it in
+      "count how many times the pattern shifts / number of distinct borders",
+      and remember that `π(n)` and `n - π(n)` reveal the string's period.
+      :::
+  - type: markdown
+    content: |
+      # Question — String Functions
+
+      We consider a string of `n` characters, indexed `1..n`. Your task is to
+      calculate **all values** of the following two functions:
+
+      - `z(i)` denotes the maximum length of a substring that **begins at
+        position i** and is a prefix of the string. In addition, `z(1) = 0`.
+      - `π(i)` denotes the maximum length of a substring that **ends at
+        position i**, is a prefix of the string, and whose length is at most
+        `i - 1`.
+
+      Note that `z` is used in the Z-algorithm, and `π` is used in the KMP
+      algorithm.
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 10^6`
+      - Each character is between `a` and `z`.
+
+      **Input.** The only input line has the string of length `n`.
+
+      **Output.** Print two lines: first the values of the `z` function, then
+      the values of the `π` function (space separated, `n` values per line).
+
+      Sample input:
+
+      ```
+      abaabca
+      ```
+
+      Sample output:
+
+      ```
+      0 0 1 2 0 0 1
+      0 0 1 1 2 0 1
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — compare directly, O(n²)–O(n³)**
+
+      For each `i`, compute `z(i)` by literally comparing `s[0..]` with `s[i..]`
+      until they diverge. For each `i`, compute `π(i)` by trying every possible
+      border length `L` from `i` down to `1` and checking equality by hand.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; cin >> s;
+          int n = (int)s.size();
+
+          vector<int> z(n, 0);
+          for (int i = 1; i < n; ++i)                      // z(1) = 0
+              while (i + z[i] < n && s[z[i]] == s[i + z[i]]) z[i]++;
+
+          vector<int> pi(n, 0);
+          for (int i = 1; i < n; ++i) {
+              for (int L = i; L >= 1; --L) {               // try every border length
+                  bool ok = true;
+                  for (int j = 0; j < L; ++j)
+                      if (s[j] != s[i - L + 1 + j]) { ok = false; break; }
+                  if (ok) { pi[i] = L; break; }
+              }
+          }
+
+          for (int i = 0; i < n; ++i) cout << (i ? " " : "") << z[i];
+          cout << "\n";
+          for (int i = 0; i < n; ++i) cout << (i ? " " : "") << pi[i];
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      The `π` loop alone is O(n²) (and its inner check pushes it to O(n³)).
+      Correct, but **hopeless at `n = 10^6`** — about `10^12` character
+      comparisons.
+
+      **② Optimization — Z-algorithm + KMP prefix function, O(n) (submission)**
+
+      Both functions are computed in a single linear pass by **reusing an
+      already-matched box** instead of re-comparing.
+
+      Z-algorithm: keep an interval `[l, r]` = the rightmost box that matches
+      the prefix. If `i ≤ r`, many characters are already known to match, so
+      bootstrap `z[i]` from `z[i-l]` and only extend past `r`. KMP: use the
+      failure chain `π[j-1]` to backtrack `j` so total fallback work is O(n).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; cin >> s;
+          int n = (int)s.size();
+
+          // --- Z-array (O(n)) ---
+          vector<int> z(n, 0);
+          for (int i = 1, l = 0, r = 0; i < n; ++i) {
+              if (i <= r) z[i] = min(r - i + 1, z[i - l]);
+              while (i + z[i] < n && s[z[i]] == s[i + z[i]]) z[i]++;
+              if (i + z[i] - 1 > r) { l = i; r = i + z[i] - 1; }
+          }
+
+          // --- Prefix function (KMP, O(n)) ---
+          vector<int> pi(n, 0);
+          for (int i = 1; i < n; ++i) {
+              int j = pi[i - 1];
+              while (j > 0 && s[i] != s[j]) j = pi[j - 1];
+              if (s[i] == s[j]) j++;
+              pi[i] = j;
+          }
+
+          for (int i = 0; i < n; ++i) cout << (i ? " " : "") << z[i];
+          cout << "\n";
+          for (int i = 0; i < n; ++i) cout << (i ? " " : "") << pi[i];
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n)** time and **O(n)** space. This is the submission tier.
+
+      **③ Alternative — π and z are two views of the same info**
+
+      Either array can be derived from the other in O(n) (a classic known
+      identity: the Z-array can be recovered from the prefix function and
+      vice-versa), so you never need to double-compute. In practice, if the
+      judge only asks for one, compute that one directly — the linear
+      algorithms above are already optimal, so there is no meaningful faster
+      tier.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The submission tier computes both arrays independently and linearly.
+
+      **Z-array.** The state is a box `[l, r]` that is already known to equal
+      the prefix `s[0..r-l]`. When the next position `i` lies inside the box
+      (`i ≤ r`), then `s[i]` mirrors `s[i-l]`; so `z[i]` can start at
+      `min(r - i + 1, z[i - l])` — we never re-read the characters we already
+      matched. The `while` loop only stretches `r` past its previous value, and
+      `r` increases at most `n` times over the whole run, giving O(n).
+
+      **Prefix function.** `π[i]` is derived from `π[i-1]`: we try to extend the
+      previous border by one character. If the new character doesn't extend it,
+      we "fail back" along `j = π[j-1]` (each fallback shrinks `j`; `j` can grow
+      only `n` times, so fallbacks total O(n)). When `s[i] == s[j]` we extend to
+      `π[i] = j + 1`.
+
+      **Why this problem.** CSES asks for the whole arrays, not an application —
+      it's a "prove you can build the primitives" problem. Get both right
+      because `π` and `z` underpin every later string lesson (substring matching,
+      border/period, the suffix structures used in the rest of this chapter).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `abaabca` (n = 7).
+
+      **Step 1 — Z-array.**
+
+      | position i | comparison | z[i] |
+      |------|------------|------|
+      | 1 | `b` vs `a` → mismatch | 0 |
+      | 2 | `a`==`a`, then `a` vs `b` | 1 |
+      | 3 | `a`,`b` then `c` vs `a` | 2 |
+      | 4 | `b` vs `a` | 0 |
+      | 5 | `c` vs `a` | 0 |
+      | 6 | `a` == `a` | 1 |
+
+      → z = `[0, 0, 1, 2, 0, 0, 1]`.
+
+      **Step 2 — prefix function.**
+
+      | i | prefix | border | π[i] |
+      |---|--------|--------|------|
+      | 1 | `ab` | none | 0 |
+      | 2 | `aba` | `a` | 1 |
+      | 3 | `abaa` | `a` | 1 |
+      | 4 | `abaab` | `ab` | 2 |
+      | 5 | `abaabc` | none | 0 |
+      | 6 | `abaabca` | `a` | 1 |
+
+      → π = `[0, 0, 1, 1, 2, 0, 1]`.
+
+      Output:
+
+      ```
+      0 0 1 2 0 0 1
+      0 0 1 1 2 0 1
+      ```
+
+      **Expected `0 0 1 2 0 0 1 / 0 0 1 1 2 0 1` — Actual: match.**
+  - type: mcq
+    prompt: 'Why does the linear Z-algorithm avoid re-reading previously matched characters?'
+    options:
+      - Because it compares the string against its reverse
+      - Because it keeps a box [l,r] known to match the prefix, so positions inside it can borrow z[i-l]
+      - Because it sorts all suffixes first
+      - Because each position is compared against every other position once
+    answer: 1
+    explanation: The algorithm maintains the rightmost interval [l, r] that equals the prefix s[0..r-l]. For any i inside it, s[i] mirrors s[i-l], so z[i] can be seeded from min(r-i+1, z[i-l]) without re-reading the matched text. The while loop only extends r past its old value, and r only moves forward n times, giving total linear work.
+type: content
+---

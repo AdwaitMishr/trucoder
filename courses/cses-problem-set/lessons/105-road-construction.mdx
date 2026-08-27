@@ -1,0 +1,214 @@
+---
+id: road-construction
+title: "Road Construction"
+type: content
+difficulty: medium
+order: 105
+tags:
+  - graph-algorithms
+  - union-find
+  - dynamic-connectivity
+blocks:
+  - type: markdown
+    content: |
+      # Road Construction — dynamic connectivity with union-find
+
+      Cities start with no roads. A new road is added **every day**, and after
+      each addition we must know two things: how many connected components the
+      graph has, and the size of the largest one.
+
+      This is *dynamic (incremental) connectivity* — edges only ever appear,
+      never disappear. That one-way property is exactly what the **disjoint-set
+      union (union-find / DSU)** data structure is built for: it tracks
+      components under union operations and answers "same component?" in
+      near-constant time.
+
+      ## The data structure
+
+      A DSU keeps each component as a rooted tree. `find(x)` returns the root,
+      compressing paths so repeated finds are fast; `unite(a, b)` attaches one
+      root under the other. Two invariants make size tracking trivial:
+
+      - **component count** starts at `n` and drops by `1` on every successful
+        merge — never rises, because edges are never removed;
+      - **largest size** is tracked by storing the size at each root and taking
+        the max after each merge.
+
+      The classic trick to prevent tall trees is **union by size** (attach the
+      smaller tree under the larger). With path compression *and* union by
+      size, `m` operations cost `O(m * α(n))` — effectively linear.
+
+      **Time:** `O(m * α(n))` for all `m` roads. **Space:** `O(n)`.
+
+      :::tip
+      **Interview tip:** union-find is the go-to answer for "online additions
+      keep splitting/merging groups, tell me about the groups after each
+      step" — friend networks, image-region merging, Kruskal's MST, dynamic
+      *incremental* connectivity. The two questions it answers instantly are
+      "are u and v in the same group?" and "how many / how large are the
+      groups?", the second by storing a size at every root. Remember: it only
+      *merges*; if edges can be deleted, you need a heavier tool.
+      :::
+  - type: markdown
+    content: |
+      # Question
+
+      There are `n` cities and initially no roads between them. However, every
+      day a new road will be constructed, and there will be a total of `m`
+      roads. A component is a group of cities where there is a route between
+      any two cities using the roads. After each day, your task is to find the
+      number of components and the size of the largest component.
+
+      **Input**
+
+      The first input line has two integers `n` and `m`: the number of cities
+      and roads. The cities are numbered `1, 2, ..., n`.
+
+      Then, there are `m` lines describing the new roads. Each line has two
+      integers `a` and `b`: a new road is constructed between cities `a` and
+      `b`. You may assume that every road will be constructed between two
+      different cities.
+
+      **Output**
+
+      Print `m` lines: the required information after each day.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `1 <= m <= 2*10^5`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 3
+      1 2
+      1 3
+      4 5
+      ```
+
+      Output:
+
+      ```
+      4 2
+      3 3
+      2 3
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — recompute connectivity after every road, O(m (n + m))**
+
+      After each new road, run BFS/DFS from scratch (or flood from every
+      unvisited city) to count components and the largest one. With `m` up to
+      `2*10^5` and a full scan costing `O(n + m)` each time, this is far too
+      slow.
+
+      **② Optimization — union-find with size, O(m * α(n))**
+
+      Maintain component count and per-root sizes; decrement the count and
+      refresh the max only when a road actually merges two components.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      struct DSU {
+          vector<int> p, sz;
+          int comps, largest;
+          DSU(int n) : p(n + 1), sz(n + 1, 1), comps(n), largest(1) {
+              iota(p.begin(), p.end(), 0);
+          }
+          int find(int x){ return p[x] == x ? x : p[x] = find(p[x]); }
+          bool unite(int a, int b){
+              a = find(a); b = find(b);
+              if (a == b) return false;       // already connected
+              if (sz[a] < sz[b]) swap(a, b);
+              p[b] = a; sz[a] += sz[b];
+              comps--;                         // one fewer component
+              largest = max(largest, sz[a]);   // refresh largest
+              return true;
+          }
+      };
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          DSU dsu(n);
+          for (int i = 0; i < m; ++i){
+              int a, b; cin >> a >> b;
+              dsu.unite(a, b);
+              cout << dsu.comps << ' ' << dsu.largest << '\n';
+          }
+          return 0;
+      }
+      ```
+
+      *O(m * α(n)) time, O(n) space — the intended solution.*
+
+      **③ Further optimization** — none needed; the per-day work is already
+      near-constant.
+
+      **④ Alternative algorithm** — a Segment Tree over time (divide-and-conquer
+      offline dynamic connectivity) handles general *deletions too*, but here
+      the problem is purely incremental, so plain union-find is optimal and far
+      simpler; there is no better online approach.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The important lines:
+
+      - **`find` with path compression** (`p[x] = find(p[x])`) keeps the trees
+        flat, amortizing finds to near `O(1)`.
+      - **Union by size**: `if (sz[a] < sz[b]) swap(a, b); p[b] = a;` attaches
+        the smaller tree under the larger, capping tree height at `O(log n)`
+        even without compression.
+      - **`comps` and `largest` are both initialized in the constructor** —
+        before any road there are `n` components of size 1, so `largest = 1`.
+      - On a *real* merge we decrement `comps` and set
+        `largest = max(largest, sz[a])`. On a no-op (both endpoints already in
+        one component) nothing changes, so the printed line simply repeats.
+      - The answer is printed **inside the loop, after each union** — exactly
+        one line per day, as required.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, roads `(1,2)`, `(1,3)`, `(4,5)`.
+
+      Start: `comps = 5`, `largest = 1`, sizes all `1`.
+
+      | day | road | merge? | comps | largest |
+      |-----|------|--------|-------|---------|
+      | 1 | (1,2) | yes ({1},{2} → {1,2}, size 2) | 4 | max(1,2)=2 |
+      | 2 | (1,3) | yes ({1,2} and {3} → {1,2,3}, size 3) | 3 | max(2,3)=3 |
+      | 3 | (4,5) | yes ({4},{5} → {4,5}, size 2) | 2 | max(3,2)=3 |
+
+      Components after each day: `4`, `3`, `2`; largest sizes: `2`, `3`, `3`.
+
+      Expected (sample) — `4 2 / 3 3 / 2 3`. Actual — `4 2 / 3 3 / 2 3`. Match.
+  - type: flowchart
+    title: "Incremental connectivity via union-find"
+    nodes: ["init DSU: comps = n, largest = 1", "read road (a, b)", "unite(a, b)", "different components?", "merge, comps--, largest = max(...)", "print comps, largest", "more roads?"]
+    edges:
+      - {from: 0, to: 1, label: "per day"}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 3, to: 5, label: "no (no-op)"}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6, label: "loop"}
+  - type: mcq
+    prompt: "Why is union-by-size (attaching the smaller tree under the larger root) combined with path compression enough to make m union operations run in near-linear time?"
+    options:
+      - "Because it bounds tree height to O(log n) even without compression, and compression keeps find near-constant across repeated queries, jointly giving O(m * alpha(n)) overall."
+      - "Because it removes all cycle edges so find always returns the same root instantly."
+      - "Because it guarantees every component ends up as exactly one node."
+      - "Because it eliminates the need for path compression entirely."
+    answer: 0
+    explanation: "Union by size alone caps every tree height at O(log n), so no lookup can be expensive; adding path compression makes each find effectively constant over the whole run. Together they yield the inverse-Ackermann near-linear bound — good enough for n, m up to 1e5."
+---
