@@ -1,0 +1,203 @@
+---
+id: distinct-values-subarrays
+title: Distinct Values Subarrays
+difficulty: medium
+order: 40
+tags:
+  - sorting
+  - sliding-window
+  - counting
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — count every all-distinct subarray with a sliding window
+
+      This problem is Playlist's counting cousin. Playlist asked for the
+      **longest** window with all-distinct values; this one asks to **count**
+      every subarray whose elements are all distinct.
+
+      The elegant trick: count by *right endpoint*. Suppose `left` is the
+      smallest index such that the window `[left .. right]` has all distinct
+      values. Then every end-inclusive choice `[l .. right]` with `l ≥ left` is
+      a valid distinct subarray, and there are exactly `right - left + 1` of
+      them — all of them distinct subarrays, each with a different start `l`.
+      Adding this number for every `right` counts every distinct-value subarray
+      exactly once (each subarray has a unique rightmost element).
+
+      As `right` advances, the window's "all distinct" property is preserved by
+      moving `left` forward past any repeated value (tracking each value's last
+      index), just like in Playlist. Because the property is monotone, `left`
+      only ever moves forward, giving `O(n)` total.
+
+      **Worked mini-example.** `a = [1, 2, 1]`:
+
+      | right | value | duplicates | left | new subarrays (end at right) | total |
+      |-------|-------|-----------|------|------------------------------|-------|
+      | 0 | 1 | no | 0 | `[1]` → 1 | 1 |
+      | 1 | 2 | no | 0 | `[2]`, `[1,2]` → 2 | 3 |
+      | 2 | 1 | yes (idx 0 ≥ 0) | 1 | `[1]`, `[2,1]` → 2 | 5 |
+
+      Valid distinct subarrays of `[1,2,1]` are `[1]`×2, `[2]`, `[1,2]`, `[2,1]`
+      = 5. ✓
+
+      **Complexity.** Time `O(n)`, space `O(n)` (last-occurrence map).
+
+      :::tip
+      **Interview tip:** Counting subarrays usually has a "sum over right
+      endpoints" form: once you know that `[left..right]` is the minimal window
+      satisfying a constraint, it contributes exactly `right - left + 1` valid
+      endings. This pattern transfers directly to "at most k distinct values"
+      and "sum ≤ k" subarray-counting questions.
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an array of `n` integers, count the number of **subarrays** where
+      each element is **distinct**.
+
+      **Input:** The first line has an integer `n`: the array size. The second
+      line has `n` integers `x1, x2, …, xn`: the array contents.
+
+      **Output:** Print the number of subarrays with distinct elements.
+
+      **Constraints:**
+
+      - `1 ≤ n ≤ 2 · 10^5`
+      - `1 ≤ x_i ≤ 10^9`
+
+      ### Sample
+
+      Input:
+
+      ```text
+      4
+      1 2 1 3
+      ```
+
+      Output:
+
+      ```text
+      8
+      ```
+
+      The 8 valid subarrays are `[1]` (appears twice), `[2]`, `[3]`, `[1,2]`,
+      `[1,3]`, `[2,1]` and `[2,1,3]`.
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²)**
+
+      Enumerate every start `i`, extend `j`, add to a set, and count each prefix
+      that runs into no duplicate.
+
+      ```cpp
+      long long solve(int n, vector<int>& a) {
+          long long cnt = 0;
+          for (int i = 0; i < n; ++i) {
+              unordered_set<int> seen;
+              for (int j = i; j < n; ++j) {
+                  if (seen.count(a[j])) break;      // duplicate ends this start
+                  seen.insert(a[j]);
+                  cnt++;                            // [i .. j] is distinct
+              }
+          }
+          return cnt;
+      }
+      ```
+
+      Time `O(n²)`, space `O(n)` per start. The answer reaches `n(n+1)/2`, so we
+      return `long long`. Too slow for `n = 2 · 10^5`.
+
+      **② Optimization — sliding window + sum of valid endings — O(n)**
+
+      ```cpp
+      long long solve(int n, vector<int>& a) {
+          unordered_map<int, int> last;   // value -> most recent index
+          long long ans = 0;
+          int left = 0;
+          for (int right = 0; right < n; ++right) {
+              if (last.count(a[right]))
+                  left = max(left, last[a[right]] + 1);   // expel the duplicate
+              last[a[right]] = right;
+              ans += (long long)(right - left + 1);       // subarrays ending here
+          }
+          return ans;
+      }
+      ```
+
+      Time `O(n)`, space `O(n)`.
+
+      **③ Further optimization — none needed**
+
+      Every element must be read, so `Ω(n)` is a floor and `O(n)` is optimal.
+
+      **④ Alternative — count by start index — O(n)**
+
+      A mirrored formulation: for each start `i`, find the farthest `j` such that
+      `[i .. j]` is all-distinct; the window contributes `j - i` subarrays
+      (lengths 1..j-i). Because `j` only grows, it still runs in `O(n)` amortized.
+
+      ```cpp
+      long long solve(int n, vector<int>& a) {
+          unordered_map<int, int> freq;
+          long long cnt = 0;
+          int j = 0;
+          for (int i = 0; i < n; ++i) {
+              while (j < n && freq[a[j]] == 0) { freq[a[j]]++; j++; }
+              cnt += (long long)(j - i);       // subarrays [i..i], [i..i+1], ..., [i..j-1]
+              freq[a[i]]--;
+          }
+          return cnt;
+      }
+      ```
+
+      Time `O(n)` amortized, space `O(n)`. Same idea viewed from the left instead
+      of the right.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` returns a `long long` because the answer can be as large as
+      `n(n+1)/2 ≈ 2 · 10^10` for `n = 2 · 10^5`. It maintains `left`, the start of
+      the longest all-distinct window ending at `right`.
+
+      The work happens in two lines. First, if the value `a[right]` was seen
+      before at an index `≥ left`, that older copy sits inside our window and
+      must be removed, so `left = last[a[right]] + 1`. The `max` guards against
+      an even older occurrence already excluded. Then `last[a[right]] = right`
+      records the new copy, and `right - left + 1` is the number of distinct-value
+      subarrays that end exactly at `right`: one for each possible start from
+      `left` to `right`. Summing these across all right endpoints is the total
+      count, because every subarray has a unique rightmost element and is counted
+      exactly once there.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 4`, `a = [1, 2, 1, 3]` (the CSES sample).
+
+      **Expected output:** `8`.
+
+      **Actual run:**
+
+      | right | value | last seen | new left | subarrays ending here | ans |
+      |-------|-------|-----------|----------|-----------------------|-----|
+      | 0 | 1 | — | 0 | `[1]` = 1 | 1 |
+      | 1 | 2 | — | 0 | `[2],[1,2]` = 2 | 3 |
+      | 2 | 1 | 0 ≥ 0 | 1 | `[1],[2,1]` = 2 | 5 |
+      | 3 | 3 | — | 1 | `[3],[1,3],[2,1,3]` = 3 | 8 |
+
+      Final `ans = 8`, matching the expected output exactly.
+  - type: mcq
+    prompt: Why does adding (right - left + 1) for every right endpoint count each valid subarray exactly once?
+    options:
+      - 'Every valid subarray has a unique rightmost element, so it is counted precisely at that right index, and from left onward every start forms a valid distinct subarray.'
+      - 'Because a subarray is always counted twice: once when it opens and once when it closes.'
+      - 'Because there are exactly n pairs (left, right) that are valid.'
+      - 'Because distinct subarrays never overlap.'
+    answer: 0
+    explanation: 'Each subarray is identified by its (start, end) pair; fixing end = right, the valid starts are exactly l in [left, right], giving right - left + 1 subarrays ending at right. Since disjoint right endpoints correspond to disjoint groups, the sum counts every distinct-value subarray exactly once.'
+type: content
+---

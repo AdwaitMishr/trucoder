@@ -1,0 +1,216 @@
+---
+id: subsets-with-fixed-average
+title: "Subsets With Fixed Average"
+type: content
+difficulty: hard
+order: 360
+tags:
+  - combinatorics
+  - meet-in-the-middle
+  - subset-sum
+blocks:
+  - type: markdown
+    content: |
+      # Subsets With Fixed Average — count subsets whose average equals a target
+
+      ## Theory
+
+      A subset of size `j` with sum `s` has average `s/j`. We need `s/j = p/q`, i.e.
+
+      `s·q = p·j`.
+
+      Cross-multiplying turns "average equals a rational" into a **linear condition on
+      (sum, size)** — no floats, no precision loss. The count is over *index-subsets* (distinct
+      choices of positions, so equal values are counted separately).
+
+      Two tools dominate, depending on the constraint and the value range:
+
+      - **Knapsack DP over (size, sum).** `dp[j][s]` = number of subsets of size `j` and sum
+        `s`. Adding each element updates the table like a 0/1 knapsack. Excellent when values
+        (hence sums) are bounded.
+      - **Meet in the middle (MITM).** Split the array into two halves. Enumerate all subsets
+        of each half (`2^(n/2)` each). For counting, define `key = s·q − p·j` for a subset; two
+        subsets (one from each half) join into a *valid* subset exactly when their keys sum to
+        zero. Sort one half's keys and look each of the other half up with a hash map /
+        two pointers. Handles large values where a sum-indexed DP would be enormous.
+
+      Because we cross-multiply with `p` and `q`, keep `p, q` and the values modest relative to
+      each other so `s·q` stays inside a 64-bit integer.
+
+      **MITM time:** `O(2^(n/2) · n/2 + 2^(n/2) log 2^(n/2))` ≈ `O(2^(n/2))`. **Space:**
+      `O(2^(n/2))`.
+
+      :::tip
+      **Interview tip:** "Count subsets/count pairs with a *ratio* (average, mean, median,
+      slope) equal to a target" is a recurring decomposition: rewrite the ratio as a **linear
+      equation in (sum, size)**, then use either a 2-D knapsack (small sums) or **meet in the
+      middle** (large sums, n ≤ 40). The same key-reduction trick powers "count pairs with sum
+      k", "equal average", and two-array pairing problems.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Question
+
+      Given `n` integers and a target average `p/q`, count the number of non-empty subsets
+      whose average is exactly `p/q`. A subset's average is its sum divided by its size; a
+      subset of size `j` and sum `s` qualifies when `s·q == p·j`. Subsets are counted by index
+      — two subsets that contain different positions are distinct even if the values match.
+
+      **Input.** The first line has `n`. The second line has `n` integers `a[1..n]`. The third
+      line has two integers `p` and `q`.
+
+      **Output.** Print the number of qualifying non-empty subsets.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 40`
+      - `−10⁶ ≤ a[i] ≤ 10⁶`
+      - `1 ≤ p, q ≤ 10⁶`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      3
+      1 2 3
+      2 1
+      ```
+
+      **Output:**
+      ```
+      3
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2^n · n).** Enumerate every subset by bitmask, sum it and count its
+      size, then check `s·q == p·j`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          int n; cin>>n;
+          vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          ll p,q; cin>>p>>q;
+          ll ans=0;
+          for(int mask=1; mask<(1<<n); mask++){
+              ll s=0; int j=0;
+              for(int i=0;i<n;i++) if(mask>>i&1){ s+=a[i]; j++; }
+              if(s*q==p*j) ans++;
+          }
+          cout<<ans<<"\n";
+      }
+      ```
+      *Complexity: O(2^n·n) — impossible for `n = 40` (≈ 10¹²).*
+
+      **② Optimization — meet in the middle (intended for n ≤ 40).** Split into two halves
+      (`n₁ ≈ n/2` each). Enumerate all subsets of each half, keeping `(size, sum)`, and reduce
+      each to `key = sum·q − p·size`. A valid combined subset corresponds to one subset from
+      each half whose keys sum to zero. Count those pairs, then subtract the single empty+empty
+      pair (`j = 0`, which trivially matches but is not a real subset):
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      vector<pair<ll,ll>> enu(const vector<ll>& v, int start, int len){
+          // returns list of (size, key) over all 2^len subsets of v[start..start+len)
+          vector<pair<ll,ll>> res;
+          for(int mask=0; mask<(1<<len); mask++){
+              ll s=0, j=0;
+              for(int b=0;b<len;b++) if(mask>>b&1){ s+=v[start+b]; j++; }
+              res.push_back({j, s});
+          }
+          return res;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          ll p,q; cin>>p>>q;
+          int n1 = n/2;
+          auto L = enu(a, 0, n1);          // halves
+          auto R = enu(a, n1, n - n1);
+          unordered_multiset<ll> rkey;     // R's keys = sum*q - p*size
+          for(auto &e : R){
+              ll key = e.second*q - p*e.first;
+              rkey.insert(key);
+          }
+          ll ans=0;
+          for(auto &e : L){
+              ll key = e.second*q - p*e.first;
+              ans += rkey.count(-key);
+          }
+          ans -= 1;                         // remove the empty(0)+empty(0) subset
+          cout<<ans<<"\n";
+      }
+      ```
+      *Complexity: O(2^(n/2)) time and space — handles `n = 40` (2 halves of ≈2²⁰ each).*
+
+      **③ Further optimization — knapsack DP when values are small.** If instead sums are
+      bounded (e.g. `|a[i]| ≤ 100`, so total sum fits a small range), build `dp[j][s]` = count
+      of size-`j`, sum-`s` subsets with a 0/1-knapsack update. This runs in
+      `O(n · n · Smax)`. It is the better choice when the value range, not `n`, is the binding
+      constraint — pick DP or MITM based on which of `2^(n/2)` vs `n·Smax` is smaller.
+
+      **④ Alternative — hash map instead of counts.** Replacing the `unordered_multiset` with a
+      `map<ll,ll>` (key → count) and iterating `R` to build the map, then `L` for the sum, is
+      the same algorithm with a deterministic structure. There is no closed-form answer — the
+      count genuinely depends on the subset values — so some form of subset enumeration is the
+      last word; MITM is the fastest practical one for `n = 40`.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      - **Cross-multiplication.** `s·q == p·j` requires no division, so no float error and no
+        averaging at all — the subset's average exactly equals `p/q` iff this linear test
+        passes.
+      - **Meet in the middle pairing.** A combined subset from `L` and `R` has size `j_L + j_R`
+        and sum `s_L + s_R`; its key `(s_L+s_R)·q − p·(j_L+j_R)` is exactly `key_L + key_R`.
+        So the combination is valid iff `key_L + key_R == 0`, i.e. we count how many `R` keys
+        equal `-key_L`.
+      - **Subtracting the empty subset.** The empty subset from `L` plus the empty from `R`
+        pairs trivially (both keys 0) but has `j = 0`; it must not count. Subtract exactly one.
+      - **64-bit safety.** With `|a| ≤ 10⁶, p,q ≤ 10⁶, n ≤ 40`: `s ≤ 4·10⁷`,
+        `s·q ≤ 4·10¹³`, `p·j ≤ 4·10⁷` — comfortably inside `long long`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `a = [1, 2, 3]`, target average `p/q = 2/1` (average 2).
+
+      Enumerate every non-empty subset and test `s·q == p·j`, i.e. `s == 2j`:
+
+      - `{1}`: s=1, j=1 → `1 ≠ 2` ✗
+      - `{2}`: s=2, j=1 → `2 == 2` ✓
+      - `{3}`: s=3, j=1 → `3 ≠ 2` ✗
+      - `{1,2}`: s=3, j=2 → `3 ≠ 4` ✗
+      - `{1,3}`: s=4, j=2 → `4 == 4` ✓
+      - `{2,3}`: s=5, j=2 → `5 ≠ 4` ✗
+      - `{1,2,3}`: s=6, j=3 → `6 == 6` ✓
+
+      Qualifying subsets: `{2}`, `{1,3}`, `{1,2,3}` — count **3**.
+
+      Output:
+      ```
+      3
+      ```
+      which matches the sample. ✓
+
+  - type: mcq
+    prompt: "Why is converting 'average equals p/q' into the integer test s·q == p·j (where s is the subset sum and j its size) preferred over comparing floating-point averages?"
+    options:
+      - "Because it avoids floating-point round-off entirely and turns every check into an exact integer equality on (size, sum), which both a knapsack and meet-in-the-middle can consume."
+      - "Because divides are faster than multiplies in C++."
+      - "Because it removes the need to choose the subset at all."
+      - "Because s·q == p·j is always false, so the problem is trivially answered."
+    answer: 0
+    explanation: "Decimal comparisons of s/j and p/q are subject to rounding (e.g. 1/3). Cross-multiplying to s·q == p·j is an exact integer predicate, free of precision loss, and it operates only on the two integers (size, sum) that subset-counting algorithms naturally track — making it directly usable by DP and meet-in-the-middle."

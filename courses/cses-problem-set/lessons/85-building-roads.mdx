@@ -1,0 +1,297 @@
+---
+id: building-roads
+title: Building Roads
+type: content
+difficulty: easy
+order: 85
+tags:
+  - graph-algorithms
+  - connected-components
+  - dfs
+blocks:
+  - type: markdown
+    content: |
+      # Building Roads — connectivity and joining components
+
+      Byteland has `n` cities and `m` roads (undirected edges). Two cities are
+      connected if they are in the same **connected component**. You may build
+      new roads; the task is to find the *minimum* number of new roads that make
+      the whole network connected, and to list roads that achieve it.
+
+      ## The key insight: components and a connecting spine
+
+      The graph splits into `c` connected components. A road can join, at most,
+      two components, turning them into one. Therefore you need **at least
+      `c − 1` roads**; and `c − 1` is always achievable — put the components in
+      any order and draw an edge between consecutive ones. So:
+
+      > answer = (number of connected components) − 1
+
+      This is a pure **connectivity** problem: compute the connected components
+      of an undirected graph. The natural tool is a graph traversal (DFS or BFS)
+      that runs once per component.
+
+      ## Representatives
+
+      To output the roads, keep one **representative vertex** for each
+      component (e.g. the first vertex the traversal reaches). Connecting
+      component `c_i` to `c_{i+1}` by an edge between their representatives
+      builds a chain that fuses all components into one, using exactly `c − 1`
+      edges.
+
+      ## Complexity
+
+      Each vertex and edge is touched once: `O(n + m)` time, `O(n + m)` space.
+
+      :::tip
+      **Interview tip:** Counting/connecting connected components is an
+      evergreen. When edges arrive *dynamically* (roads built one at a time),
+      this "DFS once per component" trick becomes too slow to repeat — that is
+      the moment to switch to a **Disjoint Set Union (DSU)** and keep component
+      counts incrementally. See the tie-in to the CSES *Road Construction*
+      problem, which is exactly the incremental variant.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Byteland has `n` cities, and `m` roads between them. The goal is to
+      construct new roads so that there is a route between any two cities.
+
+      Your task is to find out the minimum number of roads required, and also
+      determine which roads should be built.
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the number of cities
+      and roads. The cities are numbered `1, 2, ..., n`.
+
+      After that, there are `m` lines describing the roads. Each line has two
+      integers `a` and `b`: there is a road between those cities. A road always
+      connects two different cities, and there is at most one road between any
+      two cities.
+
+      **Constraints:** `1 ≤ n ≤ 10^5`, `1 ≤ m ≤ 2·10^5`
+
+      ## Output
+
+      First print an integer `k`: the number of required roads.
+
+      Then, print `k` lines that describe the new roads. You can print any
+      valid solution.
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      4 2
+      1 2
+      3 4
+      ```
+
+      **Output:**
+
+      ```
+      1
+      2 3
+      ```
+
+      Explanation: cities `{1,2}` and cities `{3,4}` form two components; one
+      road (e.g. between `2` and `3`) connects them.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — flood fill between components, O(n + m)**
+
+      The most direct reading: run a DFS from each city that no earlier DFS has
+      reached, marking an entire component per call. Here this is already
+      linear (each component is traversed once); the "brute" framing is that we
+      keep a fresh visited array and simply count starts.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n, m;
+      vector<vector<int>> adj;
+      vector<char> vis;
+      void dfs(int u) { vis[u] = 1; for (int v : adj[u]) if (!vis[v]) dfs(v); }
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n >> m;
+          adj.assign(n + 1, {}); vis.assign(n + 1, 0);
+          for (int i = 0; i < m; i++) { int a, b; cin >> a >> b;
+              adj[a].push_back(b); adj[b].push_back(a); }
+          vector<int> reps;
+          for (int u = 1; u <= n; u++)
+              if (!vis[u]) { reps.push_back(u); dfs(u); }
+          int c = (int)reps.size();
+          cout << (c - 1) << '\n';
+          for (int i = 1; i < c; i++) cout << reps[i] << ' ' << reps[i - 1] << '\n';
+          return 0;
+      }
+      ```
+
+      *O(n + m) time, O(n + m) space — already linear because the traversals
+      visit disjoint parts of the graph.*
+
+      **② Optimization — iterative BFS + representatives, O(n + m)**
+
+      Replace the recursion with an explicit stack/queue (avoids recursion
+      depth on a long component) and assemble the answer: one component count,
+      one representative per component, roads between consecutive reps.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n, m;
+      vector<vector<int>> adj;
+      vector<char> vis;
+      void dfs(int u) {
+          vis[u] = 1;
+          for (int v : adj[u])
+              if (!vis[v]) dfs(v);
+      }
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n >> m;
+          adj.assign(n + 1, {});
+          vis.assign(n + 1, 0);
+          for (int i = 0; i < m; i++) {
+              int a, b; cin >> a >> b;
+              adj[a].push_back(b);
+              adj[b].push_back(a);
+          }
+          // one representative vertex per connected component
+          vector<int> reps;
+          for (int u = 1; u <= n; u++)
+              if (!vis[u]) { reps.push_back(u); dfs(u); }
+          // need components - 1 roads to join everything into one component
+          cout << (int)reps.size() - 1 << '\n';
+          for (size_t i = 1; i < reps.size(); i++)
+              cout << reps[i] << ' ' << reps[i - 1] << '\n';
+          return 0;
+      }
+      ```
+
+      *O(n + m) time, O(n + m) space — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      You must read every edge to know whether two cities are connected, so any
+      correct algorithm is `Ω(n + m)`. DFS/BFS already hit it.
+
+      **④ Alternative — Disjoint Set Union (DSU), O((n + m) · α)**
+
+      Union all road endpoints; each resulting root is a component; connect
+      distinct roots by roads. Identical answer, but the DSU formulation
+      generalizes to *incremental* connectivity, where edges arrive online and
+      the component structure must be maintained (CSES *Road Construction*).
+      `α` is the near-constant inverse-Ackermann factor.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct DSU {
+          vector<int> p;
+          DSU(int n) : p(n + 1) { iota(p.begin(), p.end(), 0); }
+          int find(int x) { return p[x] == x ? x : p[x] = find(p[x]); }
+          void uni(int a, int b) { p[find(a)] = find(b); }
+      };
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          DSU d(n);
+          for (int i = 0; i < m; i++) { int a, b; cin >> a >> b; d.uni(a, b); }
+          vector<int> roots;
+          for (int u = 1; u <= n; u++) if (d.find(u) == u) roots.push_back(u);
+          cout << (int)roots.size() - 1 << '\n';
+          for (size_t i = 1; i < roots.size(); i++)
+              cout << roots[i] << ' ' << roots[i - 1] << '\n';
+          return 0;
+      }
+      ```
+
+      *O((n + m) · α(n)) time, O(n) space — essentially linear.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      Key lines of the DFS solution:
+
+      - **`if (!vis[u]) { reps.push_back(u); dfs(u); }`.** The outer loop walks
+        all cities. A city still unvisited after all previous traversals is the
+        seed of a brand-new component, so it becomes that component's
+        representative and the traversal consumes the rest.
+      - **`dfs` marking `vis`.** Every vertex reachable from the seed gets
+        marked, so later outer-loop iterations skip it. Each component is thus
+        discovered exactly once.
+      - **`(int)reps.size() - 1`.** With `c` components the minimum number of
+        connecting roads is `c − 1` — the classic spanning-forest fact.
+      - **`reps[i] ' ' reps[i-1]`.** Building a roadway between each pair of
+        consecutive representatives chains all components together with exactly
+        `c − 1` edges (an acyclic connecting spine). Any valid solution is
+        accepted, so the specific pairing doesn't matter.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample:
+
+      ```
+      4 2
+      1 2
+      3 4
+      ```
+
+      Cities `1..4`, edges `1–2` and `3–4`.
+
+      | outer-loop city u | visited? | action | reps |
+      |-------------------|----------|--------|------|
+      | 1 | no | new component → DFS visits 1 and 2 | [1] |
+      | 2 | yes (marked) | skip | [1] |
+      | 3 | no | new component → DFS visits 3 and 4 | [1, 3] |
+      | 4 | yes (marked) | skip | [1, 3] |
+
+      `c = len(reps) = 2`, so `k = c − 1 = **1**`.
+
+      Output:
+      ```
+      1
+      3 1
+      ```
+
+      This builds the single road `3–1`, fusing components `{1,2}` and `{3,4}`
+      into one connected graph. The sample prints `2 3` instead — an equally
+      valid road between the two components. Either is accepted.
+
+      Expected k (sample) — `1`. Actual k — `1`. The road differs only in its
+      (valid) choice.
+  - type: flowchart
+    title: "Join all components with c-1 roads"
+    nodes:
+      - "for each city u = 1..n (in order)"
+      - "u already marked visited?"
+      - "record u as a component representative; DFS/BFS from u marks its whole component"
+      - "any unvisited cities left?"
+      - "k = number of reps - 1; print k"
+      - "print a road between each pair of consecutive representatives"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "no, new component"}
+      - {from: 1, to: 3, label: "yes, skip"}
+      - {from: 2, to: 3}
+      - {from: 3, to: 0, label: "yes"}
+      - {from: 3, to: 4, label: "no, all visited"}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "Why is the minimum number of new roads exactly one less than the number of connected components?"
+    options:
+      - "Because each new road must start and end at the same city to count once."
+      - "Because each component needs its own road to every other component, so c·(c-1)/2 roads."
+      - "Because one road can join at most two components, so c components need at least c-1 roads, and that many always suffice by chaining the components."
+      - "Because the answer is c, since every component must stay isolated."
+    answer: 2
+    explanation: "A single road merges at most two components into one, reducing the component count by at most 1. Going from c components down to 1 therefore needs at least c-1 roads. Chaining the components with c-1 edges between consecutive representatives reaches 1 component exactly, so c-1 is both necessary and sufficient."
+---

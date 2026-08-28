@@ -1,0 +1,294 @@
+---
+id: split-into-two-paths
+title: "Split into Two Paths"
+type: content
+difficulty: hard
+order: 318
+tags:
+  - graph-algorithms
+  - dag
+  - max-bipartite-matching
+  - path-decomposition
+blocks:
+  - type: markdown
+    content: |
+      # Split into Two Paths — decompose a DAG into two directed paths
+
+      We are given a **directed acyclic graph** (DAG). We must decide whether its
+      vertices can be split into **two directed paths** so that every vertex sits
+      on exactly one path. Edges do *not* all need to be used — we may pick a
+      subset of edges to form the two paths.
+
+      The key move is to stop thinking about "paths" and start thinking about
+      **which edges to keep**. A chosen set of edges forms a collection of
+      vertex-disjoint paths exactly when every vertex has **at most one chosen
+      incoming edge and at most one chosen outgoing edge**. Because the graph is
+      acyclic, those edges can never close a cycle, so they automatically look
+      like a set of disjoint directed paths.
+
+      Now count paths. If a path has `L` vertices it uses `L - 1` edges, so for a
+      set of paths covering all `n` vertices with `E` chosen edges we get
+
+      `#paths = n - E`.
+
+      We want `#paths <= 2`, i.e. `E >= n - 2`. So the whole problem reduces to:
+
+      > Pick a maximum number of edges such that each vertex keeps indegree
+      > `<= 1` and outdegree `<= 1`, then check `maxEdges >= n - 2`.
+
+      That is exactly a **maximum bipartite matching**: split every vertex `u`
+      into an *out-copy* `u_out` (left) and an *in-copy* `u_in` (right); for every
+      DAG edge `a -> b` draw `a_out -- b_in`. A matching edge `a_out - b_in`
+      means "keep the edge `a -> b`". Each out-copy used at most once forces
+      outdegree `<= 1`; each in-copy at most once forces indegree `<= 1`.
+
+      **Time:** `O(m * sqrt(n))` with Hopcroft-Karp (or `O(E*n^0.5)` in general
+      form). **Space:** `O(n + m)`.
+
+      :::tip
+      **Interview tip:** "Split the DAG into the fewest vertex-disjoint directed
+      paths / chain cover" is matching's classic application. Any time you must
+      bound the in-degree and out-degree of the edges you keep, draw the out-copy
+      vs in-copy bipartite graph. The number of chains equals `n - matching`
+      (Dilworth's theorem for chains). Recognizing "paths = `n - matching`" is
+      usually the whole of the insight.
+      :::
+  - type: markdown
+    content: |
+      # Question
+
+      You are given an acyclic directed graph with `n` nodes and `m` edges.
+      Determine whether two paths can be formed in the graph such that each node
+      of the graph appears in exactly one of the paths. Note that all edges of
+      the graph do not need to appear in the paths.
+
+      **Input**
+
+      The first line has two integers `n` and `m`: the number of nodes and the
+      number of edges. The nodes are numbered `1, 2, ..., n`. After this, there
+      are `m` lines describing the edges; each line has two integers `a` and `b`:
+      there is an edge from node `a` to node `b`.
+
+      **Output**
+
+      First print the line `YES` if the paths can be formed, or `NO` otherwise.
+      If the paths can be formed, print them on the following two lines. At the
+      beginning of both lines, print the amount of nodes in the path and then the
+      nodes of the path in order. There must be an edge between subsequent nodes.
+      One of the paths may contain zero nodes. If there exist multiple solutions,
+      you can print any solution.
+
+      **Constraints**
+
+      - `2 <= n <= 2*10^5`
+      - `0 <= m <= 5*10^5`
+
+      **Example 1**
+
+      Input:
+      ```
+      5 4
+      1 2
+      1 4
+      3 4
+      4 5
+      ```
+      Output:
+      ```
+      YES
+      2 1 2
+      3 3 4 5
+      ```
+
+      **Example 2**
+
+      Input:
+      ```
+      5 4
+      1 2
+      1 3
+      1 4
+      1 5
+      ```
+      Output:
+      ```
+      NO
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — try every partition, O(2^n * n!)**
+
+      Try every way of assigning each vertex to path 1 or path 2; for each side,
+      try every permutation and check that consecutive vertices are joined by an
+      edge. Correct, but exponential and unusable for `n` up to `2*10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n; vector<vector<int>> adj;
+      bool orderable(vector<int> p){ // can these vertices form one directed path?
+          sort(p.begin(), p.end());
+          do {
+              bool ok = true;
+              for (int i = 0; i + 1 < (int)p.size(); i++)
+                  if (!binary_search(adj[p[i]].begin(), adj[p[i]].end(), p[i+1])) { ok = false; break; }
+              if (ok) return true;
+          } while (next_permutation(p.begin(), p.end()));
+          return false;
+      }
+      int main(){
+          int m; cin >> n >> m; adj.assign(n, {});
+          for (int i = 0; i < m; i++){ int a,b; cin>>a>>b; --a;--b; adj[a].push_back(b); }
+          for (int i = 0; i < n; i++) sort(adj[i].begin(), adj[i].end());
+          for (int mask = 0; mask < (1 << n); mask++){
+              vector<int> p1, p2;
+              for (int i = 0; i < n; i++) (mask & (1 << i)) ? p1.push_back(i) : p2.push_back(i);
+              if (orderable(p1) && orderable(p2)){
+                  cout << "YES\n";
+                  for (auto &p : {p1, p2}){
+                      cout << p.size(); for (int x : p) cout << ' ' << x + 1; cout << "\n";
+                  }
+                  return 0;
+              }
+          }
+          cout << "NO\n";
+      }
+      ```
+      *O(2^n * n!) time — far too slow.*
+
+      **② Optimization — maximum bipartite matching, O(m * sqrt(n))**
+
+      Keep an edge `a -> b` by matching `a_out` to `b_in`. Use Hopcroft-Karp to
+      maximize the matching; the chosen edges automatically form disjoint paths.
+      Answer `YES` iff `matching >= n - 2`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; if(!(cin >> n >> m)) return 0;
+          vector<vector<int>> g(n);
+          for (int i = 0; i < m; i++){ int a,b; cin>>a>>b; --a;--b; g[a].push_back(b); }
+          vector<int> pairL(n, -1), pairR(n, -1), dist(n);
+          auto bfs = [&](){
+              queue<int> q; bool found = false;
+              for (int u = 0; u < n; u++)
+                  if (pairL[u] == -1) { dist[u] = 0; q.push(u); } else dist[u] = INT_MAX;
+              while (!q.empty()){
+                  int u = q.front(); q.pop();
+                  for (int v : g[u]){
+                      int u2 = pairR[v];
+                      if (u2 == -1) found = true;
+                      else if (dist[u2] == INT_MAX){ dist[u2] = dist[u] + 1; q.push(u2); }
+                  }
+              }
+              return found;
+          };
+          function<bool(int)> dfs = [&](int u){
+              for (int v : g[u]){
+                  int u2 = pairR[v];
+                  if (u2 == -1 || (dist[u2] == dist[u] + 1 && dfs(u2))){
+                      pairL[u] = v; pairR[v] = u; return true;
+                  }
+              }
+              dist[u] = INT_MAX; return false;
+          };
+          int matching = 0;
+          while (bfs())
+              for (int u = 0; u < n; u++)
+                  if (pairL[u] == -1 && dfs(u)) matching++;
+          if (matching < n - 2){ cout << "NO\n"; return 0; }
+          cout << "YES\n";
+          vector<int> nxt(n, -1), indeg(n, 0);
+          for (int u = 0; u < n; u++) if (pairL[u] != -1){ nxt[u] = pairL[u]; indeg[pairL[u]]++; }
+          int printed = 0;
+          for (int u = 0; u < n && printed < 2; u++){
+              if (indeg[u]) continue;               // start of a chain
+              vector<int> p; for (int x = u; x != -1; x = nxt[x]) p.push_back(x);
+              cout << p.size(); for (int x : p) cout << ' ' << x + 1; cout << "\n";
+              printed++;
+          }
+      }
+      ```
+      *O(m * sqrt(n)) time, O(n + m) space — the intended solution.*
+
+      **③ Alternative algorithm — max-flow reduces to the same thing**
+
+      Any bipartite-matching problem is a unit-capacity max-flow: connect a
+      source to every out-copy (capacity 1), every in-copy to a sink (capacity
+      1), and `a_out -> b_in` (capacity 1) along the DAG edges. Dinic's blocking
+      flow on this unit network runs in `O(E * sqrt(V))`, identical to
+      Hopcroft-Karp — the phases of Dinic *are* the phases of Hopcroft-Karp.
+      Use this formulation when you already have a flow template.
+
+      **④ Further optimization** — none meaningful; `O(m * sqrt(n))` is a
+      matching lower bound for these constraints, so we stop here.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The heart of the `O(m * sqrt(n))` solution is the reduction:
+
+      - **Two copies per node.** `pairL[u]` stores the in-copy `v` that `u_out`
+        is matched to (i.e. the kept edge `u -> v`); `pairR[v]` stores the
+        reverse. Using a copy at most once is exactly the "one edge in, one edge
+        out" constraint.
+      - **Hopcroft-Karp.** `bfs()` builds the layered structure from all free
+        left vertices and reports whether any augmenting path exists; `dfs()`
+        finds vertex-disjoint augmenting paths. Each phase adds a maximal set of
+        shortest augmenting paths, which is what gives the famous `sqrt(n)` phase
+        bound.
+      - **Decision rule.** Keep `matching` edges. Since `#paths = n - matching`,
+        we need `#paths <= 2`, i.e. `matching >= n - 2`.
+      - **Reconstruction.** Each kept edge `u -> v` gives `nxt[u] = v`. Vertices
+        with no incoming kept edge are path starts; walk `nxt` from each start to
+        emit the path.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Sample 1:** `n = 5`, edges `1->2, 1->4, 3->4, 4->5`.
+
+      Build the bipartite graph. A maximum matching keeps three edges, e.g.
+      `1->2`, `3->4`, `4->5` (left out-copies `1,3,4` matched to in-copies
+      `2,4,5`). So `matching = 3` and `#paths = 5 - 3 = 2 <= 2`.
+
+      Reconstruct: kept edges are `1->2`, `3->4`, `4->5`. Node `1` has no kept
+      incoming edge (start) -> walk `1, 2`. Node `3` has no kept incoming edge
+      (start) -> walk `3, 4, 5`. Node `4` *does* have kept incoming (`3->4`),
+      node `5` does too (`4->5`), so they belong to the second chain.
+
+      Output:
+      ```
+      YES
+      2 1 2
+      3 3 4 5
+      ```
+      which matches the expected output exactly. ✔
+
+      **Sample 2:** `n = 5`, edges `1->2, 1->3, 1->4, 1->5`. Every edge leaves
+      node `1`, so only its one out-copy can be used: `matching = 1`.
+      `#paths = 5 - 1 = 4 > 2`, so the answer is `NO` — we would need four chains
+      (nodes `2, 3, 4, 5` cannot be linked). ✔
+  - type: flowchart
+    title: "Path decomposition via bipartite matching"
+    nodes: ["each vertex -> out-copy and in-copy", "edge a->b gives a_out -- b_in", "max bipartite matching", "matching >= n-2 ?", "NO: three-plus paths", "kept edges are disjoint paths", "print up to two paths"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "n - matching"}
+      - {from: 3, to: 4, label: "no"}
+      - {from: 3, to: 5, label: "yes"}
+      - {from: 5, to: 6}
+  - type: mcq
+    prompt: "Why does keeping edges subject to in-degree <= 1 and out-degree <= 1 automatically give a set of vertex-disjoint directed paths in a DAG?"
+    options:
+      - "Because a DAG has no directed cycles, so a subgraph with indegree-1 and outdegree-1 is a disjoint union of simple directed paths."
+      - "Because every DAG is always fully coverable by two paths regardless of degree constraints."
+      - "Because each vertex has at most one preserved edge, which forces the whole chosen set to be a single path."
+      - "Because the matching always uses exactly n-2 edges, leaving exactly two path components."
+    answer: 0
+    explanation: "In a DAG, the chosen edges cannot form a directed cycle. A set of edges where every vertex has indegree <= 1 and outdegree <= 1 and no directed cycle is, by definition, a disjoint union of directed paths (each vertex is internal to at most one chain). This is exactly why matching 'out-copies to in-copies' solves the problem — the acyclicity guarantee is what turns a degree-bounded subgraph into paths rather than cycles."

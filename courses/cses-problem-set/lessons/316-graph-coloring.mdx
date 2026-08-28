@@ -1,0 +1,374 @@
+---
+id: graph-coloring
+title: "Graph Coloring"
+type: content
+difficulty: hard
+order: 316
+tags:
+  - advanced-graph
+  - graph-coloring
+  - bitmask-dp
+  - independent-set
+blocks:
+  - type: markdown
+    content: |
+      # Graph Coloring — the minimum chromatic number by subset DP
+
+      We must color every node of an undirected graph such that **no edge joins two
+      nodes of the same color**, using as few colors as possible. The smallest
+      number of colors is the **chromatic number** of the graph, written `χ(G)`.
+
+      The general problem is **NP-hard** once we allow three or more colors, so
+      the trick is in the constraints: here `n <= 16`. That is tiny enough for an
+      *exponential-in-n* exact algorithm — the classic **subset DP over
+      independent sets**.
+
+      The key idea: look at a single *color class* (the set of nodes painted the
+      same color). Because no edge may join two nodes of the same color, every
+      color class is an **independent set** — a set of nodes with no edges between
+      them. So a proper coloring is exactly a *partition of all nodes into
+      independent sets*, and we want the fewest such sets.
+
+      This turns the problem into a counting-over-subsets DP:
+
+      > `dp[mask]` = the fewest colors needed to color exactly the node set `mask`.
+
+      For `indep` (evidence that a set is independent) we precompute
+      `indep[mask]`. Then:
+
+      ```
+      dp[0] = 0
+      dp[mask] = 1 + min{ dp[mask ^ S] : S ⊆ mask is independent and contains the lowest set bit }
+      ```
+
+      Forcing `S` to contain the lowest set bit of `mask` is a **symmetry break**:
+      it stops us from reordering the same color classes in many duplicate ways,
+      and it guarantees every remaining ``uncolored'' vertex is handled
+      (`mask ^ S` shrinks until empty). Enumerating those submasks costs `O(3^n)`
+      in total, and with `n = 16` that is about `43.0` million operations — a few
+      milliseconds in C++.
+
+      **Time:** `O(3^n)` (independent-set precompute is `O(n * 2^n)` but is
+      dominated), **Space:** `O(2^n)`.
+
+      :::tip
+      **Interview tip:** "Minimum vertex coloring" is a *decision-oracle* for
+      register allocation, exam-scheduling, and map coloring. The instant you see
+      `n <= 16` (or `n <= 20`), reach for subset DP over independent sets — it is
+      the standard trick. For larger `n`, the problem is NP-hard, so interviews
+      use either the 2-coloring (bipartite) special case or greedy heuristics,
+      never an exact general solver.
+      :::
+  - type: markdown
+    content: |
+      # Question
+
+      You are given a simple graph with `n` nodes and `m` edges. Your task is to
+      use the minimum possible number of colors to color each node such that no
+      edge connects two nodes of the same color.
+
+      **Input**
+
+      The first line has two integers `n` and `m`: the number of nodes and edges.
+      The nodes are numbered `1, 2, ..., n`. Then there are `m` lines describing
+      the edges. Each line has two integers `a` and `b`: there is an edge
+      connecting nodes `a` and `b`.
+
+      **Output**
+
+      First, print an integer `k`: the minimum number of colors. After this,
+      print `n` integers `c_1, c_2, ..., c_n`: the colors of the nodes. The colors
+      should satisfy `1 <= c_i <= k`. You may print any valid solution.
+
+      **Constraints**
+
+      - `1 <= n <= 16`
+      - `0 <= m <= n(n-1)/2`
+
+      **Example**
+
+      Input:
+      ```
+      4 4
+      1 2
+      2 3
+      3 4
+      4 1
+      ```
+      Output:
+      ```
+      2
+      1 2 1 2
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — try every coloring, O(n * n^n)**
+
+      For each `k` from `1` up to `n`, enumerate every assignment of colors
+      `1..k` to the `n` nodes (there are `k^n` of them) and check that no edge has
+      equal-colored endpoints. The first `k` with a valid coloring is the answer.
+      For `n = 16`, `16^16 ≈ 1.8 * 10^19` colorings — hopeless.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n; vector<vector<int>> adj;
+      bool proper(const vector<int>& c){
+          for(int u=0;u<n;u++) for(int v:adj[u]) if(c[u]==c[v]) return false;
+          return true;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int m; if(!(cin>>n>>m)) return 0;
+          adj.assign(n,{});
+          for(int i=0;i<m;i++){int a,b;cin>>a>>b;--a;--b;adj[a].push_back(b);adj[b].push_back(a);}
+          for(int k=1;k<=n;k++){
+              vector<int> c(n);
+              long long total=1; for(int i=0;i<n;i++) total*=k;
+              for(long long x=0;x<total;x++){
+                  long long y=x;
+                  for(int i=0;i<n;i++){ c[i]=(int)(y%k)+1; y/=k; }
+                  if(proper(c)){
+                      cout<<k<<"\n";
+                      for(int i=0;i<n;i++){ if(i) cout<<' '; cout<<c[i]; }
+                      cout<<"\n"; return 0;
+                  }
+              }
+          }
+          return 0;
+      }
+      ```
+      *`O(n * n^n)` — correct but far too slow for `n = 16`.*
+
+      **② Optimization — subset DP over independent sets, O(3^n)**
+
+      Color classes are independent sets, so `dp[mask] = 1 + min dp[mask ^ S]`
+      over independent submasks `S` containing the lowest bit. This is the
+      intended solution for the CSES instance.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; if(!(cin>>n>>m)) return 0;
+          vector<int> nbr(n,0);
+          for(int i=0;i<m;i++){int a,b;cin>>a>>b;--a;--b;nbr[a]|=1<<b;nbr[b]|=1<<a;}
+
+          int FULL=1<<n;
+          vector<int> indep(FULL,1);
+          indep[0]=1;
+          for(int mask=1;mask<FULL;mask++){       // a set is independent iff the
+              int v=__builtin_ctz(mask);          // lowest node sees no vertex of it
+              indep[mask]=indep[mask^(1<<v)] && ((mask&nbr[v])==0);
+          }
+
+          const int INF=1e9;
+          vector<int> dp(FULL,INF), pick(FULL,-1);
+          dp[0]=0;
+          for(int mask=1;mask<FULL;mask++){
+              int low=mask & (-mask);             // symmetry break: class holds low bit
+              int best=INF, bestSub=-1;
+              for(int sub=mask; sub>0; sub=(sub-1)&mask){   // all submasks
+                  if((sub&low) && indep[sub]){
+                      int cand=1+dp[mask^sub];
+                      if(cand<best){best=cand;bestSub=sub;}
+                  }
+              }
+              dp[mask]=best; pick[mask]=bestSub;
+          }
+
+          int k=dp[FULL-1];                       // chromatic number
+          vector<int> color(n,0);
+          int cur=FULL-1,c=0;
+          while(cur){                             // reconstruct color classes
+              int sub=pick[cur];
+              for(int v=0;v<n;v++) if(sub&(1<<v)) color[v]=c+1;
+              c++; cur^=sub;
+          }
+          cout<<k<<"\n";
+          for(int i=0;i<n;i++){ if(i) cout<<' '; cout<<color[i]; }
+          cout<<"\n";
+          return 0;
+      }
+      ```
+      *`O(3^n)` time, `O(2^n)` space — the intended solution.*
+
+      **③ Further optimization — only maximal independent sets**
+
+      In an optimal coloring the first color class can always be taken
+      *maximal* in the remaining graph: if a compatible node is left out of the
+      class, adding it keeps the class independent and only shrinks the rest.
+      So while enumerating submasks we can skip any independent set that is *not*
+      maximal in `mask` — fewer candidate classes, same asymptotic worst case but
+      much faster on sparse graphs.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; if(!(cin>>n>>m)) return 0;
+          vector<int> nbr(n,0);
+          for(int i=0;i<m;i++){int a,b;cin>>a>>b;--a;--b;nbr[a]|=1<<b;nbr[b]|=1<<a;}
+          int FULL=1<<n;
+          vector<int> indep(FULL,1); indep[0]=1;
+          for(int mask=1;mask<FULL;mask++){
+              int v=__builtin_ctz(mask);
+              indep[mask]=indep[mask^(1<<v)] && ((mask&nbr[v])==0);
+          }
+          const int INF=1e9;
+          vector<int> dp(FULL,INF), pick(FULL,-1); dp[0]=0;
+          for(int mask=1;mask<FULL;mask++){
+              int low=mask&-mask, best=INF, bestSub=-1;
+              for(int sub=mask; sub>0; sub=(sub-1)&mask){
+                  if(!(sub&low) || !indep[sub]) continue;
+                  bool mx=true; int rest=mask^sub;
+                  for(int v=0;v<n && mx;v++)
+                      if(((rest>>v)&1) && (nbr[v]&sub)==0) mx=false; // addable vertex
+                  if(!mx) continue;                 // not maximal in mask
+                  int cand=1+dp[mask^sub];
+                  if(cand<best){best=cand;bestSub=sub;}
+              }
+              dp[mask]=best; pick[mask]=bestSub;
+          }
+          int k=dp[FULL-1];
+          vector<int> color(n,0);
+          int cur=FULL-1,c=0;
+          while(cur){int sub=pick[cur];for(int v=0;v<n;v++)if(sub&(1<<v))color[v]=c+1;c++;cur^=sub;}
+          cout<<k<<"\n";
+          for(int i=0;i<n;i++){ if(i) cout<<' '; cout<<color[i]; }
+          cout<<"\n";
+          return 0;
+      }
+      ```
+      *Worst case still `O(3^n)`, but each candidate class must now be maximal, so
+      the branches that survive drop sharply on sparse/structured graphs.*
+
+      **④ Alternative algorithm — backtracking with DSATUR**
+
+      A completely different exact solver: recursion that always colors the
+      currently *most constrained* vertex — the one with the most distinct colors
+      among its neighbours (DSATUR), ties broken by degree — and prunes once the
+      color count meets the best found. Practical and often fast in the wild.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n; vector<vector<int>> adj;
+      int bestK; vector<int> bestCol, col;
+      void dfs(int curMax){
+          int v=-1, sat=-1, deg=-1;               // pick most-saturated uncolored vertex
+          for(int u=0;u<n;u++) if(col[u]==0){
+              bool mark[40]={0}; int s=0;
+              for(int w:adj[u]) if(col[w]) mark[col[w]]=true;
+              for(int c=1;c<=n;c++) if(mark[c]) s++;
+              int d=(int)adj[u].size();
+              if(s>sat || (s==sat && d>deg)){ sat=s; deg=d; v=u; }
+          }
+          if(v==-1){ if(curMax<bestK){ bestK=curMax; bestCol=col; } return; }
+          for(int c=1;c<=curMax+1;c++){
+              if(c>=bestK) return;                // prune: can't improve on best
+              bool ok=true; for(int w:adj[v]) if(col[w]==c){ ok=false; break; }
+              if(!ok) continue;
+              col[v]=c;
+              dfs(max(curMax,c));
+              col[v]=0;
+          }
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int m; if(!(cin>>n>>m)) return 0;
+          adj.assign(n,{});
+          for(int i=0;i<m;i++){int a,b;cin>>a>>b;--a;--b;adj[a].push_back(b);adj[b].push_back(a);}
+          col.assign(n,0); bestCol.assign(n,0);
+          bestK=n+1;
+          dfs(0);
+          cout<<bestK<<"\n";
+          for(int i=0;i<n;i++){ if(i) cout<<' '; cout<<bestCol[i]; }
+          cout<<"\n";
+          return 0;
+      }
+      ```
+      *Worst case exponential, but branch-and-bound plus DSATUR ordering makes it
+      fast on many real graphs; it is the method behind most *exact coloring*
+      solvers.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      The heart of the `O(3^n)` subset DP:
+
+      - **`nbr[]`** — one integer per node whose set bits are the node's
+        neighbours. Testing ``no edges inside `mask`'' becomes the single bitwise
+        check `(mask & nbr[v]) == 0`.
+      - **`indep[mask]`** — built recursively from the lowest bit `v`: drop `v`.
+        `mask ^ (1<<v)` must already be independent, and `v` must see no vertex of
+        the rest. This gives linear `O(2^n)` precompute instead of re-checking
+        edges per set.
+      - **`dp[mask]`** — the smallest number of independent sets that cover
+        `mask`. The transition forces `sub` to contain the lowest bit, breaking
+        the symmetry between `{0,1}`-then-`{2,3}` and `{2,3}`-then-`{0,1}`.
+      - **`pick[]`** — records which independent set was chosen so that, after
+        computing the answer `k`, we can walk `cur = FULL-1` down to `0` and paint
+        each recorded class with the next color. This is what turns a *decision
+        DP* into a *constructive solution*.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Sample:** `n = 4`, edges `1-2, 2-3, 3-4, 4-1` (a 4-cycle). 0-indexed nodes
+      `0,1,2,3`; the neighbour masks are exactly:
+      `nbr[0]={1,3}`, `nbr[1]={0,2}`, `nbr[2]={1,3}`, `nbr[3]={2,0}`.
+
+      Independent sets: every singleton `{v}`; the pairs `{0,2}` and `{1,3}`;
+      no edge-singleton is violated elsewhere. Bigger sets contain an edge, so
+      they are *not* independent.
+
+      The DP fills (listing the colour count, not the sub-chosen set):
+
+      ```
+      dp[{0}] = dp[{1}] = dp[{2}] = dp[{3}] = 1        (single vertices)
+      dp[{0,1}] = 1 + dp[{1}] = 2                      ({0} alone is the only class)
+      dp[{0,2}] = 1 + dp[{}]   = 1                     ({0,2} is itself independent)
+      dp[{0,1,2}] = 1 + dp[{0,2}] = 2                  (e.g. class {1} + {0,2})
+      dp[{0,1,2,3}] = 2                                (2 colours suffice)
+      ```
+
+      Why `dp[{0,1,2,3}] = 2`? Take the independent class `{0,2}` (contains the
+      lowest bit, node `0`); the rest is `{1,3}`, itself independent with
+      `dp[{1,3}]=1`. So `1 + 1 = 2`. No single independent set covers all four
+      nodes (the cycle is not independent), so `k = 2`.
+
+      Reconstruction: `pick` gives class `{0,2}` first, then `{1,3}`.
+
+      ```
+      color[0]=color[2]=1 ; color[1]=color[3]=2
+      ```
+
+      Output:
+      ```
+      2
+      1 2 1 2
+      ```
+      which matches the expected output exactly ✔ (and `1-2`, `2-3`, `3-4`,
+      `4-1` all join different colors).
+  - type: flowchart
+    title: "Min-k coloring via subset DP"
+    nodes: ["nbr[] + indep[] for every mask", "dp[0]=0", "dp[mask] = min over independent sub- classes holding lowest bit", "dp[FULL-1] = chromatic number", "walk pick[] to emit colors 1..k"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+  - type: mcq
+    prompt: "Why can a color class always be forced to contain the lowest remaining vertex in the subset DP for graph coloring?"
+    options:
+      - "Because the answer k is invariant to renaming colors, so we may fix one canonical ordering of the color classes and always put the smallest uncolored node in the next class."
+      - "Because the lowest-numbered node is always connectable to every other node, so it can be in any class."
+      - "Because the lowest-numbered node has degree 0 in every instance."
+      - "Because independent sets are always maximal by construction."
+    answer: 0
+    explanation: "The coloring count does not depend on *which* color. Grouping the color classes is symmetric up to permutation, so fixing the rule 'the next class contains the lowest remaining node' picks one canonical representative of each class. This avoids enumerating the same partition many times in different orders, turning the otherwise huge search into the O(3^n) recurrence."

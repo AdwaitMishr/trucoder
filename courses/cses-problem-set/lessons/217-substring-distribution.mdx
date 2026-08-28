@@ -1,0 +1,259 @@
+---
+id: substring-distribution
+title: Substring Distribution
+difficulty: medium
+order: 217
+tags:
+  - string
+  - suffix-automaton
+  - lcp
+  - counting
+blocks:
+  - type: markdown
+    content: |
+      # Substring Distribution — how many distinct substrings of each length?
+
+      For every length `L` from `1` to `n`, count the **distinct substrings of
+      exactly that length**. This is a "distribution" of the distinct-substring
+      count by length, and the suffix automaton solves it beautifully.
+
+      **Key SAM fact.** Every distinct substring corresponds to exactly **one**
+      pair `(state, length)`, where `length` ranges inside that state's
+      interval `( len[link], len[v] ]` — and every such pair is a distinct
+      substring. So:
+
+      ```
+      # distinct substrings of length L  =  # states whose interval covers L
+      ```
+
+      That is a pure **interval difference-array** problem. For each state `v`,
+      contribute `+1` to every length in its interval by doing two point
+      updates:
+
+      ```
+      diff[ len[v] ]      ... no — use the convention
+      diff[ len[link[v]] + 1 ] += 1
+      diff[ len[v]      + 1 ] -= 1
+      ```
+
+      then a prefix sum over `L = 1..n` yields the answer per length. The empty
+      string (state at root, interval ending at `0`) is excluded by starting the
+      range at `len[link] + 1 ≥ 1`.
+
+      **Why this is linear.** Building the SAM is O(n). There are O(n) states,
+      each doing two O(1) difference updates; the prefix sum is O(n). Total
+      **O(n)** time and **O(n)** space.
+
+      :::tip
+      **Interview tip:** the "for each state, its `(len[link], len[v]]` interval
+      is a block of distinct substrings, all with the same end positions" fact
+      is the single most reusable SAM idea. It turns counting-by-length (this
+      problem), counting distinct substrings (sum of `len[v] - len[link[v]]`),
+      and occurrence counting (endpos sizes) into one toolkit.
+      :::
+  - type: markdown
+    content: |
+      # Question — Substring Distribution
+
+      You are given a string of length `n`. For every integer between
+      `1 … n` you need to print the **number of distinct substrings** of that
+      length.
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 10^5`
+
+      **Input.** The only input line has the string of length `n` (characters
+      `a`–`z`).
+
+      **Output.** For each integer between `1 … n` print the number of distinct
+      substrings of that length (space separated).
+
+      Sample input:
+
+      ```
+      abab
+      ```
+
+      Sample output:
+
+      ```
+      2 2 2 1
+      ```
+
+      Explanation: length 1 has `a,b` (2); length 2 has `ab,ba` (2); length 3
+      has `aba,bab` (2); length 4 has `abab` (1).
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — build and count per length, O(n²)**
+
+      For each length `L`, collect all substrings of that length into a `set`
+      and output its size.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; cin >> s;
+          int n = (int)s.size();
+          for (int L = 1; L <= n; ++L) {
+              set<string> st;
+              for (int i = 0; i + L <= n; ++i) st.insert(s.substr(i, L));
+              cout << (L > 1 ? " " : "") << st.size();
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n³)** time overall (n² substrings, each O(n) to hash/copy) — correct,
+      but a non-starter at `n = 10^5`.
+
+      **② Optimization — suffix automaton interval difference, O(n) (submission)**
+
+      Build the SAM. For each non-root state `v`, its interval of lengths is
+      `( len[link[v]] , len[v] ]`. A difference array + prefix sum turns those
+      intervals into per-length counts.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      struct SAM {
+          struct St { int len, link; array<int,26> nxt; };
+          vector<St> st; int last;
+          SAM() { st.push_back({0, -1, array<int,26>{}}); last = 0; }
+          void extend(int ch) {
+              int cur = (int)st.size();
+              st.push_back({st[last].len + 1, 0, array<int,26>{}});
+              int p = last;
+              while (p != -1 && st[p].nxt[ch] == 0) { st[p].nxt[ch] = cur; p = st[p].link; }
+              if (p == -1) st[cur].link = 0;
+              else {
+                  int q = st[p].nxt[ch];
+                  if (st[p].len + 1 == st[q].len) st[cur].link = q;
+                  else {
+                      int clone = (int)st.size();
+                      st.push_back({st[p].len + 1, st[q].link, st[q].nxt});
+                      while (p != -1 && st[p].nxt[ch] == q) { st[p].nxt[ch] = clone; p = st[p].link; }
+                      st[q].link = st[cur].link = clone;
+                  }
+              }
+              last = cur;
+          }
+      };
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; cin >> s;
+          int n = (int)s.size();
+
+          SAM sam;
+          for (char ch : s) sam.extend(ch - 'a');
+
+          vector<ll> diff(n + 2, 0);               // 1-indexed lengths
+          for (int v = 0; v < (int)sam.st.size(); ++v) {
+              int link = sam.st[v].link;
+              if (link == -1) continue;             // root = empty substring, skip
+              diff[sam.st[link].len + 1] += 1;      // lengths (len[link], len[v]] each give one distinct substring
+              diff[sam.st[v].len + 1] -= 1;
+          }
+
+          ll cur = 0;
+          for (int L = 1; L <= n; ++L) {
+              cur += diff[L];
+              cout << (L > 1 ? " " : "") << cur;
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n)** time, **O(n)** space. This is the submission tier.
+
+      **③ Alternative — suffix array + LCP, O(n log n)**
+
+      Suffix-array route: sort the suffixes (O(n log n)), build the Kasai LCP.
+      For each suffix `i` in sorted order, the distinct substrings it introduces
+      span lengths `lcp[i]+1 .. n-sa[i]` — exactly the same interval idea, but
+      with the suffix array instead of the automaton. A difference array over
+      those ranges then gives the same per-length counts. Correct and standard;
+      slightly slower (O(n log n)) than the SAM but reuses the suffix-array
+      machinery from earlier lessons.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **The interval-per-state.** Every state `v` represents the substrings
+        whose lengths are `len[link[v]]+1 .. len[v]`. These are all **distinct**
+        from each other and from every other state's, and they all share the
+        same `endpos` set. So the "distribution by length" is the histogram of
+        how many states cover each length.
+      - **Difference array.** Adding `+1` to a whole interval
+        `[l, r]` is done once with `diff[l] += 1` and `diff[r+1] -= 1`; a prefix
+        scan turns `diff` into the per-length counts. The root (empty string)
+        is skipped via `link == -1`.
+      - **Sanity constant.** The total number of distinct substrings is the sum
+        of all interval widths = `Σ (len[v] - len[link[v]])`, which is also the
+        sum of the prefix array — a useful invariant to self-check.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `s = abab` (n = 4).
+
+      The built suffix automaton has 5 states. Each non-root state's `(len[link],
+      len[v]]` interval (printed by the compiled program):
+
+      | v | len[v] | link | interval |
+      |---|--------|------|----------|
+      | 1 | 1 | 0 | 1 .. 1 |
+      | 2 | 2 | 0 | 1 .. 2 |
+      | 3 | 3 | 1 | 2 .. 3 |
+      | 4 | 4 | 2 | 3 .. 4 |
+
+      Note state 2 (`link = 0`) covers lengths `1..2` — it holds both the
+      one-char substring `b` and, jointly with its suffix-link, participates in
+      `ab`. Every distinct substring of `abab` appears in exactly one interval:
+
+      `a`(in [1,1]) `b`(in [1,2]) `ab`(in [1,2]) `ba`(in [2,3]) `aba`(in [2,3])
+      `bab`(in [3,4]) `abab`(in [3,4]).
+
+      Difference updates:
+
+      ```
+      [1,1] → d[1]+=1, d[2]-=1
+      [1,2] → d[1]+=1, d[3]-=1
+      [2,3] → d[2]+=1, d[4]-=1
+      [3,4] → d[3]+=1, d[5]-=1
+      ```
+
+      Running prefix sum:
+
+      | L | cur += d[L] | distinct substrings |
+      |---|-------------|---------------------|
+      | 1 | +2 = 2 | a, b → 2 |
+      | 2 | 2 (+0) = 2 | ab, ba → 2 |
+      | 3 | 2 (+0) = 2 | aba, bab → 2 |
+      | 4 | 2 (−1) = 1 | abab → 1 |
+
+      Output: `2 2 2 1`.
+
+      **Expected `2 2 2 1` — Actual `2 2 2 1` (from the compiled submission).
+      Match.**
+  - type: mcq
+    prompt: 'Which invariant is the suffix-automaton method relying on to count distinct substrings by length?'
+    options:
+      - Each state v contributes exactly one substring of every length in (len[link], len[v]]
+      - Each distinct substring corresponds to exactly one (state, length) pair, with length in that state's (len[link], len[v]] interval
+      - All substrings of a given length share one state
+      - The number of states equals the string length
+    answer: 1
+    explanation: Every distinct substring is a unique root-to-node path; a state v contains exactly the substrings whose lengths lie in (len[link[v]], len[v]], and these substrings are all distinct across the whole automaton and all share the same end positions. Thus counting distinct substrings of length L reduces to counting how many states cover L, which a difference array answers in linear time.
+type: content
+---

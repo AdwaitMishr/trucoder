@@ -1,0 +1,205 @@
+---
+id: monotone-subsequences
+title: "Monotone Subsequences — Build a Permutation with given LIS/LDS"
+difficulty: hard
+order: 288
+tags:
+  - construction
+  - lis
+  - lds
+  - erdos-szekeres
+  - permutation
+blocks:
+  - type: markdown
+    content: |
+      # Constructing a permutation with a target LIS and LDS
+
+      Let `LIS(p)` be the length of the longest **strictly increasing**
+      subsequence and `LDS(p)` the longest **strictly decreasing** subsequence
+      of a permutation `p`. We are asked: given `n`, `a`, `b`, build a
+      permutation of `[1..n]` with `LIS = a` and `LDS = b` — or report
+      impossible.
+
+      **Feasibility — two unavoidable bounds.**
+      1. **Erdős–Szekeres:** in any sequence of `n` distinct values,
+         `LIS · LDS ≥ n` (pigeonhole over the pair (LIS-prefix, LDS-prefix)
+         assignments). So we need `a · b ≥ n`.
+      2. **Sum bound:** `LIS + LDS ≤ n + 1` for a permutation. Equivalently we
+         need `a + b ≤ n + 1`.
+      These two conditions are **both necessary and sufficient**.
+
+      **Construction (block / "staircase descent").** Divide the numbers into
+      `a` consecutive blocks, each block `≤ b` elements long, written in
+      **strictly decreasing** order inside the block, and with *at least one*
+      block of full length `b`. Concatenate the blocks in increasing order of
+      their value ranges. Then:
+      - **LIS = a:** an increasing subsequence uses at most one element per
+        (internally decreasing) block, and taking one element from each of the
+        `a` blocks (their maxima ascend) achieves `a`.
+      - **LDS = b:** a decreasing subsequence can use at most one element of
+        each block, but cannot extend across asc-descending block boundaries
+        (later blocks hold larger values), so LDS = the largest block = `b`.
+
+      :::tip
+      **Interview tip:** Erdős–Szekeres (`LIS·LDS ≥ n` for distinct values) and
+      its tight construction — `a` decreasing blocks stacked by increasing
+      maxima — are the canonical "is such a permutation possible / build it"
+      question pair. If an interviewer asks for a permutation with given LIS/LDS,
+      immediately check `a·b ≥ n` and `a+b ≤ n+1`, then emit the block
+      construction. The same pigeonhole is re-asked as "what is the smallest n
+      forcing an increasing or decreasing subsequence of length ≥ x".
+      :::
+  - type: markdown
+    content: |
+      # Question — Monotone Subsequences
+
+      Given `n`, `a`, `b`, construct a permutation of `1, 2, …, n` whose longest
+      strictly-increasing subsequence has length **exactly `a`** and whose
+      longest strictly-decreasing subsequence has length **exactly `b`**. If
+      impossible, print `IMPOSSIBLE`.
+
+      **Input.** A single line with three integers `n`, `a`, `b`.
+
+      **Output.** A permutation of `[1..n]` with `LIS = a` and `LDS = b` (any
+      valid one), or `IMPOSSIBLE`.
+
+      **Constraints**
+      - `1 ≤ n ≤ 5·10^5`
+      - `1 ≤ a, b ≤ n`
+
+      **Example**
+      ```
+      Input:
+      5 3 2
+
+      Output:
+      2 1 3 5 4
+      ```
+      Explanation: `2 1 3 5 4` — an increasing subsequence like `2,3,5` (length
+      3) is achievable and no length-4 exists (only 3 blocks); the longest
+      decreasing run is `5,4` or `2,1` (length 2). So `LIS=3`, `LDS=2`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — search all permutations, O(n! · n log n)**
+
+      Generate permutations and check both `LIS` and `LDS` (via patience
+      sorting / binary-search tails) until one matches `(a, b)`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int lis(vector<int>& p){                       // O(n log n)
+          vector<int> t;
+          for(int v:p){ auto it=lower_bound(t.begin(),t.end(),v);
+              if(it==t.end()) t.push_back(v); else *it=v; }
+          return (int)t.size();
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,a,b; if(!(cin>>n>>a>>b)) return 0;
+          vector<int> p(n); iota(p.begin(),p.end(),1);
+          do{
+              int L = lis(p);
+              vector<int> q(p.rbegin(),p.rend());
+              int D = lis(q);                        // LDS of p = LIS of reversed
+              if(L==a && D==b){
+                  for(int v:p) cout<<v<<" "; cout<<"\n"; return 0;
+              }
+          } while(next_permutation(p.begin(),p.end()));
+          cout<<"IMPOSSIBLE\n";
+          return 0;
+      }
+      ```
+
+      **O(n! · n log n)** time — hopeless for `n ≥ 12`. Correct only for tiny
+      `n`, where the exhaustive `do…while(next_permutation)` honestly finds a
+      matching permutation or prints `IMPOSSIBLE`.
+
+      **② Optimization — Erdos–Szekeres block construction, O(n) (submission)**
+
+      First test feasibility: if `a*b < n` or `a+b > n+1`, print `IMPOSSIBLE`.
+      Otherwise split `n` into `a` blocks: the **last** block has size `b`, the
+      first `a-1` blocks share the remaining `n-b` elements with sizes in
+      `[1, b]`. Print each block's values in **decreasing** order, blocks in
+      increasing value order.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          long long n,a,b; if(!(cin>>n>>a>>b)) return 0;
+          if((long long)a*b < n || a + b > n + 1){ cout<<"IMPOSSIBLE\n"; return 0; }
+          long long extra = n - (a - 1 + b);          // beyond one-per-block + last block b
+          long long lo = 1;
+          for(int blk=0; blk<a; blk++){
+              long long sz = (blk == a-1) ? b : 1 + min(b-1, extra);
+              if(blk != a-1) extra -= max(0LL, sz - 1);   // account for the extras we assigned
+              for(long long v = lo + sz - 1; v >= lo; v--) cout << v << " ";
+              lo += sz;
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n)** time, **O(n)** output. Each block is a descending run; concatenating
+      them in ascending value order gives exactly `LIS = a` and `LDS = b`. This
+      is the submission.
+  - type: markdown
+    content: |
+      ### Solution — ③ further optimization / alternative
+
+      The block construction is already `O(n)` and optimal (output is `n`
+      numbers). No faster algorithm exists.
+
+      A *different* valid construction is the **staircase zigzag** used to show
+      `LIS+LDS` can reach `n+1`: interleave the two halves
+      `n, 1, n-1, 2, n-2, 3, …`. For you to build *exact* `(a, b)`, choose block
+      sizes so the maximum descending run equals `b` while keeping `a` blocks —
+      the same partition logic, just written as an interleaving. When `a + b =
+      n + 1` the permutation is forced up to ordering (e.g. `n=5,a=3,b=3` gives
+      `5 1 4 2 3`), which the staircase form matches exactly. Also note where the
+      brute tier is unusable, the feasibility check `a·b ≥ n` and `a+b ≤ n+1` is
+      what makes `IMPOSSIBLE` provably right.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **Feasibility.** `a*b < n` breaks Erdős–Szekeres; `a+b > n+1` breaks the
+        sum bound. Only both-checks-pass is constructible.
+      - **`extra = n - (a-1+b)`.** We commit one element per *first `a-1`* block
+        and `b` elements to the last block; `extra` is what remains to spread
+        among the first `a-1` blocks (each may grow up to size `b`).
+      - **Block size.** `sz = (last) ? b : 1 + min(b-1, extra)` keeps every block
+        in `[1, b]` and guarantees the last block has full size `b` ⇒ `LDS=b`.
+      - **`a` blocks ⇒ LIS is capped.** An increasing subsequence takes ≤ one
+        element per descending block, so `LIS ≤ a`, and the ascending maxima of
+        the `a` blocks achieve exactly `a`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 5, a = 3, b = 2`.
+
+      Feasibility: `a·b = 6 ≥ 5` ✓, `a+b = 5 ≤ 6` ✓. Proceed.
+
+      `extra = n - (a-1+b) = 5 - (2+2) = 1`. Block sizes:
+      - block 0 (not last): `sz = 1 + min(b-1, extra) = 1 + min(1, 1) = 2`,
+        `extra` → 0. Value range `[1,2]`, printed decreasing: `2 1`.
+      - block 1 (not last): `sz = 1 + min(1, 0) = 1`. Range `[3,3]`: `3`.
+      - block 2 (last): `sz = b = 2`. Range `[4,5]`, decreasing: `5 4`.
+
+      Permutation: **`2 1 3 5 4`**. Check `LIS`: `2,3,5` or `1,3,5` → 3 = `a`.
+      `LDS`: `5 4` and `2 1` → 2 = `b`. Matches the expected output.
+  - type: mcq
+    prompt: "What makes the construction split the numbers into a blocks, each written decreasing, able to guarantee LIS exactly a ?"
+    options:
+      - Each block is internally decreasing, so an increasing subsequence takes at most one element per block, and the block maxima ascend across the a blocks
+      - The blocks are sorted, so the whole sequence is increasing except for the first block
+      - Decreasing blocks can never be part of an increasing subsequence, forcing LIS to 1
+      - A block of size b guarantees all LIS elements come from that single block
+    answer: 0
+    explanation: A strictly increasing subsequence cannot take two elements from the same strictly-decreasing block (they are out of order), so it draws at most one per block — capping LIS at the number of blocks a. Conversely the maxima of consecutive blocks increase (blocks are ordered by value range), so picking the maximum of each block yields an increasing subsequence of length a, achieving exactly LIS = a. The same reasoning with the block of size b gives LDS = b.

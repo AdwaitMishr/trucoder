@@ -1,0 +1,189 @@
+---
+id: candy-lottery
+title: "Candy Lottery"
+difficulty: easy
+order: 189
+tags:
+  - mathematics
+  - probability
+  - expectation
+  - order-statistics
+blocks:
+  - type: markdown
+    content: |
+      # Candy Lottery — expected maximum via tail probabilities
+
+      `n` children each independently receive a uniform random integer between
+      `1` and `k` candies. You want the **expected value of the maximum** number
+      of candies any child gets.
+
+      Computing the expectation of a max directly is annoying because the
+      maximum is not a simple linear function. The clean tool is the **tail-sum
+      formula for expectation**:
+
+      ```
+      E[max] = Σ_{v=1}^{k} P(max ≥ v) = Σ_{v=1}^{k} (1 − P(max ≤ v−1))
+      ```
+
+      This works for any non-negative integer random variable: summing the tail
+      probabilities `P(X ≥ v)` over `v` recovers `E[X]`.
+
+      ## The key probability: P(every child ≤ v)
+
+      For a fixed threshold `v`, the maximum is `≤ v` exactly when **all `n`
+      children** get at most `v` candies. Each child independently gets at most
+      `v` with probability `v/k` (outcomes `1..v` out of `1..k`). By
+      independence:
+
+      ```
+      P(max ≤ v) = (v/k)^n
+      ```
+
+      So `P(max ≥ v) = 1 − ((v−1)/k)^n`, and the answer is a single closed-form
+      sum.
+
+      **Complexity.** `O(k)` time, `O(1)` space. For `n,k ≤ 100` this is
+      instantaneous.
+
+      :::tip
+      **Interview tip:** "expected maximum (or min) of independent draws" is one
+      of the most portable ideas in probability interviews — the move is to
+      rewrite `E[max]` as the tail sum `Σ_v P(max ≥ v)`, then compute each tail
+      as a product `(1 − P(single < v)^n)`. The moment you see "expected maximum",
+      reach for tail probabilities instead of grinding out the full PMF.
+      :::
+  - type: markdown
+    content: |
+      # Question — Candy Lottery
+
+      There are `n` children, and each of them independently gets a random
+      integer number of candies between `1` and `k`.
+
+      What is the **expected maximum number of candies** a child gets?
+
+      **Input:** The only input line contains two integers `n` and `k`.
+
+      **Output:** Print the expected number rounded to six decimal places
+      (rounding half to even).
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 100`
+      - `1 ≤ k ≤ 100`
+
+      **Example**
+
+      Input:
+
+      ```
+      2 3
+      ```
+
+      Output:
+
+      ```
+      2.444444
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate all k^n outcomes, O(k^n)**
+
+      Every child has `k` choices, so there are `k^n` joint outcomes; for each
+      take the max and average. Correct but `k^n` explodes (e.g. `100^100`).
+
+      ```cpp
+      double brute(int n, int k){ // conceptual
+          // for (each of k^n outcomes) { m = max over n children; total += m; }
+          // return total / k^n;
+      }
+      ```
+
+      **② Optimization — tail-sum formula for the expected max, O(k)**
+
+      Rewrite the expectation as a sum of tail probabilities; each tail is
+      `1 − ((v−1)/k)^n`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          int n, k; cin>>n>>k;
+          // E[max] = sum_{v=1}^{k} P(max >= v),  P(max >= v) = 1 - ((v-1)/k)^n
+          long double ans=0;
+          for(int v=1; v<=k; v++){
+              long double under=(v-1.0)/(long double)k;
+              ans += 1.0 - powl(under, n);
+          }
+          cout<<fixed<<setprecision(6)<<(double)ans<<"\n";
+          return 0;
+      }
+      ```
+
+      Time `O(k·n)` (each `powl` is `O(log n)`), space `O(1)`. Instant.
+
+      **③ Further optimization — precompute powers / iterative.**
+
+      We could precompute `p^e` for all needed exponents, but `k ≤ 100` makes it
+      unnecessary. A pure DP over the max-distribution `P(max = v)` for exact
+      rationals is an alternative when no floats are wanted (see `④`).
+
+      **④ Alternative — DP over the maximum distribution.**
+
+      Let `F[v] = P(max ≤ v) = (v/k)^n`. Then
+      `P(max = v) = F[v] − F[v−1]`, and
+      `E[max] = Σ_v v · (F[v] − F[v−1])`. This is the exact same computation in
+      different clothes — build `F` with `n`-fold powers and take differences.
+      Useful to *prove* the tail formula: `Σ_v v(F[v]−F[v−1]) = Σ_v (1−F[v−1])`
+      by summation by parts, which is exactly the `②` formula.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`powl(under, n)`** raises `(v−1)/k` to the `n`-th power — the
+        probability that every one of the `n` children gets `≤ v−1` candies.
+      - **`1 − powl(...)`** is then `P(max ≥ v)` (the maximum is `≥ v` whenever
+        at least one child reaches `v`).
+      - The loop sums those tails over `v = 1..k`; by the tail-sum identity that
+        total is `E[max]`.
+      - `long double` keeps intermediate values precise; `setprecision(6)`
+        produces the six-decimal output with correct rounding.
+      - For `v = 1`, `under = 0`, so the term is `1` — the maximum is always
+        `≥ 1`. For `v = k`, `under = (k−1)/k`, so `P(max = k)` is folded in.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 2, k = 3` (two children, each gets `1..3` candies).
+
+      Compute each tail `P(max ≥ v) = 1 − ((v−1)/3)^2`:
+
+      | v | (v−1)/3 | tail P(max ≥ v) |
+      |----|---------|------------------|
+      | 1 | 0 | 1 − 0^2 = 1 |
+      | 2 | 1/3 | 1 − (1/3)^2 = 8/9 ≈ 0.888889 |
+      | 3 | 2/3 | 1 − (2/3)^2 = 5/9 ≈ 0.555556 |
+
+      ```
+      E[max] = 1 + 8/9 + 5/9 = 1 + 13/9 = 22/9 = 2.4444...
+      ```
+
+      Print `2.444444`, matching the sample output.
+
+      **Sanity check by hand:** with 2 children and 3 candy values, the possible
+      maxima are 1 (both get 1: 1 way/9), 2 (max exactly 2: outcomes `{1,2},{2,1},
+      {2,2}` = 3/9), 3 (the rest: 5/9). So
+      `E[max] = 1·1/9 + 2·3/9 + 3·5/9 = (1+6+15)/9 = 22/9`. ✓ Same answer.
+  - type: mcq
+    prompt: Why can E[max] be written as the sum of tail probabilities Σ_v P(max ≥ v)?
+    options:
+      - 'Because for any non-negative integer random variable X, the identity Σ_{v≥1} P(X ≥ v) = E[X] holds; applying it to X = max gives the tail sum, and each tail is a product (1 − ((v−1)/k)^n) by independence'
+      - 'Because the maximum is always attained by exactly one child, so we can sum single-child expectations'
+      - 'Because maximum is a linear function of the children counts'
+      - 'Because probabilities of disjoint events add to give the expectation directly'
+    answer: 0
+    explanation: 'E[X] = Σ_{v≥1} P(X ≥ v) is a known identity for non-negative integer variables (the tail-sum / layers-of-a-cake formula). For X = max, P(max ≥ v) = 1 − P(all children ≤ v−1) = 1 − ((v−1)/k)^n by independence of the n draws. Summing these tails over v gives the expected maximum.'
+type: content
+---

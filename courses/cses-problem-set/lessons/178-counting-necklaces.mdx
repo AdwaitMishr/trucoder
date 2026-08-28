@@ -1,0 +1,276 @@
+---
+id: counting-necklaces
+title: "Counting Necklaces"
+type: content
+difficulty: medium
+order: 178
+tags:
+  - mathematics
+  - combinatorics
+  - burnside
+  - group-theory
+  - modular-arithmetic
+blocks:
+  - type: markdown
+    content: |
+      # Counting Necklaces — Burnside's lemma on rotations
+
+      We must count the number of **distinct** necklaces with `n` pearls, each
+      pearl colored one of `m` colors, where two necklaces are the same if one can
+      be **rotated** into the other (reflections do *not* count as the same).
+
+      The tool for this is **Burnside's lemma** (the orbit-counting theorem).
+
+      ## Burnside's lemma
+
+      Let a group `G` of symmetries act on a set of colourings. The number of
+      **orbits** — colourings that are the same up to a symmetry — is
+
+      ```
+      #orbits = (1 / |G|) * sum over g in G of fix(g)
+      ```
+
+      where `fix(g)` = number of colourings left **unchanged** by symmetry `g`.
+
+      For a necklace, `G` is the cyclic group of the `n` rotations: rotation by
+      `0, 1, 2, ..., n-1` positions. A colouring (a sequence of `n` colours) is
+      fixed by rotating `i` positions exactly when the sequence is **periodic**
+      with period `d = gcd(n, i)` — i.e. the colour is forced to repeat every `d`
+      pearls. So `fix(rotation by i) = m^gcd(n,i)`.
+
+      Therefore:
+
+      ```
+      answer = (1/n) * sum_{i=0}^{n-1} m^gcd(n,i)   (mod 10^9+7)
+      ```
+
+      The division by `n` is done with a **modular inverse** (`n^(-1) mod M`),
+      because `M = 10^9+7` is prime and `n < M`.
+
+      **Time:** `O(n · log n)` for the direct sum, or about `O(sqrt(n) + d(n) · log n)`
+      with the divisor trick below. **Space:** `O(1)` (besides factoring).
+
+      :::tip
+      **Interview tip:** Burnside's lemma is the single formula that turns "how
+      many colourings up to symmetry?" into a sum of fixed counts. Memorise it as
+      *"average number of fixed points"* — `#orbits = (1/|G|) Σ fix(g)`. The
+      recurring coding trick is computing `fix(g)` as `colors^orbits` and grouping
+      rotations by `gcd` using Euler's totient. It appears in necklace, bracelet,
+      grid, and graph-colouring counting questions.
+      :::
+  - type: markdown
+    content: |
+      # Question — Counting Necklaces
+
+      Your task is to count the number of different necklaces that consist of `n`
+      pearls, and each pearl has `m` possible colors.
+
+      Two necklaces are considered to be different if it is **not** possible to
+      rotate one of them so that they look the same.
+
+      **Input**
+
+      The only input line has two numbers `n` and `m`: the number of pearls and
+      colors.
+
+      **Output**
+
+      Print one integer: the number of different necklaces modulo `10^9+7`.
+
+      **Constraints**
+
+      - `1 <= n,m <= 10^6`
+
+      **Example**
+
+      Input:
+      ```
+      4 3
+      ```
+
+      Output:
+      ```
+      24
+      ```
+
+      For `n=4, m=3` there are 24 rotation-distinct colourings.
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — enumerate all colourings, O(m^n · n)**
+
+      Generate every one of the `m^n` colourings, produce all `n` rotations of it,
+      and keep the lexicographically smallest ("canonical") rotation. Count how many
+      distinct canonicals exist. Fully correct, but `m^n` explodes — for the sample
+      `m=3, n=4` alone there are `3^4 = 81` colourings, and with `n,m <= 10^6` this is
+      impossible.
+
+      ```cpp
+      // Illustration only — O(m^n), unusable for real constraints.
+      // set<string> seen; for each of m^n colourings: rotate to canonical, insert.
+      ```
+
+      **② Optimization — Burnside's lemma, direct sum, O(n · log n) time, O(1) space**
+
+      Sum the fixed colourings over all `n` rotations and divide by `n`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1e9 + 7;
+
+      ll modpow(ll b, ll e){
+          ll r = 1 % MOD; b %= MOD;
+          while (e){
+              if (e & 1) r = r * b % MOD;
+              b = b * b % MOD; e >>= 1;
+          }
+          return r;
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          ll n, m; cin >> n >> m;
+          ll sum = 0;
+          for (ll i = 0; i < n; ++i){
+              ll g = gcd(n, i);            // rotation by i fixes m^gcd colourings
+              sum = (sum + modpow(m, g)) % MOD;
+          }
+          ll answer = sum * modpow(n, MOD - 2) % MOD;  // divide by n
+          cout << answer << "\n";
+          return 0;
+      }
+      ```
+
+      A rotation by `i` leaves a colouring unchanged iff it repeats with period
+      `gcd(n,i)`, so exactly `m^gcd(n,i)` colourings are fixed. Fits the limits
+      (`n <= 10^6`).
+
+      **③ Further optimization — group by divisor using Euler's totient, O(sqrt(n) + d(n)·log n)**
+
+      Rotations with the same gcd contribute the same term. `gcd(n, i) = d` happens
+      for exactly `phi(n/d)` values of `i` (the count of `i` coprime to `n/d`). So:
+
+      ```
+      sum = sum over d|n of phi(n/d) * m^d
+      ```
+
+      Reach every divisor `d` of `n` and compute `phi` on the fly from the prime
+      factorisation of `n`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1e9 + 7;
+
+      ll modpow(ll b, ll e){
+          ll r = 1 % MOD; b %= MOD;
+          while (e){ if (e & 1) r = r * b % MOD; b = b * b % MOD; e >>= 1; }
+          return r;
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          ll n, m; cin >> n >> m;
+          // factor n into distinct primes with exponents
+          ll x = n; vector<ll> p; vector<int> e;
+          for (ll q = 2; q * q <= x; ++q){
+              if (x % q == 0){ int c = 0; while (x % q == 0){ x /= q; c++; } p.push_back(q); e.push_back(c); }
+          }
+          if (x > 1){ p.push_back(x); e.push_back(1); }
+          ll sum = 0;
+          function<void(int,ll,ll)> go = [&](int i, ll d, ll phi){
+              if (i == (int)p.size()){
+                  // d is a divisor; phi = phi(d); term = phi(d) * m^{n/d}
+                  sum = (sum + (phi % MOD) * modpow(m, n / d)) % MOD;
+                  return;
+              }
+              ll pd = d, pp = phi;                     // try exponent 0..e[i] of prime p[i]
+              for (int k = 0; k <= e[i]; ++k){
+                  if (k == 0) go(i + 1, pd, pp);
+                  else{
+                      pd = pd * p[i];                  // one more factor of p
+                      pp = pp * ((k == 1) ? (p[i] - 1) : p[i]);   // phi(p^k) = p^{k-1}(p-1)
+                      go(i + 1, pd, pp);
+                  }
+              }
+          };
+          go(0, 1, 1);
+          ll answer = sum * modpow(n, MOD - 2) % MOD;
+          cout << answer << "\n";
+          return 0;
+      }
+      ```
+
+      This is the intended solution — it needs only the divisors of `n`, so it
+      scales to far larger `n` than the direct sum.
+
+      **④ Alternative** — the direct sum in ② and the totient grouping in ③ are the
+      two classic Burnside formulations; no third algorithm is needed. A variant
+      uses the **Möbius function** to invert the same sum, but it computes the
+      identical count, so the totient grouping is the one to remember.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O(sqrt(n)) solution in **③**:
+
+      - `factor n` into `(prime, exponent)` pairs by trial division up to `sqrt(n)`.
+      - The recursive `go` enumerates every divisor `d` of `n` as a product of
+        prime powers, carrying `phi(d)` alongside. When we raise the exponent of a
+        prime `p` from `0` to `1` we multiply phi by `(p - 1)`; from `k >= 1` to
+        `k + 1` we multiply by `p` (since `phi(p^k) = p^(k-1)(p-1)`).
+      - At each leaf divisor `d`, we add `phi(d) * m^(n/d)`: rotating a necklace by
+        `d` steps is equivalent to a rotation by `gcd`, and there are `phi(n/d)`
+        rotations whose gcd is exactly `d`. Summed over all `d | n` we recover the
+        full Burnside sum.
+      - Multiply by `n^(-1) mod M` via Fermat (`modpow(n, MOD-2)`) to divide by the
+        group size `n`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `n = 4, m = 3`.
+
+      Direct Burnside sum (**②**): rotation `i` fixes `3^gcd(4,i)` colourings.
+
+      | i | gcd(4,i) | fixed |
+      |---|----------|-------|
+      | 0 | 4 | 3^4 = 81 |
+      | 1 | 1 | 3^1 = 3 |
+      | 2 | 2 | 3^2 = 9 |
+      | 3 | 1 | 3^1 = 3 |
+
+      Sum = `81 + 3 + 9 + 3 = 96`. Divided by `n = 4` → `96/4 = 24`.
+
+      Divisor grouping (**③**): divisors `d | 4` are `1, 2, 4` with
+      `phi(1)=1, phi(2)=1, phi(4)=2`. Sum = `1·3^4 + 1·3^2 + 2·3^1 = 81 + 9 + 6 = 96`,
+      again `96/4 = 24`. Both match the sample output `24`.
+  - type: flowchart
+    title: "Burnside over rotations"
+    nodes: ["Read n, m", "Factor n into prime powers",
+            "Enumerate divisors d with phi(d)",
+            "Add phi(d) * m^(n/d)",
+            "All divisors done?",
+            "Multiply sum by n^(-1) mod M", "Print answer"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: "DFS"}
+      - {from: 2, to: 3, label: "leaf d"}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 2, label: "no"}
+      - {from: 4, to: 5, label: "yes"}
+      - {from: 5, to: 6, label: ""}
+  - type: mcq
+    prompt: "A rotation by i positions fixes exactly m^gcd(n,i) colourings. Which is the reason, and what is the final step to get the number of necklaces?"
+    options:
+      - "A fixed colouring repeats with period gcd(n,i), so only the first gcd(n,i) pearls are free (m choices each): m^gcd(n,i) fixed colourings; then average over the n rotations by dividing by n (modular inverse)"
+      - "Each rotation fixes all m^n colourings, so we must multiply the sum by n"
+      - "gcd(n,i) colourings are fixed, so the answer is m^n divided by gcd(n,i)"
+      - "Only the rotation by 0 fixes colourings, so the sum reduces to m^n / n"
+    answer: 0
+    explanation: "A colouring unchanged by a rotation by i positions is periodic with period d = gcd(n,i): positions k and k+d always match, so the whole necklace is determined by its first d pearls, giving m^d = m^gcd(n,i) fixed colourings. Burnside's lemma averages the fixed counts over the n rotations, so we divide the sum by n — as modular multiplication by n^(-1) because M is prime and n < M."

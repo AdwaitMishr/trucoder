@@ -1,0 +1,198 @@
+---
+id: array-division
+title: "Array Division"
+difficulty: medium
+order: 57
+tags:
+  - sorting-searching
+  - binary-search
+  - greedy
+blocks:
+  - type: markdown
+    content: |
+      # Array Division — binary search on the maximum subarray sum
+
+      We must split the array into exactly `k` contiguous subarrays so that the
+      **largest** subarray sum is as small as possible; the answer is that
+      minimized maximum.
+
+      This is a classic "**minimize the maximum**" problem, which strongly hints
+      at **binary search on the answer**. Instead of searching over divisions,
+      we search over candidate values `X` for the maximum subarray sum and ask a
+      much easier yes/no question:
+
+      > Can we split the array into at most (or exactly) `k` subarrays, each
+      > with sum **at most `X`**?
+
+      If "at most `X`" is achievable with `k` subarrays, then any value larger
+      than `X` is also achievable — the property is **monotone**. Larger `X`
+      only makes the check easier. That monotonicity is exactly what binary
+      search needs.
+
+      ## The greedy feasibility check
+
+      For a fixed `X`, greedily form subarrays left to right: accumulate values
+      into the current subarray while `sum + next <= X`; when adding the next
+      element would exceed `X`, start a new subarray there. The greedy number
+      of subarrays is the *minimum* possible for that `X` (since we never split
+      earlier than forced). So the check succeeds exactly when this minimum is
+      `<= k`.
+
+      The lower bound of the search is `max(a_i)` (a single element can never be
+      split further) and the upper bound is `sum(a_i)` (one subarray holds all).
+
+      **Time:** O(n log(sum)) — ~`O(n log(2*10^14))` ≈ `48*n`; **Space:** O(1).
+
+      :::tip
+      **Interview tip:** "minimize the maximum" / "maximize the minimum" is a
+      strong signal for binary search on the answer — it shows up constantly
+      (splitting workload across workers, patience of painters, shipping
+      packages in `k` days, etc.). The reframe to practice is turning a hard
+      optimization into a monotone decision predicate plus a cheap greedy
+      check. Memorize: *binary search the value, greedily verify feasibility*.
+      :::
+  - type: markdown
+    content: |
+      # Question — Array Division
+
+      You are given an array containing `n` positive integers. Your task is to
+      divide the array into `k` subarrays so that the **maximum sum** in a
+      subarray is as small as possible.
+
+      **Input**
+
+      The first input line contains two integers `n` and `k`: the size of the
+      array and the number of subarrays in the division.
+
+      The next line contains `n` integers `x_1, x_2, ..., x_n`: the contents of
+      the array.
+
+      **Output**
+
+      Print one integer: the minimized maximum subarray sum.
+
+      **Constraints**
+
+      - `1 <= n <= 2*10^5`
+      - `1 <= k <= n`
+      - `1 <= x_i <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 3
+      2 4 7 3 5
+      ```
+
+      Output:
+
+      ```
+      8
+      ```
+
+      (An optimal division is `[2,4]`, `[7]`, `[3,5]` with sums `6, 7, 8`; the
+      largest sum is `8`.)
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — try all splits, combinatorially huge**
+
+      Enumerating every way to place `k-1` cut points among `n-1` gaps is
+      `C(n-1, k-1)` possibilities — astronomically infeasible for `n = 2*10^5`.
+      A dynamic program `dp[i][j]` (minimum max sum of splitting the first `i`
+      elements into `j` pieces) is correct but `O(n²·k)`, also far too slow.
+
+      ```cpp
+      // O(n^2 * k) dynamic programming - conceptually correct, too slow here
+      // dp[i][j] = best max subarray sum covering first i elements in j pieces
+      // omitted: O(n^2 * k) is hopeless for n = 2*10^5
+      ```
+
+      **② Optimisation — binary search the answer, O(n log(sum)) time, O(1) space**
+
+      Search `X` over `[max(a), sum(a)]`. For each `X`, greedily count the
+      minimum number of subarrays with sum at most `X`; keep the smallest
+      feasible `X`.
+
+      ```cpp
+      long long solve(int n, int k, const vector<long long>& a) {
+          long long lo = 0, hi = 0;
+          for (long long v : a) { lo = max(lo, v); hi += v; } // [max element, total sum]
+          long long ans = hi;
+          while (lo <= hi) {
+              long long mid = lo + (hi - lo) / 2;
+              long long cur = 0, pieces = 1;
+              bool ok = true;
+              for (long long v : a) {
+                  if (v > mid) { ok = false; break; }        // single element too big
+                  if (cur + v > mid) { pieces++; cur = v; }  // start a new subarray
+                  else cur += v;
+              }
+              if (ok && pieces <= k) { ans = mid; hi = mid - 1; } // feasible -> try smaller
+              else lo = mid + 1;
+          }
+          return ans;
+      }
+      ```
+
+      **③ Further optimisation / alternative** — the binary-search solution
+      above is already optimal at O(n log S). There is no faster asymptotically
+      meaningful alternative for the required "minimize the maximum".
+
+      **④ Note** — if `k == 1` the answer is trivially `sum(a)` (one subarray),
+      and if `k == n` it is `max(a)`; the binary search handles both
+      automatically via the `lo = max(a), hi = sum(a)` bounds.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O(n log(sum)) solution in **②**:
+
+      - **Bounds.** `lo = max(a)` is the theoretical floor (no subarray can be
+        smaller than its largest single element); `hi = sum(a)` is the ceiling
+        (one subarray holds everything). The answer lies inside `[lo, hi]`.
+      - **Feasibility check.** For a candidate `mid`, the greedy loop walks the
+        array once. `cur` is the running sum of the current subarray; when
+        `cur + v > mid` we must close it and open a new one at `v`, counting
+        the extra piece. `v > mid` is a quick impossible-condition (a single
+        element already exceeds the cap), so `ok` flips to false.
+      - **Search direction.** `pieces <= k` means "with at most `k` pieces the
+        cap `mid` works", so `mid` is achievable and we try to push `hi` lower
+        to reduce the answer. Otherwise `mid` is too small and we raise `lo`.
+      - `ans` remembers the last feasible value, so when the loop ends it holds
+        the minimum feasible maximum.
+
+      The greedy establishes *existence* of a valid split; it needs the greedy
+      count to be the minimum possible, which is guaranteed because we never
+      cut earlier than forced, hence no valid finer split of fewer pieces exists.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(5, 3, [2,4,7,3,5])`. `lo = 7` (max element), `hi = 21` (sum),
+      `ans = 21`.
+
+      | mid | greedy pieces (sums) | pieces <= 3? | action |
+      |-----|----------------------|--------------|--------|
+      | 14 | [2,4,7]=13, [3,5]=8 -> 2 | yes | ans=14, hi=13 |
+      | 10 | [2,4]=6, [7]=7, [3,5]=8 -> 3 | yes | ans=10, hi=9 |
+      | 8 | [2,4]=6, [7]=7, [3,5]=8 -> 3 | yes | ans=8, hi=7 |
+      | 7 | [2,4]=6, [7], [3], [5] -> 4 | no (4>3) | lo=8 |
+
+      After `mid = 8`, the loop terminates (`lo = 8 > hi = 7`) and `ans = 8`,
+      matching the sample. The optimal split `[2,4] / [7] / [3,5]` realizes sum
+      `8`; every smaller cap needs 4 or more pieces, so `8` is minimal.
+  - type: mcq
+    prompt: 'Why is the greedy check correct for deciding whether a cap mid is feasible?'
+    options:
+      - 'Because greedily never splitting earlier than forced produces the minimum possible number of subarrays, so if that minimum is at most k then a valid split exists'
+      - 'Because the greedy always produces exactly k subarrays regardless of mid'
+      - 'Because the array is sorted'
+      - 'Because splitting earlier always reduces the number of subarrays'
+    answer: 0
+    explanation: 'The left-to-right greedy places a cut only when forced (adding the next element would exceed mid), so it yields the fewest subarrays possible for that cap. If even that minimum count is <= k, a feasible division exists; otherwise mid is too small.'
+type: content
+---

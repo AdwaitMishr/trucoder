@@ -1,0 +1,184 @@
+---
+id: distinct-values-splits
+title: "Distinct Values Split"
+difficulty: easy
+order: 343
+tags:
+  - prefix-suffix
+  - distinct
+  - two-pointers
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting split points where two distinct-counts agree
+
+      We split an array into a non-empty **left part** `A[1..k]` and a
+      non-empty **right part** `A[k+1..n]`, and we want to know for how many
+      split points `k` the *number of distinct values on the left* equals the
+      *number of distinct values on the right*.
+
+      The naive way — for each `k` re-scan both sides and count distinct values
+      with a `set` — is `O(n²)`. We can do it in a single pass by **sweeping the
+      split point left to right** while two counters are maintained:
+
+      - `leftDistinct`: how many distinct values appear in the prefix seen so
+        far.
+      - `rightDistinct`: how many distinct values appear in the remaining
+        suffix.
+
+      The trick for the right side: count **distinct elements in the suffix** by
+      keeping a frequency map. An element is *distinct in the suffix* exactly
+      when its frequency is `1`; when we shrink the suffix (move the split
+      right), we delete the element that just crossed the boundary, and only if
+      its frequency drops to `0` does `rightDistinct` decrease.
+
+      **Time:** one pass, `O(n)`. **Space:** `O(n)` for the frequency map.
+
+      :::tip
+      **Interview tip:** "Compute a prefix property and a suffix property, then
+      sweep the boundary" is one of the most reusable skeletons in all of
+      array problems. Here the prefix property is a `set` of seen values while
+      the suffix property is a map from value to remaining frequency in the
+      suffix — compare the two at every boundary.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an array of `n` integers, count the number of **cuts** `k`
+      (`1 ≤ k ≤ n-1`) such that the number of **distinct values** in the left
+      part `A[1..k]` equals the number of **distinct values** in the right part
+      `A[k+1..n]`.
+
+      **Input.** The first input line has `n`, followed by `n` integers on the
+      next line.
+
+      **Output.** Print the number of valid cuts.
+
+      **Constraints.**
+      - `2 ≤ n ≤ 10^5`
+      - `1 ≤ A[i] ≤ 10^9`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      5
+      1 2 1 2 1
+      ```
+
+      **Output:**
+      ```
+      2
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²).** For every `k`, build a `set` for the prefix and
+      a `set` for the suffix and compare sizes.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin>>n; vector<int> a(n); for(int i=0;i<n;i++) cin>>a[i];
+          long long ans=0;
+          for(int k=1;k<n;k++){
+              set<int> L(a.begin(),a.begin()+k), R(a.begin()+k,a.end());
+              if(L.size()==R.size()) ans++;
+          }
+          cout<<ans<<"\n"; return 0;
+      }
+      ```
+      *Complexity: `O(n²)` — fine only for small `n`.*
+
+      **② Optimization — O(n) two-counter sweep (`n ≤ 10^5`).** Preload
+      `rightDistinct` from a full frequency scan, then move the split point
+      right, adding each crossed element to the left set and removing it from
+      the right frequency.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<int> a(n);
+          for(int i=0;i<n;i++) cin >> a[i];
+          unordered_map<int,int> rightFreq;
+          int rightDistinct=0;
+          for(int v : a){ if(rightFreq[v]++==0) rightDistinct++; }
+          unordered_set<int> leftSet;
+          int leftDistinct=0;
+          long long ans=0;
+          for(int i=0;i<n-1;i++){
+              int v=a[i];
+              if(leftSet.insert(v).second) leftDistinct++;
+              if(--rightFreq[v]==0) rightDistinct--;
+              if(leftDistinct==rightDistinct) ans++;
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+      *Complexity: `O(n)` time, `O(n)` space — instant for `n = 10^5`.*
+
+      **④ Alternative — separate prefix/suffix distinct arrays.** (With 1-based
+      indices) compute `P[x] = distinct in A[1..x]` and `S[x] = distinct in
+      A[x..n]` with two maps, then a cut `k` is good iff `P[k] == S[k+1]`. This
+      is the same complexity but frames the problem as two independent scan
+      passes — a clean way to reason about it.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `cutCount(a)` — O(n). Key lines:
+
+      1. **rightFreq / rightDistinct** — counting distinct values in the whole
+         array first. An element counts once toward `rightDistinct` the first
+         time it is added.
+      2. **The sweep loop** walks `i` from `0` to `n-2` (left stays non-empty,
+         right stays non-empty). Each step moves `A[i]` from the right side to
+         the left side.
+      3. **`leftSet.insert`** bumps `leftDistinct` only when `A[i]` is new on the
+         left.
+      4. **`--rightFreq[v]`** drops `rightDistinct` only when the right side runs
+         out of `v`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5`, `A = [1,2,1,2,1]`.
+
+      Initial suffix (whole array) distinct count = `2` (`{1,2}`). Sweep:
+
+      | k | element moved | leftDistinct | rightDistinct | equal? |
+      |---|---------------|--------------|---------------|--------|
+      | 1 | 1 (into left) | 1           | 2 (still 1,2) | no     |
+      | 2 | 2 (into left) | 2           | 2 (still 1,2) | **yes** |
+      | 3 | 1 (into left) | 2           | 2 (still 1,2) | **yes** |
+      | 4 | 2 (into left) | 2           | 1 (only 1)    | no     |
+
+      Two good cuts: `k = 2` and `k = 3`. Answer `2`. ✓ matches the sample.
+
+      **Why k=3 works:** left `(1,2,1)` has distincts `{1,2}`; right `(2,1)` has
+      distincts `{1,2}` → equal. **Why k=4 fails:** left `(1,2,1,2)` has `{1,2}`;
+      right `(1)` has `{1}` → not equal.
+
+  - type: mcq
+    prompt: "Why does removing an element from the suffix decrement `rightDistinct` only when its frequency reaches zero?"
+    options:
+      - "Because `rightDistinct` counts distinct values, and a value stops being distinct in the suffix only once its last copy there has been crossed to the left."
+      - "Because every element removal must always reduce the distinct count."
+      - "Because distinct counts count frequencies, not values."
+      - "Because the left set and right map must stay the same size."
+    answer: 0
+    explanation: "`rightDistinct` is the number of distinct values present in the suffix. A value contributes to that count while at least one copy remains; when the moving element is `v` and `--rightFreq[v]` reaches 0, `v` is no longer present at all, so `rightDistinct` drops by one. If copies remain, the value is still distinct and the count is unchanged."
+
+type: content
+---

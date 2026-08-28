@@ -1,0 +1,237 @@
+---
+id: fibonacci-numbers
+title: "Fibonacci Numbers"
+type: content
+difficulty: easy
+order: 180
+tags:
+  - mathematics
+  - matrix-exponentiation
+  - fast-doubling
+  - recurrence
+  - modular-arithmetic
+blocks:
+  - type: markdown
+    content: |
+      # Fibonacci Numbers — the canonical matrix-exponentiation problem
+
+      `F_0 = 0, F_1 = 1`, and `F_n = F_{n-1} + F_{n-2}`. We must compute `F_n`
+      modulo `10^9+7` for `n` up to `10^18` (far beyond any O(n) loop).
+
+      ## Linear recurrences as matrix powers
+
+      The pair `(F_{n+1}, F_n)` is a **linear function** of `(F_n, F_{n-1})`:
+
+      ```
+      [F_{n+1}]   [1 1] [F_n]
+      [F_n    ] = [1 0] [F_{n-1}]
+      ```
+
+      So with `T = [[1,1],[1,0]]` we get `(F_{n+1}, F_n)^T = T^n (F_1, F_0)^T`, and
+      in fact `(T^n)[0][1] = F_n` directly. The `n`-th power of a `2x2` matrix is
+      computed in `O(log n)` with **binary exponentiation** — square-and-multiply,
+      just like modular exponentiation of a number.
+
+      Any recurrence `a_n = c1·a_{n-1} + ... + ck·a_{n-k}` lifts to a `k x k`
+      companion matrix; matrix exponentiation solves it in `O(k^3 log n)`.
+
+      **Time:** `O(log n)`. **Space:** `O(1)`.
+
+      :::tip
+      **Interview tip:** the Fibonacci matrix `[[1,1],[1,0]]` is the simplest
+      illustration of *"turn a recurrence into a matrix and exponentiate it"*.
+      Interviewers reuse the exact pattern: Greek/Tribonacci recurrences, counting
+      walks (see Graph Paths I), sum-of-DP-transitions (see Throwing Dice), and
+      any "nth term of a linear recurrence" question. Recognise the signature —
+      a linear recurrence with `n` huge (≥10^15) — and reach for matrix power or
+      fast doubling.
+      :::
+  - type: markdown
+    content: |
+      # Question — Fibonacci Numbers
+
+      The Fibonacci numbers can be defined as follows:
+
+      ```
+      F_0 = 0
+      F_1 = 1
+      F_n = F_{n-2} + F_{n-1}
+      ```
+
+      Your task is to calculate the value of `F_n` for a given `n`.
+
+      **Input**
+
+      The only input line has an integer `n`.
+
+      **Output**
+
+      Print the value of `F_n` modulo `10^9+7`.
+
+      **Constraints**
+
+      - `0 <= n <= 10^18`
+
+      **Example**
+
+      Input:
+      ```
+      10
+      ```
+
+      Output:
+      ```
+      55
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — iterate the recurrence, O(n) time, O(1) space**
+
+      Run the definitions with two rolling variables. Correct, but `n` is up to
+      `10^18` — an O(n) loop needs `10^18` steps, impossible within any time limit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1e9 + 7;
+      int main(){
+          ll n; cin >> n;
+          ll a = 0, b = 1;            // a = F_0, b = F_1
+          for (ll i = 0; i < n; ++i){ ll c = (a + b) % MOD; a = b; b = c; }
+          cout << a % MOD << "\n";    // O(n): 10^18 iterations, far too slow
+          return 0;
+      }
+      ```
+
+      **② Optimization — matrix exponentiation, O(log n) time, O(1) space**
+
+      Raise `T = [[1,1],[1,0]]` to the `n`-th power; `F_n = (T^n)[0][1]`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1e9 + 7;
+      using Mat = array<array<ll,2>,2>;
+
+      Mat mul(const Mat& a, const Mat& b){
+          Mat c{};
+          for (int i = 0; i < 2; ++i)
+              for (int k = 0; k < 2; ++k)
+                  if (a[i][k])
+                      for (int j = 0; j < 2; ++j)
+                          c[i][j] = (c[i][j] + a[i][k] * b[k][j]) % MOD;
+          return c;
+      }
+      Mat mpow(Mat a, ll e){
+          Mat r{}; r[0][0] = r[1][1] = 1;    // identity
+          while (e){
+              if (e & 1) r = mul(r, a);
+              a = mul(a, a); e >>= 1;
+          }
+          return r;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          ll n; cin >> n;
+          if (n == 0){ cout << 0 << "\n"; return 0; }
+          Mat T{}; T[0][0] = 1; T[0][1] = 1; T[1][0] = 1;
+          Mat R = mpow(T, n);
+          cout << R[0][1] % MOD << "\n";     // (T^n)[0][1] = F_n
+          return 0;
+      }
+      ```
+
+      About `log2(10^18) <= 60` squarings, each a few `2x2` multiplies — instant.
+
+      **③ Alternative — fast doubling, O(log n)**
+
+      A different, constant-factor-faster recursion. The doubling identities
+
+      ```
+      F_{2k}   = F_k * (2*F_{k+1} - F_k)
+      F_{2k+1} = F_k^2 + F_{k+1}^2
+      ```
+
+      halve `n` at every step and need no matrix at all.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1e9 + 7;
+
+      pair<ll,ll> fib(ll n){            // returns (F_n, F_{n+1})
+          if (n == 0) return {0, 1};
+          auto [a, b] = fib(n / 2);     // a = F_k, b = F_{k+1}, k = n/2
+          ll c = a * ((2*b - a + MOD) % MOD) % MOD;   // F_{2k}
+          ll d = (a*a + b*b) % MOD;                   // F_{2k+1}
+          if (n % 2 == 0) return {c, d};
+          return {d, (c + d) % MOD};                  // F_{2k+1}, F_{2k+2}
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          ll n; cin >> n;
+          cout << fib(n).first % MOD << "\n";
+          return 0;
+      }
+      ```
+
+      `O(log n)` recursive levels. Both matrix power and fast doubling are already
+      optimal — nothing smaller than `O(log n)` is possible.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the matrix solution **②**:
+
+      - `mul` does ordinary 2x2 matrix multiplication mod `M`, skipping
+        multiplications by zero.
+      - `mpow(a, e)` is binary exponentiation: `r` starts as the identity, and we
+        square `a` while reading `e`'s bits, multiplying `r` when a bit is set.
+      - `T = [[1,1],[1,0]]` encodes the recurrence: one row of the product shifts a
+        copy of the previous vector, the other adds the two previous terms.
+      - `(T^n)[0][1] = F_n`: verified directly, `R[0][1]` is exactly what we print.
+      - The `n == 0` guard returns `F_0 = 0`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the matrix solution for `n = 10`. Iterating the definition:
+
+      `F_0..F_10 = 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55`.
+
+      Meanwhile `T^10 = [[89, 55], [55, 34]]` (mod small), and `(T^10)[0][1] = 55`.
+      So `F_10 = 55`, matching the sample output.
+
+      Fast doubling for `n = 10`: `fib(5) = (5, 8)`, then with `k = 5`
+      `F_10 = 5·(2·8 - 5) = 5·11 = 55`. Same answer.
+  - type: flowchart
+    title: "Matrix exponentiation for F_n"
+    nodes: ["Read n", "n == 0? -> print 0",
+            "T = [[1,1],[1,0]], R = I",
+            "binary-exponentiate T in e",
+            "e bit set? R = R*T",
+            "square T, shift e >>= 1",
+            "print (T^n)[0][1]"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 6, label: "yes"}
+      - {from: 1, to: 2, label: "no"}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: "bit set -> R=R*T"}
+      - {from: 5, to: 3, label: "loop while e>0"}
+      - {from: 3, to: 6, label: "e == 0"}
+  - type: mcq
+    prompt: "Why can matrix exponentiation compute F_n for n up to 10^18, and which entry of T^n equals F_n?"
+    options:
+      - "Because T^n is found by ~60 matrix squarings, each O(1) for a 2x2 matrix, so it runs in O(log n); (T^n)[0][1] equals F_n"
+      - "Because the matrix lets us skip the recurrence entirely; F_n = det(T^n)"
+      - "Because matrix multiplication is O(n) and n is small; F_n sits at T^n[1][1]"
+      - "Because fast doubling is impossible for large n; F_n equals T^n[0][0]"
+    answer: 0
+    explanation: "Binary exponentiation computes T^n with one matrix multiply per set bit of n (about 60 for n <= 10^18), so the total is O(log n) regardless of how huge n is. For the Fibonacci matrix [[1,1],[1,0]], the entry (T^n)[0][1] is the Fibonacci number F_n (with the other entries F_{n+1} and F_{n-1})."

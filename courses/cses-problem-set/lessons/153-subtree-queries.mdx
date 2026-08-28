@@ -1,0 +1,309 @@
+---
+id: subtree-queries
+title: Subtree Queries
+difficulty: medium
+order: 153
+tags:
+  - tree
+  - euler-tour
+  - fenwick
+  - point-update-range-query
+blocks:
+  - type: markdown
+    content: |
+      # Subtree Queries — subtree sums with point updates via Euler tour + BIT
+
+      You have a rooted tree where each node holds a value. A query either
+      **sets node `s` to a new value `x`** (point update) or asks for the **sum
+      of the subtree of node `s`** (subtree sum).
+
+      **The technique: the Euler tour turns every subtree into a contiguous
+      range, so the problem becomes a 1-D array problem.** Do a DFS and assign
+      each node an index `tin[u]` in the order it is *first* visited; record
+      `tout[u]` = max index seen inside its subtree. Then the nodes of the
+      subtree of `u` are exactly the contiguous block `[tin[u], tout[u]]`.
+
+      With that flattening:
+      - **Set node `s` to `x`** ⟶ point update at index `tin[s]` (add `x - old`).
+      - **Subtree sum of `s`** ⟶ range sum over `[tin[s], tout[s]]`.
+
+      Both are native **Fenwick tree (BIT)** operations: point update `O(log n)`,
+      prefix sum `O(log n)` → range sum in `O(log n)`.
+
+      **Worked mini-example.** Tree: `1` root with children `2` and `3`;
+      `3` has children `4`, `5`. A DFS visiting `2` before `3` gives
+      `tin[1]=1, tin[2]=2, tin[3]=3, tin[4]=4, tin[5]=5` with `tout[4]=4`,
+      `tout[5]=5`, `tout[3]=5`, `tout[2]=2`, `tout[1]=5`. So subtree of `3` =
+      indices `[3,5]` = nodes `{3,4,5}` — contiguous, as promised.
+
+      **Complexity.** Euler tour **O(n)**; each update or query **O(log n)**.
+
+      :::tip
+      **Interview tip:** "flatten the tree into an array with an Euler tour, then
+      use a Fenwick/segment tree" is a top interview move — it converts hard tree
+      range problems into array problems you already know. Subtree sums,
+      subtree updates, and (with two Euler passes) even path problems all use
+      the same `tin/tout` setup. If the learner gets this pattern, the next
+      lesson (Path Queries) is free.
+      :::
+  - type: markdown
+    content: |
+      # Question — Subtree Queries
+
+      You are given a rooted tree consisting of `n` nodes (node `1` is the
+      root), each with a value.
+
+      Your task is to process `q` queries:
+      - `1 s x`: change the value of node `s` to `x`.
+      - `2 s`: calculate the **sum of values in the subtree of node `s`**.
+
+      **Constraints**
+
+      - `1 ≤ n, q ≤ 2·10^5`
+      - `1 ≤ a, b, s ≤ n`
+      - `1 ≤ v_i, x ≤ 10^9`
+
+      **Input.** Line 1: `n q`. Line 2: `n` integers `v_1..v_n` (initial node
+      values). Then `n-1` lines describing the edges (each `a b`). Then `q`
+      lines: either `1 s x` or `2 s`.
+
+      **Output.** Print the answer to each query of type 2.
+
+      Time limit 1.00 s, memory 512 MB.
+
+      Sample input:
+
+      ```
+      5 3
+      4 2 5 2 1
+      1 2
+      1 3
+      3 4
+      3 5
+      2 3
+      1 5 3
+      2 3
+      ```
+
+      Sample output:
+
+      ```
+      8
+      10
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — walk the subtree on every query, O(size) each**
+
+      For a query of type 2, run a DFS from `s` and sum the whole subtree; for
+      type 1, just overwrite the value. A path-shaped tree makes a subtree as
+      large as `O(n)`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<long long> val(n + 1);
+          for(int i = 1; i <= n; i++) cin >> val[i];
+          vector<vector<int>> g(n + 1);
+          for(int i = 0; i < n - 1; i++){ int a, b; cin >> a >> b; g[a].push_back(b); g[b].push_back(a); }
+          vector<int> parent(n + 1, 0);
+          function<void(int,int)> root = [&](int u, int p){
+              parent[u] = p;
+              for(int v : g[u]) if(v != p) root(v, u);
+          };
+          root(1, 0);
+          auto subtreesum = [&](int s){
+              long long sum = 0;
+              function<void(int,int)> dfs = [&](int u, int p){
+                  sum += val[u];
+                  for(int v : g[u]) if(v != p) dfs(v, u);
+              };
+              dfs(s, parent[s]);      // never climb back into the parent
+              return sum;
+          };
+          while(q--){
+              int t; cin >> t;
+              if(t == 1){ int s, x; cin >> s >> x; val[s] = x; }
+              else { int s; cin >> s; cout << subtreesum(s) << "\n"; }
+          }
+          return 0;
+      }
+      ```
+
+      **O(n) per type-2 query, O(nq) worst case** — a chain turns every subtree
+      sum into a full walk. Too slow.
+
+      **② Optimization — Euler tour + Fenwick, O(log n) per query (submission)**
+
+      Flatten to indices, then use a BIT for point updates and range sums.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct BIT{                              // point update, prefix/range sum
+          int n; vector<long long> t;
+          BIT(int sz){ n = sz; t.assign(n + 1, 0); }
+          void add(int i, long long v){ for(; i <= n; i += i & -i) t[i] += v; }
+          long long sum(int i){ long long s = 0; for(; i > 0; i -= i & -i) s += t[i]; return s; }
+      };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<long long> val(n + 1);
+          for(int i = 1; i <= n; i++) cin >> val[i];
+          vector<vector<int>> g(n + 1);
+          for(int i = 0; i < n - 1; i++){ int a, b; cin >> a >> b; g[a].push_back(b); g[b].push_back(a); }
+          int timer = 0; vector<int> tin(n + 1), tout(n + 1);
+          function<void(int,int)> dfs = [&](int u, int p){
+              tin[u] = ++timer;
+              for(int v : g[u]) if(v != p) dfs(v, u);
+              tout[u] = timer;
+          };
+          dfs(1, 0);
+          BIT bit(n);
+          for(int i = 1; i <= n; i++) bit.add(tin[i], val[i]);   // load values
+          while(q--){
+              int t; cin >> t;
+              if(t == 1){ int s, x; cin >> s >> x;
+                  bit.add(tin[s], x - val[s]);      // add the delta
+                  val[s] = x;
+              } else {
+                  int s; cin >> s;
+                  cout << bit.sum(tout[s]) - bit.sum(tin[s] - 1) << "\n";  // range sum
+              }
+          }
+          return 0;
+      }
+      ```
+
+      **O(n)** Euler tour + **O(log n)** per operation. This is the submission
+      tier.
+
+      **③ Alternative — segment tree (point update, range query)**
+
+      The same flattening works with a segment tree: point-update in `O(log n)`,
+      range-sum in `O(log n)`. Heavier code for identical complexity, but it is
+      the standard choice once you also need range *updates* (lazy) or
+      associative queries beyond sums (min/max).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){   // iterative segment tree
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<long long> val(n + 1);
+          for(int i = 1; i <= n; i++) cin >> val[i];
+          vector<vector<int>> g(n + 1);
+          for(int i = 0; i < n - 1; i++){ int a, b; cin >> a >> b; g[a].push_back(b); g[b].push_back(a); }
+          int timer = 0; vector<int> tin(n + 1), tout(n + 1);
+          function<void(int,int)> dfs = [&](int u, int p){
+              tin[u] = ++timer;
+              for(int v : g[u]) if(v != p) dfs(v, u);
+              tout[u] = timer;
+          };
+          dfs(1, 0);
+          int N = 1; while(N < n) N <<= 1;        // power of two
+          vector<long long> seg(2 * N, 0);
+          auto update = [&](int pos, long long v){   // add v at pos (1-based tin)
+              int i = pos + N - 1; seg[i] += v;
+              for(i >>= 1; i; i >>= 1) seg[i] = seg[i<<1] + seg[i<<1|1];
+          };
+          auto query = [&](int l, int r){          // inclusive sum over [l, r]
+              long long res = 0; l += N - 1; r += N - 1;
+              while(l <= r){
+                  if(l & 1) res += seg[l++];
+                  if(!(r & 1)) res += seg[r--];
+                  l >>= 1; r >>= 1;
+              }
+              return res;
+          };
+          for(int i = 1; i <= n; i++) update(tin[i], val[i]);
+          while(q--){
+              int t; cin >> t;
+              if(t == 1){ int s, x; cin >> s >> x; update(tin[s], x - val[s]); val[s] = x; }
+              else { int s; cin >> s; cout << query(tin[s], tout[s]) << "\n"; }
+          }
+          return 0;
+      }
+      ```
+
+      **O(log n)** per operation, **O(n)** build. Choose the Fenwick here for
+      concision; the segment tree is the upgrade path toward Path Queries II
+      (which needs HLD + lazy updates).
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The whole trick is the DFS that numbers the tree:
+
+      - `tin[u] = ++timer` runs when you *first* reach `u`, and children are
+        visited right after, so every descendant of `u` gets an index strictly
+        between `tin[u]` and `tout[u]`.
+      - `tout[u] = timer` records the last index used inside `u`'s subtree, so
+        the subtree is exactly `[tin[u], tout[u]]`.
+
+      The BIT then stores `value[tin[i]] = value[i]` array:
+      - Type 1 sets node `s` to `x` by adding the delta `x - val[s]` at index
+        `tin[s]` (a point update) and storing the new value.
+      - Type 2 sums `bit.sum(tout[s]) - bit.sum(tin[s] - 1)`, the standard
+        range-sum over the subtree's contiguous window.
+
+      Values reach `10^9` and subtrees can hold `2·10^5` nodes, so every sum
+      uses `long long`.
+
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):**
+
+      ```
+      5 3
+      4 2 5 2 1
+      1 2
+      1 3
+      3 4
+      3 5
+      2 3
+      1 5 3
+      2 3
+      ```
+
+      **Euler tour.** DFS from root `1` (visiting child `2` before `3`):
+
+      | node | tin | tout |
+      |------|-----|------|
+      | 1 | 1 | 5 |
+      | 2 | 2 | 2 |
+      | 3 | 3 | 5 |
+      | 4 | 4 | 4 |
+      | 5 | 5 | 5 |
+
+      **Load BIT** (array `[v_{tin}]=[4,2,5,2,1]`).
+
+      **Query `2 3`:** subtree of `3` = indices `[3,5]`.
+      `sum(tin3=3..tout3=5) = 5 + 2 + 1 = 8`. Print **8**. ✓
+
+      **Query `1 5 3`:** delta `3 - 1 = +2` at `tin[5]=5`. BIT now
+      `[4,2,5,2,3]`; `val[5]=3`.
+
+      **Query `2 3`:** indices `[3,5]` = `5 + 2 + 3 = 10`. Print **10**. ✓
+
+      Output: **8, 10** — matches the sample. **Expected — actual: match.**
+  - type: mcq
+    prompt: 'Why can every subtree-sum query be answered by a 1-D range sum over [tin[s], tout[s]]?'
+    options:
+      - Because the Euler tour visits a node and all its descendants consecutively, so the subtree occupies one contiguous block of indexes
+      - Because the Euler tour always lists nodes in increasing value order
+      - Because tin[s] and tout[s] are arbitrarily chosen
+      - Because every subtree has exactly the same size
+    answer: 0
+    explanation: In the DFS first-visit numbering, a node is reached (tin[u]) and then its entire subtree is explored before any node outside it, so every descendant lands inside (tin[u], tout[u]) and tout[u] is the maximum such index. Consequently the nodes of the subtree form one contiguous range [tin[u], tout[u]], which a Fenwick prefix-sum difference (sum(tout) - sum(tin-1)) answers in O(log n). The other options contradict either the DFS property or the definition of the numbering.
+type: content
+---

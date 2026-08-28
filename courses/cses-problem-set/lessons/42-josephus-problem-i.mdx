@@ -1,0 +1,290 @@
+---
+id: josephus-problem-i
+title: Josephus Problem I
+difficulty: medium
+order: 42
+tags:
+  - simulation
+  - queue
+  - order-statistics
+blocks:
+  - type: markdown
+    content: |
+      # Josephus Problem I
+
+      **The technique: simulating circular removals.** We have `n` items standing in a
+      circle and we remove them one by one by walking a fixed step around the circle,
+      wrapping back to the front after the end. The question is *in which order* the
+      items leave.
+
+      This is the classic **Josephus problem** (name comes from the historical siege of
+      Yodfat, where the survivor counted himself through a similar scheme). The lesson
+      here is *not* the closed-form survivor formula — it's **how to simulate the removal
+      order efficiently** once `n` gets large. Because we must output the *whole removal
+      order*, the answer is an `n`-length list, and the challenge is keeping the "remove
+      an item while others stay in a circle" step cheap.
+
+      **When you reach for it:** any problem about removing elements in a round-robin /
+      counting-out game, "every k-th person is eliminated", or when you must output the
+      elimination sequence rather than just the last survivor. It also motivates
+      **order-statistics structures** (Fenwick tree, balanced BST) that answer "what is
+      the `k`-th remaining element?" in `O(log n)`.
+
+      **Worked mini-example (`n = 5`, remove every 2nd).** Circle: `1 2 3 4 5`.
+
+      - Start counting a child as `1`; the 2nd child is removed: `2` leaves → `1 3 4 5`.
+      - Continue from the next child `3`: `3` (1), `4` (2) → `4` leaves → `1 3 5`.
+      - Continue from `5`: `5` (1), `1` (2) → `1` leaves → `3 5`.
+      - Continue from `3`: `3` (1), `5` (2) → `5` leaves → `3`.
+      - `3` leaves last.
+
+      Order: `2 4 1 5 3`. The naive "scan the array and erase" version of this walks
+      over remaining elements each time — expensive when `n` is huge.
+
+      **Complexity.** A good simulation is **O(n)** total (each child is positioned a
+      constant number of times); a naive array-erasure simulation is **O(n²)**.
+
+      :::tip
+      **Interview tip:** Josephus (and its generalization, "remove the k-th element")
+      is a favorite for weeding out candidates. Many know only the closed-form survivor
+      formula for `k = 2`; the stronger answer is to *simulate with the right structure*.
+      Say the removal order is the real deliverable, then pick a container that supports
+      cheap k-th removal (a queue when `k` is fixed & small, a Fenwick tree / balanced
+      BST when `k` is arbitrary). Watch for the wrap-around off-by-one when counting.
+      :::
+  - type: markdown
+    content: |
+      # Question — Josephus Problem I
+
+      Consider a game where there are `n` children (numbered `1, 2, ..., n`) in a
+      circle. During the game, **every other child** is removed from the circle until
+      there are no children left. In which order will the children be removed?
+
+      **Constraints:** `1 ≤ n ≤ 2 * 10^5`.
+
+      **Input:** the only input line has an integer `n`.
+      **Output:** print `n` integers — the removal order.
+
+      Sample input:
+
+      ```
+      7
+      ```
+
+      Sample output:
+
+      ```
+      2 4 6 1 5 3 7
+      ```
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      All three versions below are *correct*; they differ only in how fast removing a
+      child from the remaining circle is.
+
+      **① Brute force — O(n²)**
+
+      Keep an array of still-present children. Repeatedly walk `step` children and
+      `erase` the target. Erasing from the middle of a `std::vector` shifts every later
+      element, so each removal is `O(remaining)`, and the total is `O(n²)` — fine for a
+      few hundred children, far too slow for `n = 2 * 10^5` (≈ 4·10¹⁰ operations).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          int n; cin >> n;
+          vector<int> v(n);
+          iota(v.begin(), v.end(), 1);       // v = 1,2,...,n
+          vector<int> ans;
+          int idx = 0;                        // 0-based position of the child we count as 1
+          while (!v.empty()) {
+              idx = (idx + 1) % (int)v.size(); // step to the 2nd child
+              ans.push_back(v[idx]);
+              v.erase(v.begin() + idx);        // O(size) shift — the killer
+          }
+          for (int i = 0; i < n; i++) cout << ans[i] << (i + 1 == n ? '\n' : ' ');
+      }
+      ```
+
+      Time: **O(n²)**. Space: **O(n)**.
+
+      **② Optimization — queue simulation, O(n)**
+
+      Because the step is fixed (here every other child), a **queue** models the circle
+      perfectly: pop the front *and push it to the back* to "skip" it, then pop the
+      front to remove it. Each child is pushed/popped a constant number of times, so the
+      whole game runs in **O(n)** — optimal for this fixed-step version.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          int n; cin >> n;
+          deque<int> dq;
+          for (int i = 1; i <= n; i++) dq.push_back(i);
+          vector<int> ans;
+          while (!dq.empty()) {
+              int skipped = dq.front(); dq.pop_front();
+              dq.push_back(skipped);          // keep the skipped child (re-wrap it)
+              ans.push_back(dq.front());      // the 2nd child is removed
+              dq.pop_front();
+          }
+          for (int i = 0; i < n; i++) cout << ans[i] << (i + 1 == n ? '\n' : ' ');
+      }
+      ```
+
+      Time: **O(n)**. Space: **O(n)**.
+
+      **③ Further optimization — Fenwick tree k-th removal, O(n log n)**
+
+      The queue trick stops working when the step `k` is arbitrary (that is exactly
+      Josephus Problem II). The general tool is an **order-statistics structure**: keep a
+      BIT (Fenwick) with a `1` for every still-present child, and at each round locate
+      the child at a given rank with a binary search over prefix sums. We advance the
+      counting position by `k` modulo the number of remaining children, find that rank,
+      emit the child, and set its BIT cell to `0`. The whole list is produced in
+      `O(n log n)` and this same skeleton solves the harder problem directly.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct Fenwick {
+          int n; vector<int> bit;
+          Fenwick(int n) : n(n), bit(n + 1, 0) {}
+          void add(int i, int v) { for (; i <= n; i += i & -i) bit[i] += v; }
+          int sum(int i) { int s = 0; for (; i > 0; i -= i & -i) s += bit[i]; return s; }
+          int kth(int k) {      // smallest i with prefix-sum >= k (1-indexed rank)
+              int lo = 1, hi = n, ans = n;
+              while (lo <= hi) { int mid = (lo + hi) / 2;
+                  if (sum(mid) >= k) { ans = mid; hi = mid - 1; } else lo = mid + 1; }
+              return ans;
+          }
+      };
+      int main() {
+          int n; long long k = 1; cin >> n;   // remove every 2nd  =>  skip k=1 child
+          Fenwick fw(n);
+          for (int i = 1; i <= n; i++) fw.add(i, 1);
+          vector<int> ans; long long pos = 0; int rem = n;
+          while (rem > 0) {
+              long long r = (pos + k) % rem;      // 0-based rank among remaining
+              int idx = fw.kth((int)r + 1);       // the actual child at that rank
+              ans.push_back(idx);
+              fw.add(idx, -1);
+              pos = (rem > 1) ? (r % (rem - 1)) : 0;  // next counting starts here
+              rem--;
+          }
+          for (int i = 0; i < n; i++) cout << ans[i] << (i + 1 == n ? '\n' : ' ');
+      }
+      ```
+
+      Time: **O(n log n)**. Space: **O(n)**. (Reach for this one when `k` isn't fixed;
+      it is the exact template for Josephus Problem II.)
+
+      **④ Alternative — circular doubly-linked list, O(n)**
+
+      Instead of a queue, keep the children in a **circular doubly-linked list**
+      (`std::list`). Removing the current node is `O(1)` (no shifting), and stepping a
+      fixed `k` children is `O(k)` per removal — with `k = 1` here that is `O(n)` total.
+      The list is the *direct* model of a physical circle: each removed node is spliced
+      out and the pointer advances. It is semantically identical to the queue for a
+      fixed small `k`, but it shines for moderate arbitrary `k` where a queue loses its
+      `O(1)` advantage (stepping `k` in a queue would cost `O(k)` anyway).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          int n; cin >> n;
+          list<int> l;
+          for (int i = 1; i <= n; i++) l.push_back(i);
+          auto it = l.begin();
+          vector<int> ans;
+          while (!l.empty()) {
+              ++it;                            // every 2nd child
+              if (it == l.end()) it = l.begin();
+              ans.push_back(*it);
+              it = l.erase(it);                // O(1) splice-out
+              if (it == l.end()) it = l.begin();
+          }
+          for (int i = 0; i < n; i++) cout << ans[i] << (i + 1 == n ? '\n' : ' ');
+      }
+      ```
+
+      Time: **O(n)** (fixed small step) / **O(nk)** for arbitrary step. Space: **O(n)**.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      Let's read the **② queue** version line by line, since it is the cleanest match
+      for "every other child".
+
+      - `deque<int> dq` + the fill loop put children `1..n` in the circle's order. A
+        `deque` gives `O(1)` push and pop at **both** ends — exactly what re-wrapping
+        needs.
+      - `int skipped = dq.front(); dq.pop_front(); dq.push_back(skipped);` — *skip* one
+        child by peeling it off the front and dropping it on the back. This is the
+        "count the 1st child, it stays" step.
+      - `ans.push_back(dq.front()); dq.pop_front();` — the next child at the front is
+        the *2nd* one, so he is removed: record the order and drop him.
+      - The loop repeats until the queue is empty. Because we always re-wrap one child
+        then eject the next, the removal order is exactly `2 4 6 1 5 3 7` for `n = 7`.
+
+      Complexity accounting: each child is moved to the back at most once and ejected
+      once → **O(n)** total, **O(n)** space.
+
+      The **③ Fenwick** template is the strongest mental model to keep: the BIT holds a
+      `1` for each live child, `fw.kth(rank)` finds the child standing at a given rank
+      in the surviving circle, and setting that cell to `0` removes him. The only
+      bookkeeping left is advancing `pos` by `k` modulo the shrinking size — that single
+      `pos` line is what generalizes this whole vertex to Josephus Problem II.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 7`. Expected removal order: `2 4 6 1 5 3 7`.
+
+      Trace of the **queue** algorithm — each row shows the next removal and the circle
+      after it:
+
+      | Step | queue (front → back) | removed |
+      |------|----------------------|---------|
+      | start | `1 2 3 4 5 6 7` | — |
+      | 1 | `3 4 5 6 7 1` | **2** |
+      | 2 | `5 6 7 1 3` | **4** |
+      | 3 | `7 1 3 5` | **6** |
+      | 4 | `3 5 7` | **1** |
+      | 5 | `7 3` | **5** |
+      | 6 | `3` | **7** |
+      | 7 | `_` | **3** |
+
+      Reading the "removed" column top to bottom: **`2 4 6 1 5 3 7`** ✓ — exactly the
+      sample output.
+
+      Let's sanity-check removal #4 (`1`): after `2,4,6` are gone the circle is
+      `1 3 5 7`. Counting from `7` (the child next to the last-removed `6`): `7` is 1st,
+      `1` is 2nd → `1` leaves. Matches the trace.
+  - type: flowchart
+    title: "Josephus I — simulate with a queue"
+    nodes: ["Start: children 1..n in queue", "Peel front (skip) → push back", "Peel next front → it's removed, record it", "Queue empty?", "No → repeat", "Yes → print removal order"]
+    edges:
+      - {from: 0, to: 1, label: "count 1"}
+      - {from: 1, to: 2, label: "count 2"}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: "no"}
+      - {from: 3, to: 5, label: "yes"}
+      - {from: 4, to: 1, label: "re-wrap"}
+  - type: mcq
+    prompt: 'For Josephus Problem I (remove every 2nd child), why is the queue approach O(n) while vector erasure is O(n²)?'
+    options:
+      - Because the queue stores the children in sorted order while the vector does not
+      - 'Because a queue only ever touches the two ends in O(1), so each child is pushed/popped a constant number of times, whereas vector.erase shifts all later elements on every removal'
+      - Because a deque has twice the capacity of a vector
+      - Because every other child can be removed simultaneously in one pass
+    answer: 1
+    explanation: 'A deque handles front/back operations in O(1); re-wrapping a child (pop front, push back) and popping the removed child cost O(1), so each of the n children does a constant amount of work → O(n) total. A vector stores its elements contiguously, so erase shifts every element after the hole — O(remaining) each — summing to O(n²).'
+type: content
+---

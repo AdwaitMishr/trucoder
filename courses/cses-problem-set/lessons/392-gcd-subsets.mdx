@@ -1,0 +1,223 @@
+---
+id: gcd-subsets
+title: GCD Subsets
+difficulty: medium
+order: 392
+tags:
+  - additional
+  - mobius
+  - divisor-counting
+  - inclusion-exclusion
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting subsets by divisor-multiples and inclusion-exclusion
+
+      We have `n` integers `x_1..x_n` with `1 ≤ x_i ≤ n`. For **each** `k = 1..n`
+      we need the number of non-empty subsets whose gcd is exactly `k`, modulo
+      `10⁹+7`.
+
+      **Counting subsets whose gcd is a *multiple* of `d` is easy.** If `cnt[d]`
+      = the number of array values divisible by `d`, then a subset has all its
+      elements divisible by `d` iff it is a non-empty subset of those `cnt[d]`
+      elements. So:
+
+      ```
+      f[d] = (2^cnt[d] − 1)  mod M     = number of non-empty subsets with gcd divisible by d
+      ```
+
+      (Any subset of the `cnt[d]` winners has gcd divisible by `d` — the gcd of
+      things all divisible by `d` is divisible by `d`.)
+
+      **Going from "multiple of `d`" to "exactly `k`" is inclusion-exclusion.**
+      A subset whose gcd is a multiple of `d` either has gcd exactly `d`, or gcd
+      exactly `2d`, or `3d`, … So, counting in the **reverse direction**:
+
+      ```
+      g[k]  = f[k] − g[2k] − g[3k] − …          (k from n down to 1)
+      ```
+
+      Here `g[k]` = number of subsets with gcd **exactly** `k`. Starting at
+      `k = n` (where only the multiple `k` itself exists) and working downward,
+      each `g[k]` is fully determined once its larger multiples are known. This
+      is precisely the classic **Möbius-inversion** / divisor DP.
+
+      **Complexity.** `cnt[d]` for every `d` by iterating multiples:
+      `Σ_{d=1}^n n/d = O(n log n)`. The downward `g` loop likewise visits each
+      `(k, multiple)` pair once ⇒ `O(n log n)` overall.
+
+      :::tip
+      **Interview tip:** "Count subsets with gcd exactly `k` for all `k`" is the
+      canonical **inclusion-exclusion over divisors**. The two steps become a
+      reflex: (1) compute, for each `d`, how many elements are divisible by `d`
+      and raise `2^(cnt)` — this counts "gcd is a *multiple* of `d`"; (2)
+      subtract the contributions of the proper multiples walking from `n`
+      downward to get "gcd *exactly* `k`". Whenever you see "for every `d`, how
+      many things are multiples of `d`", think divisor-sieve + inclusion-exclusion,
+      not per-subset gcd computation.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given an array of `n` integers. Your task is to calculate the
+      number of non-empty subsets whose elements' greatest common divisor is
+      equal to `k` for each `k = 1,…,n`.
+
+      **Input.** The first line has an integer `n`: the size of the array. The
+      next line has `n` integers `x_1,x_2,…,x_n`: the contents of the array.
+
+      **Output.** Print `n` integers as specified above modulo `10^9+7`.
+
+      **Constraints**
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ x_i ≤ n`
+
+      **Sample**
+
+      Input:
+      ```
+      5
+      5 4 4 2 3
+      ```
+
+      Output:
+      ```
+      22 4 1 3 1
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·2^n).** Enumerate every subset (bitmask), compute its
+      gcd, and `++ans[gcd]`. Correct, but for `n = 20` that's already `10⁶`
+      subsets and for `n = 2·10⁵` it is impossible.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD=1e9+7;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<int> x(n);
+          for(int i=0;i<n;i++) cin>>x[i];
+          vector<long long> ans(n+1,0);
+          for(int mask=1; mask<(1<<n); mask++){
+              int g=0;
+              for(int i=0;i<n;i++) if(mask>>i&1) g=(g==0?x[i]:__gcd(g,x[i]));
+              ans[g]=(ans[g]+1)%MOD;
+          }
+          for(int k=1;k<=n;k++) cout<<ans[k]<<" \n"[k==n];
+      }
+      ```
+      *Complexity: O(n·2^n) — hopeless beyond `n ≈ 20`.*
+
+      **② Optimization — divisor counting + inclusion-exclusion — O(n log n).**
+      Count how many elements are divisible by each `d`; get `f[d] = 2^cnt[d]−1`;
+      then walk `g[k] = f[k] − Σ_{m≥2} g[m·k]` from `n` down to `1`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD=1e9+7;
+      ll modpow(ll a,ll e){ ll r=1; a%=MOD; while(e){ if(e&1) r=r*a%MOD; a=a*a%MOD; e>>=1; } return r; }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<int> freq(n+1,0);
+          for(int i=0;i<n;i++){ int v; cin>>v; freq[v]++; }
+          // cnt[d] = how many array values are multiples of d
+          vector<int> cnt(n+1,0);
+          for(int d=1; d<=n; d++)
+              for(int m=d; m<=n; m+=d) cnt[d]+=freq[m];
+          // f[d] = non-empty subsets with gcd divisible by d = 2^cnt[d]-1
+          vector<ll> f(n+1), g(n+1,0);
+          for(int d=1; d<=n; d++) f[d]=(modpow(2,cnt[d])-1+MOD)%MOD;
+          // g[k] = f[k] - sum of g over proper multiples of k
+          for(int k=n; k>=1; k--){
+              ll v=f[k];
+              for(int d=2*k; d<=n; d+=k) v=(v-g[d]+MOD)%MOD;
+              g[k]=v;
+          }
+          for(int k=1;k<=n;k++) cout<<g[k]<<" \n"[k==n];
+      }
+      ```
+      *Complexity: O(n log n) time, O(n) space — instant for `n ≤ 2·10⁵`.*
+
+      **④ Alternative / note.** There is no simpler exact method; the divisor-sieve
+      plus downward inclusion-exclusion is the standard solution. (It is
+      mathematically the Möbius inversion `g = f * μ`.) A per-`d` GCD-sorting
+      trick is a red herring — the multiple-count + subtract approach is both the
+      simplest and the optimal one.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n log n) divisor DP. Key lines:
+
+      1. **`freq[v]`** counts occurrences of each value.
+      2. **`cnt[d]`** loops `m = d, 2d, …` adding `freq[m]` — the count of
+         elements divisible by `d`. This is the harmonic-sum sieve, O(n log n).
+      3. **`f[d] = 2^cnt[d] − 1`** counts non-empty subsets whose gcd is a
+         *multiple* of `d` (all chosen elements are divisible by `d`).
+      4. **Downward `g`.** `g[k] = f[k] − Σ_{d≥2} g[d·k]` subtracts the subsets
+         whose gcd is exactly a proper multiple `d·k`, leaving exactly the gcd
+         `k` subsets. Processed from `n` downward so every `g[d·k]` is already
+         final.
+      5. Print `g[1..n]` mod `10⁹+7`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5`, array `5 4 4 2 3` → expected `22 4 1 3 1`.
+
+      `freq = {1:0,2:1,3:1,4:2,5:1}`.
+
+      Multiples counts `cnt[d]`:
+
+      | d | multiples in {1..5} | cnt[d] | f[d]=2^cnt−1 |
+      |----|---------------------|--------|--------------|
+      | 1 | 1,2,3,4,5 → all 5   | 5 | 31 |
+      | 2 | 2,4 → 2,4,4 = 3     | 3 | 7  |
+      | 3 | 3 → 3 = 1           | 1 | 1  |
+      | 4 | 4 → 4,4 = 2         | 2 | 3  |
+      | 5 | 5 → 5 = 1           | 1 | 1  |
+
+      Downward: `g[5]=f[5]=1`; `g[4]=f[4]=3`; `g[3]=f[3]=1`;
+      `g[2]=f[2]−g[4]=7−3=4`; `g[1]=f[1]−g[2]−g[3]−g[4]−g[5]=31−4−1−3−1=22`.
+
+      Output: `22 4 1 3 1`. ✓ Matches the sample.
+
+  - type: flowchart
+    title: "GCD Subsets via divisor inclusion-exclusion"
+    nodes:
+      - Count freq[v] of each value
+      - cnt[d] = how many values are multiples of d (harmonic sieve)
+      - f[d] = 2^cnt[d] - 1 (subsets with gcd a multiple of d)
+      - Walk k from n down to 1
+      - g[k] = f[k] - sum of g[d*k] for d>=2
+      - Print g[1..n] mod 1e9+7
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: ""}
+
+  - type: mcq
+    prompt: "Why can we compute the count of subsets with gcd exactly k as g[k] = f[k] - g[2k] - g[3k] - ...?"
+    options:
+      - "Because a subset whose gcd is a multiple of k either has gcd exactly k or gcd exactly one of the proper multiples 2k, 3k, ..., and those classes partition the 'gcd is a multiple of k' subsets."
+      - "Because f[k] already equals g[k] exactly."
+      - "Because every subset's gcd is always equal to k."
+      - "Because the modulo reduction makes subtraction exact."
+    answer: 0
+    explanation: "The subsets counted by f[k] all have a gcd that is a multiple of k. Group them by the exact value of that gcd: it is k itself, or 2k, or 3k, etc. These groups are disjoint and together are exactly the f[k] set, so subtracting g[2k]+g[3k]+... from f[k] isolates the subsets whose gcd is precisely k. Processing in decreasing order ensures every g[multiple] is already computed."
+type: content
+---

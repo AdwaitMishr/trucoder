@@ -1,0 +1,234 @@
+---
+id: grid-paths-i
+title: Grid Paths I
+difficulty: medium
+order: 65
+tags:
+  - dynamic-programming
+  - grid
+  - counting
+  - modulo
+  - dp
+blocks:
+  - type: markdown
+    content: |
+      # Grid Paths I — counting paths through a grid with traps
+
+      You have an `n × n` grid of `.` (empty) and `*` (trap) cells. You start at
+      the top-left `(1,1)`, can move only **right or down**, and may **not step
+      onto a trap**. How many distinct paths reach the bottom-right `(n,n)`?
+
+      This is the archetypal **grid DP** — counting paths with a fixed step set.
+
+      ## The recurrence
+
+      Every path to cell `(i,j)` arrives from **either above** `(i−1,j)` or
+      **from the left** `(i,j−1)` — the only two legal moves. So the number of
+      paths to `(i,j)` is the sum of the paths to those two predecessors:
+
+      ```
+      dp[i][j] = dp[i−1][j] + dp[i][j−1]
+                 (0 if the cell is a trap `*`)
+      dp[1][1] = 1
+      ```
+
+      with out-of-grid references treated as `0`. Because we only ever move
+      *right* and *down*, `dp[i][j]` depends only on cells with smaller `i` or
+      smaller `j` — processing rows top-to-bottom, columns left-to-right resolves
+      every dependency in order.
+
+      **Why mod `10^9+7`?** Without traps the answer would be the central binomial
+      coefficient `C(2n−2, n−1)`, which for `n = 1000` has ~600 digits. The judge
+      wants it **modulo `10^9+7`**, so we reduce on every addition.
+
+      **Worked mini-example.** On a `3×3` grid with a single trap in the centre,
+      `dp` becomes:
+
+      ```
+      1  1  1
+      1  0  1
+      1  1  2
+      ```
+
+      so there are `2` paths around the blocked centre.
+
+      **Complexity.** Time `O(n²)`, space `O(n²)` (or `O(n)` with a rolling row).
+
+      :::tip
+      **Interview tip:** grid path-counting (LeetCode *Unique Paths*, *Unique
+      Paths II* with obstacles) is a top asked grid-DP starter. The template is
+      always the same: `dp[i][j] = (from above) + (from left)`, blocking cell =
+      0, and you must check the trap in the start cell too. Nail the row-major
+      fill order and the obstacle handling and most grid DP variants (min cost,
+      max sum) reduce to minor tweaks of this one.
+      :::
+  - type: markdown
+    content: |
+      # Question — Grid Paths I
+
+      Consider an `n × n` grid whose squares may have traps. It is not allowed to
+      move to a square with a trap. Your task is to calculate the number of paths
+      from the upper-left square to the lower-right square. You can only move
+      right or down.
+
+      **Input:** The first input line has an integer `n`: the size of the grid.
+      After this, there are `n` lines that describe the grid. Each line has `n`
+      characters: `.` denotes an empty cell, and `*` denotes a trap.
+
+      **Output:** Print the number of paths **modulo `10^9+7`**.
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 1000`
+
+      **Example**
+
+      Input:
+
+      ```
+      4
+      ....
+      .*..
+      ...*
+      *...
+      ```
+
+      Output:
+
+      ```
+      3
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — backtracking, O(C(2n−2, n−1))**
+
+      Recursively enumerate all right/down move strings that stay in-bounds and
+      off traps, counting those that reach `(n,n)`. In a trap-free `n × n` grid
+      there are `C(2n−2, n−1)` such strings — astronomically large for `n =
+      1000`, so this is hopeless.
+
+      ```cpp
+      long long brute(int i, int j, int n, const vector<string>& g,
+                      const long long MOD = 1000000007LL) {
+          if (i >= n || j >= n || g[i][j] == '*') return 0;
+          if (i == n - 1 && j == n - 1) return 1;
+          return (brute(i + 1, j, n, g) + brute(i, j + 1, n, g)) % MOD;
+      }
+      ```
+
+      Time exponential (order `C(2n−2, n−1)`), space `O(n)` stack.
+
+      **② Optimization — grid DP, O(n²) time, O(n²) space**
+
+      ```cpp
+      long long solve(int n, const vector<string>& g) {
+          const long long MOD = 1000000007LL;
+          vector<vector<long long>> dp(n, vector<long long>(n, 0));
+          if (g[0][0] == '*') return 0;
+          dp[0][0] = 1;
+          for (int i = 0; i < n; ++i)
+              for (int j = 0; j < n; ++j) {
+                  if (g[i][j] == '*') { dp[i][j] = 0; continue; }
+                  if (i > 0) dp[i][j] = (dp[i][j] + dp[i - 1][j]) % MOD;
+                  if (j > 0) dp[i][j] = (dp[i][j] + dp[i][j - 1]) % MOD;
+              }
+          return dp[n - 1][n - 1];
+      }
+      ```
+
+      Time `O(n²)`, space `O(n²)` — the intended solution.
+
+      **③ Further optimization — rolling row, O(n²) time, O(n) space**
+
+      Each row `i` only needs row `i−1`, so keep a single `cur`, `prev` vector
+      pair:
+
+      ```cpp
+      long long solve(int n, const vector<string>& g) {
+          const long long MOD = 1000000007LL;
+          vector<long long> cur(n, 0);
+          for (int i = 0; i < n; ++i) {
+              for (int j = 0; j < n; ++j) {
+                  long long v = 0;
+                  if (g[i][j] == '*') v = 0;
+                  else if (i == 0 && j == 0) v = 1;
+                  else {
+                      if (i > 0) v = (v + cur[j]) % MOD;         // prev row value (cur still holds it)
+                      if (j > 0) v = (v + cur[j - 1]) % MOD;     // this row, left
+                  }
+                  cur[j] = v;
+                  if (i == n - 1 && j == n - 1) return cur[j];
+              }
+          }
+          return 0;
+      }
+      ```
+
+      Time `O(n²)`, space `O(n)`. (Careful: reading `cur[j]` before overwriting
+      it in-place is the "from above" contribution, and `cur[j-1]` (already
+      updated) is "from the left".)
+
+      **④ Alternative — top-down DP (DFS + memo)**
+
+      Same recurrence computed recursively with memoisation. It visits only
+      reachable cells and needs `O(n²)` space; the iterative row-major version is
+      preferable because it avoids recursion overhead and trivially handles
+      `n = 1000`.
+
+      ```cpp
+      long long go(int i, int j, int n, const vector<string>& g,
+                   vector<vector<long long>>& mem,
+                   const long long MOD = 1000000007LL) {
+          if (i >= n || j >= n || g[i][j] == '*') return 0;
+          if (i == n - 1 && j == n - 1) return 1;
+          if (mem[i][j] != -1) return mem[i][j];
+          return mem[i][j] = (go(i + 1, j, n, g, mem) + go(i, j + 1, n, g, mem)) % MOD;
+      }
+      ```
+
+      Time `O(n²)`, space `O(n²)`.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the `②` grid DP:
+
+      - `dp[0][0] = 1` is the single path of length zero to the start, guarded by
+        the early return if the start cell itself is a trap.
+      - Row-major traversal `i` then `j` guarantees that when we compute
+        `dp[i][j]`, both `dp[i-1][j]` (previous row) and `dp[i][j-1]` (same row,
+        left) are already final — the dependency order from the recurrence.
+      - A trap cell is forced to `0` by the `continue`, so no path can pass
+        through it (and no path can "enter" it later).
+      - `+ ` from above plus `+ ` from the left, each modded, counts *paths*, not
+        moves — two different predecessors may feed many paths each.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(4, [...., .*.., ...*, *...])` on the sample. `dp[0][0] = 1`,
+      fill row-major (trap rows marked `0`):
+
+      | i\j | 0 | 1 | 2 | 3 |
+      |-----|---|---|---|---|
+      | 0 | 1 | 1 | 1 | 1 |
+      | 1 (`.*..`) | 1 | **0** | 1 | 2 |
+      | 2 (`...*`) | 1 | 1 | 2 | **0** |
+      | 3 (`*...`) | **0** | 1 | 3 | **3** |
+
+      Check the bottom-right: `dp[3][3] = dp[2][3] + dp[3][2] = 0 + 3 = 3`. The
+      three paths weave around the traps at `(1,1)`, `(2,3)` and `(3,0)`.
+      Output `3`, matching the sample.
+  - type: mcq
+    prompt: 'Why can a plain combinatorial formula like C(2n−2, n−1) normally not answer this problem, even though it counts all right/down paths?'
+    options:
+      - 'Because that formula counts every monotone path regardless of traps, but here some cells are forbidden, so many of those paths are invalid and we must do a grid DP that respects the traps.'
+      - 'Because the modulo operation is not defined for binomial coefficients.'
+      - 'Because paths can also move up and left in this problem.'
+      - 'Because C(2n−2, n−1) only works for square grids, and these are not square.'
+    answer: 0
+    explanation: 'The binomial counts all monotone paths in an obstacle-free grid. Obstacles invalidate exactly the paths that step on them, and the "which paths are invalid" question is not answerable with a pure closed form — so we fall back to the grid DP, which naturally zeroes out trap cells and sums real paths.'
+type: content
+---

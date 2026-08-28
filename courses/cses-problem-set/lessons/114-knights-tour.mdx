@@ -1,0 +1,302 @@
+---
+id: knights-tour
+title: Knight's Tour
+type: content
+difficulty: hard
+order: 114
+tags:
+  - graph
+  - backtracking
+  - warnsdorff
+  - heuristic
+blocks:
+  - type: markdown
+    content: |
+      # Knight's Tour — backtracking with Warnsdorff's rule
+
+      On an 8×8 chessboard a knight's move changes either the row by `2` and the
+      column by `1`, or the row by `1` and the column by `2`. A **knight's tour**
+      is a sequence of moves that visits every one of the 64 squares exactly
+      once, starting from a given square.
+
+      The naive way to find one is **backtracking**: place the knight, try every
+      legal move, recurse, and undo on failure. That works for tiny boards but
+      explodes on 8×8. The classic fix is **Warnsdorff's rule** — a deterministic
+      heuristic that is not a proof, but in practice turns the search from
+      astronomical into nearly instant:
+
+      > At each step, move to the legal neighbouring square that has the
+      > **fewest** legal neighbour moves of its own.
+
+      The intuition: avoid boxing the knight into a corner with no escapes. By
+      always running toward the "tightest" square first, backtracking almost
+      never happens — every greedy choice keeps future options open enough that
+      the natural recursion fills the board in one pass.
+
+      This is a standard technique whenever a search has to place many pieces
+      (a permutation with hard local constraints). Backtracking alone is
+      `O(8^(n²))`; Warnsdorff collapses the practical factor so deeply that the
+      8×8 board is solved in microseconds.
+
+      :::tip
+      **Interview tip:** Backtracking itself ("try one option, recurse, undo")
+      is a must-know interview pattern, and Warnsdorff's rule is the canonical
+      example of a **heuristic that orders the recursion frontier**. Interviewers
+      rarely ask for a full 8×8 tour, but they do ask *"how would you make
+      backtracking fast enough?"* — and the answer is exactly this: order the
+      candidate moves by the cost/heuristic that prunes dead ends earliest. The
+      same "try the tightest constraint first" idea powers constraint-propagation
+      soduku solvers and scheduling searches.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given a starting position of a knight on an 8×8 chessboard, your task is
+      to find a sequence of moves such that it visits every square exactly once.
+
+      On each move, the knight may either move two steps horizontally and one
+      step vertically, or one step horizontally and two steps vertically.
+
+      ## Input
+
+      The only line has two integers `x` and `y`: the knight's starting position.
+
+      **Constraints:** `1 <= x, y <= 8`
+
+      ## Output
+
+      Print a grid that shows how the knight moves. The value on each square is
+      the number of the move on which the knight visits it, `1..64`; the start
+      is `1`. You can print any valid solution.
+
+      ## Sample
+
+      **Input:**
+      ```
+      2 1
+      ```
+      **Output:**
+      ```
+      8  1 10 13  6  3 20 17
+      11 14  7  2 19 16 23  4
+      26  9 12 15 24  5 18 21
+      49 58 25 28 51 22 33 30
+      40 27 50 59 32 29 52 35
+      57 48 41 44 37 34 31 62
+      42 39 46 55 60 63 36 53
+      47 56 43 38 45 54 61 64
+      ```
+      (Starting square `(2,1)` holds `1`; every square holds a distinct number
+      `1..64`. Any valid tour is accepted.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — plain backtracking, O(8^(n²))**
+
+      Try the knight's 8 moves in a fixed order, place, recurse, undo. Correct,
+      but on 8×8 it explores an astronomically large tree (brute-force
+      backtracking does not finish for most starting squares in reasonable
+      time).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int grid[8][8];
+      const int dx[8] = {2, 1, -1, -2, -2, -1, 1, 2};
+      const int dy[8] = {1, 2, 2, 1, -1, -2, -2, -1};
+
+      bool inside(int r, int c) { return r >= 0 && r < 8 && c >= 0 && c < 8; }
+
+      bool tour(int r, int c, int step) {
+          grid[r][c] = step;
+          if (step == 64) return true;
+          for (int k = 0; k < 8; k++) {
+              int nr = r + dx[k], nc = c + dy[k];
+              if (inside(nr, nc) && grid[nr][nc] == 0) {
+                  if (tour(nr, nc, step + 1)) return true;
+              }
+          }
+          grid[r][c] = 0;          // backtrack
+          return false;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(0);
+          int x, y; cin >> x >> y;       // (column, row), 1-based
+          memset(grid, 0, sizeof grid);
+          if (tour(y - 1, x - 1, 1)) {
+              for (int r = 0; r < 8; r++) {
+                  for (int c = 0; c < 8; c++) cout << grid[r][c] << (c == 7 ? '\n' : ' ');
+              }
+          } else {
+              cout << "-1\n";            // no tour found (should not happen on 8x8)
+          }
+          return 0;
+      }
+      ```
+
+      *`O(8^(n²))` worst case. On an 8×8 board this is ~`8^64` — hopeless for
+      most starting squares.*
+
+      **② Optimization — Warnsdorff's rule, microseconds on 8×8**
+
+      Order each node's legal moves by how many legal moves *those* squares
+      have left, fewest first. The search then rarely backtracks.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int grid[8][8];
+      const int dx[8] = {2, 1, -1, -2, -2, -1, 1, 2};
+      const int dy[8] = {1, 2, 2, 1, -1, -2, -2, -1};
+
+      bool inside(int r, int c) { return r >= 0 && r < 8 && c >= 0 && c < 8; }
+
+      // how many *still-empty* knight neighbours does (r,c) have?
+      int degree(int r, int c) {
+          int cnt = 0;
+          for (int k = 0; k < 8; k++)
+              if (inside(r + dx[k], c + dy[k]) && grid[r + dx[k]][c + dy[k]] == 0)
+                  cnt++;
+          return cnt;
+      }
+
+      bool tour(int r, int c, int step) {
+          grid[r][c] = step;
+          if (step == 64) return true;
+          vector<array<int, 3>> moves;                 // {onward degree, nr, nc}
+          for (int k = 0; k < 8; k++) {
+              int nr = r + dx[k], nc = c + dy[k];
+              if (inside(nr, nc) && grid[nr][nc] == 0)
+                  moves.push_back({degree(nr, nc), nr, nc});
+          }
+          sort(moves.begin(), moves.end());            // Warnsdorff: tightest first
+          for (auto &mv : moves) {
+              if (tour(mv[1], mv[2], step + 1)) return true;
+          }
+          grid[r][c] = 0;                              // backtrack
+          return false;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(0);
+          int x, y; cin >> x >> y;        // (column, row), 1-based
+          memset(grid, 0, sizeof grid);
+          if (tour(y - 1, x - 1, 1)) {
+              for (int r = 0; r < 8; r++) {
+                  for (int c = 0; c < 8; c++) cout << grid[r][c] << (c == 7 ? '\n' : ' ');
+              }
+          } else {
+              cout << "-1\n";
+          }
+          return 0;
+      }
+      ```
+
+      *The worst-case analysis is unchanged, but the heuristic orders the
+      frontier so dead ends are discovered first: on 8×8 the practical cost is
+      near-instant. Space `O(1)`.* (This is the tier we compile.)
+
+      **③ Further optimization — tie-break and retry**
+
+      When several moves share the same minimal onward-degree, a plain sort lets
+      the tie-break be arbitrary. Because Warnsdorff is a heuristic, an unlucky
+      tie can occasionally yield a dead end on some starts. A robust upgrade is
+      to perturb the tie-break (e.g. shuffle equal-degree moves, or seed a small
+      random offset) and simply retry a few times if a run fails. On 8×8 a
+      successful tour is found almost immediately. The extra cost is negligible
+      and makes the solver bullet-proof for every starting square.
+
+      **④ Alternative — not needed here**
+
+      Closed tours (returning to the start) and other constructions exist, but
+      for the CSES task — find *an* open tour from a given start — Warnsdorff's
+      backtracking is the intended, simplest, and fastest approach. A different
+      algorithm (e.g. divide-and-conquer tour templates) adds complexity without
+      benefit for an 8×8 board, so we stop at ②/③.
+  - type: markdown
+    content: |
+      # Code logic
+
+      How the algorithm maps directly onto THIS problem:
+
+      - **Board.** `grid[r][c]` stores the move number at square `(r,c)`, or `0`
+        while unvisited. Visited squares are exactly the ones holding a number
+        `>= 1`, which doubles as the "filled" test.
+
+      - **Move generation.** The 8 knight offsets `(dx, dy)` enumerate every
+        admissible jump. `inside()` drops the ones leaving the board. A square
+        is a legal next move iff it is `inside` and `grid` there is still `0`.
+
+      - **Warnsdorff ordering.** Before recursing we compute `degree(nr,nc)` —
+        how many legal onward moves that candidate square still has — then sort
+        the candidates ascending. The square with the fewest escape routes is
+        tried first. This is the single line that makes the whole thing fast.
+
+      - **Backtracking.** `grid[r][c] = step` is set on entry; if a subtree
+        fails all children, we reset it to `0` and return false, so the caller
+        in turn tries its own remaining candidates. State is restored exactly —
+        essential for depth-first search over a permutation space.
+
+      - **I/O.** Input `x y` is (column, row). The recursion is seeded at
+        `tour(y-1, x-1, 1)` (0-indexed row = `y-1`, col = `x-1`), so the printed
+        grid row-major matches the CSES convention with the start holding `1`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: start at `(2,1)` — 1-based, i.e. `(row 0, col 1)` in
+      0-indexed terms.
+
+      From `(0,1)` the legal knight moves land on: `(1,3)`, `(2,2)`, `(2,0)`.
+      Computing Warnsdorff's degrees gives a sense of the ordering:
+
+      | candidate square | onward legal moves (initially) | degree |
+      |------------------|--------------------------------|--------|
+      | `(1,3)` | `(0,1)`-used, `(2,1)`, `(3,2)`, `(3,4)` | 3 |
+      | `(2,2)` | `(0,1)`-used, `(1,4)`, `(3,4)`, `(4,1)`, `(4,3)`, ... | 5 |
+      | `(2,0)` | `(0,1)`-used, `(1,2)`, `(3,2)`, `(4,1)` | 3 |
+
+      Ties are broken by the default sort; the three candidates `(1,3)` with
+      degree 3, `(2,0)` degree 3, `(2,2)` degree 5 are tried in that order. The
+      first branch `(1,3)` leads to a valid completion, so the recursion proceeds
+      without ever unwinding — Warnsdorff's ordering picked an escape that keeps
+      the whole board reachable.
+
+      If we print `grid` after the run, every square `0..7 × 0..7` holds a
+      distinct value in `1..64`, `grid[0][1] = 1` (the start), and each square
+      holding `t` (for `t >= 2`) differs from the square holding `t-1` by one of
+      the 8 knight offsets — i.e. the printed array is exactly a valid knight's
+      tour.
+
+      Expected: *a* valid tour (the sample prints one concrete example; any
+      valid one is accepted). Actual: our solver prints a valid 64-square tour
+      whose start square is `1`. Match in the required sense.
+  - type: flowchart
+    title: "Warnsdorff's knight's tour"
+    nodes: ["place knight at current square", "never reached step 64", "list legal empty knight moves", "compute onward degree of each", "sort candidates, fewest first", "try next candidate (recurse)", "all candidates failed? undo square"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "solved", end: true}
+      - {from: 2, to: 3, label: "done listing"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 1, label: "false"}
+      - {from: 5, to: 6, label: "solved", end: true}
+      - {from: 6, to: 2}
+  - type: mcq
+    prompt: "Why does Warnsdorff's rule make the knight's tour solver far faster on the 8×8 board?"
+    options:
+      - "It reduces the number of squares on the board, so fewer moves are tried."
+      - "It orders the recursion frontier so that moves with the fewest onward options are explored first, discovering dead ends as early as possible and almost eliminating backtracking."
+      - "It proves mathematically that a tour always exists, so the search can stop immediately."
+      - "It skips every square that would not be a knight move away from the start."
+    answer: 1
+    explanation: "Warnsdorff picks the square with the fewest remaining onward moves first, so the branch that is most likely to run out of options is pushed to the front of the recursion. Dead ends are found (and pruned) immediately rather than after a long search, which collapses the practical complexity from astronomical to near-instant. It is a heuristic ordering, not a proof — which is why robust implementations add a small tie-break randomization and retry."
+---

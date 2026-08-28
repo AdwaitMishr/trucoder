@@ -1,0 +1,200 @@
+---
+id: tree-distances-i
+title: "Tree Distances I"
+type: content
+difficulty: medium
+order: 147
+tags:
+  - tree-algorithms
+  - tree-diameter
+  - dfs
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      # Tree Distances I — farthest node from each node
+
+      We want, for *every* node `u`, the biggest distance from `u` to any other
+      node. The O(n)-per-node naive idea is `n` BFS runs. But there is a beautiful
+      shortcut that reuses the **diameter**.
+
+      ## Key fact: the answer is the distance to a diameter endpoint
+
+      Let the tree have a diameter with endpoints `A` and `B`. A classic result:
+      *for any node `u`, its farthest node in the whole tree is either `A` or `B`.*
+      Intuitively, any longest path from `u` can be pivoted onto the diameter
+      without getting shorter — the diameter is the tree's "longest spine", and
+      every node is at least as close to the ends of that spine as to anything else
+      on the far side.
+
+      Consequently:
+
+      ```
+      ans[u] = max( dist_A[u], dist_B[u] )
+      ```
+
+      where `dist_A` is distance from `A`, `dist_B` from `B`. So two DFS passes
+      give every answer: one pass from `A`, one from `B`.
+
+      ## Finding A and B
+
+      Use the two-DFS diameter trick from the previous lesson: DFS from any node to
+      get `A` (farthest node), then DFS from `A` to get `B` and the `dist_A` array;
+      then one more DFS from `B` for `dist_B`.
+
+      **Time:** O(n) (three DFS passes). **Space:** O(n).
+
+      :::tip
+      **Interview tip:** "for a tree, every node's farthest point is an endpoint of
+      the diameter" is a memorably powerful fact — it collapses n BFS runs into
+      three passes and shows up in several CSES problems and interviews. Pair it
+      with the easy-to-prove two-DFS way of finding the diameter endpoints.
+      :::
+  - type: markdown
+    content: |
+      # Question — Tree Distances I
+
+      You are given a tree consisting of `n` nodes. For each node, what is the
+      maximum distance to any other node?
+
+      **Input**
+
+      The first input line contains an integer `n`: the number of nodes. The nodes
+      are numbered `1, 2, ..., n`.
+
+      After this, there are `n-1` lines describing the edges. Each line has two
+      integers `a` and `b`: there is an edge between nodes `a` and `b`.
+
+      **Output**
+
+      Print `n` integers: for each node `1, 2, ..., n`, the maximum distance to
+      any other node.
+
+      **Constraints**
+
+      - `1 <= n <= 2 * 10^5`
+
+      **Example**
+
+      Input:
+
+      ```
+      5
+      1 2
+      1 3
+      3 4
+      3 5
+      ```
+
+      Output:
+
+      ```
+      2 3 2 3 3
+      ```
+
+      Node 1's farthest node is 2 (or 4, 5) at distance 2. Node 2's farthest is 4
+      or 5 at distance 3, and similarly nodes 4 and 5 are distance 3 from node 2.
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — BFS from every node, O(n²) time**
+
+      For each node run a BFS to find its farthest reachable node. Correct, but `n`
+      BFS runs on a tree cost O(n) each → O(n²). Too slow for `n = 2 * 10^5`.
+
+      ```cpp
+      // Illustration of the naive idea only — O(n^2), unusable.
+      // For each u: BFS(u) and record the largest depth reached.
+      ```
+
+      **② Optimization — distances to the two diameter endpoints, O(n) time, O(n) space**
+
+      Find diameter endpoints `A`, `B` with two DFS passes, compute distance arrays
+      from both, and take the max element-wise.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n; vector<vector<int>> g;
+      void dfs(int u,int p,int d, vector<int>& dist){ dist[u]=d; for(int v:g[u]) if(v!=p) dfs(v,u,d+1,dist); }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n; g.assign(n+1, {});
+          for(int i=0;i<n-1;++i){ int a,b; cin>>a>>b; g[a].push_back(b); g[b].push_back(a); }
+          vector<int> d1(n+1), d2(n+1);
+          dfs(1, 0, 0, d1);
+          int A = (int)(max_element(d1.begin(), d1.end()) - d1.begin());
+          dfs(A, 0, 0, d1);                       // d1 = distances from A
+          int B = (int)(max_element(d1.begin(), d1.end()) - d1.begin());
+          dfs(B, 0, 0, d2);                       // d2 = distances from B
+          for(int i=1;i<=n;++i)
+              cout << max(d1[i], d2[i]) << (i==n ? '\n' : ' ');
+          return 0;
+      }
+      ```
+
+      **③ Further optimization** — not needed: three DFS passes are already O(n).
+
+      **④ Alternative — in-out tree DP**
+
+      Compute with a rerooting-style DP: `down[u]` = longest path going downward
+      from `u`, then a second pass computes `up[u]` = longest path from `u` leaving
+      its subtree (best of parent's `up`, and the best sibling branch +1). Answer
+      is `max(down[u], up[u])`. This generalizes beyond diameters but requires
+      tracking top-two child depths; the endpoint method (②) is simpler for this
+      exact problem.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Follow the O(n) solution in **②**:
+
+      - `dfs(u, p, d, dist)` fills `dist` with depths measured from whichever root
+        we call it with, recursing past the parent so there is no backtracking.
+      - Pass 1 from node `1` → farthest node `A`. Pass 2 from `A` overwrites `d1`
+        to hold distances *from `A`* and returns the far endpoint `B`.
+      - Pass 3 from `B` fills `d2` with distances *from `B`*.
+      - `max(d1[i], d2[i])` is the answer for node `i`: its farthest node is always
+        `A` or `B`, so we only ever need these two distance arrays.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, edges `1-2`, `1-3`, `3-4`, `3-5`.
+
+      Pass 1 from `1`: `d1 = {1:0, 2:1, 3:1, 4:2, 5:2}` → `A = 4` (tie with 5).
+      Pass 2 from `4`: `d1 = {4:0, 3:1, 1:2, 5:2, 2:3}` → `B = 2` (distance 3).
+      Pass 3 from `2`: `d2 = {2:0, 1:1, 3:2, 4:3, 5:3}`.
+
+      | node i | d1 (from A=4) | d2 (from B=2) | max |
+      |--------|---------------|---------------|-----|
+      | 1 | 2 | 1 | 2 |
+      | 2 | 3 | 0 | 3 |
+      | 3 | 1 | 2 | 2 |
+      | 4 | 0 | 3 | 3 |
+      | 5 | 2 | 3 | 3 |
+
+      Output: `2 3 2 3 3`, matching the sample.
+  - type: flowchart
+    title: "Distances to both ends"
+    nodes: ["DFS from node 1", "A = farthest", "DFS from A → dist_A",
+            "B = farthest from A", "DFS from B → dist_B",
+            "ans[i] = max(dist_A[i], dist_B[i])", "print ans[1..n]"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: ""}
+      - {from: 5, to: 6, label: ""}
+  - type: mcq
+    prompt: "The solution only needs distances to the two diameter endpoints A and B. Why is ans[u] never larger than max(dist_A[u], dist_B[u])?"
+    options:
+      - "Because for any node u and any other node x, the closest diameter endpoint among A and B is always at least as far from u as x is — otherwise the diameter could be extended — so the largest distance from u is achieved by one of the two endpoints"
+      - "Because the diameter is always exactly two times the tree height"
+      - "Because distances are measured in edges and A,B are adjacent"
+      - "Because every node's farthest neighbour is its parent in the DFS tree"
+    answer: 0
+    explanation: "If some node x were farther from u than both A and B, then a path through u to x could be glued to a diameter endpoint chain to produce a path longer than the current diameter, a contradiction. Hence each u's extreme is attained at A or B, making max(dist_A[u], dist_B[u]) exact. This relies on the no-cycles, unique-path structure of a tree."
+---

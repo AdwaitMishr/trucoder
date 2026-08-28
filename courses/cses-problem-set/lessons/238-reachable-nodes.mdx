@@ -1,0 +1,187 @@
+---
+id: reachable-nodes
+title: Reachable Nodes
+difficulty: medium
+order: 238
+tags:
+  - advanced-techniques
+  - reachability
+  - bitset
+  - dag
+  - topological-sort
+blocks:
+  - type: markdown
+    content: |
+      # Reachable Nodes — count every node's descendants in a DAG
+
+      In a **directed acyclic graph (DAG)**, for each node we want the number of
+      nodes reachable from it (including itself). Because the graph is acyclic,
+      reachability information "flows downward": the set reachable from a node
+      is exactly **{itself} ∪ ⋃ (reachable sets of its children)**.
+
+      That property is why this problem is a great intro to **bitset
+      reachability / transitive closure on a DAG**: process nodes in
+      **reverse topological order** (children before parents), instantiate one
+      bitset per node, and union each node's bitset with its children's.
+
+      **Time:** each node unions its bitset (length `n`) into every out-neighbour
+      once → `O((n + m)·n/64)`. **Memory:** `n × n` bits = `n²/8` bytes, about
+      `313 MB` at `n = 5·10^4`, which fits CSES's 512 MB limit.
+
+      The naive alternative — run a fresh DFS/BFS from every node, marking
+      visited — is `O(n·(n+m))`, roughly `n`× more work, because it re-walks the
+      shared graph `n` times instead of reusing each child's completed answer.
+
+      :::tip
+      **Interview tip:** "compute reachability in a DAG fast" is the textbook
+      justification for bitsets. You store the *answer as a bitset per node* and
+      OR children into parents in reverse topological order — the single most
+      reusable trick for transitive-closure problems, and it transfers directly
+      to SCC-condensed graphs (next lesson) when cycles exist.
+      :::
+  - type: markdown
+    content: |
+      # Question — Reachable Nodes
+
+      A directed acyclic graph consists of `n` nodes and `m` edges. The nodes
+      are numbered `1, 2, …, n`.
+
+      Calculate for **each node the number of nodes you can reach** from it
+      (including the node itself).
+
+      **Input.** The first input line has two integers `n` and `m`: the number
+      of nodes and edges. After this there are `m` lines describing the edges:
+      each line has two distinct integers `a` and `b`: there is an edge from
+      node `a` to node `b`.
+
+      **Output.** Print `n` integers: for each node the number of reachable
+      nodes.
+
+      **Constraints**
+      - `1 ≤ n ≤ 5·10^4`
+      - `1 ≤ m ≤ 10^5`
+
+      **Example**
+      ```
+      Input:
+      5 6
+      1 2
+      1 3
+      1 4
+      2 3
+      3 5
+      4 5
+
+      Output:
+      5 3 2 2 1
+      ```
+      Explanation: node 1 reaches all 5; node 2 reaches {2,3,5} = 3; node 3
+      reaches {3,5} = 2; node 4 reaches {4,5} = 2; node 5 reaches only {5} = 1.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — DFS from every node, O(n·(n+m))**
+
+      For each node run a fresh DFS and count visited nodes.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      vector<int> adj[50005];
+      int vis[50005];
+      int dfs(int v){ vis[v]=1; int c=1; for(int to:adj[v]) if(!vis[to]) c+=dfs(to); return c; }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; cin>>n>>m;
+          for(int i=0;i<m;i++){ int a,b; cin>>a>>b; --a;--b; adj[a].push_back(b); }
+          for(int i=0;i<n;i++){ memset(vis,0,sizeof(vis)); cout<<(i?" ":"")<<dfs(i); }
+          cout<<"\n";
+          return 0;
+      }
+      ```
+
+      **O(n·(n+m))** — at `n=5·10^4, m=10^5` that is ~10^10 steps; too slow.
+
+      **② Optimization — reverse-topological bitset union, O((n+m)·n/64) (submission)**
+
+      Topologically order the DAG by DFS finish times, then process nodes in that
+      order (children first). Each node's reachability is `bitset[v] = {v} ∪ ⋃
+      bitset[child]`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int MAXN = 50005;
+      int n,m;
+      vector<int> adj[MAXN];
+      bitset<MAXN> reach[MAXN];
+      int vis[MAXN];
+      vector<int> order;
+      void dfsT(int v){
+          vis[v]=1;
+          for(int to: adj[v]) if(!vis[to]) dfsT(to);
+          order.push_back(v);          // finish time (child finishes before parent)
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          if(!(cin>>n>>m)) return 0;
+          for(int i=0;i<m;i++){ int a,b; cin>>a>>b; --a;--b; adj[a].push_back(b); }
+          for(int i=0;i<n;i++) if(!vis[i]) dfsT(i);
+          for(int i=0;i<n;i++){         // iterate finish order => children processed first
+              int v=order[i];
+              reach[v].set(v);
+              for(int to: adj[v]) reach[v] |= reach[to];
+          }
+          for(int i=0;i<n;i++){ cout<<(i?" ":"")<<reach[i].count(); }
+          cout<<"\n";
+          return 0;
+      }
+      ```
+
+      **O((n+m)·n/64)** time, **O(n²/8)** memory (~313 MB at the limit, inside
+      512 MB). This is the submission tier.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **Why finish order works.** `dfsT` pushes a node onto `order` only after
+        all its descendants; so in `order`, every child appears *before* its
+        parent. Iterating `order` left-to-right therefore computes each node only
+        once its children's `reach` bitsets are already final.
+      - **Union once per edge.** `reach[v] |= reach[to]` is a single `n/64`-word
+        OR per edge, giving the `m·n/64` term; the `n` nodes each also set their
+        own bit and are counted once, giving the `n` term.
+      - **`bitset<MAXN>` with `MAXN = n` bound.** Only bits `< n` are ever set;
+        `count()` returns the reachable count directly.
+      - **DAG only.** If the graph had cycles this greedy order would be wrong —
+        but the input guarantees a DAG; for general graphs we first collapse
+        Strongly Connected Components (next lesson) and the same trick applies.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n=5`, edges `1→2, 1→3, 1→4, 2→3, 3→5, 4→5`.
+
+      One valid finish order (children first): `[5, 3, 4, 2, 1]`. Processing
+      left to right:
+
+      | node | reach[v]                       | count |
+      |------|--------------------------------|-------|
+      | 5    | {5}                            | 1 |
+      | 3    | {3}∪{5} = {3,5}                | 2 |
+      | 4    | {4}∪{5} = {4,5}                | 2 |
+      | 2    | {2}∪reach[3] = {2,3,5}         | 3 |
+      | 1    | {1}∪reach[2]∪reach[3]∪reach[4] = {1,2,3,4,5} | 5 |
+
+      Output: **5 3 2 2 1** — matches the expected **5 3 2 2 1** (the compiled
+      submission prints `5 3 2 2 1`).
+  - type: mcq
+    prompt: 'Why is reverse topological order (children before parents) the right processing order for bitset reachability on a DAG?'
+    options:
+      - Parents finish first, so each parent can copy its children before they change
+      - A child finishes before its parent, so when a parent is processed all its children's reachability is already final
+      - Topological order visits all nodes of the graph once in any order without changing the result
+      - Reverse order is only needed to save memory, not for correctness
+    answer: 1
+    explanation: A node's reachable set is itself plus the union of its children's reachable sets. Because DFS finish time records each child after its whole subtree, children appear before parents in the finish-order array, so iterating it left-to-right guarantees that when a parent ORs in a child's bitset, that child's bitset is already complete — making the union exact.

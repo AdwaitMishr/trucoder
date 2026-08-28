@@ -1,0 +1,284 @@
+---
+id: meet-in-the-middle
+title: "Meet in the Middle — split the set, merge subset sums"
+type: content
+difficulty: medium
+order: 234
+tags:
+  - advanced-techniques
+  - meet-in-the-middle
+  - combinatorics
+  - subset-sum
+  - two-pointer
+blocks:
+  - type: markdown
+    content: |
+      # Meet in the Middle — the classic "split the set" template
+
+      You are given `n` integers and a target `x`, and must count the number of
+      subsets whose elements sum **exactly** to `x`. The honest brute force
+      enumerates all `2^n` subsets, which is impossible past `n ≈ 25`. **Meet in
+      the middle** splits the set into **two halves**, enumerates the subset
+      sums of each half separately (only `2^(n/2)` each), then *meets* the two
+      halves in the middle to count pairs that sum to `x`.
+
+      Why does this help? Brute is `2^n`. Each half costs `2^(n/2)`, and merging
+      the two sorted lists costs about `2^(n/2)` more. So the total is roughly
+      `2^(n/2)` — for `n = 40` that is `2^20 ≈ 10^6` instead of `2^40 ≈ 10^12`,
+      a difference of a factor of a million.
+
+      ## The template (memorise this shape)
+
+      1. **Split:** `n1 = n/2` items go to the left half, the rest to the right.
+      2. **Enumerate:** build every subset's sum for each half. Recursively or
+         bitmark-wise, each half yields a list of `2^(n/2)` sums.
+      3. **Sort:** sort the right half's sums non-decreasingly.
+      4. **Merge/meet:** for each left sum `s`, the right half must contribute
+         `x - s`; add the number of such occurrences. With one list sorted, use
+         two pointers or binary search.
+
+      The `count pairs summing to target` step (step 4) is where the two halves
+      "meet" — each of the requested subsets is exactly one left sum plus one
+      right sum.
+
+      **Time:** `O(2^(n/2))` (plus `O(2^(n/2) log 2^(n/2))` for the sort).
+      **Space:** `O(2^(n/2))`.
+
+      :::tip
+      **Interview tip:** the phrase *"count / find subsets, n ≤ 40 but brute 2^n
+      is too big"* is the classic meet-in-the-middle trigger. `2^40` is ~10^12
+      (too slow), `2^20` is ~10^6 (fine). The template is *four fixed steps* —
+      split, enumerate both halves, sort the right, two-pointer merge — and it
+      shows up verbatim for: number of subsets with sum `≤ x`, the 4SUM/`k`-SUM
+      family, the knapsack where weights are huge, and subset-sum feasibility.
+      Recognise it instantly: *"n ≈ 40 and any subset is being asked about."*
+      :::
+  - type: markdown
+    content: |
+      # Question — Meet in the Middle
+
+      You are given a list of `n` integers and a target value `x`. Count the
+      number of subsets whose elements sum to exactly `x`.
+
+      **Input**
+
+      The first line contains two integers `n` and `x`. The second line contains
+      `n` integers.
+
+      **Output**
+
+      Print the number of subsets whose sum equals `x`.
+
+      **Constraints**
+
+      - `1 <= n <= 40`
+      - `1 <= x <= 10^9`
+      - `1 <= a[i] <= 10^9`
+      - the answer fits in a signed 64-bit integer
+
+      **Example**
+
+      Input:
+      ```
+      4 5
+      1 2 3 2
+      ```
+
+      Output:
+      ```
+      3
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — enumerate all subsets, O(2^n) time, O(1) extra space**
+
+      Try every `0/1` choice for each of the `n` elements via a bitmask and sum.
+      Correct for tiny `n`, but `n = 40` gives `2^40 ≈ 10^12` — far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; ll x; cin >> n >> x;
+          vector<ll> a(n);
+          for (auto &v : a) cin >> v;
+          ll ans = 0;
+          for (ll mask = 0; mask < (1LL << n); ++mask){   // O(2^n) — too slow
+              ll s = 0;
+              for (int i = 0; i < n; ++i) if (mask >> i & 1) s += a[i];
+              if (s == x) ++ans;
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **② Optimization — meet in the middle, O(2^(n/2) log 2^(n/2)) time**
+
+      Split into two halves, enumerate each half's subset sums into a sorted
+      list, then two-pointer-merge to count pairs summing to `x`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; ll x; cin >> n >> x;
+          vector<ll> a(n);
+          for (auto &v : a) cin >> v;
+          int n1 = n / 2;                 // left half size
+          int n2 = n - n1;                // right half size
+
+          auto subsetSums = [&](int lo, int cnt) {
+              vector<ll> res(1, 0);                    // res[k] = sum of subset k
+              for (int i = 0; i < cnt; ++i) {
+                  int sz = (int)res.size();
+                  for (int j = 0; j < sz; ++j)
+                      res.push_back(res[j] + a[lo + i]);
+              }
+              sort(res.begin(), res.end());
+              return res;
+          };
+
+          vector<ll> L = subsetSums(0, n1);            // 2^n1 sums, sorted
+          vector<ll> R = subsetSums(n1, n2);           // 2^n2 sums, sorted
+
+          ll ans = 0;
+          int i = 0, j = (int)R.size() - 1;
+          while (i < (int)L.size() && j >= 0) {
+              ll s = L[i] + R[j];
+              if (s < x) { ++i; continue; }            // need a bigger left sum
+              if (s > x) { --j; continue; }            // need a smaller right sum
+              ll vi = L[i], vj = R[j];                 // count equal runs on both sides
+              ll ci = 0, cj = 0;
+              while (i < (int)L.size() && L[i] == vi) { ++ci; ++i; }
+              while (j >= 0 && R[j] == vj) { ++cj; --j; }
+              ans += ci * cj;                          // every pair meets the target
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **③ Further optimization** — none needed: `2^(n/2)` with `n ≤ 40` is
+      `2^20 ≈ 10^6`, and the sort + two-pointer merge run in well under a
+      second. There is no sub-exponential general algorithm for counting subset
+      sums (it is an NP-hard sum problem), so this is the intended optimum.
+
+      **④ Alternative — hash map merge, O(2^(n/2)) time, O(2^(n/2)) space**
+
+      Instead of sorting + two pointers, count each half's sums in a hash map:
+      every left sum `s` pairs with every right sum equal to `x - s`. Simpler to
+      write; the map gives the same asymptotics (a `sort` is replaced by a hash
+      insert), which suits unusually large `2^(n/2)`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; ll x; cin >> n >> x;
+          vector<ll> a(n);
+          for (auto &v : a) cin >> v;
+          int n1 = n / 2;
+          auto sums = [&](int lo, int cnt){
+              unordered_map<ll, ll> m;
+              vector<ll> cur{0};
+              for (int i = 0; i < cnt; ++i){
+                  int sz = (int)cur.size();
+                  for (int k = 0; k < sz; ++k) cur.push_back(cur[k] + a[lo + i]);
+              }
+              for (ll s : cur) ++m[s];
+              return m;
+          };
+          auto M = sums(0, n1);
+          auto R = sums(n1, n - n1);
+          ll ans = 0;
+          for (auto &p : M) if (R.count(x - p.first)) ans += p.second * R[x - p.first];
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      Both ② and ④ are correct with the same complexity; the sort + two-pointer
+      merge (②) is the version to reproduce from memory.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focusing on the two-pointer version **②**:
+
+      - `subsetSums(lo, cnt)` builds the list of all subset sums for `cnt`
+        elements starting at index `lo`. It begins with `[0]` (the empty subset)
+        and, for every existing partial sum, pushes `partial + a[lo+i]`. After
+        each element the list doubles → `2^cnt` entries. Then it sorts.
+      - `L` and `R` are the two halves' sorted lists. Because every subset of the
+        whole set is *some left subset + some right subset*, counting pairs
+        `(l, r)` with `l + r == x` counts the requested subsets exactly once.
+      - The two-pointer merge walks `i` from the front of `L` and `j` from the
+        back of `R`. When `L[i] + R[j]` is too small we move `i` up, when too
+        big we move `j` down — this is the classic sorted two-sum counting.
+      - On an exact hit we count how many equal `L[i]`s (run `ci`) and equal
+        `R[j]`s (run `cj`) and add `ci * cj`, because every one of the `ci`
+        equal left sums can pair with every one of the `cj` equal right sums.
+      - The answer can be as large as `~2^40 ≈ 10^12`, so `ans` is `long long`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 4`, `x = 5`, `a = [1, 2, 3, 2]`. Split `n1 = 2`, `n2 = 2`.
+
+      Left half `[1, 2]` subset sums `L`: `0`, `1`, `2`, `3` → sorted `[0,1,2,3]`.
+      Right half `[3, 2]` subset sums `R`: `0`, `3`, `2`, `5` → sorted `[0,2,3,5]`.
+
+      Merge counting pairs summing to `5` (two-pointer, `i` front of `L`,
+      `j` back of `R`):
+
+      | L[i] | R[j] | sum | action                    |
+      |------|------|-----|---------------------------|
+      | 0    | 5    | 5   | match, runs 1×1 → +1      |
+      | 1    | 3    | 4   | <5 → move i up            |
+      | 2    | 3    | 5   | match, runs 1×1 → +1      |
+      | 3    | 3    | 6   | >5 → move j down          |
+      | 3    | 2    | 5   | match, runs 1×1 → +1      |
+
+      The three matches are the three index-subsets summing to `5`:
+
+      | pair `(L, R)` | subset described            | sum |
+      |---------------|-----------------------------|-----|
+      | `(0, 5)`      | ∅ ∪ {3,2} = `{3,2}`         | 5   |
+      | `(2, 3)`      | {2} ∪ {3} = `{2,3}`         | 5   |
+      | `(3, 2)`      | {1,2} ∪ {2} = `{1,2,2}`     | 5   |
+
+      So the answer is `3`, matching the sample. Each subset is exactly one left
+      sum plus one right sum, so counting index-subset pairs counts every subset
+      exactly once.
+  - type: flowchart
+    title: "Meet in the middle"
+    nodes: ["Read n, x, a", "Split into L=[0,n/2), R=[n/2,n)",
+            "Enumerate L subset sums", "Enumerate R subset sums",
+            "Sort L, R", "Two-pointer count L[i]+R[j]==x", "Print count"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 1, to: 3, label: ""}
+      - {from: 2, to: 4, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: ""}
+      - {from: 5, to: 6, label: ""}
+  - type: mcq
+    prompt: "Why does meet in the middle reduce subset-sum counting from O(2^n) to about O(2^(n/2)), and how are the two halves combined?"
+    options:
+      - "Each side enumerates only its own 2^(n/2) subset sums; sorting the right list and two-pointer merging counts left+right==x pairs, so 2^40 collapses to two 2^20 lists and a linear-ish merge"
+      - "Splitting halves the exponent because each half is solved by dynamic programming in O(n)"
+      - "The algorithm only works when n is even, and it skips enumerating one whole half"
+      - "It stores every subset in a hash and answers queries by binary search over the original array"
+    answer: 0
+    explanation: "A subset of the whole set is exactly one subset of the left half plus one subset of the right half. Enumerating each half takes 2^(n/2) work and merging the two sorted lists takes only O(2^(n/2)) more, turning 2^40 (~10^12) into roughly 2^20 (~10^6). The two-pointer merge guarantees each matching pair is found without scanning all pairs."
+---

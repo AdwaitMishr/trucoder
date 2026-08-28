@@ -1,0 +1,204 @@
+---
+id: stick-divisions
+title: "Stick Divisions"
+type: content
+difficulty: medium
+order: 397
+tags:
+  - greedy
+  - huffman
+  - priority-queue
+  - merge-minimum
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — Huffman merging (cutting in reverse)
+
+      When a problem is about *splitting one thing into many pieces* whose total cost
+      is the sum of the intermediate sizes, it is almost always easier to **run the
+      process in reverse**: turning a *splitting* problem into an *merging* problem.
+      Cutting a stick of length `s` in two costs `s`; the reverse operation (gluing
+      two sticks of lengths `x` and `y` into one stick) naturally costs `x + y`, and
+      the two sums telescope to the same number. So:
+
+      > Minimum cost of cutting into the target pieces
+      > = minimum cost of merging the target pieces.
+
+      The reverse problem is now: given the target piece lengths, repeatedly merge
+      the cheapest two pieces until a single stick remains, paying the merged length
+      each time. This is exactly **Huffman's algorithm** — the same greedy that
+      minimizes the weighted external path length of a prefix code. The optimality
+      follows from an exchange argument: in *some* optimal merge tree the two smallest
+      leaves are siblings, so merging them greedily is safe, and the argument recurses.
+
+      :::tip
+      **Interview tip:** Recognizing "cost equals the sum of the sizes I combine"
+      and flipping it into a **merge-minimum** greedy is a recurring win. The
+      identical pattern appears in string concatenation problems, in balancing /
+      joining groups, and in building prefix codes. The giveaway is *a cost that is
+      proportional to the size of the current object*.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      :::note
+      **Concrete formulation.** The set lists "Stick Divisions". We adopt the
+      standard coherent version: a single stick is cut into pieces of given target
+      lengths, and the cost of a cut is the length of the stick being cut. Target
+      lengths sum to the full length, so no waste remains.
+      :::
+
+      You have a stick of length `n`. Your task is to divide it into pieces whose
+      lengths are exactly a list of `k` target lengths `a[1..k]` (where
+      `a[1] + a[2] + … + a[k] = n`, so the target pieces use the whole stick). A cut
+      takes one current stick of length `s` and splits it into two pieces; the cost
+      of that cut is `s`. You may cut in any order.
+
+      **Input.** The first line has an integer `n`. The second line has the integer
+      `k`. The third line has `k` integers `a[1..k]`.
+
+      **Output.** Print the minimum possible total cost.
+
+      **Constraints.**
+      - `1 ≤ k ≤ 10 000`
+      - `1 ≤ n ≤ 10^9`
+      - `1 ≤ a[i] ≤ n`
+      - `a[1] + … + a[k] = n`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      10
+      3
+      2 3 5
+      ```
+
+      **Output:**
+      ```
+      15
+      ```
+
+      (Cut `10 → 5 + 5` for `10`, then `5 → 2 + 3` for `5`; total `15`.)
+
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(k²) reverse merge.** Repeatedly scan for the two smallest
+      remaining pieces, merge them (cost = sum), and continue — equivalent to the
+      correct Huffman greedy but with a linear scan instead of a heap.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          long long n; int k; cin>>n>>k;
+          vector<long long> a(k);
+          for(int i=0;i<k;i++) cin>>a[i];
+          long long cost=0;
+          while(a.size()>1){
+              // find two smallest by linear scan
+              size_t i1=0,i2=1;
+              for(size_t i=1;i<a.size();i++) if(a[i]<a[i1]) {i2=i1; i1=i;} else if(a[i]<a[i2]) i2=i;
+              long long s=a[i1]+a[i2];
+              cost+=s;
+              if(i1>i2) swap(i1,i2);
+              a.erase(a.begin()+i2); a.erase(a.begin()+i1);
+              a.push_back(s);
+          }
+          cout<<cost<<"\n";
+      }
+      ```
+      *Complexity: O(k²) — each of `k−1` merges scans under `k` elements. Too slow
+      for `k = 10000`? Actually 10⁸ is borderline; the heap version below is safe and
+      simpler to reason about.*
+
+      **② Optimization — min-heap Huffman, O(k log k) (the solution).** Put all
+      targets in a min-heap; merge the two smallest repeatedly.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          long long n; int k; cin>>n>>k;
+          priority_queue<long long, vector<long long>, greater<long long>> pq;
+          for(int i=0;i<k;i++){ long long x; cin>>x; pq.push(x); }
+          long long cost=0;
+          while(pq.size()>1){
+              long long x=pq.top(); pq.pop();
+              long long y=pq.top(); pq.pop();
+              long long s=x+y;
+              cost+=s;
+              pq.push(s);
+          }
+          cout<<cost<<"\n";
+      }
+      ```
+      *Complexity: O(k log k) time, O(k) memory — handles `k = 10 000` instantly.*
+
+      **③ Further optimization — none: Huffman is already optimal.** An exchange
+      argument proves that in some optimal merge tree the two globally-smallest leaves
+      are siblings, so merging them greedily can never hurt. No asymptotically better
+      algorithm exists (an Ω(k log k) lower bound applies). The only *refinement* is
+      constant-factor: when the target lengths are available already sorted, a
+      two-queue method merges in **O(k)** after the sort, avoiding the heap's
+      log-factor — a neat interview footnote but the same asymptotic cost including
+      the sort.
+
+      **④ Alternative viewpoint — cut order does not change a leaf's contribution.**
+      For any *fixed* set of leaves, the total cost is `Σ depth(leaf) · a[leaf]`
+      where `depth` counts how many cuts the piece participates in. Huffman minimizes
+      this weighted depth-sum directly, which is why merging the smallest first (the
+      pieces that suffer the most downstream merges) is optimal. Re-deriving
+      Huffman's exchange argument is often the cleanest way to answer "why smallest
+      first?" in an interview.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(k log k). Key lines of tier ②:
+
+      1. **`pq` as `priority_queue<…, greater<long long>>`** — a *min*-heap, so `top`
+         is always the smallest current piece; merging smallest-first implements
+         Huffman.
+      2. **`cost += x + y`** — each merge corresponds to a reversed cut; `x + y` is
+         exactly the length of the two pieces combined, i.e. the stick that was cut.
+         Summing these over all merges equals the total forward cutting cost (the two
+         processes telescope).
+      3. **`pq.push(x + y)`** — the merged piece re-enters the pool as a future
+         leaf/root, so `k−1` merges reduce `k` pieces to `1`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 10`, `k = 3`, targets `a = {2, 3, 5}`.
+
+      Reverse (merge) simulation with the min-heap:
+
+      1. Heap `{2,3,5}`. Pop `2` and `3` → merge `s = 5`, `cost = 5`, push `5` →
+         heap `{5,5}`.
+      2. Pop `5` and `5` → merge `s = 10`, `cost = 5 + 10 = 15`, push `10` → one
+         stick left.
+
+      ✓ `cost = 15`, matching the sample. Forward, the same cost is achieved by
+      cutting `10 → 5 + 5` (cost `10`) then `5 → 2 + 3` (cost `5`) — total `15`. The
+      merge order `(2,3) → 5 → (5,5) → 10` mirrors exactly that cut tree.
+
+      The brute tier (①) performs the same two merges by linear scan and reports the
+      same `15`.
+
+  - type: mcq
+    prompt: "Why is it optimal to always merge the two smallest pieces first when solving Stick Divisions in reverse?"
+    options:
+      - "Because the smallest pieces are the ones that, by an exchange argument, must appear as siblings in some optimal merge tree, so committing to them greedily is safe."
+      - "Because larger pieces can never be merged at all."
+      - "Because the problem is really about sorting, not merging."
+      - "Because the answer only depends on n, not on the piece lengths."
+    answer: 0
+    explanation: "In any optimal binary merge tree the two smallest leaves can be siblings (exchange argument); merging them first is therefore never worse, and removing a linear scan keeps it optimal. This is exactly Huffman's greedy, and it makes merging smallest-first safe. The piece lengths drive both the structure and the cost, so sorting alone cannot give the answer."
+---

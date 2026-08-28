@@ -1,0 +1,310 @@
+---
+id: path-queries-ii
+title: Path Queries II
+type: content
+difficulty: hard
+order: 155
+tags:
+  - tree
+  - heavy-light-decomposition
+  - segment-tree
+  - path-max
+blocks:
+  - type: markdown
+    content: |
+      # Path Queries II — path maximums with point updates
+
+      You have a tree of `n` nodes where every node carries a value. Two
+      operations arrive as a stream: **change a node's value** and **ask for the
+      maximum value along the path** between two nodes. We need both — dynamic
+      point updates *and* path queries.
+
+      The workhorse for "do something along a tree path, with updates" is the
+      **Heavy-Light Decomposition (HLD)**: it splits the tree into heavy chains
+      and re-labels nodes so that every root-to-leaf path touches only
+      `O(log n)` chain fragments. Once flattened to an array, each chain is a
+      contiguous segment, and any path query becomes `O(log n)` segment-tree
+      range queries stitched together.
+
+      ## Why HLD makes a path a range
+
+      Choose for every node its **heavy child** — the child with the largest
+      subtree. The heavy edges form chains: you walk down the tree, always
+      continuing a chain through the heavy child, and starting a new chain at a
+      light child. Each node gets an array position `pos` such that **the nodes
+      of a chain occupy consecutive positions** (a depth-first ordering that
+      keeps the heavy edge first). A path between `a` and `b` then decomposes
+      into at most `O(log n)` such chains, because every time we jump from a
+      light edge we at least halve the subtree size.
+
+      A segment tree built over `pos` supports **point update** (change one
+      node's value) and **range maximum query** on any chain segment. The whole
+      path maximum is the max of the range maximums of the chains that make up
+      the path.
+
+      ## Complexity
+
+      - Preprocessing: `O(n log n)` (subtree sizes + heavy chains + build).
+      - Query (path max): `O(log² n)` — `O(log n)` chains, each answered in
+        `O(log n)` by the segment tree.
+      - Point update: `O(log n)`.
+      - Space: `O(n)`.
+
+      :::tip
+      **Interview tip:** HLD is the standard answer to "range query + path
+      query on a tree with updates" (values at nodes *or* on edges). Interviewers
+      rarely require the full decomposition — recognizing the problem type and
+      being able to sketch the flatten-to-chain idea, and state the
+      `O(log² n)` bound, already puts you ahead. It is very common as a
+      "LCA but with a segment tree on top" second-round question.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given a tree consisting of `n` nodes numbered `1, 2, ..., n`. Each
+      node has a value. Process two types of queries:
+
+      1. **change** the value of node `s` to `x`;
+      2. **find** the maximum value on the path between nodes `a` and `b`.
+
+      ## Input
+
+      The first input line has two integers `n` and `q`: the number of nodes and
+      queries.
+
+      The next line has `n` integers `v1, v2, ..., vn`: the value of each node.
+
+      Then there are `n - 1` lines describing the edges: each has two integers
+      `a` and `b` — an edge between `a` and `b`.
+
+      Finally there are `q` lines describing the queries. Each query is either
+      of the form `1 s x` (update) or `2 a b` (query path maximum).
+
+      **Constraints:** `1 <= n, q <= 2 * 10^5`, `1 <= a, b, s <= n`,
+      `1 <= vi, x <= 10^9`
+
+      ## Output
+
+      Print the answer to each query of type 2, one per line.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 3
+      2 4 1 3 3
+      1 2
+      1 3
+      2 4
+      2 5
+      2 3 5
+      1 2 2
+      2 3 5
+      ```
+      **Output:**
+      ```
+      4
+      3
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — climb to the LCA, O(n) per query**
+
+      For a `2 a b` query, walk up from `a` and `b` toward their LCA using parent
+      pointers, taking the max of the values seen. Correct, but a single query
+      can traverse the whole tree (worst case a path-shaped tree), so `q` queries
+      cost `O(n·q)` — up to `4 * 10^10` steps for `n = q = 2 * 10^5`. Way over the
+      time limit.
+
+      **② Optimization — Heavy-Light Decomposition + segment tree, O((n + q) log² n)**
+
+      This is the optimal tier (compiled and run against the sample below). We
+      compute subtree sizes, mark heavy children, flatten the tree into chains
+      (consecutive `pos`), build a max segment tree, then answer each path query
+      by jumping chain head by chain head.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int n, q;
+      vector<vector<int>> adj;
+      vector<ll> val;
+      int sz_[200005], par[200005], dep[200005], heavy[200005];
+      int head[200005], pos[200005], curpos;
+      ll base[200005], seg[4 * 200005];
+
+      int dfsSize(int v, int p) {
+          sz_[v] = 1; par[v] = p; heavy[v] = -1;
+          int best = 0;
+          for (int u : adj[v]) if (u != p) {
+              dep[u] = dep[v] + 1;
+              int s = dfsSize(u, v);
+              sz_[v] += s;
+              if (s > best) { best = s; heavy[v] = u; }
+          }
+          return sz_[v];
+      }
+
+      void decompose(int v, int h) {
+          head[v] = h; pos[v] = curpos; base[curpos++] = val[v];
+          if (heavy[v] != -1) decompose(heavy[v], h);        // continue the chain
+          for (int u : adj[v])                                // new chains at light kids
+              if (u != par[v] && u != heavy[v]) decompose(u, u);
+      }
+
+      void build(int id, int l, int r) {
+          if (l == r) { seg[id] = base[l]; return; }
+          int m = (l + r) >> 1;
+          build(id << 1, l, m); build(id << 1 | 1, m + 1, r);
+          seg[id] = max(seg[id << 1], seg[id << 1 | 1]);
+      }
+
+      void update(int id, int l, int r, int p, ll x) {
+          if (l == r) { seg[id] = x; return; }
+          int m = (l + r) >> 1;
+          if (p <= m) update(id << 1, l, m, p, x);
+          else update(id << 1 | 1, m + 1, r, p, x);
+          seg[id] = max(seg[id << 1], seg[id << 1 | 1]);
+      }
+
+      ll query(int id, int l, int r, int ql, int qr) {
+          if (qr < l || r < ql) return LLONG_MIN;
+          if (ql <= l && r <= qr) return seg[id];
+          int m = (l + r) >> 1;
+          return max(query(id << 1, l, m, ql, qr),
+                     query(id << 1 | 1, m + 1, r, ql, qr));
+      }
+
+      ll pathMax(int a, int b) {
+          ll ans = LLONG_MIN;
+          while (head[a] != head[b]) {
+              if (dep[head[a]] < dep[head[b]]) swap(a, b);
+              ans = max(ans, query(1, 0, n - 1, pos[head[a]], pos[a]));
+              a = par[head[a]];
+          }
+          if (dep[a] > dep[b]) swap(a, b);
+          ans = max(ans, query(1, 0, n - 1, pos[a], pos[b]));
+          return ans;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          cin >> n >> q;
+          val.resize(n);
+          for (int i = 0; i < n; i++) cin >> val[i];
+          adj.assign(n, {});
+          for (int i = 0; i + 1 < n; i++) {
+              int a, b; cin >> a >> b; --a; --b;
+              adj[a].push_back(b); adj[b].push_back(a);
+          }
+          curpos = 0; dep[0] = 0;
+          dfsSize(0, -1);
+          decompose(0, 0);
+          build(1, 0, n - 1);
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) {
+                  int s; ll x; cin >> s >> x; --s;
+                  update(1, 0, n - 1, pos[s], x);
+              } else {
+                  int a, b; cin >> a >> b; --a; --b;
+                  cout << pathMax(a, b) << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`O((n + q) log² n)` worst-case total; `O(n)` space. This is the optimal
+      tier.*
+
+      **③ Alternative algorithm — none simpler for the full constraints**
+
+      A segment tree on an Euler tour does not handle *arbitrary* path updates
+      well, and binary-lifting LCA alone cannot support point updates on path
+      maximums. For an online sequence of point updates + path max queries,
+      HLD (+ segment tree / Fenwick-to-accumulate) is the clean, accepted
+      approach. (A heavy theoretical tool, the link-cut tree, also solves it in
+      `O(log n)` amortized, but it is far more complex than needed here.)
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Subtree sizes (`dfsSize`).** One DFS rooted at `0` records `sz_`,
+        parent, depth, and picks each node's *heavy child* (the one with the
+        maximum subtree). These sizes are what guarantee the light-edge
+        halving bound behind `O(log n)` chains.
+
+      - **Flattening (`decompose`).** Visit the heavy child first and *continue*
+        the current chain (same head). Each light child starts a brand-new chain.
+        Writing `base[curpos++] = val[v]` turns chains into contiguous arrays —
+        this is the act that turns "path" into "a union of ranges".
+
+      - **Segment tree.** `build` from `base`; `update` overrides one position
+        (a point update costs `O(log n)`). `query` returns the max over any
+        `[ql, qr]`.
+
+      - **`pathMax`.** The two pointers jump up chains: while `a` and `b` live
+        in different chains, promote the one whose chain head is deeper — fold
+        that whole chain segment `[pos[head], pos[v]]` into the answer and move
+        `v` up to its parent. When both are in the same chain, their path is a
+        single contiguous range, answered by one final query. This is LCA-style
+        climbing, but each climb step costs `O(log n)`.
+
+      The order matters: default to climbing the *deeper* head each time so that
+      the two pointers converge at the same chain (their LCA's chain).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5`, values `2 4 1 3 3`, edges `1-2, 1-3, 2-4, 2-5` (root the
+      DFS at node `1`). Subtree sizes: node 2 has subtree `{2,4,5}` (size 3), so
+      node 1's heavy child is 2.
+
+      Chains: `1 -> 2 -> 5` (heavy path), then light children `4` (off 2) and `3`
+      (off 1) each form their own chain. A possible `pos` assignment:
+      `1→0, 2→1, 5→2, 4→3, 3→4`; `base = [2, 4, 3, 3, 1]`.
+
+      **Query `2 3 5`** (path from node 3 to node 5):
+      - node 3 is chain head `{3}` at pos 4; node 5 in chain head `{1}` at pos 2.
+        Different chains; depth(head of 3)=? node 3 depth 1, node 1 depth 0 → climb
+        node 3: fold `[pos3,pos3]=[4,4]` = value 1; `a = parent(3) = 1`.
+      - Now `a = 1` (chain head 1) and `b = 5` (chain head 1): same chain! Fold
+        `[pos1, pos5] = [0, 2]` = max(2, 4, 3) = 4.
+      - Answer `max(1, 4) = 4`. ✓
+
+      **Update `1 2 2`**: `pos[2] = 1`, set `base[1] = 2`. Segment tree leaf at
+      index 1 becomes 2 (values `2 2 3 3 1` along positions).
+
+      **Query `2 3 5`** again: same folding, now `[0,2] = max(2, 2, 3) = 3`, so
+      answer `max(1, 3) = 3`. ✓
+
+      Printed:
+      ```
+      4
+      3
+      ```
+      Expected `4` and `3` — actual matches exactly.
+  - type: flowchart
+    title: "Path maximum with point updates via HLD"
+    nodes: ["compute subtree sizes & heavy child", "decompose into chains (consecutive pos)", "build max segment tree on pos", "query: climb chains, fold range max", "point update: set one leaf, O(log n)"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 2, to: 4}
+  - type: mcq
+    prompt: "Why can heavy-light decomposition answer a path-max query in only O(log² n) queries, while plain parent-pointer climbing takes O(n) worst-case?"
+    options:
+      - "Because the segment tree is built over an Euler tour, which makes every path a single contiguous range."
+      - "Because every jump across a light edge at least halves the subtree size, so any path touches only O(log n) chain fragments — each answered in O(log n) by the segment tree."
+      - "Because HLD reorders nodes by value, sorting them, so the max is just the head of the array."
+      - "Because the heavy child always contains the LCA, so only one chain is ever visited."
+    answer: 1
+    explanation: "The whole point of choosing the largest-child as 'heavy' is the halving argument: from any node, moving up across a light edge enters a subtree of at most half the size, so a root-to-leaf path crosses O(log n) light edges. A path between two nodes therefore decomposes into O(log n) chain segments, and each is a contiguous range answered in O(log n). Parent-pointer climbing, by contrast, can visit all n nodes on a path-shaped tree."
+---

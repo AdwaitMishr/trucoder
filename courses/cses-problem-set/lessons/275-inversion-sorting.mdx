@@ -1,0 +1,267 @@
+---
+id: inversion-sorting
+title: Inversion Sorting
+type: content
+difficulty: hard
+order: 275
+tags:
+  - interactive
+  - inversion
+  - reconstruction
+  - constructive
+  - reversal
+blocks:
+  - type: markdown
+    content: |
+      # Inversion Sorting — reconstruct from prefix-inversion measurements, then sort
+
+      There is a hidden permutation `a_1, …, a_n` of `1..n`. You must sort it
+      (into `1, 2, …, n`) using **subarray reversals**. After every reversal the
+      judge tells you the permutation's current **inversion count** — the number
+      of pairs `(p, q)` with `p < q` but `a_p > a_q`. When it hits `0`, the array
+      is sorted and you win. You have `4n` operations.
+
+      The killer constraint is that the judge never tells you the elements —
+      only a single global number after each move. So we cannot "see" where the
+      biggest element is. The whole problem is: **extract actual information from
+      a count**, then use it to guide reversals.
+
+      ## The measurement trick
+
+      Reverse the prefix `[1..i]` and read the inversion count; reverse it again
+      (undo) and read it again. Let `s_i` be the count *after* the reversal and
+      `o_i` the count *after* undoing it (the original, unchanged array). Two
+      facts make this gold:
+
+      - Reversing a prefix only permutes elements *within* that prefix, so all
+        "cross" inversions (a pair with one element inside the prefix and one
+        outside) are unchanged by it.
+      - Within a prefix of length `i`, reversing flips every internal inversion:
+        inversions become `C(i+1,2)−(inversions)`, where `C(i+1,2) = i(i+1)/2`.
+
+      Solving the two equations isolates the number of inversions strictly
+      *inside* the original prefix `[1..i]`, call it `P_i`:
+
+      ```
+      P_i = (o_i − s_i + i(i+1)/2) / 2
+      ```
+
+      The difference `P_i − P_{i−1}` is then the number of elements before
+      position `i` that are *larger* than `a_i` — a per-element fingerprint. With
+      one fingerprint per position and the fact that the values are exactly
+      `1..n`, the whole permutation can be rebuilt.
+
+      :::tip
+      **Interview tip:** interactive problems whose feedback is a single scalar
+      (here: a global inversion count) often hide an information-extraction
+      step — carefully chosen operations that let a *difference of two readings*
+      isolate one clean number. Reversing-and-undoing to cancel cross terms is an
+      elegant, reusable "measure by subtraction" pattern. Then, once the hidden
+      data is known, a normal offline algorithm (here: a greedy selection sort by
+      reversal) drives the remaining budget. Frame it as **decouple**: first
+      learn the structure, then act on it.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There is a hidden permutation `a_1, a_2, …, a_n` of integers `1, 2, …, n`.
+      Your task is to sort the permutation by reversing subarrays.
+
+      On each turn, you can reverse a subarray of the permutation. After that,
+      you will be reported the number of inversions in the permutation. If the
+      number of inversions is `0` (i.e., the permutation is sorted), you win.
+
+      ## Interaction
+
+      This is an interactive problem. Your code will interact with the grader
+      using standard input and output. You should start by reading a single
+      integer `n`: the length of the permutation.
+
+      On your turn, print two integers `i` and `j`: reverse the subarray between
+      indices `i` and `j`.
+
+      After this, the next input line has a single integer: the number of
+      inversions after the operation. If the number is `0`, you win and your
+      program must terminate after this.
+
+      ## Constraints
+
+      - `1 <= n <= 1000`
+      - you can make **at most `4n` operations**
+
+      ## Sample
+
+      **Input:**
+      ```
+      3
+      1 2
+      1
+      2 3
+      0
+      ```
+      **Explanation:** the initial permutation is `[3,1,2]`. After the first
+      operation the permutation is `[1,3,2]` and the number of inversions is `1`.
+      After the second operation the permutation is `[1,2,3]` and the number of
+      inversions is `0`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Naive — reverse randomly / read-only (no reliable signal)**
+
+      Guessing reversals while only seeing a global inversion count gives no
+      way to locate any element. Reversing every possible subarray exhaustively
+      is `O(n²)` operations; reversing `n` random prefixes teaches nothing
+      usable. There is *no* correct "blind" tier — the count must first be
+      turned into structure.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          for(int i=0;i<n*n;i++){            // O(n^2) blind guesses: useless
+              cout<<1<<" "<<2<<"\n"; cout.flush();
+              int inv; cin>>inv; if(inv==0) return 0;
+          }
+          return 0;
+      }
+      ```
+
+      *Repeatedly reversing `[1,2]` never learns anything — it cannot sort a
+      general permutation and, worse, wastes `O(n²)` operations.*
+
+      **② Optimization — measure, reconstruct, then sort, O(3n) operations (optimal)**
+
+      **Phase A (2n ops):** for each `i`, reverse `[1..i]`, read `s_i`, reverse
+      `[1..i]` again, read `o_i`; accumulate `P_i`, then difference to get each
+      position's "number of larger elements on its left". **Phase B (recover):**
+      rebuild `a` from those fingerprints. **Phase C (≤ n−1 ops):** greedily
+      reverse each remaining largest element to its final spot using the known
+      array. Total `≤ 3n − 1 < 4n`. This is the tier we compile and verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n;
+
+      int reverseAsk(int l,int r){                     // reverse [l,r], read inversions
+          cout<<l<<" "<<r<<"\n"; cout.flush();
+          int inv; cin>>inv; return inv;
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          cin>>n;
+
+          // ---- Phase A: measure prefix inversions (undo each reversal) ----
+          vector<long long> P(n,0);
+          for(int i=0;i<n;i++){
+              long long s = reverseAsk(1, i+1);            // after reversing [1..i+1]
+              if(s==0) return 0;
+              long long o = reverseAsk(1, i+1);            // undo it: back to original
+              if(o==0) return 0;
+              P[i] = (o - s + 1LL*i*(i+1)/2) / 2;          // inversions inside original prefix
+          }
+          for(int i=n-1;i>=1;i--) P[i] -= P[i-1];          // L[i] = # larger on the left of a[i]
+
+          // ---- Phase B: reconstruct the permutation ----
+          vector<int> pool; for(int v=1;v<=n;v++) pool.push_back(v);
+          vector<int> a(n);
+          for(int i=n-1;i>=0;i--){
+              int rank = (i+1) - (int)P[i];                // a[i] has P[i] larger in pool
+              a[i] = pool[rank-1];
+              pool.erase(pool.begin()+rank-1);
+          }
+
+          // ---- Phase C: sort the now-known array by reversals ----
+          vector<int> b = a;
+          for(int i=n-1; i>=1; i--){
+              int mx = i;
+              for(int j=0;j<i;j++) if(b[j] > b[mx]) mx = j;   // largest of b[0..i]
+              if(mx != i){
+                  reverse(b.begin()+mx, b.begin()+i+1);        // rehearse locally
+                  if(reverseAsk(mx+1, i+1)==0) return 0;       // apply to grader
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`≤ 3n − 1` operations (2n to measure + up to n−1 to sort), `O(n)` memory.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Undo keeps the benchmark stable.** In Phase A each iteration reverses
+        `[1..i+1]` and then reverses it back, so before every measurement the
+        judge's array is the original — every `o_i` is the same base count, and
+        the cross-term cancellation holds exactly.
+      - **Why the formula works.** Let `P_i` be inversions inside the *original*
+        prefix `[1..i+1]` and `X` the (reversal-invariant) cross inversions.
+        Undone count `o = P_i + X`; reversed count `s = (C(i+1,2) − P_i) + X`.
+        Subtract: `o − s = 2P_i − C(i+1,2)`, so
+        `P_i = (o − s + C(i+1,2))/2`.
+      - **Difference = per-position fingerprint.** `P_i − P_{i−1}` counts exactly
+        the index-`i` inversions — the number of elements to the left of position
+        `i` in the original array that are greater than `a_i`.
+      - **Ranked reconstruction.** Going right to left, the still-unplaced pool
+        is `a[0..i]`. Of those `i+1` values, `P_i` are larger than `a_i`, so
+        `a_i` is rank `(i+1)−P_i` (1-based) in the pool — remove it.
+      - **Guided sorting.** With `a` known, find the largest element of the
+        unsorted prefix `b[0..i]` at `mx`; reversing `[mx, i]` parks it at
+        position `i`. Rehearse offline, then issue the same reversal to the
+        judge. The loop ends when every element but the first is placed — the
+        judge's count reaches `0` and we terminate.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 3`, hidden permutation `[3, 1, 2]`.
+
+      **Phase A (measure):** the original inversion count is `2` (`(3,1),(3,2)`).
+      - `i=0`: reverse `[1,1]` (no-op) → `s=2`; undo → `o=2`. `P_0 = (2−2)/2 = 0`.
+      - `i=1`: reverse `[1,2]` → `[1,3,2]`, inversions `1` → `s=1`; undo →
+        `o=2`. `P_1 = (2−1+1)/2 = 1`.
+      - `i=2`: reverse `[1,3]` → `[2,1,3]`, inversions `1` → `s=1`; undo →
+        `o=2`. `P_2 = (2−1+3)/2 = 2`.
+
+      Difference: `L[0]=0`, `L[1]=1`, `L[2]=1`.
+
+      **Phase B (recover):** pool `{1,2,3}`.
+      - `i=2`: rank `3−1=2` → value `2`; `a[2]=2`; pool `{1,3}`.
+      - `i=1`: rank `2−1=1` → value `1`; `a[1]=1`; pool `{3}`.
+      - `i=0`: rank `1−0=1` → value `3`; `a[0]=3`.
+
+      Recovered `a = [3,1,2]` — the true hidden permutation.
+
+      **Phase C (sort):** `b=[3,1,2]`.
+      - `i=2`: largest of `b[0..2]` is `3` at `mx=0`; reverse `[1,3]` → judge
+        array `[2,1,3]`, inversions `1` (matches local `b`).
+      - `i=1`: largest of `b[0..1]` is `2` at `mx=0`; reverse `[1,2]` → judge
+        array `[1,2,3]`, inversions `0` → **win**.
+
+      5 operations total (`4n = 12`). (The transcript on the problem uses a
+      different valid route — `[1,2]` then `[2,3]` — also reaching `0`.)
+  - type: flowchart
+    title: "Inversion Sorting: measure, reconstruct, sort"
+    nodes: ["for each i: reverse prefix [1,i], read s; undo, read o", "P_i = (o - s + i(i+1)/2) / 2", "L[i] = P_i - P_{i-1} = larger elements on the left of a[i]", "reconstruct a[i] by rank from the value pool", "greedily reverse largest of b[0..i] into place", "judge inversion count -> 0", "win"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6}
+  - type: mcq
+    prompt: "Why does reversing a prefix and then reversing it again let us learn the permutation from a global inversion count?"
+    options:
+      - "Reversing a prefix changes the number of inversions by a value that depends only on the hidden values, revealing them directly."
+      - "The two readings o and s: reversing only permutes the prefix (cross inversions unchanged), and within the prefix reversals flip internal inversions to C(i+1,2) - P_i. Subtracting these cancels the fixed cross term, giving P_i = (o - s + i(i+1)/2)/2, and the difference P_i - P_{i-1} is a per-position fingerprint large-enough-to-its-left, from which the permutation is uniquely reconstructible."
+      - "Inversion counts are cumulative, so subtracting two consecutive readings always yields the element itself."
+      - "The judge prints the array on the last line of every answer."
+    answer: 1
+    explanation: "A reversal of the prefix [1..i+1] never moves elements out of the prefix, so cross-prefix inversions are invariant; it only turns the internal inversion count P_i into C(i+1,2) - P_i. Reading the count after the reversal (s) and after undoing it (o = original) gives two equations whose difference isolates P_i. Then P_i - P_{i-1} counts exactly the elements left of position i that exceed a_i. Those n fingerprints, plus the known value set 1..n, determine the permutation uniquely."
+---

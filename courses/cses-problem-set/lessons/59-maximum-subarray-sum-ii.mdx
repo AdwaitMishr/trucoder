@@ -1,0 +1,221 @@
+---
+id: maximum-subarray-sum-ii
+title: "Maximum Subarray Sum II"
+difficulty: hard
+order: 59
+tags:
+  - sorting-searching
+  - prefix-sum
+  - monotonic-queue
+  - sliding-window
+blocks:
+  - type: markdown
+    content: |
+      # Maximum Subarray Sum II — best subarray of length in [a, b]
+
+      Find the maximum sum of a contiguous subarray whose **length is between
+      `a` and `b`**. Unlike the plain maximum-subarray-sum (which allows any
+      length), here we restrict the window size, and the values may be
+      negative.
+
+      ## Prefix sums turn length constraint into a range-min query
+
+      With `P[0] = 0` and `P[i]` = sum of the first `i` elements, a subarray
+      `[l, r)` (0-indexed, `length = r - l`) has sum `P[r] - P[l]`. If its
+      length is in `[a, b]`, then the start and end indices are related by:
+
+      ```
+      a <= r - l <= b   =>   r - b <= l <= r - a
+      ```
+
+      So, for a fixed end `r`, the best sum is:
+
+      ```
+      P[r] - min( P[l] )   over l in [r - b, r - a]
+      ```
+
+      We need the **minimum prefix value** over a window of indices that slides
+      along with `r` — a classic **sliding-window minimum**, solvable in
+      O(n) with a **monotonic deque**.
+
+      ## Monotonic deque for sliding-window minimum
+
+      As `r` advances, the candidate start `l = r - a` becomes newly available
+      and any `l < r - b` expires. We maintain a deque of candidate indices
+      `l` whose prefix values are increasing from back to front, with the
+      *smallest* prefix at the front:
+
+      - push a new candidate `r - a`;
+      - pop from the front any index `< r - b` (expired);
+      - the front now holds the index with the minimum `P[l]` among the valid
+        window, and `P[r] - P[front]` is the best subarray ending at `r`.
+
+      Pop from the back while the back's prefix is `>=` the new prefix, so that
+      dominated (larger-value, sooner-to-expire) candidates never survive.
+
+      **Time:** O(n), **Space:** O(n) (the prefix array).
+
+      :::tip
+      **Interview tip:** "maximum subarray sum with a length constraint" is the
+      classic that upgrades the plain Kadane idea to a sliding-window minimum
+      over prefix sums — expect to be quizzed on why a plain Kadane-style
+      running maximum breaks when the window has a minimum length `a`. The
+      monotonic-deque pattern (min over a sliding window) also underlies Sliding
+      Window Maximum/Minimum, so it pays off across many problems.
+      :::
+  - type: markdown
+    content: |
+      # Question — Maximum Subarray Sum II
+
+      Given an array of `n` integers, your task is to find the maximum sum of
+      values in a contiguous subarray with **length between `a` and `b`**.
+
+      **Input**
+
+      The first input line has three integers `n`, `a` and `b`: the size of the
+      array and the minimum and maximum subarray length.
+
+      The second line has `n` integers `x_1, x_2, ..., x_n`: the array values.
+
+      **Output**
+
+      Print one integer: the maximum subarray sum.
+
+      **Constraints**
+
+      - `1 <= n <= 2*10^5`
+      - `1 <= a <= b <= n`
+      - `-10^9 <= x_i <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      8 1 2
+      -1 3 -2 5 3 -5 2 2
+      ```
+
+      Output:
+
+      ```
+      8
+      ```
+
+      (The best subarray is `[5, 3]` with sum `8`; length `2` is allowed since
+      `a = 1, b = 2`.)
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n · b) time, O(1) space**
+
+      Enumerate every start `l` and every length in `[a, b]`, accumulating the
+      window sum directly. `n` up to `2*10^5` and `b` up to `n` makes this up to
+      ~`4*10^10` steps — far too slow.
+
+      ```cpp
+      long long brute(int n, int a, int b, const vector<long long>& x) {
+          long long best = LLONG_MIN;
+          for (int l = 0; l < n; ++l) {
+              long long s = 0;
+              for (int len = 1; len <= b && l + len <= n; ++len) {
+                  s += x[l + len - 1];
+                  if (len >= a) best = max(best, s);
+              }
+          }
+          return best;
+      }
+      ```
+
+      **② Optimisation — prefix sums + monotonic deque, O(n) time, O(n) space**
+
+      Build `P`, then for each end `r` find the min prefix over valid starts
+      `[r-b, r-a]` via a sliding-window-minimum deque.
+
+      ```cpp
+      long long solve(int n, int a, int b, const vector<long long>& x) {
+          vector<long long> P(n + 1, 0);
+          for (int i = 0; i < n; ++i) P[i + 1] = P[i] + x[i];
+
+          deque<int> dq;                     // candidate start indices l, incr. P back->front
+          long long best = LLONG_MIN;
+          for (int r = 1; r <= n; ++r) {
+              int candidate = r - a;                       // new start index that becomes usable
+              if (candidate >= 0) {
+                  while (!dq.empty() && P[dq.back()] >= P[candidate])
+                      dq.pop_back();                       // drop dominated candidates
+                  dq.push_back(candidate);
+              }
+              while (!dq.empty() && dq.front() < r - b)
+                  dq.pop_front();                          // expire starts older than r-b
+              // front now holds the min P[l] among l in [r-b, r-a]
+              best = max(best, P[r] - P[dq.front()]);
+          }
+          return best;
+      }
+      ```
+
+      **③ Alternative — segment tree (range-min over prefixes), O(n log n)**
+
+      Maintain a segment tree over `P` supporting range-minimum queries; for
+      each `r` query `min(P[r-b .. r-a])`. Correct and general, but the deque
+      achieves O(n) and is the intended solution here.
+
+      **④ Further optimisation** — O(n) is optimal: the array must be read
+      (Ω(n)) and the deque touches each index twice (push once, pop once).
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O(n) deque solution in **②**:
+
+      - `P[0..n]` holds prefix sums: `P[i] = x_0 + ... + x_{i-1}`.
+      - For each end `r` (from `1` to `n`) the valid subarrays have start `l`
+        with `r - b <= l <= r - a` and sum `P[r] - P[l]`. To maximize we need
+        the **minimum** `P[l]` in that index window.
+      - `candidate = r - a` is the leftmost start that becomes legal at end
+        `r`; we push it now. `while (P[dq.back()] >= P[candidate])` pops any
+        stored candidate whose prefix is at least as large — it is dominated
+        (larger value, and it expires no later), so it can never be the minimum.
+      - `while (dq.front() < r - b)` removes starts that fall out of the window
+        (their subarray would be shorter than `a`).
+      - After maintenance, `dq.front()` indexes the min prefix in the valid
+        window; `P[r] - P[dq.front()]` is the best sum ending at `r`.
+
+      Every index is added to the deque at most once and removed at most once,
+      hence O(n) total for all ends.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(8, 1, 2, [-1,3,-2,5,3,-5,2,2])`. Prefixes `P`:
+      `P[0]=0`, `P[1]=-1`, `P[2]=2`, `P[3]=0`, `P[4]=5`, `P[5]=8`, `P[6]=3`,
+      `P[7]=5`, `P[8]=7`. Window: `[r-2, r-1]`.
+
+      The candidate `P[l]` minimum and best value at key `r`:
+
+      | r | valid starts | min P[l] | P[r]-min | best |
+      |---|--------------|----------|----------|------|
+      | 1 | 0 | P[0]=0 | -1 | -1 |
+      | 2 | 0,1 | P[1]=-1 | 3 | 3 |
+      | 3 | 1,2 | P[1]=-1 | 1 | 3 |
+      | 4 | 2,3 | P[3]=0 | 5 | 5 |
+      | 5 | 3,4 | P[3]=0 | **8** | **8** |
+      | 6 | 4,5 | P[4]=5 | -2 | 8 |
+      | 7 | 5,6 | P[6]=3 | 2 | 8 |
+      | 8 | 6,7 | P[6]=3 | 4 | 8 |
+
+      At `r = 5`, `P[5] - P[3] = 8 - 0 = 8`, i.e. the subarray `x[3..4] =
+      [5, 3]` of length 2. Return `8`, matching the sample output.
+  - type: mcq
+    prompt: 'The monotonic deque holds candidate start indices. Why do we pop the back before inserting a new candidate?'
+    options:
+      - 'To keep the deque sorted by index'
+      - 'To remove candidates whose prefix P is at least as large as the new one, since such candidates are dominated (larger value, no later expiry) and can never be the minimum'
+      - 'To ensure every stored candidate has a distinct prefix value'
+      - 'To sort the array'
+    answer: 1
+    explanation: 'A stored candidate that has a prefix value at least as large as the new candidate, and expires no later than it, can never be the minimum over any future window. Popping it keeps the front as the true sliding-window minimum and keeps each push/pop O(1) amortized.'
+type: content
+---

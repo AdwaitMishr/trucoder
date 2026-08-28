@@ -1,0 +1,199 @@
+---
+id: minimizing-coins
+title: Minimizing Coins
+difficulty: easy
+order: 61
+tags:
+  - dynamic-programming
+  - unbounded-knapsack
+  - minimisation
+  - dp
+blocks:
+  - type: markdown
+    content: |
+      # Minimizing Coins — fewest coins to build a sum (unbounded)
+
+      You have coins of `n` denominations, **unlimited** copies of each, and want
+      to pay exactly the sum `x` using as **few coins** as possible. This is the
+      classic *unbounded* coin-change minimisation.
+
+      ## The recurrence
+
+      Think about the *last* coin you place. Whatever coins came before it, they
+      already formed some sum `x − c` with `c` a coin value. So
+
+      ```
+      dp[0] = 0
+      dp[s] = 1 + min over coins c of dp[s − c]     (for s ≥ 1)
+      ```
+
+      `dp[s]` = the fewest coins to make sum `s`; `dp[0] = 0` is the base case.
+      If no coin reaches `s` (dp stays "infinity"), the sum `s` is impossible.
+
+      **Unbounded means reused freely.** Because each `dp[s-c]` is itself built
+      from any number of coins, a denomination may appear many times — there is
+      no "used up" bookkeeping. This is the difference from *bounded*/0-1
+      knapsack.
+
+      **A key subtlety for minimisation:** for *counting* coin change (lessons
+      62–63) the loop order matters, but for *minimisation* it does not. Whether
+      you loop coins outer-then-sums, or sums outer-then-coins, `dp[s]` ends up
+      the same — we are taking a min over all coins, and `min` is commutative and
+      associative. (The greedy that "always take the largest coin" is a tempting
+      shortcut but is WRONG in general — see the alternative tier.)
+
+      **Worked mini-example.** Coins `{1, 5, 7}`, target `11`. `dp[11] = 3`
+      (`5 + 5 + 1`). Note greedy would take `7` first and need `5` coins
+      (`7+1+1+1+1`), so greedy is suboptimal here.
+
+      **Complexity.** Time `O(n · x)`, space `O(x)`.
+
+      :::tip
+      **Interview tip:** `coins → min number to hit a target` is the canonical
+      unbounded-knapsack warm-up (LeetCode *Coin Change*). Interviewers love to
+      ask *"can you use greedy?"* — the correct answer for arbitrary
+      denominations is **no**, and you should be able to produce a counterexample
+      like `{1,5,7}, target 11`. The `dp[s] = 1 + minᵧ dp[s-c]` recurrence is
+      the thing to write down first.
+      :::
+  - type: markdown
+    content: |
+      # Question — Minimizing Coins
+
+      Consider a money system consisting of `n` coins. Each coin has a positive
+      integer value. Your task is to produce a sum of money `x` using the
+      available coins. You may use each coin **any number of times**.
+
+      **Input:** The first input line has two integers `n` and `x`: the number of
+      coins and the desired sum of money. The second line has `n` distinct
+      integers `c_1, c_2, …, c_n`: the value of each coin.
+
+      **Output:** Print the minimum number of coins needed to produce the sum
+      `x`, or `-1` if it is impossible to form the sum.
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 100`
+      - `1 ≤ x ≤ 10^6`
+      - `1 ≤ c_i ≤ 10^6`
+
+      **Example**
+
+      Input:
+
+      ```
+      3 11
+      1 5 7
+      ```
+
+      Output:
+
+      ```
+      3
+      ```
+
+      (The optimal selection is `5 + 5 + 1`.)
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — recursion, exponential**
+
+      Try every first coin and recurse on the remainder, taking the min. The
+      branching is up to `n` ways per level and depth up to `x / min(c_i)`, so
+      this explores exponentially many coin sequences — unusable for `x = 10^6`.
+
+      ```cpp
+      long long brute(int x, const vector<int>& c) {
+          if (x == 0) return 0;
+          long long best = 1e18;
+          for (int v : c)
+              if (v <= x) best = min(best, brute(x - v, c) + 1);
+          return best;                              // 1e18 if unreachable
+      }
+      ```
+
+      Time `O(n^(x/min c))`, space `O(x)` stack.
+
+      **② Optimization — bottom-up DP, O(n · x) time, O(x) space**
+
+      ```cpp
+      long long solve(int n, int x, const vector<int>& c) {
+          vector<long long> dp(x + 1, LLONG_MAX / 2);
+          dp[0] = 0;
+          for (int s = 1; s <= x; ++s)
+              for (int v : c)
+                  if (s >= v) dp[s] = min(dp[s], dp[s - v] + 1);
+          return dp[x] >= LLONG_MAX / 2 ? -1 : dp[x];
+      }
+      ```
+
+      Time `O(n · x)`, space `O(x)`. With `n ≤ 100`, `x ≤ 10^6` that is ≈ `10^8`
+      inner steps — fine in C++ within the 1 s limit.
+
+      **③ Further optimization — none needed**
+
+      We must examine every coin for every reachable sum up to `x`, so `Ω(n·x)`
+      is a natural floor and the `②` solution is the intended one. (If memory
+      were a concern the dp array is already just size `x+1`.)
+
+      **④ Greedy is WRONG — a cautionary alternative**
+
+      "Always take the largest coin that fits" is `O(x)` and looks tempting, but
+      it is **not** correct for arbitrary denominations. Counterexample: coins
+      `{1, 5, 7}`, target `11`. Greedy: `7 → 1 → 1 → 1 → 1` = **5** coins;
+      optimal is `5 + 5 + 1` = **3** coins. Always reach for DP for the min,
+      unless the denominations are *canonical* (and you can argue why).
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the `②` bottom-up solution:
+
+      - `dp` is sized `x+1` and initialised to a large "infinity"
+        (`LLONG_MAX / 2` — big enough that `+1` never overflows).
+      - `dp[0] = 0`: making sum `0` needs zero coins.
+      - The outer loop runs `s = 1 … x` **in increasing order**, so every
+        `dp[s-v]` used on the right is already finalised. This is why bottom-up
+        avoids recomputation.
+      - For each coin `v`, `dp[s-v] + 1` is the coin count if we finish the sum
+        `s` with one copy of `v`; `min` keeps the best across all coins.
+      - Because coins are unlimited, reusing `v` as many times as needed is
+        automatic — `dp[s-v]` may itself contain `v`.
+      - At the end, if `dp[x]` never left its initialised infinity, print `-1`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(3, 11, [1, 5, 7])` on the sample. We fill `dp[0..11]`; only
+      reaching states are shown:
+
+      | s | dp[s] (how) |
+      |---|-------------|
+      | 0 | 0 |
+      | 1 | 1 (1) |
+      | 2 | 2 (1+1) |
+      | 3 | 3 (1+1+1) |
+      | 4 | 4 (1+1+1+1) |
+      | 5 | 1 (5) |
+      | 6 | 2 (5+1) |
+      | 7 | 1 (7) |
+      | 8 | 2 (7+1) |
+      | 9 | 3 (7+1+1) |
+      | 10 | 2 (5+5) |
+      | 11 | **3** (5+5+1) |
+
+      `dp[11] = dp[6] + 1 = 2 + 1 = 3`, matching the sample output. (Greedy
+      would reach `dp[11] = 5` via `7+1+1+1+1`, which is why we never rely on
+      it.)
+  - type: mcq
+    prompt: 'For minimising the number of coins, why does the greedy "always take the largest coin" fail, forcing a DP?'
+    options:
+      - 'Because taking a large coin now can force many small coins later, and a smaller-but-smart choice can win overall; e.g. coins {1,5,7}, target 11 gives greedy 5 coins but optimal 3 (5+5+1).'
+      - 'Because greedy only works when all coins have value 1.'
+      - 'Because the weights are decimal and greedy is for integers only.'
+      - 'Because the DP table is not sorted.'
+    answer: 0
+    explanation: 'Greedy is myopic: it optimises the current step, not the total. The counterexample {1,5,7} / 11 shows a locally larger coin (7) leading to a globally worse answer than two 5s. Minimisation over reachable sums needs a DP (or BFS) over all states, where greedy is optimal only for special "canonical" coin systems.'
+type: content
+---

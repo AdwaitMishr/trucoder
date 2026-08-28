@@ -1,0 +1,331 @@
+---
+id: counting-paths
+title: Counting Paths
+difficulty: medium
+order: 152
+tags:
+  - tree
+  - lca
+  - difference-array
+  - subtree-sum
+  - euler-tour
+blocks:
+  - type: markdown
+    content: |
+      # Counting Paths — count how many of m paths pass through each node
+
+      You have a tree of `n` nodes and `m` (possibly overlapping) paths. For
+      every node, you must compute how many of those `m` paths pass through it.
+
+      **The technique: tree difference, resolved by subtree sums.** This is the
+      same idea as a prefix/difference array on a line, transplanted onto a
+      tree. Instead of incrementing every node on each path (too slow), you
+      record path *endpoint* changes that, after summing, reproduce the path's
+      effect on the nodes it covers.
+
+      For a path `a → b`, with `c = LCA(a,b)`, add to a difference array `diff`:
+
+      ```
+      diff[a] += 1
+      diff[b] += 1
+      diff[c] -= 1
+      diff[ parent(c) ] -= 1      (skip for the root)
+      ```
+
+      Then the answer for a node `v` is the **sum of `diff` over the subtree of
+      `v`**. Intuitively: `diff` at a node "sends" its value up to all its
+      ancestors when you sum a subtree. Tracing a single path `a → b`:
+      - Nodes on the `a`-side of the path (from `a` up to `c`, including `a`)
+        lie in `a`'s subtree, so `diff[a] += 1` reaches them.
+      - Nodes on the `b`-side are reached by `diff[b] += 1`.
+      - The LCA `c` is in *both* `a`'s and `b`'s subtrees, so it would count
+        twice — hence `diff[c] -= 1` removes the overlap.
+      - Everything strictly above the path (nodes between the LCA and the root)
+        shouldn't count; `diff[parent(c)] -= 1` subtracts the two `+1`s that
+        would otherwise leak up through `c`, because those ancestors are in
+        `a`'s subtree AND `b`'s subtree, getting `+2` which becomes `0` after
+        `-1 -1`... in the sense that only the path's own nodes survive.
+
+      **Subtree sums.** Since there are no updates between paths, one post-order
+      DFS is enough: `result[u] = diff[u] + sum(result[child])`. This
+      accumulates every node's difference up to its ancestors.
+
+      **Complexity.** LCA precompute **O(n log n)**; each path **O(log n)**;
+      the subtree-sum sweep **O(n)**. Total **O((n + m) log n)** time,
+      **O(n log n)** space.
+
+      :::tip
+      **Interview tip:** tree difference is the classic answer to "how many
+      routes/queries touch each node or edge?" It powers telemetry dashboards
+      ("requests through this server"), route counting, and range stuff on
+      trees. The `at[a]++, at[b]++, at[lca]--, at[parent(lca)]--` pattern is
+      widely known; recognize the phrasing "count paths by node" and reach for
+      it immediately.
+      :::
+  - type: markdown
+    content: |
+      # Question — Counting Paths
+
+      You are given a tree consisting of `n` nodes, and `m` paths in the tree.
+
+      Your task is to calculate **for each node the number of paths containing
+      that node**.
+
+      **Constraints**
+
+      - `1 ≤ n, m ≤ 2·10^5`
+      - `1 ≤ a, b ≤ n`
+
+      **Input.** Line 1: `n m`. Then `n-1` lines describing the tree edges
+      (each `a b`: an edge between `a` and `b`). Then `m` lines, each `a b` —
+      a path.
+
+      **Output.** Print `n` integers (the count for nodes `1..n`), on one line.
+
+      Time limit 1.00 s, memory 512 MB.
+
+      Sample input:
+
+      ```
+      5 3
+      1 2
+      1 3
+      3 4
+      3 5
+      1 3
+      2 5
+      1 4
+      ```
+
+      Sample output:
+
+      ```
+      3 1 3 1 1
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — mark every node on every path, O(n) per path**
+
+      For each of the `m` paths, walk from `a` up to the LCA and down to `b`,
+      incrementing a counter on every visited node. Cost is proportional to path
+      length, up to `O(n)` per path.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<int>> g(n + 1);
+          for(int i = 0; i < n - 1; i++){ int a, b; cin >> a >> b; g[a].push_back(b); g[b].push_back(a); }
+          vector<int> par(n + 1), depth(n + 1);
+          function<void(int,int,int)> dfs = [&](int u, int p, int pr){
+              par[u] = pr;
+              for(int v : g[u]) if(v != p){ depth[v] = depth[u] + 1; dfs(v, u, u); }
+          };
+          dfs(1, 0, 0);
+          vector<long long> cnt(n + 1, 0);
+          while(m--){
+              int a, b; cin >> a >> b;
+              // bring to equal depth, then climb together, incrementing along the way
+              int x = a, y = b;
+              while(depth[x] > depth[y]){ cnt[x]++; x = par[x]; }
+              while(depth[y] > depth[x]){ cnt[y]++; y = par[y]; }
+              while(x != y){ cnt[x]++; cnt[y]++; x = par[x]; y = par[y]; }
+              cnt[x]++;   // the LCA node
+          }
+          for(int i = 1; i <= n; i++){ cout << cnt[i]; if(i < n) cout << " "; }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n) per path, O(nm) overall** — with `2·10^5` paths on a chain that is
+      ~`4·10^10` increments. Too slow.
+
+      **② Optimization — tree difference + subtree sums, O((n + m) log n) (submission)**
+
+      Record the four endpoint deltas per path (needs LCA), then resolve every
+      node's value as the sum of `diff` over its subtree in one post-order pass.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<int>> g(n + 1);
+          for(int i = 0; i < n - 1; i++){ int a, b; cin >> a >> b; g[a].push_back(b); g[b].push_back(a); }
+          int LOGN = 1; while((1 << LOGN) <= n) LOGN++;
+          vector<vector<int>> up(LOGN, vector<int>(n + 1));
+          vector<int> depth(n + 1, 0);
+          function<void(int,int)> dfs = [&](int u, int p){
+              up[0][u] = p;
+              for(int v : g[u]) if(v != p){ depth[v] = depth[u] + 1; dfs(v, u); }
+          };
+          dfs(1, 1);
+          for(int k = 1; k < LOGN; k++)
+              for(int i = 1; i <= n; i++) up[k][i] = up[k-1][ up[k-1][i] ];
+          auto lca = [&](int a, int b){
+              if(depth[a] < depth[b]) swap(a, b);
+              int diff = depth[a] - depth[b];
+              for(int k = 0; k < LOGN; k++) if(diff & (1 << k)) a = up[k][a];
+              if(a == b) return a;
+              for(int k = LOGN - 1; k >= 0; k--)
+                  if(up[k][a] != up[k][b]){ a = up[k][a]; b = up[k][b]; }
+              return up[0][a];
+          };
+          vector<long long> diff(n + 1, 0);
+          for(int i = 0; i < m; i++){
+              int a, b; cin >> a >> b;
+              int c = lca(a, b);
+              diff[a]++; diff[b]++;
+              diff[c]--; if(up[0][c] != c) diff[up[0][c]]--;
+          }
+          // accumulate subtree sums: process deeper nodes first, push value to parent
+          vector<int> order(n);
+          iota(order.begin(), order.end(), 1);
+          sort(order.begin(), order.end(), [&](int x, int y){ return depth[x] > depth[y]; });
+          for(int u : order){ if(u == 1) continue; diff[up[0][u]] += diff[u]; }
+          for(int i = 1; i <= n; i++){ cout << diff[i]; if(i < n) cout << " "; }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n log n)** precompute + **O(m log n)** for LCAs + **O(n log n)**
+      (sorting) for the sweep — well under the limit. This is the submission
+      tier.
+
+      **③ Alternative — same differencing, subtree sums via Euler tour + Fenwick**
+
+      Flatten the tree (Euler `tin`/`tout` makes each subtree a contiguous
+      range), then accumulate `diff` into a Fenwick tree range-query. The result
+      is `sum(diff)` over `[tin[v], tout[v]]`. It costs an extra `O(n log n)`
+      but generalizes: if paths arrived one at a time (online), you could maintain
+      a running answer with updates instead of one static sweep.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<int>> g(n + 1);
+          for(int i = 0; i < n - 1; i++){ int a, b; cin >> a >> b; g[a].push_back(b); g[b].push_back(a); }
+          int LOGN = 1; while((1 << LOGN) <= n) LOGN++;
+          vector<vector<int>> up(LOGN, vector<int>(n + 1));
+          vector<int> depth(n + 1, 0), tin(n + 1), tout(n + 1);
+          int timer = 0;
+          function<void(int,int)> dfs = [&](int u, int p){
+              up[0][u] = p; tin[u] = ++timer;
+              for(int v : g[u]) if(v != p){ depth[v] = depth[u] + 1; dfs(v, u); }
+              tout[u] = timer;
+          };
+          dfs(1, 1);
+          for(int k = 1; k < LOGN; k++)
+              for(int i = 1; i <= n; i++) up[k][i] = up[k-1][ up[k-1][i] ];
+          auto lca = [&](int a, int b){
+              if(depth[a] < depth[b]) swap(a, b);
+              int d = depth[a] - depth[b];
+              for(int k = 0; k < LOGN; k++) if(d & (1 << k)) a = up[k][a];
+              if(a == b) return a;
+              for(int k = LOGN - 1; k >= 0; k--)
+                  if(up[k][a] != up[k][b]){ a = up[k][a]; b = up[k][b]; }
+              return up[0][a];
+          };
+          vector<long long> tree(n + 2, 0);   // Fenwick
+          auto add = [&](int i, long long v){ for(; i <= n; i += i & -i) tree[i] += v; };
+          auto sum = [&](int i){ long long s = 0; for(; i > 0; i -= i & -i) s += tree[i]; return s; };
+          for(int i = 0; i < m; i++){
+              int a, b; cin >> a >> b;
+              int c = lca(a, b);
+              add(tin[a], 1); add(tin[b], 1);
+              add(tin[c], -1); if(up[0][c] != c) add(tin[up[0][c]], -1);
+          }
+          for(int i = 1; i <= n; i++){ cout << sum(tout[i]) - sum(tin[i] - 1); if(i < n) cout << " "; }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **O((n + m) log n)**. The static post-order sweep of tier ② is simpler
+      and optimal here; this Euler+Fenwick variant is the stepping stone to the
+      online subtree and path query problems that follow.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      Tier ② has three phases:
+
+      - **Lift the endpoints.** For each path `(a,b)`, `lca` gives `c`. Then
+        `diff[a]++` and `diff[b]++` "plant" one unit at each end; `diff[c]--`
+        cancels the double count at the LCA; `diff[up[0][c]]--` (skipped for the
+        root, whose parent is itself) stops the two units from leaking up to
+        ancestors above the path.
+      - **Subtree accumulation.** A node's final count equals the sum of `diff`
+        over its whole subtree. Sorting nodes by decreasing depth and pushing
+        each node's accumulated value up to its parent implements exactly that:
+        children finish before the parent is updated.
+      - **Output order.** The answer is printed per node `1..n` on one line, as
+        the sample shows.
+
+      The root `1` deliberately has `up[0][1] = 1`, so `up[0][c] != c` is false
+      for it and the parent-delta line correctly does nothing.
+
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):**
+
+      ```
+      5 3
+      1 2
+      1 3
+      3 4
+      3 5
+      1 3
+      2 5
+      1 4
+      ```
+
+      Tree: root `1`; children `2`, `3`; `3` has children `4`, `5`.
+
+      **Differences for the three paths** (root's own `up[0]=1` so no parent-drop):
+
+      | path | lca | diff updates |
+      |------|-----|--------------|
+      | 1–3 | 1 | diff[1]+1, diff[3]+1, diff[1]−1 → diff[1]=0, diff[3]=1 |
+      | 2–5 | 1 | diff[2]+1, diff[5]+1, diff[1]−1 → diff[2]=1, diff[5]=1, diff[1]=−1 |
+      | 1–4 | 1 | diff[1]+1, diff[4]+1, diff[1]−1 → diff[1]=−1, diff[4]=1 |
+
+      Net `diff`: `diff[1]=-1, diff[2]=1, diff[3]=1, diff[4]=1, diff[5]=1`.
+
+      **Subtree accumulation (post-order, deepest first):**
+
+      | node | subtree diff sum | result |
+      |------|------------------|--------|
+      | 5 | 1 | 1 |
+      | 4 | 1 | 1 |
+      | 2 | 1 | 1 |
+      | 3 | 1 + 1(4) + 1(5) = 3 | 3 |
+      | 1 | -1 + 1(2) + 3(3) = 3 | 3 |
+
+      Output: **3 1 3 1 1** — matches the sample. **Expected — actual: match.**
+
+      (Manual check: path 1–3 → nodes {1,3}; 2–5 → {2,1,3,5}; 1–4 → {1,3,4};
+      counts: node1=3, node2=1, node3=3, node4=1, node5=1.)
+  - type: mcq
+    prompt: 'For a single path a → b with lca c, why must the difference be diff[a]++, diff[b]++, diff[c]--, diff[parent(c)]-- instead of only diff[a] and diff[b]?'
+    options:
+      - Because diff[c]-- cancels the double count of the LCA (it lies in both a's and b's subtrees), and diff[parent(c)]-- stops the two +1s from leaking to ancestors above the path
+      - Because diff[c] and diff[parent(c)] must also be incremented, not decremented
+      - Because the LCA can never lie on the path
+      - Because we need diff at the two leaves only, never near the LCA
+    answer: 0
+    explanation: When each answer is the subtree sum of diff, a +1 at the endpoint `a` reaches every node on the a-side of the path as ancestor of `a`; the +1 at `b` likewise reaches the b-side. The LCA is an ancestor of both ends, so it would be counted twice — diff[c]-- removes one count. Ancestors *above* the LCA are ancestors of both ends too, so they would also get +2 and leak past the path; diff[parent(c)]-- cancels that so only the path's own nodes (≤ c) keep a positive count. This is what makes each node's subtree-sum of diff equal exactly "number of paths through it."
+type: content
+---

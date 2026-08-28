@@ -1,0 +1,231 @@
+---
+id: tree-isomorphism-i
+title: "Tree Isomorphism I"
+type: content
+difficulty: medium
+order: 311
+tags:
+  - advanced-graph
+  - tree
+  - canonical-form
+  - ahu
+blocks:
+  - type: markdown
+    content: |
+      # Tree Isomorphism I — are two rooted trees the same shape?
+
+      Two rooted trees are **isomorphic** if they can be relabelled so that the edge
+      structure (and the root) matches: they "look the same". We must decide this for
+      pairs of rooted trees.
+
+      ## Canonical form: the AHU algorithm
+
+      Give every rooted tree a *canonical name* — a string that is identical for two trees
+      exactly when they are isomorphic. Computing it bottom‑up is the heart of the idea:
+
+      - A **leaf** has canonical name `()`.
+      - An **internal node** `u` whose children have canonical names `n1, n2, …` is named
+        `"(" + sorted(n1, n2, …) + ")"`.
+
+      Sorting the children's names makes the name independent of sibling order, which is
+      exactly what "isomorphic rooted tree" means. Two poly-noded trees are isomorphic iff
+      their **root** names are equal.
+
+      Because full strings can be quadratic in size, we replace each distinct canonical
+      name by a small **rank**: process nodes in post-order, form the sorted list of
+      children's ranks, and map that list to a fresh integer via a dictionary. This is the
+      AHU (Aho–Hopcroft–Ullman) canonicalization, deterministic and `O(n log n)`.
+
+      :::tip
+      **Interview tip:** substring-hash style tree hashing is the frequent shortcut, but it
+      is probabilistic. AHU's perfect "canonical rank via a dictionary over sorted child
+      ranks" is the rigorous version interviewers respect — state, *"sort the children's
+      canonical names and assign each distinct tuple an id"*, and you immediately get exact,
+      collision-free isomorphism, also for unrooted trees after picking a center.
+      :::
+  - type: markdown
+    content: |
+      # Question — Tree Isomorphism I
+
+      Given two **rooted** trees, find out if they are isomorphic, i.e. it is possible to
+      draw them so that they look the same.
+
+      **Input**
+
+      The first input line has an integer `t`: the number of tests. Then, there are `t`
+      tests described as follows:
+
+      The first line has an integer `n`: the number of nodes in both trees. The nodes are
+      numbered `1, 2, ..., n`, and node `1` is the root.
+
+      Then, there are `n-1` lines describing the edges of the first tree, and finally
+      `n-1` lines describing the edges of the second tree.
+
+      **Output**
+
+      For each test, print `"YES"` if the trees are isomorphic, and `"NO"` otherwise.
+
+      **Constraints**
+
+      - `1 <= t <= 1000`
+      - `2 <= n <= 10^5`
+      - the sum of all values of `n` is at most `10^5`
+
+      **Example**
+
+      Input:
+
+      ```
+      2
+      3
+      1 2
+      2 3
+      1 2
+      1 3
+      3
+      1 2
+      2 3
+      1 3
+      3 2
+      ```
+
+      Output:
+
+      ```
+      NO
+      YES
+      ```
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      **① Brute force — try every relabelling, exponential**
+
+      Enumerate bijections of the nodes and check edge sets, or try every permutation of
+      each node's children. `n` up to `10^5` — hopeless.
+
+      ```cpp
+      // 2^(n-1)-ish relabellings — illustration of the naive idea only.
+      ```
+
+      **② Optimization — AHU canonical ranks, O(n log n) per test**
+
+      Root at `1`, compute post-order, assign each node a rank from the sorted list of its
+      children's ranks using a shared dictionary; roots are isomorphic iff their ranks equal.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      map<vector<int>,int> dict;   // canonical tuple -> rank (shared across the 2 trees)
+
+      vector<vector<int>> readTree(int n){
+        vector<vector<int>> g(n+1);
+        for(int i=0;i<n-1;i++){ int a,b;cin>>a>>b; g[a].push_back(b); g[b].push_back(a); }
+        return g;
+      }
+
+      int encode(int n, const vector<vector<int>>& g, int root){
+        vector<int> par(n+1,0), order; order.reserve(n);
+        vector<char> vis(n+1,0); vis[root]=1;
+        vector<int> stk; stk.push_back(root);
+        while(!stk.empty()){
+          int u=stk.back(); stk.pop_back(); order.push_back(u);
+          for(int v:g[u]) if(!vis[v]){ vis[v]=1; par[v]=u; stk.push_back(v); }
+        }
+        vector<int> rank(n+1,0);
+        for(int i=order.size()-1;i>=0;i--){
+          int u=order[i], r;
+          vector<int> kids;
+          for(int v:g[u]) if(v!=par[u]) kids.push_back(rank[v]);
+          sort(kids.begin(), kids.end());
+          auto it=dict.find(kids);
+          if(it==dict.end()){ r=dict.size(); dict.emplace(kids, r); } // fresh canonical rank
+          else r=it->second;
+          rank[u]=r;
+        }
+        return rank[root];
+      }
+
+      int main(){
+        ios::sync_with_stdio(false); cin.tie(nullptr);
+        int t; cin>>t;
+        while(t--){
+          int n; cin>>n;
+          auto t1=readTree(n);
+          auto t2=readTree(n);
+          int r1=encode(n,t1,1);
+          int r2=encode(n,t2,1);
+          cout << (r1==r2? "YES":"NO") << "\n";
+        }
+        return 0;
+      }
+      ```
+
+      The dictionary is shared between the two trees of a test, so equal shapes receive the
+      same rank and the comparison is exact. Each of the `O(n)` tuples is produced once;
+      sorting each node's child list costs `O(degree · log degree)`, totalling `O(n log n)`.
+
+      **③ Further optimization** — not needed.
+
+      **④ Alternative — polynomial tree hashing**
+
+      Replace the rank dictionary with a numeric hash of the sorted child-hash list (e.g.
+      `h(u) = base + Σ (childh * P + childSize) mod M`). Identical idea, `O(n)`, but
+      probabilistic — a collision is astronomically unlikely yet not impossible; prefer
+      AHU ranks when exactness matters.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Follow the optimal **②** solution:
+
+      - `readTree` builds the adjacency of one tree (nodes `1..n`).
+      - `encode` roots the tree at the given root (here `1`) with an iterative DFS,
+        producing an order and a parent array.
+      - Processing `order` in **reverse** gives post-order (children before parent).
+      - For each node, collect the ranks of its children, sort them — this sorted vector
+        is the node's canonical tuple. A shared `map<vector<int>,int>` assigns each
+        distinct tuple the next integer id.
+      - The root's rank is the tree's canonical id. Compare the two roots.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample test 1: `n = 3`.
+      Tree 1 (root 1): edges `1-2, 2-3` → a chain hanging from the root.
+      Tree 2 (root 1): edges `1-2, 1-3` → the root has two leaves.
+
+      Post-order ranks (shared dictionary):
+      - Leaves get `kids = []` → rank `0`.
+      - Tree 1 node 2 has child 3 (leaf, rank 0) → tuple `[0]` → rank `1`; root 1 has only
+        child 2 (rank 1) → tuple `[1]` → rank `2`.
+      - Tree 2 root 1 has children `{2,3}` both rank `0` → tuple `[0,0]` → a *new* rank
+        `3`.
+
+      Ranks `2 ≠ 3` → **NO**.
+
+      Sample test 2: Tree 1 is the chain `1-2, 2-3`; Tree 2 (root 1) is `1-3, 3-2` — also a
+      chain under the root. Both root ranks are `2` → **YES**. Output `NO` / `YES`.
+  - type: flowchart
+    title: "AHU canonization"
+    nodes: ["root tree at 1", "iterative DFS -> order + parent", "process order in reverse (post-order)",
+            "sort children's ranks", "map tuple -> fresh rank via dictionary", "return root's rank",
+            "compare the two roots' ranks"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: "same dict for both trees"}
+      - {from: 5, to: 6, label: "== => YES"}
+  - type: mcq
+    prompt: "Why is sorting the children's canonical names essential to the AHU test for rooted tree isomorphism?"
+    options:
+      - "Because two rooted trees are isomorphic exactly when, at every node, the multisets of child subtrees are equal; sorting makes the children's order canonical, so identical shapes always produce identical tuples (and thus equal ranks), eliminating the need to try every sibling permutation"
+      - "Because sorting ensures the root is always the largest node"
+      - "Because nodes must be relabelled in increasing dictionary order to be compared"
+      - "Because isomorphism only cares about the number of nodes, not their shape"
+    answer: 0
+    explanation: "A rooted-tree isomorphism can permute the children of any node freely. The root-preserving structure is fixed only up to such sibling permutations. Sorting each node's child canonical names collapses all permutations to one representative tuple, so two trees are isomorphic iff, bottom-up, every node produces the same sorted tuple as the corresponding node in the other tree — and in particular the roots do. Equating trees to the rank of that tuple gives an exact, collision-free test."
+---

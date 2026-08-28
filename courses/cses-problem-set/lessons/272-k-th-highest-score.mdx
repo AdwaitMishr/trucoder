@@ -1,0 +1,255 @@
+---
+id: k-th-highest-score
+title: K-th Highest Score
+type: content
+difficulty: hard
+order: 272
+tags:
+  - interactive
+  - binary-search
+  - unimodal
+  - order-statistic
+blocks:
+  - type: markdown
+    content: |
+      # K-th Highest Score — the k-th largest of a union, by rank queries
+
+      There are `n` coders from Finland and `n` coders from Sweden; all `2n`
+      scores are **distinct**. You must find the **k-th highest score overall**,
+      but you may only ask, for one country at a time, "what is the *i*-th
+      highest score of that country?". You do not get to see either list whole —
+      you only get one scalar answer per query, and you are capped at **100**
+      queries.
+
+      The scoring arrays are individually **sorted descending**: if `f_i` is the
+      i-th highest Finland score then `f_1 ≥ f_2 ≥ … ≥ f_n`, and likewise `s`.
+      That monotonicity is the entire engine of the solution.
+
+      ## The high-level idea
+
+      Say the top `k` scores overall are chosen. They can be described by a
+      single number: how many of the top `k` come from Finland. If Finland
+      supplies `i` of them, Sweden supplies exactly `k − i`. Because both lists
+      are sorted, Finland's contribution is its top `i` scores `f_1..f_i` and
+      Sweden's is its top `k−i` scores `s_1..s_{k−i}`. The k-th highest overall
+      is then the smaller of the two cut-offs:
+
+      ```
+      F(i) = min(f_i, s_{k−i})
+      ```
+
+      (with the pure-Finland `i = k` and pure-Sweden `i = 0` boundary cases
+      handled by taking the single list's cut-off). The answer is the maximum
+      `F(i)` over all valid `i` — that is the biggest threshold with at least
+      `k` scores at or above it.
+
+      `F(i)` is **unimodal**: as `i` grows, `f_i` drops and `s_{k−i}` rises, so
+      `min(f_i, s_{k−i})` climbs while the (smaller) *increasing* arm is in
+      charge and falls once the decreasing arm takes over. A unimodal function
+      is findable by a hill-climbing **peak binary search** in
+      `O(log n)` *evaluations*, and each evaluation is just **2 queries**. That
+      is the whole trick: `≈ 2 log₂ n ≤ 40` queries is comfortably inside the
+      cap even for `n = 10^5`.
+
+      :::tip
+      **Interview tip:** "two sorted lists, find the k-th largest, but each
+      list can only be accessed by rank" is a recurring interactive / decision
+      variant of the classic merge problem. The pattern — parameterise by *how
+      many of the top k come from each side* (`i` and `k−i`), express the answer
+      as `min` of the two cut-offs, notice it is unimodal, and binary-search the
+      peak — is very reusable. In interviews, name the "which `i` splits the top
+      k" parameter explicitly; interviewers listen for that framing more than
+      for the final code.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There were `n` coders from Finland and `n` coders from Sweden in a
+      programming contest. It turned out that after the contest, each coder had
+      a **distinct** score.
+
+      Your task is to find the **k-th highest score** in the contest.
+
+      To do this, you can ask questions: choose a country (Finland or Sweden)
+      and an integer `i` and you will be told the i-th highest score of that
+      country.
+
+      ## Interaction
+
+      This is an interactive problem. Your code will interact with the grader
+      using standard input and output. You should start by reading two integers
+      `n` and `k`.
+
+      On your turn, you can print one of the following:
+
+      - `F i`, where `1 <= i <= n`: ask the i-th highest score for Finland.
+      - `S i`, where `1 <= i <= n`: ask the i-th highest score for Sweden.
+      - `! s`: report that the k-th highest score is `s`. Your program must
+        terminate after this.
+
+      Each line should be followed by a line break. You must make sure the output
+      gets flushed after printing each line.
+
+      ## Constraints
+
+      - `1 <= n <= 10^5`
+      - `1 <= k <= 2n`
+      - each score is between `1` and `10^9`
+      - you can ask **at most `100` queries** of the first two types in total
+
+      ## Sample
+
+      **Input:**
+      ```
+      3 1
+      F 1
+      9
+      S 1
+      8
+      ! 9
+      ```
+      **Explanation:** the scores for Finland are `[9, 4, 3]` and the scores
+      for Sweden are `[8, 6, 1]`. Since `k = 1`, the task is to find the highest
+      score overall, which in this case is `9`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — read every score, O(2n) queries (NOT allowed)**
+
+      Query `F i` and `S i` for every `i` from `1` to `n`, collect both lists,
+      sort the union, and read off the k-th largest. Perfectly correct, but uses
+      `2n` queries — for `n = 10^5` that is `2·10^5`, over two thousand times
+      the `100`-query cap.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          ll n,k; cin>>n>>k;
+          vector<ll> a;
+          for(int i=1;i<=n;i++){ cout<<"F "<<i<<"\n"; cout.flush(); ll x; cin>>x; a.push_back(x); }
+          for(int i=1;i<=n;i++){ cout<<"S "<<i<<"\n"; cout.flush(); ll x; cin>>x; a.push_back(x); }
+          sort(a.rbegin(), a.rend());
+          cout<<"! "<<a[k-1]<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(2n)` queries — the answer is right but the query count is illegal.*
+
+      **② Optimization — unimodal peak binary search, O(log n) queries (optimal)**
+
+      Parameterise the answer by `i` (Finland's share of the top `k`): the
+      candidate threshold is `F(i) = i==0 ? s_k : (k−i==0 ? f_i :
+      min(f_i, s_{k−i}))`. This function is unimodal on the valid range, so a
+      peak binary search evaluates only `O(log n)` indices, each costing 2
+      queries. This is the tier we compile and verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      ll n, k;
+      unordered_map<int,ll> mf, ms;                 // cache: avoid asking twice
+
+      ll askF(int i){                                // i-th highest, Finland
+          if(mf.count(i)) return mf[i];
+          cout<<"F "<<i<<"\n"; cout.flush();
+          ll x; cin>>x; return mf[i]=x;
+      }
+      ll askS(int i){                                // i-th highest, Sweden
+          if(ms.count(i)) return ms[i];
+          cout<<"S "<<i<<"\n"; cout.flush();
+          ll x; cin>>x; return ms[i]=x;
+      }
+      ll F(int i){                                   // candidate k-th score
+          if(i==0)      return askS((int)k);         //   pure Sweden
+          if((int)k-i==0) return askF(i);            //   pure Finland
+          return min(askF(i), askS((int)k-i));       //   mixed: min of cut-offs
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          cin>>n>>k;
+
+          int lo = (int)max(0LL, k-n);               // Finland needs <= n, Sweden <= n
+          int hi = (int)min(k, n);
+
+          while(lo < hi){                            // climb to the unimodal peak
+              int mid = (lo+hi)/2;
+              if(F(mid) <= F(mid+1)) lo = mid+1; else hi = mid;
+          }
+          cout<<"! "<<F(lo)<<"\n";
+          return 0;
+      }
+      ```
+
+      *`≈ 2 log₂ n` queries (≤ about 70 even at `n = 10^5`), `O(log n)` memory.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`i` is the number of Finland scores inside the top `k`.** The only free
+        choice is how to split the top `k` between the two countries. If `i` come
+        from Finland, exactly `k−i` come from Sweden; both numbers must lie in
+        `[0, n]`, which is exactly the `lo..hi` range.
+      - **`min(f_i, s_{k−i})` is the cut-off.** The top-`k` set contains `f_1..f_i`
+        and `s_1..s_{k−i}` (both lists sorted), so the smallest score in that set
+        — the k-th overall — is `min(f_i, s_{k−i})`. The pure cases `i=0`, `i=k`
+        collapse to one list.
+      - **Unimodal ⇒ binary-searchable.** `min` of a non-increasing `f_i` and a
+        non-decreasing `s_{k−i}` first rises, peaks where the two arms cross, then
+        falls. The `while` loop repeatedly compares `F(mid)` with `F(mid+1)` and
+        moves toward the higher side — the standard discrete peak search.
+      - **Query once, cache forever.** `mf`/`ms` remember every asked rank so the
+        peak search (which re-probes overlapping indices) never wastes a query.
+      - **Flush every line.** Each `F`/`S` line is flushed so the judge sees it;
+        the final `!` answer ends the conversation.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 3`, `k = 1`. Finland `f = [9,4,3]`, Sweden `s = [8,6,1]`.
+
+      Valid range: `lo = max(0, 1−3) = 0`, `hi = min(1, 3) = 1`.
+
+      - `F(0) = s_1 = 8` (pure Sweden, one query `S 1`).
+      - `F(1) = f_1 = 9` (pure Finland, one query `F 1`).
+      - Peak search: compare `F(0) = 8` vs `F(1) = 9` → `8 ≤ 9`, so `lo = 1`.
+        Range is now `[1,1]`; the peak is at `i = 1`.
+
+      Answer:
+
+      ```
+      ! 9
+      ```
+
+      Expected (sample) `9` — **match**. Intuition: with `k=1` you just need the
+      single largest score; Finland's top score `9` beats Sweden's top `8`, so
+      `i = 1` (Finland supplies the whole top-1) is the winning split. Only 2
+      queries were needed.
+  - type: flowchart
+    title: "K-th Highest Score via unimodal peak binary search"
+    nodes: ["read n, k", "valid split range i in [max(0,k-n), min(k,n)]", "F(i) = min(f_i, s_{k-i}), edges pure", "F is unimodal in i", "peak binary search on F", "each check = 2 cached queries", "report '!' + F(peak)"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6}
+  - type: mcq
+    prompt: "Why is F(i) = min(f_i, s_{k-i}) the right expression for the k-th highest score?"
+    options:
+      - "Because the average of f_i and s_{k-i} always equals the k-th largest of the union."
+      - "If Finland contributes i of the top k scores and Sweden k-i, those are exactly the i highest of Finland and k-i highest of Sweden (both lists are sorted descending), so the smallest score in that chosen set is min(f_i, s_{k-i}); maximizing it over valid i yields the largest achievable k-th threshold."
+      - "Because min is cheaper than max, so the judge answers faster."
+      - "The k-th highest is always max(f_k, s_k), independent of i."
+    answer: 1
+    explanation: "With both lists sorted descending, the top i Finland scores are f_1..f_i and the top k-i Sweden scores are s_1..s_{k-i}. The chosen top-k set's minimum is min(f_i, s_{k-i}), and that minimum is exactly the k-th highest. Maximizing this over the split i (equivalently, finding the biggest value with at least k scores at or above it) gives the true k-th order statistic of the union. The function is unimodal in i, which is what lets a peak binary search solve it within the query cap."
+---

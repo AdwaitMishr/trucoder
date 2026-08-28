@@ -1,0 +1,232 @@
+---
+id: creating-strings-ii
+title: Creating Strings II
+difficulty: easy
+order: 171
+tags:
+  - math
+  - combinatorics
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — permutations of a multiset (the multinomial coefficient)
+
+      If all characters of a string were distinct, the number of arrangements would be
+      `n!`. When characters **repeat**, swapping two identical letters does not create a
+      new string, so those `n!` orderings over-count.
+
+      If character `c` appears `f_c` times, its `f_c!` internal arrangements all collapse
+      into one. By the same reasoning for every repeated character, the count of distinct
+      strings is the **multinomial coefficient**
+
+      ```
+      n! / (f_1! · f_2! · … · f_Σ!)
+      ```
+
+      Computed mod `10^9+7` (a prime) with factorials and modular inverses:
+
+      ```
+      answer = fact[n] · ∏_c invfact[f_c]   (mod p)
+      ```
+
+      Precompute `fact[0..n]` and `invfact` once, then multiply in each character's
+      `invfact[f_c]`. Since there are only `26` letters, the loop over characters is
+      constant-size.
+
+      **Time complexity:** `O(n + 26)` time, `O(n)` space — easily handles `n = 10^6`.
+
+      :::tip
+      **Interview tip:** "how many distinct arrangements of a string with repeats" is the
+      multinomial coefficient — `n!` divided by the product of each letter's factorial.
+      It is the same `fact`/`invfact` machinery as `nCr`; recognising "multiset of size n"
+      tells you to reach for `n! / ∏ f_c!`. Also remember this as `C(n, f_a)·C(n−f_a, f_b)·…`,
+      which is exactly equivalent.
+      :::
+  - type: markdown
+    content: |
+      ## Question
+
+      Your task is to calculate the number of different strings that can be created
+      using the characters of a given string.
+
+      **Input**
+
+      The only input line has a string `s` of length `n`.
+
+      **Output**
+
+      Print the number of different strings with the characters of `s` modulo `10^9+7`.
+
+      **Constraints**
+
+      - `1 <= n <= 10^6`
+      - `s` consists of lowercase English letters `a…z`
+
+      **Example**
+
+      Input:
+
+      ```
+      aab
+      ```
+
+      Output:
+
+      ```
+      3
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n! · n) time, O(n!) space (generate and dedupe permutations).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          string s; cin >> s;
+          sort(s.begin(), s.end());
+          set<string> seen;
+          do { seen.insert(s); } while (next_permutation(s.begin(), s.end()));
+          cout << (ll)seen.size() % MOD << "\n";
+          return 0;
+      }
+      ```
+
+      Enumerate every permutation with `next_permutation` and throw them into a `set` to
+      dedupe. Correct, but there are `n!` permutations; even `n = 20` is ~`2.4·10^18`,
+      and `n = 10^6` is impossible. It only runs on the toy example.
+
+      **② Optimization — O(n + 26) time, O(n) space (multinomial coefficient via fact/invfact).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+
+      ll modpow(ll a, ll e) {
+          ll r = 1; a %= MOD;
+          while (e) { if (e & 1) r = r * a % MOD; a = a * a % MOD; e >>= 1; }
+          return r;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          string s; cin >> s;
+          int n = (int)s.size();
+
+          vector<ll> fact(n + 1);
+          fact[0] = 1;
+          for (int i = 1; i <= n; i++) fact[i] = fact[i - 1] * i % MOD;
+
+          int cnt[26] = {};
+          for (char c : s) cnt[c - 'a']++;
+
+          ll ans = fact[n];                       // n! for a fully-distinct multiset
+          for (int i = 0; i < 26; i++)
+              if (cnt[i])
+                  ans = ans * modpow(fact[cnt[i]], MOD - 2) % MOD;  // divide by f_c!
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      Count how often each letter occurs, build `fact`, then start from `n!` and divide
+      out each `f_c!` via Fermat inverses (`a^(p−2) mod p`, valid because `p` is prime and
+      `f_c ≤ n < p`). A single `O(n)` pass plus 26 inverses — the intended solution.
+
+      **③ Further optimization — not needed.**
+
+      `O(n + 26)` is already optimal (you must read the whole string and count its
+      letters). The only consideration is the modular inverse cost: 26 Fermat
+      exponentiations here, or one combined inverse as in ④ — both comfortably under the
+      limit for `n = 10^6`.
+
+      **④ Alternative algorithm — O(n + 26) time, O(n) space (single combined denominator inverse).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+
+      ll modpow(ll a, ll e) {
+          ll r = 1; a %= MOD;
+          while (e) { if (e & 1) r = r * a % MOD; a = a * a % MOD; e >>= 1; }
+          return r;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          string s; cin >> s;
+          int n = (int)s.size();
+          vector<ll> fact(n + 1);
+          fact[0] = 1;
+          for (int i = 1; i <= n; i++) fact[i] = fact[i - 1] * i % MOD;
+
+          int cnt[26] = {};
+          for (char c : s) cnt[c - 'a']++;
+
+          ll denom = 1;
+          for (int i = 0; i < 26; i++) denom = denom * fact[cnt[i]] % MOD;
+          ll ans = fact[n] * modpow(denom, MOD - 2) % MOD;   // n! / (∏ f_c!)
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      Instead of dividing out each `f_c!` with its own inverse, form the **whole
+      denominator** `∏ f_c!` and invert it once. Mathematically identical to ② — the same
+      multinomial numerator divided by the same denominator — with a single
+      exponentiation and a marginally smaller constant.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The program implements the multinomial formula directly:
+
+      1. **Count letters.** `cnt[c−'a']` records how many times each letter appears.
+      2. **Precompute `fact`.** `fact[i] = i! mod p`, which will index both the numerator
+         `fact[n]` and each `fact[cnt[i]]` in the denominator.
+      3. **Divide out repeats.** Starting from `fact[n]`, multiply by `inv(fact[cnt[i]])`
+         for every letter that appears — removing the `f_c!` over-counts. Fermat's inverse
+         `a^(p−2)` is the modular division, safe because `p` is prime and every `f_c! < p`.
+
+      The result is the number of distinct orderings of the given multiset of characters,
+      exact for `n < p = 10^9+7`. All multiplications stay `< p² ≈ 10^18`, inside
+      `long long`.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      Trace the sample `s = "aab"` (expected `3`):
+
+      - `n = 3`, `fact = [1, 1, 2, 6]`.
+      - Counts: `a: 2`, `b: 1`.
+      - `ans = fact[3] = 6` (all 3! orderings).
+      - Divide by `fact[2] = 2`: `6 · inv(2) = 3`.
+      - Divide by `fact[1] = 1`: unchanged, `3`.
+
+      Output `3`, matching the sample. Indeed the distinct strings are exactly
+      `aab, aba, baa` — the `6` raw permutations collapse to `3` because the two `a`s are
+      interchangeable. As a check, `n! / (2!·1!) = 6/2 = 3`.
+  - type: mcq
+    prompt: If every letter has frequency at most 1, why does the multinomial formula reduce to n! and not something smaller?
+    options:
+      - 'Because with all letters distinct, each denominator f_c! equals 0!, and 0! = 1, so the formula gives n!/1 = n!.'
+      - 'Because unique letters are still over-counted, so the formula subtracts instead of divides.'
+      - 'Because next_permutation stops after n steps when letters are distinct.'
+      - 'Because n! mod p is always the same as 1 for prime p.'
+    answer: 0
+    explanation: 'A letter with frequency 1 has f_c = 1, so f_c! = 1! = 1 and dividing by it changes nothing. With no repeat present, product of the f_c! ((1!) for each of n letters) is 1, so the count is exactly n! — all n! permutations are distinct. The multinomial formula is a strict generalisation that only shrinks the count when some f_c > 1.'
+type: content
+---

@@ -1,0 +1,218 @@
+---
+id: programmers-and-artists
+title: Programmers and Artists
+difficulty: hard
+order: 383
+tags:
+  - additional
+  - greedy
+  - sorting
+  - prefix-suffix
+  - heaps
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — a sorted split + top-k prefix/suffix sums
+
+      We must hire exactly `a` programmers and `b` artists from `n` applicants,
+      each applicant usable for one role, maximising total skill. An applicant
+      `i` gives `x_i` if hired as a programmer and `y_i` if hired as an artist.
+
+      **The key exchange argument.** Suppose in some optimal hiring we use one
+      person as a programmer (earning `x_p`) and another as an artist (earning
+      `y_q`). Swapping their roles keeps the counts unchanged and changes the
+      total by
+
+      ```
+      (x_q + y_p) - (x_p + y_q) = (x_q - y_q) - (x_p - y_p).
+      ```
+
+      So a swap *improves* the answer exactly when `x_q − y_q > x_p − y_p`. An
+      optimal solution therefore has the following **crossing structure**: no
+      hired *artist* may have a larger `x−y` than any hired *programmer*. Once
+      we sort applicants by `d = x − y` descending:
+
+      > all chosen **programmers** come from the top (large `d`) part, and all
+      > chosen **artists** from the bottom (small `d`) part.
+
+      There is a single split point. For a fixed split, the two halves are
+      independent: from the top part pick `a` applicants with the largest `x`,
+      from the bottom part pick `b` with the largest `y`. Trying every split is
+      O(n) splits, and the "top-k" sums of prefixes/suffixes are precomputed in
+      O(n log n) with a **min-heap** of size `k`.
+
+      :::tip
+      **Interview tip:** "Pick exactly *a* of kind one and *b* of kind two from
+      elements with two scores" → find a scalar that decides the roles
+      (here `x−y`), sort by it, and validate that both choices live on opposite
+      sides of one split. Then the prefix/suffix **top-k via min-heap** trick
+      (keep the k best, drop the worst) answers "best k of a sliding side"
+      cheaply. Expect this pattern in hiring / matching / team problems.
+      :::
+
+  - type: markdown
+    content: |-
+      ## The Problem
+
+      A company wants to hire `a` programmers and `b` artists. There are a
+      total of `n` applicants, and each applicant can become either a programmer
+      or an artist. You know each applicant's programming and artistic skills.
+      Your task is to select the new employees so that the sum of their skills
+      is maximum.
+
+      **Input.** The first input line has three integers `a`, `b` and `n`: the
+      required number of programmers and artists, and the total number of
+      applicants. After this, there are `n` lines that describe the applicants.
+      Each line has two integers `x` and `y`: the applicant's programming and
+      artistic skills.
+
+      **Output.** Print one integer: the maximum sum of skills.
+
+      **Constraints**
+      - `1 ≤ n ≤ 2·10⁵`
+      - `0 ≤ a, b ≤ n`
+      - `a + b ≤ n`
+      - `1 ≤ x, y ≤ 10⁹`
+
+      **Sample**
+
+      Input:
+      ```
+      2 1 4
+      3 7
+      9 8
+      1 5
+      4 2
+      ```
+
+      Output:
+      ```
+      20
+      ```
+
+      *Explanation:* an optimal solution is to hire two programmers with skills
+      `9` and `4` and one artist with skill `7`. The sum of the skills is
+      `9+4+7 = 20`.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n! / …), exponential.** Enumerate every way to choose
+      the `a` programmers and the `b` artists (disjoint) and take the maximum
+      sum. The number of choices is `C(n,a)·C(n−a,b)`, hopeless for `n ≤ 2·10⁵`.
+
+      **② Optimization — O(n log n).** Sort by `d = x − y` descending. Sweep
+      left→right with a min-heap of the largest `a` `x`-values to get `pre[i]`
+      (best sum of `a` programmers from applicants `0..i`). Sweep right→left
+      with a min-heap of the largest `b` `y`-values to get `suf[i]` (best sum of
+      `b` artists from applicants `i..n−1`). The answer is
+      `max over split i of pre[i] + suf[i+1]`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int a,b,n; cin>>a>>b>>n;
+          vector<pair<int,int>> xy(n);
+          for(int i=0;i<n;i++) cin>>xy[i].first>>xy[i].second;
+          // sort by x-y descending  ( x_p + y_q  >  x_q + y_p )
+          sort(xy.begin(), xy.end(), [](auto &p,auto &q){
+              return (ll)p.first+q.second > (ll)p.second+q.first; });
+          const ll NEG=-(ll)1e18;
+          vector<ll> pre(n, NEG), suf(n+1, NEG);
+          priority_queue<int,vector<int>,greater<int>> pqx;  // min-heap, hold best a
+          ll sx=0;
+          for(int i=0;i<n;i++){
+              pqx.push(xy[i].first); sx+=xy[i].first;
+              if((int)pqx.size()>a){ sx-=pqx.top(); pqx.pop(); }
+              if((int)pqx.size()==a) pre[i]=sx;
+          }
+          priority_queue<int,vector<int>,greater<int>> pqy;  // hold best b
+          ll sy=0;
+          for(int i=n-1;i>=0;i--){
+              pqy.push(xy[i].second); sy+=xy[i].second;
+              if((int)pqy.size()>b){ sy-=pqy.top(); pqy.pop(); }
+              if((int)pqy.size()==b) suf[i]=sy; else suf[i]=NEG;
+          }
+          suf[n]=0;
+          ll ans=(a==0? suf[0]: NEG);          // split before index 0 (all artists)
+          for(int i=0;i<n;i++)
+              if(pre[i]!=NEG && suf[i+1]!=NEG) ans=max(ans, pre[i]+suf[i+1]);
+          cout<<ans<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: O(n log n) time, O(n) extra memory — comfortably within limits.*
+
+      **③ Further optimization.** O(n log n) is asymptotically optimal here (a
+      sort is required to decide the split). One can note that since only the
+      top-`a`/top-`b` sums are needed and `a+b ≤ n`, the two heap sweeps are
+      each amortised O(n log min(a,b)), which is the practical bound.
+
+      **④ Alternative — max-flow / bipartite selection.** This is a matroid
+      intersection / assignment problem and could be phrased as a min-cost
+      maximum flow (source→applicants→programmer/artist slots→sink). For `n≤2·10⁵`
+      that is far too slow, but it confirms the "max of a split accounting"
+      ② is the only fast route.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n log n). Key lines:
+
+      1. **Sort.** Comparator `x_p + y_q > x_q + y_p` ⟺ `x_p − y_p > x_q − y_q`,
+         i.e. descending `d`. This makes the crossing argument valid so
+         programmers are in a prefix, artists in a suffix.
+      2. **`pre[i]`** — a min-heap `pqx` keeps the largest `a` `x`-values of
+         `xy[0..i]`; `sx` is their sum, updated by dropping the heap worst when
+         size exceeds `a`.
+      3. **`suf[i]`** — the mirrored right-to-left sweep keeps the largest `b`
+         `y`-values of `xy[i..n−1]`.
+      4. **Answer** — for each boundary `i` (`a` programmers from a prefix ending
+         at `i`, `b` artists from the suffix after it), maximise `pre[i]+suf[i+1]`,
+         taking care of the `a=0` boundary via `suf[0]`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `a=2, b=1, n=4`
+      ```
+      (x,y): (3,7) (9,8) (1,5) (4,2)
+      ```
+      `d = x−y`: `3−7=−4`, `9−8=1`, `1−5=−4`, `4−2=2`. Sorted descending:
+
+      | idx | (x,y) | d  |
+      |-----|-------|----|
+      | 0   | (4,2) | +2 |
+      | 1   | (9,8) | +1 |
+      | 2   | (3,7) | −4 |
+      | 3   | (1,5) | −4 |
+
+      `pre[i]` (top-2 `x`): `pre[0]=[−,−]`, `pre[1]=4+9=13`, `pre[2]=13`,
+      `pre[3]=13`. `suf[i]` (top-1 `y`): `suf[0]=max(2,8,7,5)=8`,
+      `suf[1]=8`, `suf[2]=7`, `suf[3]=5`.
+
+      Boundaries:
+      - `i=1`: `pre[1]+suf[2]=13+7=20` — programmers `(4,2),(9,8)`, artist `(3,7)`.
+      - `i=2`: `13+5=18`.
+      - `i=0` boundary (all artists): `suf[0]=8`.
+
+      Maximum is **20** ✓ (2 programmers with skill 9+4, one artist with 7).
+
+  - type: mcq
+    prompt: "Why can we restrict the chosen programmers and artists to lie on opposite sides of a single split after sorting by x−y?"
+    options:
+      - "Because if a hired artist had a larger x−y than a hired programmer, swapping their roles would strictly increase the total, so an optimum never has such a crossing."
+      - "Because programmers always have higher x than artists."
+      - "Because a+b ≤ n guarantees one side is empty."
+      - "Because sorting by x−y makes every prefix's x-sum maximal."
+    answer: 0
+    explanation: "The role swap between a hired programmer p (x_p) and artist q (y_q) changes the sum by (x_q−y_q)−(x_p−y_p). If that is positive the swap helps, so in an optimum every artist's x−y is ≤ every programmer's x−y — a clean crossing-free split by the sorted order."
+
+type: content
+---

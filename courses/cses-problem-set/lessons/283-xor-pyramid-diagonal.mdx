@@ -1,0 +1,203 @@
+---
+id: xor-pyramid-diagonal
+title: "XOR Pyramid — Diagonal Cell"
+difficulty: hard
+order: 283
+tags:
+  - bitwise
+  - xor
+  - lucas-theorem
+  - binomial-coefficients
+  - submask
+blocks:
+  - type: markdown
+    content: |
+      # XOR Pyramid — a single diagonal cell
+
+      Take an array `a[0..n-1]` as the **base** of a triangular pyramid. Above
+      it, every cell is the XOR of the two cells directly below it:
+
+          dp[0][i] = a[i]
+          dp[l][i] = dp[l-1][i] ^ dp[l-1][i+1]
+
+      So `dp[1]` has length `n-1`, `dp[2]` length `n-2`, and so on, until one
+      apex cell remains. A **diagonal** query asks for a single cell `dp[x][y]`
+      (row level `x`, offset `y` from the left edge of that row).
+
+      **Key identity — Lucas' theorem in disguise.** Unroll the recurrence: a
+      cell on level `l` is the XOR of some cells of the base, weighted by
+      binomial coefficients `C(l, j)`. Because XOR addition is addition *mod 2*:
+
+          dp[x][y] = XOR over j of ( C(x, j) mod 2 ) * a[y + j]
+
+      and by **Lucas' theorem** a binomial coefficient is odd **iff** every bit
+      of `j` is a subset of every bit of `x`, i.e.
+
+          C(x, j) odd  ⟺  (j & ~x) == 0      (j is a submask of x)
+
+      So a cell only depends on the base elements `a[y + j]` for *submasks* `j`
+      of `x`. The number of such `j` is `2^(popcount(x))`, and each is an XOR
+      (no carries, no doubling) — so instead of building the whole triangle we
+      can jump straight to the answer.
+
+      This is a classic example of turning a "repeat-the-operation" problem
+      into a "which base cells survive" combinatorial question.
+
+      :::tip
+      **Interview tip:** the "binomial coefficient parity by submask of the
+      other index" trick (`(j & ~x) == 0 ⟺ C(x,j)` odd) is Lucas' theorem and
+      shows up in XOR-tower / Pascal-parity / fractal-Sierpinski questions and
+      in any iterated `x ^ x-key`/addition-free recurrence. Recognising the
+      mod-2-polynomial structure turns an O(n²) simulation into an O(n)
+      formula.
+      :::
+  - type: markdown
+    content: |
+      # Question — XOR Pyramid Diagonal
+
+      You are given an array of `n` integers `a[0..n-1]`. Build the triangular
+      XOR pyramid where `dp[0][i] = a[i]` and `dp[l][i] = dp[l-1][i] ^
+      dp[l-1][i+1]`.
+
+      Your task is to answer **one** query `(x, y)`: print the value of
+      `dp[x][y]` (the cell on level `x` at offset `y` from the left).
+
+      **Input.** The first line has an integer `n`: the size of the array.
+      The second line has `n` integers `a[0..n-1]`. The third line has two
+      integers `x` and `y`.
+
+      **Output.** Print one integer: the value of `dp[x][y]`.
+
+      **Constraints**
+      - `1 ≤ n ≤ 3·10^5`
+      - `0 ≤ a[i] < 2^30`
+      - `0 ≤ x`, `0 ≤ y`, and `x + y < n`
+
+      **Example**
+      ```
+      Input:
+      4
+      1 2 3 4
+      2 1
+
+      Output:
+      6
+      ```
+      Explanation: `dp[0] = [1,2,3,4]`, `dp[1] = [1^2, 2^3, 3^4] = [3,1,7]`,
+      `dp[2] = [3^1, 1^7] = [2,6]`, so `dp[2][1] = 6`. (Via the identity,
+      `C(2,j)` is odd only for `j ∈ {0,2}`, giving `a[1] ^ a[3] = 2 ^ 4 = 6`.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — build the whole triangle, O(n²)**
+
+      Allocate a `(x+1) × n` table, fill `dp[0]`, then each level from the one
+      below it, and print `dp[x][y]`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; if(!(cin>>n)) return 0;
+          vector<int> a(n);
+          for(auto &v:a) cin>>v;
+          int x,y; cin>>x>>y;
+          vector<vector<int>> dp(x+1);
+          dp[0] = a;
+          for(int l=1; l<=x; l++){
+              dp[l].resize(n-l);
+              for(int i=0;i<n-l;i++) dp[l][i] = dp[l-1][i] ^ dp[l-1][i+1];
+          }
+          cout << dp[x][y] << "\n";
+          return 0;
+      }
+      ```
+
+      **O(x·n) = O(n²)** time, **O(n²)** space — for `n = 3·10^5` that is ~9·10^10
+      XORs and an impossible memory foot-print. Correct but unusable.
+
+      **② Optimization — Lucas submask XOR, O(2^(popcount(x))) (submission)**
+
+      Only the base elements `a[y+j]` for submasks `j` of `x` survive. Enumerate
+      all submasks of `x` directly (the classic `(j-1) & x` descending trick)
+      and XOR the corresponding base values.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; if(!(cin>>n)) return 0;
+          vector<unsigned> a(n);
+          for(auto &v:a) cin>>v;
+          int x,y; cin>>x>>y;
+          unsigned ans = 0;
+          for(int j=x;;j=(j-1)&x){          // enumerate submasks of x, descending
+              ans ^= a[y + j];              // keep positions whose coefficient is odd
+              if(j==0) break;
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **O(2^(popcount(x)))** time, **O(1)** extra space. Since
+      `2^(popcount(x)) ≤ 2^x` and `x < n = 3·10^5` (worst case ~2^18), a single
+      query is at most ~2.6·10^5 iterations — well within budget. This is the
+      submission.
+  - type: markdown
+    content: |
+      ### Solution — ③ further optimization / alternative
+
+      No better algorithm exists for a single query: there can genuinely be up
+      to `2^(popcount(x))` base cells contributing (whenever a bit pattern of
+      `x` is rich), and each contributes a distinct XOR term, so that many XORs
+      are necessary in the worst case. The submask enumeration is optimal.
+
+      For the *opposite* direction — when `x` is dense (all `20` bits set), the
+      answer is simply the XOR of all `a[y..y+x]`; noticing that saves the loop
+      but is still `O(x)`. If many queries were asked on the same `x`, one could
+      precompute prefix-XOR parity tables, but with a single query the direct
+      submask sweep is the clean answer.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **The recurrence is mod-2 polynomial.** Because `dp[l][i]` is a XOR of
+        base terms, the coefficient of `a[y+j]` in `dp[x][y]` is `C(x,j) mod 2`.
+      - **`(j & ~x) == 0` is the odd test.** By Lucas' theorem `C(x,j)` is odd
+        exactly when no bit of `j` exceeds the corresponding bit of `x` — i.e.
+        `j` is a submask of `x`. That single condition replaces the whole
+        triangle build.
+      - **Submask sweep.** `j = (j-1) & x` enumerates every submask of `x`
+        exactly once, descending, ending at `0` (the `if(j==0) break` traps the
+        sentinel `(0-1)&x == x` that would otherwise loop forever).
+      - **Bounds are safe.** Query validity `x + y < n` guarantees `y + j < n`
+        for every submask `j ≤ x`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 4`, `a = [1, 2, 3, 4]`, query `(x=2, y=1)`.
+
+      Enumerate submasks of `x = 2` (`10b`): `j ∈ {2, 0}`.
+
+      | `j` | `y+j` | `a[y+j]` | include? |
+      |-----|-------|----------|----------|
+      | 2   | 3     | 4        | yes (`C(2,2)=1` odd) |
+      | 1   | 2     | 3        | skip (`C(2,1)=2` even) |
+      | 0   | 1     | 2        | yes (`C(2,0)=1` odd) |
+
+      `ans = 4 ^ 2 = 6`. Output: **6** — matches the expected **6** (and the
+      full triangle `dp[2] = [2,6]` from the sample explanation).
+  - type: mcq
+    prompt: "In an XOR pyramid, why is the coefficient of a[y+j] in dp[x][y] the parity of C(x,j) ?"
+    options:
+      - Because unrolling the recurrence expresses the cell as a mod-2 sum of base cells, and XOR is addition mod 2
+      - Because XOR of n equal integers equals 1, so coefficients multiply by powers of two instead
+      - Because each level halves the array, so only every other base element survives
+      - Because the triangle is symmetric, so all cells equal the apex value
+    answer: 0
+    explanation: Unrolling dp[l][i] = dp[l-1][i] ^ dp[l-1][i+1] a total of x levels yields dp[x][y] = XOR over j of C(x,j) · a[y+j] where the product is taken in GF(2) — i.e. only the parity of C(x,j) matters. Since XOR is addition modulo 2 (no carries, no doubling), exactly the odd binomial coefficients survive. This is why the cell is fully determined by the submasks of x.

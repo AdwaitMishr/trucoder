@@ -1,0 +1,307 @@
+---
+id: counting-towers
+title: Counting Towers
+difficulty: medium
+order: 68
+tags:
+  - dynamic-programming
+  - two-state-dp
+  - counting
+  - modular-arithmetic
+blocks:
+  - type: markdown
+    content: |
+      # Counting Towers
+
+      **The technique: a two-state recurrence.** You are tiling a tower that is
+      **2 cells wide and `n` cells tall** using rectangular blocks whose width and
+      height are whole units (so `1×1`, `1×2`, `2×1` and `2×2` blocks may all be
+      used). Count how many distinct towers exist, modulo `10^9+7`.
+
+      The key is to notice that the only thing that matters while growing the tower
+      **one row at a time** is the *shape of the top row*: is it **"split"** into two
+      separate cells, or **"united"** into one 2-wide block? Everything below the top
+      is already counted and decoupled from the future.
+
+      Define two arrays of length `n`:
+
+      ```
+      dp0[i] = number of towers of height i whose TOP row is split (two separate cells)
+      dp1[i] = number of towers of height i whose TOP row is a single 2-wide block
+      ```
+
+      **The transition (adding one row on top):** each top shape offers a fixed number
+      of ways to place the next row, ending in either shape:
+
+      | below | → split (dp0) | → united (dp1) |
+      |-------|---------------|----------------|
+      | split | 2 | 1 |
+      | united | 1 | 4 |
+
+      So, reading the multiplications off that table:
+
+      ```
+      dp0[i] = 2·dp0[i-1] + 1·dp1[i-1]
+      dp1[i] = 1·dp0[i-1] + 4·dp1[i-1]
+      ```
+
+      with the base `dp0[1] = 1` (two `1×1` cells) and `dp1[1] = 1` (one `2×1` block).
+      The total for height `n` is `dp0[n] + dp1[n]`.
+
+      **Intuition behind the weights.** A split top can continue into a split top in
+      two ways (drop a `1×1` on one side so the other stays a fresh cell to continue
+      vertically), and can be sealed into a united top one way (a `2×1` across). A
+      united top can become split one way but stays united in four ways — the `2×2`
+      (which swallows the row below), a `2×1`, or the two asymmetric placements where
+      a vertical `1×2` covers one column and a `1×1` the other while the top edge is
+      joined. Working the recurrence for `n = 1, 2, 3` gives `2, 8, 34`.
+
+      **Complexity.** Each step is O(1), so building up to height `n` is **O(n)** time
+      and **O(n)** (or O(1) rolling) space. Because there are up to `10^6` heights and
+      100 queries, precomputing once up to the largest `n` answers every query in
+      O(1) — total O(max n + t).
+
+      **When you reach for it:** counting tilings where a small, fixed "shape state"
+      drives the growth. Recognize a 2-state (or few-state) DP whenever the
+      transition depends only on the shape of the current boundary and the numbers are
+      modular counts. The same pattern covers tiling with dominoes, staircases, and
+      bounded-shape compositions.
+
+      :::tip
+      **Interview tip:** tiling-count DP is a classic "medium/hard" interview topic.
+      The skill interviewers probe is discovering a *small state* — you usually do not
+      need to remember the whole boundary, only its shape where the next piece will
+      attach. Practise 2×n domino tilings (already Fibonacci-like) and this 4-block
+      variant to internalize how the state chooses itself. Always frame the answer as
+      a modular count, and check your recurrence against a hand-drawn small tower
+      (n = 2 should give 8) before writing code.
+      :::
+  - type: markdown
+    content: |
+      # Question — Counting Towers
+
+      Build a tower whose **width is 2 and height is `n`**. You have an unlimited
+      supply of blocks whose width and height are integers (so blocks can be `1×1`,
+      `1×2`, `2×1` or `2×2`). Count how many different towers you can build. Mirrored
+      and rotated towers are counted separately if they look different.
+
+      **Constraints:**
+      - `1 ≤ t ≤ 100` (number of test cases)
+      - `1 ≤ n ≤ 10^6` (height of the tower)
+
+      **Input:** the first line contains an integer `t`. After that there are `t`
+      lines, each with an integer `n` — the height of the tower.
+
+      **Output:** for each test case, print the number of towers **modulo `10^9+7`**.
+
+      Sample input:
+
+      ```
+      3
+      2
+      6
+      1337
+      ```
+
+      Sample output:
+
+      ```
+      8
+      2864
+      640403945
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — exponential recursion** *(only for tiny n)*
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+
+      // fill a 2 x n tower cell by cell, returning the number of tilings
+      long long countAt(vector<vector<int>>& g, int r, int c, int n) {
+          // find the first empty cell
+          while (c < n && g[0][c] && g[1][c]) c++;
+          if (c == n) return 1;                       // full tower
+          if (r == 2) { r = 0; c++; }                 // move to next column
+          if (g[r][c]) return countAt(g, r + 1, c, n);
+
+          long long ways = 0;
+          // 1x1
+          g[r][c] = 1; ways += countAt(g, r + 1, c, n); g[r][c] = 0;
+          // 1x2 vertical (r==0 and row1 free)
+          if (r == 0 && !g[1][c]) {
+              g[0][c] = g[1][c] = 1;
+              ways += countAt(g, 2, c, n);
+              g[0][c] = g[1][c] = 0;
+          }
+          // 2x1 horizontal (same row, next column free)
+          if (c + 1 < n && !g[r][c + 1]) {
+              g[r][c] = g[r][c + 1] = 1;
+              ways += countAt(g, r + 1, c, n);
+              g[r][c] = g[r][c + 1] = 0;
+          }
+          // 2x2 square
+          if (r == 0 && c + 1 < n && !g[1][c] && !g[0][c + 1] && !g[1][c + 1]) {
+              g[0][c] = g[1][c] = g[0][c + 1] = g[1][c + 1] = 1;
+              ways += countAt(g, 2, c, n);
+              g[0][c] = g[1][c] = g[0][c + 1] = g[1][c + 1] = 0;
+          }
+          return ways;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int t; cin >> t;
+          while (t--) {
+              int n; cin >> n;
+              vector<vector<int>> g(2, vector<int>(n, 0));
+              cout << countAt(g, 0, 0, n) % MOD << "\n";
+          }
+          return 0;
+      }
+      ```
+      Exponential — blows up fast and cannot reach `n = 10^6`. Only a correctness
+      baseline.
+
+      **② Optimization — two-state recurrence, O(n) time per query** *(the solution)*
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int t; cin >> t;
+          while (t--) {
+              int n; cin >> n;
+              long long d0 = 1, d1 = 1;             // height 1: split / united
+              for (int i = 2; i <= n; ++i) {
+                  long long n0 = (2 * d0 + d1) % MOD;   // below split
+                  long long n1 = (d0 + 4 * d1) % MOD;   // below united
+                  d0 = n0; d1 = n1;
+              }
+              cout << (d0 + d1) % MOD << "\n";
+          }
+          return 0;
+        }
+      ```
+      O(n) per query, O(1) space. Two rolling scalars replace the entire grid.
+
+      **③ Further optimization — batch precompute, O(max n + t)** *(the chosen
+      solution)*
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int t; cin >> t;
+          vector<int> q(t); int mx = 0;
+          for (int i = 0; i < t; ++i) { cin >> q[i]; mx = max(mx, q[i]); }
+
+          vector<long long> d0(mx + 1), d1(mx + 1);
+          d0[1] = d1[1] = 1;
+          for (int i = 2; i <= mx; ++i) {
+              d0[i] = (2 * d0[i - 1] + d1[i - 1]) % MOD;
+              d1[i] = (d0[i - 1] + 4 * d1[i - 1]) % MOD;
+          }
+          for (int n : q) cout << (d0[n] + d1[n]) % MOD << "\n";
+          return 0;
+      }
+      ```
+      O(max n + t) time, O(max n) space. Precompute up to the largest height once;
+      each query is an O(1) lookup. With `t ≤ 100` and `n ≤ 10^6` this is trivial.
+
+      **④ Alternative — matrix exponentiation, O(t·log n).** Pack the recurrence
+      `(dp0, dp1) → (dp0', dp1')` into a 2×2 matrix and exponentiate it to the power
+      `n` to answer each query in `O(log n)`. This pays off only when `n` is enormous
+      (up to 10^18). With `n ≤ 10^6` and many queries sharing a precompute, the O(max n
+      + t) linear table is simpler and faster — matrix power is overkill here.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **③ the precomputed two-state table.** Structure:
+
+      - **Two states.** `d0[i]` — height `i` tower whose top row is *split* (two
+        separate cells); `d1[i]` — top row is one 2-wide block. This state captures
+        everything the future needs; the packed tower below is decoupled.
+      - **Recurrence.** `d0[i] = 2·d0[i-1] + d1[i-1]` and `d1[i] = d0[i-1] +
+        4·d1[i-1]`. Each "coefficient" is the number of distinct rows you can place
+        above that state to yield the target top shape.
+      - **Base.** `d0[1] = 1` (two `1×1` cells side by side), `d1[1] = 1` (one `2×1`
+        block). Total height-1 towers = 2.
+      - **Precompute once to `max n`.** We read every query first, take the largest
+        height, and build both arrays up to it. Every query then prints
+        `(d0[n] + d1[n]) % MOD` in O(1).
+      - **Modulo discipline.** Each step reduces `2·d0[i-1] + d1[i-1]` (at most
+        `3·MOD`) with one `% MOD`, keeping values in range even for `n = 10^6`.
+      - **Reasoning check.** Height 2: `d0[2] = 2·1 + 1 = 3`, `d1[2] = 1 + 4·1 = 5`,
+        total **8** — matches the sample.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      3
+      2
+      6
+      1337
+      ```
+
+      **Precompute table** (showing selected heights):
+
+      | h | d0[h] | d1[h] | total = d0+d1 |
+      |---|-------|-------|---------------|
+      | 1 | 1 | 1 | 2 |
+      | 2 | 2·1+1 = 3 | 1+4·1 = 5 | **8** |
+      | 3 | 2·3+5 = 11 | 3+4·5 = 23 | 34 |
+      | 4 | 2·11+23 = 45 | 11+4·23 = 103 | 148 |
+      | 5 | 2·45+103 = 193 | 45+4·103 = 457 | 650 |
+      | 6 | 2·193+457 = 843 | 193+4·457 = 2021 | **2864** |
+
+      Per query:
+      - `n = 2` → `8` ✓
+      - `n = 6` → `2864` ✓
+      - `n = 1337` → `(d0[1337] + d1[1337]) % MOD` = **640403945** ✓ (computed by the
+        precomputed table, verified against the judge sample).
+
+      All three outputs match the sample exactly.
+
+      **Edge cases:**
+      - `n = 1` → 2 towers (the two `1×1` cells, or one `2×1` block).
+      - `t` = 1 and the single `n` small — precompute still fine.
+      - Only squares: `n = 2` can be one `2×2` block, which is why the united state
+        has 4 continuations (the `2×2` is one of them).
+  - type: flowchart
+    title: "Two-state tiling recurrence"
+    nodes:
+      - "Read height n queries"
+      - "mx = largest n"
+      - "Precompute d0[i], d1[i] up to mx"
+      - "d0[i] = 2·d0[i-1] + d1[i-1]"
+      - "d1[i] = d0[i-1] + 4·d1[i-1]"
+      - "Answer query = (d0[n] + d1[n]) % MOD"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "i = 2..mx"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 2}
+      - {from: 2, to: 5, label: "precomputed"}
+  - type: mcq
+    prompt: Why is the two-state recurrence (d0, d1) sufficient for Counting Towers instead of anything more complex?
+    options:
+      - Because the full tiling below the top row is irrelevant to the future, so the only thing the DP must remember is whether the TOP row is split or united — every future placement depends only on that shape
+      - Because blocks are all the same size, so a single counter is enough
+      - Because the tower height is capped at 2, making the state trivial
+      - Because mirrored towers are subtracted from the count
+    answer: 0
+    explanation: 'The transition for adding a row depends only on the shape of the current top boundary (split vs united). Everything below has already been counted and never revisited, so the whole reachable future is summarized by two scalars. This is the essence of a boundary/profile DP: the state is the minimum that determines what can be placed next — here just 2 configurations, giving an O(n) (or precomputed O(max n + t)) solution for n up to 10^6.'
+type: content
+---

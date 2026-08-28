@@ -1,0 +1,190 @@
+---
+id: maximum-average-subarrays
+title: "Maximum Average Subarrays"
+type: content
+difficulty: easy
+order: 359
+tags:
+  - prefix-sums
+  - sliding-window
+  - arrays
+blocks:
+  - type: markdown
+    content: |
+      # Maximum Average Subarrays — best fixed-length window via sliding sum
+
+      ## Theory
+
+      Given an array (with possibly negative values) and a window length `k`, we want the
+      largest possible **average** among all subarrays of length exactly `k`. Dividing every
+      window by the same `k` does not change which window wins, so maximising the average is
+      identical to maximising the **window sum**. The task therefore reduces to: find the
+      maximum sum of any length-`k` contiguous window.
+
+      **Brute force** recomputes each window from scratch — `O(n·k)`. Two classic tricks cut
+      this to `O(n)`:
+
+      - **Prefix sums.** Let `p[0]=0`, `p[i+1]=p[i]+a[i]`. The sum of `a[l..r]` is `p[r+1]−p[l]`
+        in `O(1)`. Slide `l` over all `n−k+1` starting positions.
+      - **Sliding window.** Keep a running `sum`; move the window right by adding the entering
+        element and subtracting the leaving one. This is just the prefix idea with `O(1)`
+        extra space.
+
+      **Time:** `O(n)`. **Space:** `O(1)` for the sliding window.
+
+      :::tip
+      **Interview tip:** "Maximum/minimum average (or sum) of a fixed-length window" is the
+      entry-level **sliding window** question. Two follow-ups to be fluent in: (1) windows of
+      *any* length with a lower/upper bound — becomes a decision problem solved by prefix sums
+      plus a running minimum (see the alternative tier); (2) building the prefix array first
+      lets you answer arbitrary range-sum queries in O(1) after an O(n) build.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Question
+
+      Given an array of `n` integers and an integer `k`, find the maximum average of any
+      contiguous subarray of length exactly `k`. Values may be negative.
+
+      **Input.** The first line has two integers `n` and `k`. The second line has `n` integers
+      `a[1..n]`.
+
+      **Output.** Print the maximum average as a decimal number with exactly six digits after
+      the decimal point.
+
+      **Constraints.**
+      - `1 ≤ k ≤ n ≤ 2·10⁵`
+      - `−10⁴ ≤ a[i] ≤ 10⁴`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      6 4
+      1 12 -5 -6 50 3
+      ```
+
+      **Output:**
+      ```
+      12.750000
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·k).** For each start `l`, add the next `k` elements to form the
+      window sum and track the best. Correct but recomputes shared overlaps.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n,k; cin>>n>>k;
+          vector<long long> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          long long best = LLONG_MIN;
+          for(int l=0; l+k<=n; l++){
+              long long s=0;
+              for(int j=l; j<l+k; j++) s += a[j];
+              best = max(best, s);
+          }
+          cout<<fixed<<setprecision(6)<<(double)best/k<<"\n";
+      }
+      ```
+      *Complexity: O(n·k) — too slow for `n = 2·10⁵` when `k ≈ n`.*
+      *(Note: `LLONG_MIN`-style extremes are avoided in the final version; the first window
+      is always valid since `k ≤ n`.)*
+
+      **② Optimization — prefix sums, O(n) (intended).** Precompute `p` so every window sum is
+      one subtraction apart, then scan all starts:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<ll> p(n+1,0);
+          for(int i=1;i<=n;i++){ ll v; cin>>v; p[i]=p[i-1]+v; }
+          ll best = LLONG_MIN;
+          for(int l=0; l+k<=n; l++) best = max(best, p[l+k]-p[l]);
+          cout<<fixed<<setprecision(6)<<(double)best/k<<"\n";
+      }
+      ```
+      *Complexity: O(n) time, O(n) space.*
+
+      **③ Further optimization — sliding window, O(n) time and O(1) extra space.** Maintain a
+      running `sum`; each step adds the entering element and subtracts the leaving one:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          ll sum=0;
+          for(int i=0;i<k;i++) sum += a[i];
+          ll best = sum;
+          for(int i=k;i<n;i++){ sum += a[i] - a[i-k]; best = max(best, sum); }
+          cout<<fixed<<setprecision(6)<<(double)best/k<<"\n";
+      }
+      ```
+      *Complexity: O(n) time, O(1) extra space — the fastest version.*
+      *(This is the version used in the walkthrough to match the sample.)*
+
+      **④ Alternative — decision version via prefix sums + running minimum.** If instead we ask
+      "is there *any* subarray of length `≥ k` with average ≥ `t`?", transform `b[i] = a[i] − t`
+      and require a window `[l, r]` (length `≥ k`) with non-negative sum. Using
+      `p[r+1] ≥ p[l] + 0`, scan a sliding `<k`-lag running minimum of `p[l]`; binary-search `t`
+      to `O(n log(1/ε))` precision. This is the machinery behind "maximum average subarray"
+      with no fixed length — a genuinely different technique worth knowing when `k` is a bound
+      rather than an exact length.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      - **Sliding window state.** `sum` holds the current `k`-window. Initialise it with the
+        first `k` elements.
+      - **The step.** `sum += a[i] - a[i-k]` removes the element that left the window and adds
+        the one that entered — both in `O(1)`.
+      - **Update best.** After each step `best = max(best, sum)`. Since all windows share the
+        same length `k`, the largest sum is the largest average.
+      - **Output formatting.** `best` is an integer sum; casting to `double` and dividing by
+        `k` before `fixed << setprecision(6)` yields exactly six decimals.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `a = [1, 12, -5, -6, 50, 3]`, `n = 6`, `k = 4`.
+
+      Initial window `a[0..3]`: `1+12-5-6 = 2` → `best = 2`.
+
+      Step (`i = 4`): `sum = 2 + a[4] − a[0] = 2 + 50 − 1 = 51` → `best = 51`.
+      Step (`i = 5`): `sum = 51 + a[5] − a[1] = 51 + 3 − 12 = 42` → `best = 51`.
+
+      Windows: `[1,12,-5,-6]`=2 (avg 0.5), `[12,-5,-6,50]`=51 (avg 12.75), `[-5,-6,50,3]`=42
+      (avg 10.5). Largest average is `51 / 4 = 12.75`.
+
+      Output:
+      ```
+      12.750000
+      ```
+      which matches the sample. ✓
+
+  - type: mcq
+    prompt: "For a fixed-length window problem, why does maximising the window sum also maximise the window average?"
+    options:
+      - "Because every window has the same length k, so dividing each sum by the same k does not change which window is largest."
+      - "Because the array contains only positive numbers."
+      - "Because the average of a window is always the middle element."
+      - "Because prefix sums are always non-negative."
+    answer: 0
+    explanation: "The average of a length-k window is its sum divided by the identical constant k for every window. Maximizing a common-constant-scaled quantity is the same as maximizing the quantity itself, so the window with the largest sum is exactly the window with the largest average."

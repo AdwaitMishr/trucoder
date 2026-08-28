@@ -1,0 +1,235 @@
+---
+id: bracket-sequences-i
+title: Bracket Sequences I
+difficulty: medium
+order: 176
+tags:
+  - combinatorics
+  - catalan-numbers
+  - ballot-paths
+  - modular-inverse
+  - mathematics
+blocks:
+  - type: markdown
+    content: |
+      # Bracket Sequences I
+
+      **The technique: Catalan numbers.** A **regular (balanced) bracket
+      sequence** is one where every prefix has at least as many `(` as `)` and
+      the total counts are equal. The number of regular bracket sequences of
+      length `2n` is the **Catalan number**
+
+      ```
+      Cₙ = (1 / (n+1)) · C(2n, n)
+      ```
+
+      **Why it works — lattice paths.** Represent `(` as a step `+1` and `)` as
+      a step `−1`. A regular sequence becomes a path from `(0,0)` to `(2n,0)`
+      that never dips below the `x`-axis (all prefixes ≥ 0). The count of such
+      "ballot paths" is Catalan, via the **reflection principle**: the
+      unconstrained count `C(2n, n)` (choose which `n` of the `2n` steps go up)
+      minus the "bad" paths that touch `−1` — and every bad path reflects
+      bijectively onto a path with `n+1` rising steps, giving a `C(2n, n+1)`
+      subtraction:
+
+      ```
+      Cₙ = C(2n, n) − C(2n, n+1) = (1/(n+1)) · C(2n, n)
+      ```
+
+      **When you reach for it.** Beyond parentheses, Catalan counts many
+      structures: binary trees, the number of full binary trees with `n`
+      internal nodes, triangulations of a polygon, non-crossing handshakes, Dyck
+      paths, valid expression orderings — all sharing the same "never drop below
+      zero" combinatorial shape. It is one of the most repeated numbers in
+      combinatorics interviews.
+
+      **Modulo.** With `n` up to `10^6`, `C(2n, n)` is enormous; compute it with
+      factorial + inverse-factorial tables mod `10^9 + 7`, then multiply by the
+      modular inverse of `n + 1` (Fermat). Total **O(n)** time and memory.
+
+      :::tip
+      **Interview tip:** "Count balanced bracket sequences / binary trees /
+      Dyck paths of size n" is the Catalan signature. The one-line memory is
+      `Catal(n) = C(2n,n)/(n+1)`. Interviewers often probe why we divide by
+      `n+1` — answer with the reflection principle (subtract the `C(2n,n+1)`
+      paths that dip below zero). Also know the first few: `1, 1, 2, 5, 14, 42,
+      132` — instant sanity checks.
+      :::
+  - type: markdown
+    content: |
+      # Question — Bracket Sequences I (CSES 2064)
+
+      A **regular bracket sequence** is a bracket sequence that can be
+      transformed into a correct arithmetic expression by inserting characters
+      `1` and `+` between the original characters. For example, the bracket
+      sequences `()(())` and `(())()` are regular, while `)(` is not.
+
+      Your task is to calculate the number of **regular bracket sequences** of
+      length `n`.
+
+      **Input:** the only input line has an integer `n`.
+
+      **Output:** print the number of sequences modulo `10^9 + 7`.
+
+      **Constraints:**
+      - `1 ≤ n ≤ 10^6`
+
+      Sample input:
+
+      ```
+      6
+      ```
+
+      Sample output:
+
+      ```
+      5
+      ```
+
+      Explanation: length is even here (`n = 6`, so `n = 2·3` pairs); the 5
+      regular sequences are `()()()`, `()(())`, `(())()`, `(()())`, `((()))`.
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate all 2^n strings, check each**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      int n; ll ans = 0;
+      void rec(int i, int bal) {
+          if (i == n) { if (bal == 0) ans++; return; }
+          rec(i + 1, bal + 1);              // put '('
+          if (bal > 0) rec(i + 1, bal - 1); // put ')' only if balance stays >= 0
+      }
+      int main() { cin >> n; rec(0, 0); cout << ans << '\n'; }
+      ```
+      Explores up to `2^n` strings — for `n = 10^6` that is unreachable.
+      Correct only for `n ≤ ~30`.
+
+      **② Optimization — Catalan closed form, O(n)** (the chosen solution)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll MOD = 1e9 + 7;
+
+      ll modpow(ll a, ll e) {
+          ll r = 1;
+          while (e) { if (e & 1) r = r * a % MOD; a = a * a % MOD; e >>= 1; }
+          return r;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          ll n; cin >> n;
+          vector<ll> fact(n + 1), invf(n + 1);
+          fact[0] = 1;
+          for (int i = 1; i <= n; i++) fact[i] = fact[i - 1] * i % MOD;
+          invf[n] = modpow(fact[n], MOD - 2);
+          for (int i = n; i >= 1; i--) invf[i - 1] = invf[i] * i % MOD;
+          auto comb = [&](ll a, ll b) -> ll {
+              if (b < 0 || b > a) return 0;
+              return fact[a] * invf[b] % MOD * invf[a - b] % MOD;
+          };
+          ll cat = comb(n, n / 2) * modpow((n / 2 + 1) % MOD, MOD - 2) % MOD; // Catal(n/2)
+          cout << cat << '\n';
+          return 0;
+      }
+      ```
+      O(n). Build factorials once, evaluate `C(n, n/2)/(n/2 + 1)` mod `P`.
+      Optimal — the formula is a single expression.
+
+      **③ Further optimization — none needed**
+      O(n) is optimal: the factorial table must be built to size `n`. There is
+      nothing faster to reach for.
+
+      **④ Alternative — ballot DP, O(n²) exact integer count**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      int main() {
+          int n; cin >> n;                      // n even here
+          vector<vector<ll>> dp(n + 1, vector<ll>(n + 1, 0));
+          dp[0][0] = 1;
+          for (int i = 0; i < n; i++)
+              for (int bal = 0; bal <= n; bal++) if (dp[i][bal]) {
+                  dp[i + 1][bal + 1] += dp[i][bal];   // add '('
+                  if (bal > 0) dp[i + 1][bal - 1] += dp[i][bal]; // add ')'
+              }
+          cout << dp[n][0] << '\n';
+      }
+      ```
+      Counts paths position by position, keeping every balance state. A
+      *different* algorithm (no division/inverse needed) that is exact for any
+      `n`, but O(n²) does not scale to `10^6`. Great for small-n reasoning and
+      for building intuitive answers.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② the closed form**.
+
+      - **Factorials:** `fact[0..n]` holds `i! mod P`; `invf` holds their
+        inverses via Fermat's little theorem (`invf[N] = fact[N]^(P-2)` then
+        read backwards).
+      - **Combination:** `comb(a, b) = fact[a] · invf[b] · invf[a-b]` gives any
+        binomial coefficient mod `P` with no division.
+      - **Catalan:** with `n = 2m`, the count is `C(2m, m)/(m+1)`. In code
+        `comb(n, n/2)` computes `C(2m, m)` and
+        `modpow(n/2 + 1, MOD-2)` supplies `1/(m+1)` as a modular inverse.
+      - The final multiply is `mod`-reduced, so every value stays in
+        `[0, MOD)`.
+
+      Note the guard `if (b < 0 || b > a) return 0;` protects against an
+      odd/edge `n`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Sample:** `n = 6` → expected `5`.
+
+      `n = 6 = 2·3`, so `m = n/2 = 3`.
+
+      ```
+      Catal(3) = C(2m, m) / (m + 1) = C(6, 3) / 4
+              = 20 / 4 = 5
+      ```
+
+      All three tiers agree:
+
+      | tier | output |
+      |------|--------|
+      | ① brute (enumerate & only keep balanced) | 5 |
+      | ② closed form `20 / 4` | 5 |
+      | ④ ballot DP `dp[6][0]` | 5 |
+
+      The 5 sequences are `()()()`, `()(())`, `(())()`, `(()())`, `((()))`.
+      ✓
+  - type: flowchart
+    title: "Catalan via lattice paths"
+    nodes:
+      - "Read n (even)"
+      - "Build fact[0..n] and invf"
+      - "c = C(n, n/2)"
+      - "divide by (n/2 + 1) via inverse"
+      - "Print Catal(n/2) mod P"
+    edges:
+      - {from: 0, to: 1, label: "precompute"}
+      - {from: 1, to: 2, label: "comb"}
+      - {from: 2, to: 3, label: "Fermat inverse"}
+      - {from: 3, to: 4, label: "single multiply"}
+  - type: mcq
+    prompt: 'Why does the reflection principle turn the count of regular bracket sequences into C(2n,n) - C(2n,n+1)?'
+    options:
+      - Because every "bad" path (one that dips below 0) reflects across the horizontal axis to a unique path with n+1 up-steps, and reflection is a bijection, so the bad count is exactly C(2n, n+1)
+      - Because there are n+1 invalid characters in any sequence
+      - Because C(2n,n) counts only full binary trees
+      - Because the number of '(' must be exactly n+1
+    answer: 0
+    explanation: The unconstrained count of 2n steps choosing n ups is C(2n,n). A path is invalid exactly when it reaches height -1. Reflecting (mirroring) the part of such a path below the axis turns it into a path from (0,0) to (2n,-2), i.e. one with n+1 up-steps; this reflection is a bijection between bad paths and C(2n,n+1) paths, so Catalan = C(2n,n) - C(2n,n+1) = C(2n,n)/(n+1).
+type: content
+---

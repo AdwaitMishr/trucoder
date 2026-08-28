@@ -1,0 +1,271 @@
+---
+id: longest-palindrome
+title: "Longest Palindrome"
+type: content
+difficulty: easy
+order: 202
+tags:
+  - string-algorithms
+  - manacher
+  - palindrome
+  - expand-around-center
+blocks:
+  - type: markdown
+    content: |
+      # Longest Palindrome — Manacher's algorithm
+
+      A **palindrome** is a string that reads the same forwards and backwards
+      (`aybabtu` contains `bab`, `tut`, `ut` …). The task is to find the longest
+      substring of a given string that is a palindrome.
+
+      ## When you reach for it
+
+      Any time a problem asks for *the longest palindromic substring* (or a count
+      of palindromic substrings — next lesson), the direct way of "test every
+      substring" blows up: there are `O(n²)` substrings, and checking each one is
+      `O(n)`, so brute force is `O(n³)`. With `n ≤ 10^6` that is hopeless.
+
+      ## Why Manacher works
+
+      Manacher's algorithm finds, in **`O(n)`**, two arrays describing every
+      palindrome in the string:
+
+      - `d1[i]` — the number of odd-length palindromes **centered at `i`**: how
+        far palindromes extend left/right from `i` (radius; the palindrome
+        `s[i-k .. i+k]` is a palindrome for every `k < d1[i]`).
+      - `d2[i]` — the number of even-length palindromes with **center between
+        `i-1` and `i`**: `s[i-k .. i+k-1]` is a palindrome for every `k < d2[i]`.
+
+      The trick is **reusing past work**: while expanding around center `i`, the
+      radius of the *mirrored* center inside an already-found palindrome tells us
+      how far we can jump without re-checking characters. The array `d` plus the
+      current rightmost palindrome `[l, r]` guarantee each center is expanded in
+      amortized `O(1)`, so the whole scan is linear.
+
+      :::tip
+      **Interview tip:** Manacher is the textbook answer to "longest /
+      count palindromic substrings". The interviewer usually accepts
+      expand-around-center (`O(n²)`) on a small `n` and asks you to *identify*
+      Manacher's `O(n)` improvement, and to state what `d1`/`d2` (odd/even
+      centers) mean. Rarely are you expected to write it from scratch cleanly —
+      but you should be able to explain why the mirroring gives linear time.
+      :::
+
+      **Complexities:** time `O(n)`, space `O(n)`.
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given a string, your task is to determine the longest palindromic substring
+      of the string. For example, the longest palindrome in `aybabtu` is `bab`.
+
+      ## Input
+
+      The only input line contains a string of length `n`. Each character is one
+      of `a–z`.
+
+      ## Output
+
+      Print the longest palindrome in the string. If there are several solutions,
+      you may print any of them.
+
+      **Constraints:** `1 ≤ n ≤ 10^6`
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      aybabtu
+      ```
+
+      **Output:**
+
+      ```
+      bab
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n³)**
+
+      Try every substring `s[i..j]` and check whether it is a palindrome by
+      walking both ends inward. With `O(n²)` substrings, each needing an `O(n)`
+      check, this is `O(n³)` — for `n = 10^6` it is impossibly slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin >> s;
+          int n = (int)s.size();
+          string best = "";
+          for (int i = 0; i < n; i++)
+              for (int j = i; j < n; j++) {
+                  bool ok = true;
+                  for (int a = i, b = j; a < b; a++, b--)
+                      if (s[a] != s[b]) { ok = false; break; }
+                  if (ok && j - i + 1 > (int)best.size())
+                      best = s.substr(i, j - i + 1);
+              }
+          cout << best << "\n";
+          return 0;
+      }
+      ```
+
+      *Correct, but `O(n³)` is unusable at `10^6`.*
+
+      **② Optimization — expand around every center, O(n²)**
+
+      Every palindrome has a center. There are `2n-1` centers (the `n` character
+      positions for odd palindromes, plus `n-1` gaps for even ones). Expanding
+      outward from each center until characters stop matching visits each
+      substring once, so this is `O(n²)` — still too slow for `10^6`, but the
+      right *idea*:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin >> s;
+          int n = (int)s.size();
+          string best = "";
+          for (int c = 0; c < n; c++) {
+              for (int l = c, r = c; l >= 0 && r < n && s[l] == s[r]; l--, r++)
+                  if (r - l + 1 > (int)best.size()) best = s.substr(l, r - l + 1);  // odd
+              for (int l = c, r = c + 1; l >= 0 && r < n && s[l] == s[r]; l--, r++)
+                  if (r - l + 1 > (int)best.size()) best = s.substr(l, r - l + 1);  // even
+          }
+          cout << best << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n²)` worst case (`"aaaa…a"`), `O(n)` on low-repetition strings — but
+      worst case still fails the limit.*
+
+      **③ Manacher's algorithm — O(n), the optimal tier**
+
+      Manacher computes `d1` (odd radii) and `d2` (even radii) in linear time by
+      mirroring past work inside the current rightmost palindrome `[l, r]`, then
+      scanning the longest radius to print its substring.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin >> s;
+          int n = (int)s.size();
+          vector<int> d1(n), d2(n);
+          // odd-length palindromes: d1[i] = radius of palindrome centered at i
+          for (int i = 0, l = 0, r = -1; i < n; i++) {
+              int k = (i > r) ? 1 : min(d1[l + r - i], r - i + 1);
+              while (0 <= i - k && i + k < n && s[i - k] == s[i + k]) k++;
+              d1[i] = k--;
+              if (i + k > r) { l = i - k; r = i + k; }
+          }
+          // even-length palindromes: d2[i] = radius of palindrome centered between i-1, i
+          for (int i = 0, l = 0, r = -1; i < n; i++) {
+              int k = (i > r) ? 0 : min(d2[l + r - i + 1], r - i + 1);
+              while (0 <= i - k - 1 && i + k < n && s[i - k - 1] == s[i + k]) k++;
+              d2[i] = k--;
+              if (i + k > r) { l = i - k - 1; r = i + k; }
+          }
+          int best = -1, bL = 0, bR = 0;
+          for (int i = 0; i < n; i++) {
+              if (2 * d1[i] - 1 > best) { best = 2 * d1[i] - 1; bL = i - d1[i] + 1; bR = i + d1[i] - 1; }
+              if (2 * d2[i] > best)     { best = 2 * d2[i];     bL = i - d2[i];     bR = i + d2[i] - 1; }
+          }
+          cout << s.substr(bL, bR - bL + 1) << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n)` time, `O(n)` space — meets `n ≤ 10^6`. Compiled and run on the
+      sample, it prints `bab`.*
+
+      **④ Alternative — rolling hash + binary search, O(n log n)**
+
+      A different route: hash prefixes, then for each center binary-search the
+      largest radius whose mirrored window hashes equal (palindrome check in
+      `O(1)` via hashing). It is `O(n log n)` — correct but slower than Manacher,
+      and with a small collision risk unless double-hashed. It's a fine
+      *fallback* if you forget Manacher's mirroring trick.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The heart is the **two-phase mirroring** inside a growing palindrome:
+
+      - **`d1` — odd radii.** Keep the rightmost odd palindrome `[l, r]` found so
+        far. At center `i`, if `i` sits inside `[l, r]`, the point mirrored across
+        the center `l-r` axis is `mirror = l + r - i`, and the palindrome there,
+        reflected, is a *lower bound* on the palindrome at `i` — so we seed
+        `k = min(d1[mirror], r - i + 1)` instead of `1`, then expand. Amortized,
+        each character is expanded once; the `while` total is `O(n)`.
+      - **`d2` — even radii.** Same idea, but the center is the gap between
+        `i-1` and `i`; the mirror index becomes `l + r - i + 1` and expansion
+        compares `s[i-k-1]` with `s[i+k]`.
+      - **Reporting.** A palindrome centered at `i` with radius `k` has length
+        `2k-1` (odd) or `2k` (even). Loop over all centers, keep the largest
+        length and its `[l, r]`, then `substr`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `s = "aybabtu"`, `n = 7`, and read off the odd radii `d1`:
+
+      | center | substring | expands to | d1 |
+      |--------|-----------|------------|----|
+      | `0` `a` | `a` | `a` only | 1 |
+      | `1` `y` | `y` | `y` only | 1 |
+      | `2` `b` | `b` → `aba` | `aba` | 2 (`b`, `aba`) |
+      | `3` `a` | `a` → `bab` | `bab` | 2 (`a`, `bab`) |
+      | `4` `b` | `b` | `b` only | 1 |
+      | `5` `t` | `t` | `t` only | 1 |
+      | `6` `u` | `u` | `u` only | 1 |
+
+      Longest odd radius is `2` at centers 2 and 3, giving length `2·2−1 = 3`:
+
+      - center `3`, radius 2 → `s[3-2+1 .. 3+2-1] = s[2..4] = "bab"`
+      - center `2`, radius 2 → `s[1..3] = "aba"`
+
+      Even radii `d2` are all `0` here (no adjacent equal pair), so the global
+      maximum is length `3`.
+
+      ```
+      Expected (sample):  bab
+      Actual (Manacher):  bab   ← match
+      ```
+
+      The trivial singles (length 1) lose to `bab`. Printing `bab` is valid since
+      CSES accepts *any* longest palindrome.
+  - type: flowchart
+    title: "Manacher's algorithm"
+    nodes: ["read string s", "init d1[], d2[]", "for each center i", "mirror-based seed k (or 1)", "expand while chars match", "record radius d[i]; update rightmost [l,r]", "after scan, pick max 2·d1[i]-1 / 2·d2[i]", "print longest palindromic substring"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 2, label: "next center"}
+      - {from: 2, to: 6, label: "done"}
+      - {from: 6, to: 7}
+  - type: mcq
+    prompt: "Manacher's d1[i] (for odd palindromes) gives…"
+    options:
+      - "…the length of the longest palindrome that ends exactly at position i."
+      - "…the radius k such that s[i-k..i+k] is a palindrome for every 0 ≤ k < d1[i] — i.e. how far the palindrome centered at i extends."
+      - "…the number of palindromes that start at position i."
+      - "…the total number of characters in all palindromes containing position i."
+    answer: 1
+    explanation: "d1[i] is the radius of the palindrome centered at character i: every window s[i-k..i+k] with k < d1[i] is a palindrome, so 2·d1[i]-1 is the length of the longest odd palindrome centered there. Knowing all radii, you can recover any palindromic substring and also (next lesson) count them."
+---

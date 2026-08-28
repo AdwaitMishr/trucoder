@@ -1,0 +1,294 @@
+---
+id: range-interval-queries
+title: Range Interval Queries
+type: content
+difficulty: hard
+order: 132
+tags:
+  - range-queries
+  - segment-tree
+  - lazy-propagation
+  - range-update
+  - range-set
+blocks:
+  - type: markdown
+    content: |
+      # Range Interval Queries — a lazy segment tree, handled carefully
+
+      This problem is about operations that act on **whole intervals**: you add a
+      constant to every element of a range, you *set* a whole range to a value,
+      and you ask for the *sum over a range*. Both updates and queries live on
+      intervals, which forces a **lazy segment tree**.
+
+      A plain segment tree only supports fast *point* mutation (change one
+      element, re-merge its path). Updating a whole range element-by-element is
+      `O(len log n)` — up to `O(n log n)` per operation, far too slow. The fix
+      is to **defer** work: when an update fully covers a node, store a
+      *lazy tag* on that node instead of touching every leaf beneath it, and
+      only push the tag down to the children when a later operation actually
+      needs to descend through that node.
+
+      ## The tricky part: two different kinds of tags
+
+      Our updates come in two flavours — *add* and *set* — and they interact in
+      a way that is easy to get wrong:
+
+      - **apply add `x`:** the node's sum grows by `x × len`. It is a pure
+        increment, so it stacks: keep folding into whatever add is already
+        pending there.
+      - **apply set `x`:** the node's sum *becomes* `x × len`. A set **overrides
+       ** any earlier pending work — if you set a range to `5` after having
+        scheduled `+2`, the `+2` is gone (the final value is `5`, not `7`).
+
+      So every node keeps an `addTag` **and** a `setTag` (a sentinel meaning "no
+      set pending"). When pushing, you must apply the **set tag first, then the
+      add tag** — set-and-then-add is the correct final value, and applying them
+      in the wrong order corrupts the descendants. Getting this ordering right
+      is the whole art of the problem.
+
+      :::tip
+      **Interview tip:** lazy propagation is one of the most heavily grilling
+      segment-tree topics. The two hardest-to-remember details — and the ones
+      interviewers probe — are (1) returning the node's cached sum when it is
+      fully covered, and (2) keeping *two* tags when both range-add and range-set
+      exist, with set applied *before* add during a push. A bug in either makes
+      answers subtly wrong only on overlapping updates, which is exactly how
+      these are hidden in test cases.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There is an array of `n` integers, indexed `1..n`. Process `q` queries of
+      three types:
+
+      1. `1 a b x` — add `x` to every element in the range `[a, b]`;
+      2. `2 a b` — print the sum of all elements in the range `[a, b]`;
+      3. `3 a b x` — set every element in `[a, b]` to the value `x`.
+
+      ## Input
+
+      The first input line has two integers `n` and `q`: the size of the array
+      and the number of queries.
+
+      The second line has `n` integers: the initial array values.
+
+      Then there are `q` lines describing the queries.
+
+      ## Output
+
+      Print the answer to each query of type `2`, one per line.
+
+      ## Constraints
+
+      - `1 <= n, q <= 2 * 10^5`
+      - `-10^9 <= initial values, x <= 10^9`
+      - `1 <= a <= b <= n`
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 4
+      1 2 3 4 5
+      1 1 3 5
+      2 2 4
+      3 2 3 0
+      2 1 5
+      ```
+      **Output:**
+      ```
+      19
+      15
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(len) per operation, O(q·n) total**
+
+      Keep the raw array. A range add/set loops over `[a,b]` and edits values; a
+      range sum scans `[a,b]`. With `n,q <= 2*10^5` the worst case is `4*10^10`
+      steps — far too slow, but simple and correct.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<ll> a(n + 1);
+          for (int i = 1; i <= n; i++) cin >> a[i];
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) { int l, r; ll x; cin >> l >> r >> x; for (int i = l; i <= r; i++) a[i] += x; }
+              else if (t == 2) { int l, r; cin >> l >> r; ll s = 0; for (int i = l; i <= r; i++) s += a[i]; cout << s << "\n"; }
+              else { int l, r; ll x; cin >> l >> r >> x; for (int i = l; i <= r; i++) a[i] = x; }
+          }
+          return 0;
+      }
+      ```
+
+      *`O(q·n)` worst case — correct but too slow for the real constraints.*
+
+      **② Optimization — lazy segment tree, O((n+q) log n)** — optimal
+
+      Each node caches its `sum` and carries `setTag` (sentinel = none) plus
+      `addTag`. A fully-covered update only tags the node; a descending update
+      first `push`es (set, then add) to the children. A fully-covered query
+      returns the cached `sum` without descending. This is the tier we compile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll NONE = (ll)4e18;                 // sentinel: no pending set
+
+      struct LazySeg {
+          int n; vector<ll> sum, setT, addT;
+          LazySeg(const vector<ll>& a) {
+              n = (int)a.size() - 1;
+              sum.assign(4 * n, 0); setT.assign(4 * n, NONE); addT.assign(4 * n, 0);
+              build(1, 1, n, a);
+          }
+          void build(int v, int l, int r, const vector<ll>& a) {
+              if (l == r) { sum[v] = a[l]; return; }
+              int m = (l + r) / 2;
+              build(v * 2, l, m, a); build(v * 2 + 1, m + 1, r, a);
+              sum[v] = sum[v * 2] + sum[v * 2 + 1];
+          }
+          void applySet(int v, int l, int r, ll x) { sum[v] = x * (r - l + 1); setT[v] = x; addT[v] = 0; }
+          void applyAdd(int v, int l, int r, ll x) {
+              sum[v] += x * (r - l + 1);
+              if (setT[v] != NONE) setT[v] += x;   // set followed by add -> fold into set
+              else addT[v] += x;                   // add stacks onto add
+          }
+          void push(int v, int l, int r) {
+              int m = (l + r) / 2;
+              if (setT[v] != NONE) { applySet(v * 2, l, m, setT[v]); applySet(v * 2 + 1, m + 1, r, setT[v]); setT[v] = NONE; }
+              if (addT[v] != 0)    { applyAdd(v * 2, l, m, addT[v]);  applyAdd(v * 2 + 1, m + 1, r, addT[v]);  addT[v] = 0; }
+          }
+          void setRange(int v, int l, int r, int ql, int qr, ll x) {
+              if (ql <= l && r <= qr) { applySet(v, l, r, x); return; }
+              push(v, l, r);
+              int m = (l + r) / 2;
+              if (ql <= m) setRange(v * 2, l, m, ql, qr, x);
+              if (qr > m)  setRange(v * 2 + 1, m + 1, r, ql, qr, x);
+              sum[v] = sum[v * 2] + sum[v * 2 + 1];
+          }
+          void addRange(int v, int l, int r, int ql, int qr, ll x) {
+              if (ql <= l && r <= qr) { applyAdd(v, l, r, x); return; }
+              push(v, l, r);
+              int m = (l + r) / 2;
+              if (ql <= m) addRange(v * 2, l, m, ql, qr, x);
+              if (qr > m)  addRange(v * 2 + 1, m + 1, r, ql, qr, x);
+              sum[v] = sum[v * 2] + sum[v * 2 + 1];
+          }
+          ll query(int v, int l, int r, int ql, int qr) {
+              if (ql <= l && r <= qr) return sum[v];          // cached sum — no descend
+              push(v, l, r);
+              int m = (l + r) / 2; ll res = 0;
+              if (ql <= m) res += query(v * 2, l, m, ql, qr);
+              if (qr > m)  res += query(v * 2 + 1, m + 1, r, ql, qr);
+              return res;
+          }
+      };
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<ll> a(n + 1);
+          for (int i = 1; i <= n; i++) cin >> a[i];
+          LazySeg s(a);
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) { int l, r; ll x; cin >> l >> r >> x; s.addRange(1, 1, n, l, r, x); }
+              else if (t == 2) { int l, r; cin >> l >> r; cout << s.query(1, 1, n, l, r) << "\n"; }
+              else { int l, r; ll x; cin >> l >> r >> x; s.setRange(1, 1, n, l, r, x); }
+          }
+          return 0;
+      }
+      ```
+
+      *`O((n+q) log n)` time, `O(n)` space — optimal. (An `O(sqrt n)` per-op
+      block decomposition is a correct alternative, but the lazy tree wins on
+      speed and memory.)*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Node state.** `sum` is the true sum of the segment (keeping `sum` up to
+        date even when tags are pending means a fully-covered query is `O(1)`).
+        `setT` is `NONE` (a big sentinel) when no set is pending; otherwise it
+        holds the exact value the whole segment will become. `addT` holds pending
+        additions.
+
+      - **`applySet`** replaces `sum = x × len` and **clears** `addT`. A set must
+        obliterate earlier adds, so folding any past add into the set is wrong —
+        we throw it away.
+
+      - **`applyAdd`** grows `sum` and, to remember the deferred change: if a set
+        is already pending, add rolls *into* the set value (`setT += x` — the
+        final value is set-then-add); otherwise it accumulates in `addT`.
+
+      - **`push`** propagates to children — **set first, then add**. That order is
+        non-negotiable: a descendant's correct pending state is "set value, then
+        add increment". Pushing add first would let a later set's `applySet` wipe
+        an add that should have survived.
+
+      - **Fully-covered shortcut.** Every `setRange`/`addRange`/`query` first
+        checks `ql <= l && r <= qr`: update tags or return the cached sum, *no
+        descent*. This is what makes range operations logarithmic — the tree only
+        descends past a node when the interval is split.
+
+      - **The exact `1 1 3 5` then `3 2 3 0` interplay** is where careless code
+        fails: the add tagged at the root-left and the later set on a sub-range
+        must combine to the true per-leaf values, which the set-then-add push
+        ordering guarantees.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, `a = [1, 2, 3, 4, 5]`.
+
+      **Query `1 1 3 5`** — add `5` to `[1,3]`. Array effectively becomes
+      `[6, 7, 8, 4, 5]`.
+
+      **Query `2 2 4`** — sum of `[2,4] = 7 + 8 + 4 = 19`. Expected `19`,
+      answer `19`.
+
+      **Query `3 2 3 0`** — set `[2,3]` to `0`. Here the earlier add and this
+      set overlap on positions `2, 3`; the set overrides the add there. Array
+      becomes `[6, 0, 0, 4, 5]`.
+
+      **Query `2 1 5`** — sum of `[1,5] = 6 + 0 + 0 + 4 + 5 = 15`. Expected
+      `15`, answer `15`.
+
+      Printed output:
+      ```
+      19
+      15
+      ```
+      Matching the sample exactly. Note the key subtlety: positions `2` and `3`
+      got `+5` then were set to `0` — the set won, they do NOT become `5`.
+  - type: flowchart
+    title: "Lazy segment tree — range add/set/sum"
+    nodes: ["range op [a,b] descends from root", "fully covered?", "yes: tag node (set clears adds, add folds into set) / return cached sum", "no: push set-then-add to children", "recurse into split children", "re-merge child sums into parent"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "yes"}
+      - {from: 1, to: 3, label: "no"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "In a lazy tree that supports both range-set and range-add, when pushing a node's tags to its children you must…"
+    options:
+      - "…apply only the newest tag, because older tags are automatically absorbed."
+      - "…apply the add tag first and the set tag second, so leftover increments survive."
+      - "…apply the set tag first, then the add tag — because a pending set then a pending add composes to (set value) + (add), whereas an add then a set would wrongly wipe the add."
+      - "…reset both tags without touching the children, since descendants read the cached sum."
+    answer: 2
+    explanation: "Set-and-then-add is the real final value: first the range becomes the set value, then the add increments it. Pushing add first would let a set applied on top wipe the add (applySet clears addT), corrupting descendants. Set-then-add preserves both correctly."
+---

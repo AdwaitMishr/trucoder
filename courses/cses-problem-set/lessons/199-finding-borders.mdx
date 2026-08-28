@@ -1,0 +1,218 @@
+---
+id: finding-borders
+title: Finding Borders
+type: content
+difficulty: easy
+order: 199
+tags:
+  - string
+  - prefix-function
+  - kmp
+blocks:
+  - type: markdown
+    content: |
+      # Finding Borders — every proper prefix that is also a suffix
+
+      A **border** of a string is a *proper* prefix (not the whole string) that
+      is also a **suffix**. For example the borders of `abcababcab` are `ab`
+      and `abcab`. Your task is to list **all border lengths** of a string.
+
+      ## The prefix function already gives you the answer
+
+      Recall the prefix function `pi[i]` = length of the **longest proper
+      border** of the prefix `s[0..i]`. For the whole string:
+
+      - `pi[n-1]` is the *longest* border length.
+      - The next-longest border of `s` is the longest border of that prefix —
+        i.e. `pi[pi[n-1] - 1]`.
+      - Repeating gives a **chain**: each border's longest border is the next
+        border down, ending at `0`.
+
+      So all borders of `s` are exactly the values on the chain
+      `pi[n-1] -> pi[pi[n-1]-1] -> pi[pi[...]-1] -> ...`. Walk the chain and
+      collect them; print in increasing order.
+
+      ## Why the chain is complete
+
+      Any border `B` of `s` is itself already a border of the *longest* border
+      `pi[n-1]` (the longest border of a border is still a border of `s`). By
+      induction every border lies on this chain, so the chain visits every
+      border exactly once.
+
+      ## Complexity
+
+      - Computes `pi`: `O(n)`. Walking the chain: `O(n)` (each step shortens
+        strictly).
+      - Total `O(n)` time, `O(n)` space for `n <= 10^6`.
+
+      :::tip
+      **Interview tip:** "Print all borders" is the gateway to two famous
+      follow-ups — **Finding Periods** (period = `n` minus a border) and KMP.
+      If an interviewer asks about borders, be ready to name the chain walk
+      through the prefix function as the `O(n)` answer.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      A border of a string is a prefix that is also a suffix of the string but
+      not the whole string. Find all border lengths of a given string.
+
+      ## Input
+
+      The only input line has a string of length `n` consisting of characters
+      `a`–`z`.
+
+      **Constraints:** `1 <= n <= 10^6`
+
+      ## Output
+
+      Print all border lengths of the string in increasing order.
+
+      ## Sample
+
+      **Input:**
+      ```
+      abcababcab
+      ```
+      **Output:**
+      ```
+      2 5
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — test every length, O(n²)**
+
+      For each length `L` from `1` to `n-1`, compare the prefix and the suffix of
+      length `L` character by character. `O(n)` candidate lengths × `O(n)`
+      comparison = `O(n²)`; for `n = 10^6` that is `10^12` — far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin>>s; int n=s.size();
+          vector<int> ans;
+          for(int L=1; L<n; L++) if(s.substr(0,L)==s.substr(n-L)) ans.push_back(L);
+          for(size_t i=0;i<ans.size();i++){ if(i) cout<<" "; cout<<ans[i]; } cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n²)` time. Too slow for `n = 10^6`.*
+
+      **② Optimization — prefix-function border chain, O(n) (optimal)**
+
+      Build `pi`, then walk the chain from `pi[n-1]` down to `0`, collecting
+      every length. Compiled and run against the sample below.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin>>s; int n=s.size();
+          vector<int> pi(n,0);
+          for(int i=1;i<n;i++){ int j=pi[i-1]; while(j>0&&s[i]!=s[j]) j=pi[j-1]; if(s[i]==s[j]) j++; pi[i]=j; }
+          vector<int> ans;
+          int j=pi[n-1];
+          while(j>0){ ans.push_back(j); j=pi[j-1]; }
+          reverse(ans.begin(),ans.end());
+          for(size_t i=0;i<ans.size();i++){ if(i) cout<<" "; cout<<ans[i]; } cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n)` time, `O(n)` space. The recommended solution.*
+
+      **③ Alternative — Z-function, O(n)**
+
+      The Z-array gives `z[i]` = longest common prefix of `s` and `s[i..]`. A
+      length `L` is a border exactly when the suffix starting at `n-L` shares
+      `>= L` characters with the prefix, i.e. `z[n-L] >= L`. Checking every `L`
+      is then `O(1)` each.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin>>s; int n=s.size();
+          vector<int> z(n,0); int l=0,r=0;
+          for(int i=1;i<n;i++){
+              if(i<=r) z[i]=min(r-i+1,z[i-l]);
+              while(i+z[i]<n && s[z[i]]==s[i+z[i]]) z[i]++;
+              if(i+z[i]-1>r){ l=i; r=i+z[i]-1; }
+          }
+          vector<int> ans;
+          for(int L=1; L<n; L++) if(z[n-L]>=L) ans.push_back(L);
+          for(size_t i=0;i<ans.size();i++){ if(i) cout<<" "; cout<<ans[i]; } cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n)` time, `O(n)` space. Uses the suffix-prefix overlap view of a
+      border instead of the chain.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Border chain descent.** `pi[n-1]` is the longest border; each next
+        border is `pi[previous - 1]`. The loop
+        `while (j > 0) { ans.push_back(j); j = pi[j-1]; }` walks the whole chain.
+      - **Ordering.** The chain is produced longest → shortest, so a
+        `reverse` yields increasing lengths exactly as required.
+      - **Proper-only.** The chain stops at `j = 0`, so the whole string
+        (length `n`) is never printed — borders are proper prefixes only. This
+        is the one off-by-one to watch.
+      - **Z alternative.** `z[n-L] >= L` reads "the suffix that begins `L`
+        characters before the end matches the prefix for `L` characters" — that
+        is the definition of a border, checked in O(1).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `s = "abcababcab"`, `n = 10`.
+
+      Compute the prefix function (only the values on the final chain matter):
+
+      ```
+      i:  0  1  2  3  4  5  6  7  8  9
+      s:  a  b  c  a  b  a  b  c  a  b
+      pi: 0  0  0  1  2  1  2  3  4  5
+      ```
+
+      - Longest border: `pi[9] = 5` → collect `5`.
+      - Next: `pi[5-1] = pi[4] = 2` → collect `2`.
+      - Next: `pi[2-1] = pi[1] = 0` → stop.
+
+      Chain `{5, 2}`; reversed → `{2, 5}`.
+
+      Printed:
+      ```
+      2 5
+      ```
+      Expected `2 5` — match. (Border `ab` and border `abcab`.)
+  - type: flowchart
+    title: "Collecting a border chain"
+    nodes: ["compute prefix function pi", "j = pi[n-1]", "j > 0?", "record border length j", "j = pi[j-1]", "reverse recorded lengths and print"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3, label: "yes"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 2}
+      - {from: 2, to: 5, label: "no"}
+  - type: mcq
+    prompt: "Why does walking only the chain pi[n-1], pi[pi[n-1]-1], ... find ALL borders rather than just the longest one?"
+    options:
+      - "Because every border of the whole string is also a border of its longest border, so descending longest → its longest border → ... revisits every border exactly once."
+      - "Because the prefix function is constant across all prefixes."
+      - "Because borders never overlap, so no two can share a prefix."
+      - "Because the chain is sorted in increasing order automatically."
+    answer: 0
+    explanation: "If B is any border of s, then B is a border of the string pi[n-1] (the longest border), since B still matches both the front and back of that prefix. Applying this recursively, every border sits somewhere on the chain pi[n-1], then pi[pi[n-1]-1], and so on down to 0 — so the chain enumerates the full set."
+---

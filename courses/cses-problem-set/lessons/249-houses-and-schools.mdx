@@ -1,0 +1,375 @@
+---
+id: houses-and-schools
+title: "Houses and Schools"
+type: content
+difficulty: hard
+order: 249
+tags:
+  - advanced-techniques
+  - dynamic-programming
+  - divide-and-conquer-optimization
+  - weighted-median
+blocks:
+  - type: markdown
+    content: |
+      # Houses and Schools — place k facilities to minimise total travel
+
+      There are `n` houses in a row with `c_i` children each. You must place `k`
+      schools (each inside some house) so that every child walks to the **nearest**
+      school. Minimise the total walking distance over all children.
+
+      Because houses are on a line and each child goes to its nearest school, an
+      optimal placement partitions the houses into **`k` consecutive groups**,
+      each served by one school placed at the **weighted median** of its group
+      (the position minimising the sum of absolute distances). So this is a
+      **partitioning DP** accelerated by the **divide-and-conquer optimization**.
+
+      ## The DP
+
+      Let `cost(l, r)` be the minimum walking distance when houses `l..r` are all
+      served by a single school optimally placed inside that range. Then
+
+      ```
+      dp[t][i] = min over j in [t-1, i-1] of  dp[t-1][j] + cost(j+1, i)
+      ```
+
+      with `dp[0][0] = 0`; the answer is `dp[k][n]`. Filling it naively is
+      `O(k n²)` plus whatever computing `cost` costs.
+
+      ## Computing cost(l, r) in O(1)
+
+      For houses `l..r`, the optimal school sits at a **weighted median**: the
+      smallest house `m` where at least half the children are at or to its left.
+      With prefix sums of children `P` and of weighted children `Q`
+
+      ```
+      P[i] = c_1 + ... + c_i
+      Q[i] = 1·c_1 + 2·c_2 + ... + i·c_i
+      ```
+
+      we find `m` by binary search, then split the total distance into children on
+      the left (`m - house`) and on the right (`house - m`):
+
+      ```
+      cost(l, r) =  (P[m]-P[l-1])·m - (Q[m]-Q[l-1])        # children l..m
+              +  (Q[r]-Q[m]) - (P[r]-P[m])·m               # children m+1..r
+      ```
+
+      That is `O(log n)` per query (the median binary search), or we can precompute
+      the whole `cost` table in `O(n^2)` for O(1) lookups.
+
+      :::tip
+      **Interview tip:** "place k facilities on a line so that each client walks to
+      the nearest one" is the canonical **facility-location partition DP**. The two
+      things to nail in an interview: (1) the optimal single-facility spot is the
+      *weighted median*, not the average, and (2) the interval cost is Monge, which
+      unlocks the divide-and-conquer speedup. Expect it in "cache/warehouse/server
+      placement" worded variants.
+      :::
+
+  - type: markdown
+    content: |
+      # Question — Houses and Schools
+
+      There are `n` houses on a street, numbered `1, 2, ..., n`. The distance of
+      houses `a` and `b` is `|a - b|`. You know the number of children in each
+      house.
+
+      Your task is to establish `k` schools in such a way that each school is in
+      some house. Then each child goes to the **nearest** school. What is the
+      **minimum total walking distance** of the children if you act optimally?
+
+      **Input**
+
+      The first input line has two integers `n` and `k`: the number of houses and
+      the number of schools. The houses are numbered `1, 2, ..., n`.
+      After this, there are `n` integers `c_1, c_2, ..., c_n`: the number of
+      children in each house.
+
+      **Output**
+
+      Print the minimum total distance.
+
+      **Constraints**
+
+      - `1 <= k <= n <= 3000`
+      - `1 <= c_i <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      6 2
+      2 7 1 4 6 4
+      ```
+
+      Output:
+
+      ```
+      11
+      ```
+
+      Explanation: houses 2 and 5 will have schools.
+  - type: markdown
+    content: |
+      ### Solution — Houses and Schools
+
+      **① Brute force — O(k n³) time, O(n) space**
+
+      Try every placement of one school within a group by scanning all candidate
+      houses to compute `cost(l, r)` each time:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll INF = (1LL << 62);
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, k; cin >> n >> k;
+          vector<ll> c(n + 1);
+          for (int i = 1; i <= n; ++i) cin >> c[i];
+          // cost(l, r): try every school house m in [l, r]
+          auto cost = [&](int l, int r) {
+              ll best = INF;
+              for (int m = l; m <= r; ++m) {
+                  ll tot = 0;
+                  for (int i = l; i <= r; ++i) tot += c[i] * (ll)abs(i - m);
+                  best = min(best, tot);
+              }
+              return best;
+          };
+          vector<vector<ll>> dp(k + 1, vector<ll>(n + 1, INF));
+          dp[0][0] = 0;
+          for (int t = 1; t <= k; ++t)
+              for (int i = 1; i <= n; ++i)
+                  for (int j = 0; j < i; ++j)
+                      dp[t][i] = min(dp[t][i], dp[t - 1][j] + cost(j + 1, i));
+          cout << dp[k][n] << "\n";
+      }
+      ```
+
+      Each `cost` is `O(n)` (a full scan over candidate houses), so the DP is
+      `O(k n² · n) = O(k n³)`. Far too slow.
+
+      **② Optimisation — O(1) cost via weighted median, O(k n²) time, O(n²) space**
+
+      Precompute `cost(l, r)` for all intervals with the prefix sums `P`, `Q`
+      (weighted median + two distance sums). Then the DP body is a single cheap
+      lookup:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll INF = (1LL << 62);
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, k; cin >> n >> k;
+          vector<ll> c(n + 1), P(n + 1, 0), Q(n + 1, 0);
+          for (int i = 1; i <= n; ++i) { cin >> c[i]; P[i] = P[i - 1] + c[i]; Q[i] = Q[i - 1] + c[i] * (ll)i; }
+
+          vector<vector<ll>> cost(n + 2, vector<ll>(n + 2, 0));
+          for (int l = 1; l <= n; ++l)
+              for (int r = l; r <= n; ++r) {
+                  ll total = P[r] - P[l - 1];
+                  int lo = l, hi = r, m = l;                 // weighted median
+                  while (lo <= hi) {
+                      int mid = (lo + hi) >> 1;
+                      if ((P[mid] - P[l - 1]) * 2 >= total) { m = mid; hi = mid - 1; }
+                      else lo = mid + 1;
+                  }
+                  cost[l][r] = ((P[m] - P[l - 1]) * m - (Q[m] - Q[l - 1]))
+                             + ((Q[r] - Q[m]) - (P[r] - P[m]) * m);
+              }
+
+          vector<vector<ll>> dp(k + 1, vector<ll>(n + 1, INF));
+          dp[0][0] = 0;
+          for (int t = 1; t <= k; ++t)
+              for (int i = 1; i <= n; ++i)
+                  for (int j = 0; j < i; ++j)
+                      dp[t][i] = min(dp[t][i], dp[t - 1][j] + cost[j + 1][i]);
+          cout << dp[k][n] << "\n";
+      }
+      ```
+
+      Now the DP is `O(k n²)` — at `n = k = 3000`, `2.7·10^10` again, still too
+      slow.
+
+      **③ Further optimisation — divide-and-conquer DP, O(k n log n) time, O(n²) space**
+
+      `cost(l, r)` (a one-dimensional facility-location cost) satisfies the
+      **quadrangle / Monge inequality**, so the optimal split `opt[i]` for row `t`
+      is **monotone in `i`**. Use the divide-and-conquer DP that computes the
+      midpoint first and bounds the two recursions:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll INF = (1LL << 62);
+
+      int n, k;
+      vector<vector<ll>> cost1;
+      vector<ll> dpP, dpC;
+
+      void solve(int lo, int hi, int optLo, int optHi) {
+          if (lo > hi) return;
+          int mid = (lo + hi) >> 1;
+          ll best = INF; int who = optLo;
+          for (int j = optLo; j <= min(mid - 1, optHi); ++j) {
+              if (dpP[j] == INF) continue;
+              ll v = dpP[j] + cost1[j + 1][mid];
+              if (v < best) { best = v; who = j; }
+          }
+          dpC[mid] = best;
+          solve(lo, mid - 1, optLo, who);
+          solve(mid + 1, hi, who, optHi);
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n >> k;
+          vector<ll> c(n + 1), P(n + 1, 0), Q(n + 1, 0);
+          for (int i = 1; i <= n; ++i) { cin >> c[i]; P[i] = P[i - 1] + c[i]; Q[i] = Q[i - 1] + c[i] * (ll)i; }
+
+          cost1.assign(n + 2, vector<ll>(n + 2, 0));
+          for (int l = 1; l <= n; ++l)
+              for (int r = l; r <= n; ++r) {
+                  ll total = P[r] - P[l - 1];
+                  int lo = l, hi = r, m = l;
+                  while (lo <= hi) {
+                      int mid = (lo + hi) >> 1;
+                      if ((P[mid] - P[l - 1]) * 2 >= total) { m = mid; hi = mid - 1; }
+                      else lo = mid + 1;
+                  }
+                  cost1[l][r] = ((P[m] - P[l - 1]) * m - (Q[m] - Q[l - 1]))
+                              + ((Q[r] - Q[m]) - (P[r] - P[m]) * m);
+              }
+
+          dpP.assign(n + 1, INF); dpC.assign(n + 1, INF);
+          dpP[0] = 0;
+          for (int t = 1; t <= k; ++t) {
+              fill(dpC.begin(), dpC.end(), INF);
+              solve(1, n, 0, n);
+              dpP.swap(dpC);
+          }
+          cout << dpP[n] << "\n";
+      }
+      ```
+
+      Each row costs `O(n log n)`, so overall `O(k n log n)` — for
+      `n = k = 3000` roughly `3000 · 3000 · 12 ≈ 10^8` operations. Fast enough.
+
+      **④ Alternative — why CHT does *not* cleanly apply here.** The group cost
+      `cost(l, r)` is a *weighted-median distance* whose median position depends on
+      **both** endpoints `l` and `r` — it does not factor into
+      `A(r) + B(l) + C(l)·D(r)`. That means the transition cannot be turned into
+      "min over lines evaluated at a scalar", so the convex hull / Li Chao trick is
+      not directly usable. The correct accelerator for this Monge partitioning DP
+      is divide-and-conquer (or, on interval variants, Knuth's optimization). Don't
+      force CHT onto a cost that isn't a linear form — recognise the quadrangle
+      shape and reach for divide-and-conquer instead.
+  - type: markdown
+    content: |
+      # Code logic — Houses and Schools
+
+      Focus on the final divide-and-conquer solution **③**:
+
+      - `P` and `Q` are the prefix sums of children and of `children × house`.
+        Together they let us compute, for any interval `[l, r]`, the total distance
+        from a candidate school house `m` in `O(1)`.
+      - The **weighted median** `m` is found by binary search: the smallest house
+        such that `(P[m] - P[l-1])·2 >= total`. For a sum-of-absolute-distances
+        objective any weighted median is optimal, so this single `m` gives the best
+        school position.
+      - `cost(l, r)` splits the distance into a left part (children at houses `<= m`,
+        paying `m - house`) and a right part (children at houses `> m`, paying
+        `house - m`). Both are read off `P` and `Q` in O(1).
+      - Precomputing `cost1[l][r]` for every interval turns each DP transition into
+        one array lookup.
+      - `dp[t][i]` places `t` schools covering the first `i` houses; in the 
+        transition, schools `1..t-1` cover `1..j` and school `t` covers `j+1..i`.
+      - `solve` computes `dpC[mid]` by scanning only the currently-plausible split
+        range `[optLo, optHi]`, then recurses left with range `[optLo, who]` and
+        right with `[who, optHi]`. The monotonicity of `opt` (a consequence of the
+        Monge cost) is what makes those ranges correct and small.
+
+      :::tip
+      **Interview question:** Why is the school placed at the weighted median and
+      not the average house? — For a sum-of-absolute-distances objective, the
+      minimiser is any *median* (weighted: by children), whereas the mean minimises
+      sum-of-squared distances. Placing at the average would be wrong and would
+      fail the sample's `cost(4,6)=8` check (mean house 5 also works there, but in
+      general it does not).
+      :::
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace on the sample: `n = 6, k = 2`, children `c = [2, 7, 1, 4, 6, 4]`.
+
+      Prefix sums:
+
+      ```
+      P = [0, 2, 9, 10, 14, 20, 24]
+      Q = [0, 2, 16, 19, 35, 65, 89]
+      ```
+
+      **Row 1** — one school for the first `i` houses:
+
+      | i | median house | cost(1, i) |
+      |---|-------------|-----------|
+      | 1 | 1 | 0 |
+      | 2 | 2 | `2·1 = 2` → 2 |
+      | 3 | 2 | `2·1 + 1·1 = 3` → 3 |
+      | 4 | 2 | `2·2 + 1·1 + 4·2 = 11` → 11 |
+
+      Check `cost(1, 4)`: children `2, 7, 1, 4` at houses 1–4, median house 2, so
+      `2·|1-2| + 7·0 + 1·|3-2| + 4·|4-2| = 2 + 0 + 1 + 8 = 11`.
+
+      **Key values for `n = 6`:**
+
+      - `cost(1, 3) = 3` (school at house 2: `2·1 + 1·1 = 3`)
+      - `cost(4, 6) = 8` (house 5 is the median of children 4,6,4 ⇒ `4·1 + 4·1 = 8`)
+      - `cost(1, 2) = 2`, `cost(3, 6) = 10`, `cost(1, 4) = 11`
+
+      **Row 2** — `dp2[6] = min over j in [1..5] of dp1[j] + cost(j+1, 6)`:
+
+      | j | dp1[j] | cost(j+1, 6) | total |
+      |---|--------|--------------|-------|
+      | 2 | 2      | cost(3,6) = 10 | 12 |
+      | 3 | 3      | cost(4,6) = 8  | **11** |
+      | 4 | 11     | cost(5,6) = 4  | 15 |
+
+      The minimum is `11` at `j = 3`, matching the sample output.
+
+      Reading it back: schools at houses `2` (serving houses 1–3) and `5` (serving
+      houses 4–6), exactly the sample's explanation "houses 2 and 5 will have
+      schools".
+  - type: flowchart
+    title: "Houses and Schools — facility-partition DP"
+    nodes:
+      - "nearest school => consecutive groups"
+      - "dp[t][i] = min_j dp[t-1][j] + cost(j+1, i)"
+      - "cost(l,r): one school at weighted median (P,Q prefix sums)"
+      - "cost is Monge => opt monotone"
+      - "divide-and-conquer DP, O(k n log n)"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+  - type: mcq
+    prompt: "Why is the convex hull trick NOT the right accelerator for Houses and Schools, while divide-and-conquer is?"
+    options:
+      - "Because cost(l,r) is a weighted-median distance that depends on both endpoints and does not factor into a linear form C(l)·D(r) + A(r) + B(l); but it is Monge, so the optimal split is monotone and divide-and-conquer applies."
+      - "Because schools must be placed in even-numbered houses only."
+      - "Because k can be larger than n, which breaks the CHT."
+      - "Because convex hull trick only works on trees, never on partitioning DP."
+    answer: 0
+    explanation: "CHT needs each transition to be 'min over lines evaluated at a scalar', which requires the cost to factor as A(r)+B(l)+C(l)·D(r). A weighted-median distance does not, so CHT is unusable. But it satisfies the quadrangle (Monge) inequality, which makes the optimal split index opt[i] monotone — the exact precondition of the divide-and-conquer DP optimization."
+---

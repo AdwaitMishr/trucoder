@@ -1,0 +1,187 @@
+---
+id: pyramid-array
+title: "Pyramid Array"
+type: content
+difficulty: medium
+order: 362
+tags:
+  - dynamic-programming
+  - arrays
+blocks:
+  - type: markdown
+    content: |
+      # Pyramid Array — longest subarray that rises then falls (a mountain)
+
+      ## Theory
+
+      A **pyramid / mountain** subarray is one that first **strictly increases** to a peak and
+      then **strictly decreases** to its end, with at least one step on each side. We want the
+      **longest** such contiguous subarray.
+
+      This decomposes into two one-dimensional runs, using the idea of *run lengths*:
+
+      - `up[i]` = length of the longest strictly-increasing run **ending** at `i`.
+      - `down[i]` = length of the longest strictly-decreasing run **starting** at `i`.
+
+      Both are computed in a single sweep each with a recurring step:
+      `up[i] = up[i-1] + 1` if `a[i] > a[i-1]` else `1`, and symmetrically
+      `down[i] = down[i+1] + 1` if `a[i] > a[i+1]` else `1`.
+
+      A position `i` is a valid peak when `up[i] ≥ 2` and `down[i] ≥ 2` (at least one step up
+      and one step down). The longest pyramid centred at `i` has length `up[i] + down[i] − 1`
+      — join its maximal increasing left part and decreasing right part at the peak. The
+      answer is the maximum over all peaks.
+
+      **Time:** `O(n)` (two passes + a scan). **Space:** `O(n)`.
+
+      :::tip
+      **Interview tip:** "Mountain/pyramid peak" problems — longest bitonic or mountain subarray
+      — all reduce to **precomputing left and right run lengths** and combining them at a peak
+      index. The two-pass (`up`/`down`) skeleton recurs for the longest *mountain* in an array,
+      the *number* of bitonic subarrays, and (with a small tweak) counting them, because the
+      run arrays make each peak's reachable left/right endpoints an O(1) lookup.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Question
+
+      Given an array of `n` integers, find the length of the **longest contiguous subarray**
+      that forms a **pyramid (mountain)**: it strictly increases to a peak and then strictly
+      decreases, with at least one step on each side. Output the length, or `0` if no such
+      subarray exists.
+
+      **Input.** The first line has an integer `n`. The second line has `n` integers `a[1..n]`.
+
+      **Output.** Print the length of the longest pyramid subarray.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 2·10⁵`
+      - `−10⁹ ≤ a[i] ≤ 10⁹`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      7
+      2 1 4 7 3 2 5
+      ```
+
+      **Output:**
+      ```
+      5
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²).** For each candidate peak `i`, scan left while elements strictly
+      increase to reach `i`, and scan right while they strictly decrease from `i`; combine the
+      two lengths. Correct, but the left+right scans cost O(n) per peak.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          int n; cin>>n; vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          int ans=0;
+          for(int i=0;i<n;i++){
+              int l=i; while(l>0 && a[l-1]<a[l]) l--;    // increasing to i
+              int r=i; while(r<n-1 && a[r]>a[r+1]) r++;  // decreasing from i
+              if(i-l>=1 && r-i>=1) ans=max(ans, (i-l)+(r-i)+1);
+          }
+          cout<<ans<<"\n";
+      }
+      ```
+      *Complexity: O(n²) — too slow for `n = 2·10⁵`.*
+
+      **② Optimization — two-pass run lengths, O(n) (intended).** Compute `up` and `down` once,
+      then take `max(up[i]+down[i]-1)` over positions that are genuine peaks:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n; vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          if(n<3){ cout<<0<<"\n"; return 0; }
+          vector<int> up(n), down(n);
+          up[0]=1;
+          for(int i=1;i<n;i++) up[i] = (a[i] > a[i-1]) ? up[i-1]+1 : 1;
+          down[n-1]=1;
+          for(int i=n-2;i>=0;i--) down[i] = (a[i] > a[i+1]) ? down[i+1]+1 : 1;
+          int ans=0;
+          for(int i=1;i<n-1;i++)
+              if(up[i]>=2 && down[i]>=2)
+                  ans = max(ans, up[i]+down[i]-1);
+          cout<<ans<<"\n";
+      }
+      ```
+      *Complexity: O(n) time, O(n) space — solves `n = 2·10⁵`.*
+
+      **③ Further optimization — O(1) extra space.** `up` can be computed left-to-right and
+      streamed into the peak check if you compute all `down` first: keep a running `up` variable
+      and combine with the stored `down[i]` in the same loop. Same O(n) time, but the arrays
+      shrink to a single `down` vector. Not asymptotically better, just less memory.
+
+      **④ Alternative — count all pyramid subarrays.** With the same `up, down` arrays, the
+      number of pyramids centred at peak `i` is `(up[i]−1) · (down[i]−1)`: choose the left end
+      among the `up[i]−1` in-run choices and the right end among the `down[i]−1` out-run
+      choices, and every such combination is a valid pyramid. Summing over peaks counts every
+      pyramid subarray in O(n) — a different *counting* task solved by the identical run-length
+      machinery.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      - **Two runs, two sweeps.** `up[i]` extends the increasing run while `a[i] > a[i-1]`,
+        otherwise it resets to 1. `down[i]` does the mirror from the right end.
+      - **Peak condition.** The subarray must step up *and* step down, so require `up[i] ≥ 2`
+        and `down[i] ≥ 2`. A plateau (`a[i] == a[i-1]`) resets `up` to 1, so it can never serve
+        as a strict peak.
+      - **Combine.** A peak with left run `up` and right run `down` spans `up + down − 1`
+        elements (the peak is counted in both runs).
+      - **Edge case.** With `n < 3` no pyramid can exist (need ≥ 1 up and ≥ 1 down step), so the
+        answer is `0`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `a = [2, 1, 4, 7, 3, 2, 5]`, `n = 7`.
+
+      Compute `up[]` (increasing runs ending at `i`):
+      `i=0(2):1; i=1(1):1; i=2(4):2; i=3(7):3; i=4(3):1; i=5(2):1; i=6(5):2`
+      → `up = [1,1,2,3,1,1,2]`.
+
+      Compute `down[]` (decreasing runs starting at `i`):
+      `i=6(5):1; i=5(2):1; i=4(3):2; i=3(7):3; i=2(4):1; i=1(1):1; i=0(2):2`
+      → `down = [2,1,1,3,2,1,1]`.
+
+      Scan peaks `i = 1..5` (require `up[i]≥2 && down[i]≥2`):
+      - `i=3` (value 7): `up=3, down=3` → length `3+3−1 = 5`.
+      - Any other `i` fails (e.g. `i=2`: `up=2` but `down=1`; `i=4`: `up=1`).
+
+      Longest pyramid = **5** (the subarray `[1, 4, 7, 3, 2]`):
+
+      Output:
+      ```
+      5
+      ```
+      which matches the sample. ✓
+
+  - type: mcq
+    prompt: "After computing up[i] (increasing-run ending at i) and down[i] (decreasing-run starting at i), why is the longest pyramid centred at peak i equal to up[i] + down[i] − 1?"
+    options:
+      - "Because the maximal increasing prefix and maximal decreasing suffix overlap exactly at the peak i (counted twice), so joining them gives up[i] + down[i] − 1 elements."
+      - "Because it is always equal to up[i] + down[i] regardless of the peak."
+      - "Because strictly increasing and strictly decreasing runs never overlap at all."
+      - "Because up[i] and down[i] are always both 1 at a valid peak."
+    answer: 0
+    explanation: "The left run of length up[i] ends at i and the right run of length down[i] starts at i, so they share only the single peak element. The union therefore has up[i] + down[i] − 1 distinct positions, and no pyramid centred at i can be longer because any longer left/right side would break strict monotonicity."

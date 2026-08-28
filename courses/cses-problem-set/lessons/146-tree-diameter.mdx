@@ -1,0 +1,215 @@
+---
+id: tree-diameter
+title: "Tree Diameter"
+type: content
+difficulty: medium
+order: 146
+tags:
+  - tree-algorithms
+  - tree-diameter
+  - dfs
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      # Tree Diameter — two DFS passes
+
+      The **diameter** of a tree is the length of its *longest path* (number of
+      edges). Two elegant O(n) methods exist: the classic **two-DFS** approach and
+      a **tree-DP** that keeps the two deepest downward paths per node.
+
+      ## Method A — two BFS/DFS passes (the intended trick)
+
+      **Claim:** take *any* node, run a DFS to find the node **farthest from it**
+      (call it `A`). Run a second DFS from `A`; the farthest node `B` found is the
+      far end of a diameter, and the distance between `A` and `B` is the diameter.
+
+      Why it works, intuitively: the farthest node from an arbitrary start always
+      lies on some diameter, and the node farthest from that endpoint is the other
+      endpoint. So the second DFS directly measures a longest path. This relies on
+      the tree being unweighted (or that the first pass goes to a diameter
+      endpoint); on a general graph the same procedure fails, but on a tree it is
+      exact.
+
+      Complexity: two DFS passes, each O(n) → **O(n) time, O(n) space**.
+
+      :::tip
+      **Interview tip:** the two-DFS diameter trick ("find the farthest node, then
+      the farthest node from it") is a favourite warm-up in tree interviews — state
+      the property, give the proof sketch, then implement two DFS passes. Knowing
+      the DP alternative (keep the two deepest child paths) shows depth when they
+      ask for a different approach or a weighted-tree variant.
+      :::
+
+  - type: markdown
+    content: |
+      # Question — Tree Diameter
+
+      You are given a tree consisting of `n` nodes. What is the diameter of the
+      tree?
+
+      The diameter of a tree is the maximum length of a path between two nodes
+      (the length is the number of edges on the path).
+
+      **Input**
+
+      The first input line contains an integer `n`: the number of nodes. The nodes
+      are numbered `1, 2, ..., n`.
+
+      After this, there are `n-1` lines describing the edges. Each line has two
+      integers `a` and `b`: there is an edge between nodes `a` and `b`.
+
+      **Output**
+
+      Print one integer: the diameter of the tree.
+
+      **Constraints**
+
+      - `1 <= n <= 2 * 10^5`
+
+      **Example**
+
+      Input:
+
+      ```
+      5
+      1 2
+      1 3
+      3 4
+      3 5
+      ```
+
+      Output:
+
+      ```
+      3
+      ```
+
+      The longest path has 3 edges, e.g. `2-1-3-4` (or `2-1-3-5`).
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — all-pairs shortest paths, O(n²) time**
+
+      Run a BFS from every node to get the distance between every pair, take the
+      maximum over all pairs. Correct, but `n` BFS runs cost O(n²) total — about
+      `4 * 10^10` operations at `n = 2 * 10^5`. Too slow.
+
+      ```cpp
+      // Illustration of the naive idea only — O(n^2), unusable.
+      // For each u: BFS to all v, record max distance.
+      ```
+
+      **② Optimization — two DFS passes, O(n) time, O(n) space**
+
+      First DFS from node `1` finds the farthest node `A`; second DFS from `A`
+      finds the farthest node `B`; the answer is the distance `A`→`B`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n; vector<vector<int>> g; vector<int> dist;
+      void dfs(int u,int p,int d){ dist[u]=d; for(int v:g[u]) if(v!=p) dfs(v,u,d+1); }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n; g.assign(n+1, {});
+          for(int i=0;i<n-1;++i){ int a,b; cin>>a>>b; g[a].push_back(b); g[b].push_back(a); }
+          dist.assign(n+1, 0);
+          dfs(1, 0, 0);
+          int A = (int)(max_element(dist.begin(), dist.end()) - dist.begin());
+          dist.assign(n+1, 0);
+          dfs(A, 0, 0);
+          cout << *max_element(dist.begin(), dist.end()) << "\n";
+          return 0;
+      }
+      ```
+
+      For a single node (`n = 1`) there are no edges and the answer is correctly 0.
+
+      **③ Further optimization** — not needed: O(n) is optimal.
+
+      **④ Alternative — tree-DP diameter.**
+
+      Run DFS from an arbitrary root. For each node, keep `deep[u]` = the longest
+      downward path from `u`. When processing `u`, the best path that *passes
+      through `u`* is the sum of its two longest child paths; update the running
+      maximum with `top1 + top2`, then set `deep[u] = top1 + 1`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n; vector<vector<int>> g; int diameter = 0;
+      int dfs(int u, int p){
+          int top1 = 0, top2 = 0;
+          for(int v : g[u]) if(v != p){
+              int d = dfs(v, u) + 1;
+              if(d > top1) { top2 = top1; top1 = d; }
+              else if(d > top2) top2 = d;
+          }
+          diameter = max(diameter, top1 + top2);
+          return top1;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n; g.assign(n+1, {});
+          for(int i=0;i<n-1;++i){ int a,b; cin>>a>>b; g[a].push_back(b); g[b].push_back(a); }
+          dfs(1, 0);
+          cout << diameter << "\n";
+          return 0;
+      }
+      ```
+
+      Also O(n). It is slightly heavier on the call stack (pure recursion), which
+      the two-DFS method avoids if written iteratively, but it teaches the "keep
+      the two deepest paths" idea that generalizes to harder tree problems.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Follow the O(n) two-DFS solution in **②**:
+
+      - `dfs(u, p, d)` sets `dist[u] = d` (depth from the current root) and
+        recurses into every neighbour except the parent.
+      - First call with root `1`: `max_element` picks index `A`, the node farthest
+        from `1` — guaranteed to be one end of a diameter.
+      - Reset `dist` and DFS again from `A`; now `dist` holds distance from `A`,
+        and its maximum is the distance to the far end `B` — precisely the
+        diameter.
+      - Recursing with an explicit depth keeps the count of edges correct; no
+        visited array is needed because passing the parent prevents backtracking.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, edges `1-2`, `1-3`, `3-4`, `3-5`.
+
+      First DFS from `1`: depths `dist[1]=0, dist[2]=1, dist[3]=1, dist[4]=2,
+      dist[5]=2`. The farthest node is a tie between `4` and `5`; suppose
+      `A = 4`.
+
+      Second DFS from `4`: depths `dist[4]=0, dist[3]=1, dist[1]=2, dist[5]=2,
+      dist[2]=3`. The maximum is `dist[2] = 3`.
+
+      Output: `3`, matching the sample (`2-1-3-4`, three edges). The two-DFS
+      property held: node `4` is a diameter endpoint, and the farthest node from it
+      (`2`) closes the longest path.
+  - type: flowchart
+    title: "Two-DFS diameter"
+    nodes: ["DFS from node 1", "find farthest node A", "DFS from A",
+            "find farthest node B", "print distance A→B"]
+    edges:
+      - {from: 0, to: 1, label: "depth array"}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: "max depth"}
+  - type: mcq
+    prompt: "Why does the two-DFS method find the diameter, and why would the identical procedure be wrong on a general (non-tree) graph?"
+    options:
+      - "In a tree the node farthest from any start is always a diameter endpoint, so the second DFS measures the true diameter; on a general graph the farthest node from an arbitrary start need not be a diameter endpoint because paths may re-join via other routes, so the trick breaks"
+      - "Because trees always have an even number of nodes"
+      - "Because DFS is faster than BFS on graphs"
+      - "Because the farthest node is always the root of any tree"
+    answer: 0
+    explanation: "A tree has exactly one simple path between any two nodes, which makes the farthest-node-from-a-diameter-endpoint property hold and lets the second DFS read off the diameter. In a general graph, multiple routes between two nodes can make the farthest node from a start land off every diameter, so the two-pass trick is tree-specific; the DP variant (keep two deepest child paths per node) is the more general fallback."
+---

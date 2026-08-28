@@ -1,0 +1,285 @@
+---
+id: minimum-euclidean-distance
+title: Minimum Euclidean Distance
+difficulty: medium
+order: 223
+tags:
+  - geometry
+  - closest-pair
+  - divide-and-conquer
+  - sweep-line
+blocks:
+  - type: markdown
+    content: |
+      # Minimum Euclidean Distance — the closest pair of points
+
+      Given `n` distinct points, find the **minimum square distance** between any
+      two of them. CSES asks for `d²` (not `d`) so the answer is an integer.
+
+      The naive `O(n²)` all-pairs scan is fine for small `n` but dies at
+      `n = 2·10^5`. The two classic near-linear approaches are **divide and
+      conquer** and a **plane sweep**, both `O(n log n)`.
+
+      **The key bound behind both.** A famous packing result: in a vertical strip
+      of width `δ` (the current best distance), with all points sorted by height,
+      any point needs to be compared with **at most the next few points** — no
+      other point in the strip can be closer than `δ` to it. (At most 6 points can
+      fit in a `δ×2δ` rectangle mutually `δ`-apart.) So after filtering to the
+      strip, a windowed scan is constant-size per point.
+
+      **Divide & conquer outline.**
+
+      1. Sort points by `x`. Split the array in half at `x = midX`.
+      2. Recurse on the left and right halves to get each half's best `δ`.
+      3. `δ` = `min(δ_left, δ_right)`. Now only *cross-half* pairs can improve it.
+      4. Collect points within `x`-distance `δ` of the middle line into a strip,
+         sort/merge them by `y`, and for each point check only points whose
+         `y`-distance is `< δ` (a constant-size window).
+      5. Any improvement shrinks `δ`, which only helps.
+
+      The base case (`≤ 3` points) is brute-force.
+
+      **Plane sweep outline.** Sort points by `x`, keep a balanced structure of
+      previously processed points whose `x` is within `δ` of the current one
+      (sorted by `y`), and for the current point check the few candidates whose
+      `y` is within `δ`. `std::set` in C++ gives the needed ordered deletion.
+
+      **Answer type.** Coordinates up to `10^9`, so a coordinate difference is at
+      most `2·10^9`, its square `4·10^18`, and `d² ≤ 8·10^18` — fits in
+      `long long` (max ≈ `9.2·10^18`), so no `__int128_t` needed here (still use
+      `long long` and compare squared distances, never the square root).
+
+      **Complexity.** Both approaches: **O(n log n)** time (DC: `n` points, `2`
+      levels, each level merges in `O(n)`), **O(n)** auxiliary space.
+
+      :::tip
+      **Interview tip:** "closest pair of points" is the classic "can you beat
+      `O(n²)`?" question. Either divide & conquer or sweep is an acceptable
+      `O(n log n)` answer; the interviewer is checking that you (a) sort, (b)
+      handle the strip window with the constant-bound argument, and (c) compare
+      squared distances to dodge the square root. Expect at least an
+      `O(n²)`-then-`O(n log n)` conversation.
+      :::
+  - type: markdown
+    content: |
+      # Question — Minimum Euclidean Distance
+
+      Given a set of points in the two-dimensional plane, your task is to find
+      the minimum Euclidean distance between two distinct points.
+
+      The Euclidean distance of points `(x1,y1)` and `(x2,y2)` is
+      `√((x1−x2)² + (y1−y2)²)`.
+
+      **Input.** The first input line has an integer `n`: the number of points.
+      After this, there are `n` lines that describe the points. Each line has two
+      integers `x` and `y`. You may assume that each point is **distinct**.
+
+      **Output.** Print one integer: **`d²`** where `d` is the minimum Euclidean
+      distance (this ensures that the result is an integer).
+
+      **Constraints**
+
+      - `2 ≤ n ≤ 2·10^5`
+      - `-10^9 ≤ x, y ≤ 10^9`
+
+      Sample input:
+
+      ```
+      4
+      2 1
+      4 4
+      1 2
+      6 3
+      ```
+
+      Sample output:
+
+      ```
+      2
+      ```
+
+      (The closest pair is `(2,1)` and `(1,2)` at distance `√(1+1) = √2`, so
+      `d² = 2`.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — all pairs, O(n²)**
+
+      Compare every pair and keep the minimum squared distance. Correct, and the
+      base case used inside both fast algorithms, but `O(n²) = 4·10^10`
+      operations at `n = 2·10^5` — far beyond the 1 second limit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<ll> x(n), y(n);
+          for(int i=0;i<n;i++) cin >> x[i] >> y[i];
+          ll best = LLONG_MAX;
+          for(int i=0;i<n;i++)
+              for(int j=i+1;j<n;j++){
+                  ll dx = x[i]-x[j], dy = y[i]-y[j];
+                  best = min(best, dx*dx + dy*dy);
+              }
+          cout << best << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n²)** time — correct but far too slow at `n = 2·10^5`.
+
+      **② Optimization — divide and conquer, O(n log n) (submission)**
+
+      Implement the strip-windowed divide & conquer described above. The strip
+      is kept sorted by `y` by merging during the recursion.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      struct P { ll x, y; };
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<P> p(n);
+          for(int i=0;i<n;i++) cin >> p[i].x >> p[i].y;
+          sort(p.begin(), p.end(), [](const P&a, const P&b){ return a.x != b.x ? a.x < b.x : a.y < b.y; });
+
+          const ll INF = numeric_limits<ll>::max();
+          ll best = INF;                       // best squared distance so far
+          vector<P> tmp(n);
+
+          function<void(int,int)> dnc = [&](int l, int r){
+              if(r - l <= 3){                  // base case: brute force
+                  for(int i=l;i<r;i++) for(int j=i+1;j<r;j++){
+                      ll dx = p[i].x-p[j].x, dy = p[i].y-p[j].y;
+                      best = min(best, dx*dx + dy*dy);
+                  }
+                  sort(p.begin()+l, p.begin()+r, [](const P&a, const P&b){ return a.y < b.y; });
+                  return;
+              }
+              int mid = (l + r) / 2;
+              ll midx = p[mid].x;
+              dnc(l, mid); dnc(mid, r);
+              merge(p.begin()+l, p.begin()+mid, p.begin()+mid, p.begin()+r,
+                    tmp.begin()+l, [](const P&a, const P&b){ return a.y < b.y; }); // hold left half by y
+              copy(tmp.begin()+l, tmp.begin()+r, p.begin()+l);
+
+              vector<int> strip;               // points within current best in x
+              for(int i=l;i<r;i++) if((p[i].x-midx)*(p[i].x-midx) < best) strip.push_back(i);
+              for(size_t i=0;i<strip.size();i++)
+                  for(size_t j=i+1;j<strip.size()
+                      && (p[strip[j]].y-p[strip[i]].y)*(p[strip[j]].y-p[strip[i]].y) < best; j++){
+                      ll dx = p[strip[i]].x-p[strip[j]].x, dy = p[strip[i]].y-p[strip[j]].y;
+                      best = min(best, dx*dx + dy*dy);
+                  }
+          };
+          dnc(0, n);
+          cout << best << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n log n)** time, **O(n)** space (the `tmp` buffer + recursion depth
+      `O(log n)`). This is the submission tier — compile with
+      `g++ -std=c++17 -O2`. (The window is early-bounded by the squared
+      `y`-distance, which keeps the constant bound exact even as `best` shrinks.)
+
+      **③ Alternative — plane sweep, O(n log n)**
+
+      Sort points by `x`. Maintain a `std::set<P>` (ordered by `y`) of points
+      within `x < best` of the current point; for the current point, only inspect
+      the few set members whose `y` differs by `< best` (via `lower_bound`), then
+      insert the point. Because the constant-bound argument limits the live set,
+      each point causes constant work and the set gives `O(log n)` per update.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      struct P {
+          ll x, y;
+          bool operator<(const P& o) const { return y != o.y ? y < o.y : x < o.x; }
+      };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<P> p(n);
+          for(int i=0;i<n;i++) cin >> p[i].x >> p[i].y;
+          sort(p.begin(), p.end(), [](const P&a, const P&b){ return a.x != b.x ? a.x < b.x : a.y < b.y; });
+          ll best = numeric_limits<ll>::max();
+          set<P> active; int head = 0;
+          for(const P& q : p){
+              while(q.x - p[head].x > sqrt((long double)best)) active.erase(p[head++]); // drop far-left
+              auto it = active.lower_bound({-1, q.y - (ll)sqrt((long double)best) - 1});
+              for(; it != active.end(); it++){
+                  if((*it).y - q.y > (ll)sqrt((long double)best)) break;
+                  ll dx = q.x-(*it).x, dy = q.y-(*it).y;
+                  best = min(best, dx*dx + dy*dy);
+              }
+              active.insert(q);
+          }
+          cout << best << "\n";
+          return 0;
+      }
+      ```
+
+      Same **O(n log n)** time, **O(n)** space. Both algorithms are valid
+      submissions; pick whichever reads best to you (this one reuses `std::set`
+      but needs a `long double` square root for the window bound).
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **Compare squares, never `sqrt`.** The final answer is `d²`; all
+        comparisons use `dx*dx + dy*dy`, so there is no floating point in the
+        submission tier (only in the optional sweep alternative's window bound).
+      - **`midx = p[mid].x` is the split line.** A point belongs to the strip if
+        its `x` differs from `midx` by less than `sqrt(best)` — equivalently
+        `(p[i].x−midx)² < best`, avoiding `sqrt` entirely.
+      - **The merge keeps the strip sorted by `y`.** The two halves were each
+        sorted by `y` at the end of their recursion, so `std::merge` produces the
+        whole range sorted by `y`, making the inner window scan correct and cheap.
+      - **Inner-loop early exit.** Once `j-th` point's `y`-distance squared meets
+        `best`, no later point (sorted by `y`) can be closer — that guarantees the
+        constant-time bound per point.
+      - **`INF` must exceed any real answer.** Max `d² = 8·10^18 < LLONG_MAX`,
+        so `numeric_limits<ll>::max()` is a safe initializer (a smaller sentinel
+        like `4·10^18` would be too small and corrupt the answer).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 4`, points `(2,1) (4,4) (1,2) (6,3)`.
+
+      Sorted by `x`: `[(1,2), (2,1), (4,4), (6,3)]`.
+
+      - `dnc(0,4)`: `mid = 2`, `midx = 4`. Left `[(1,2),(2,1)]`, right
+        `[(4,4),(6,3)]`.
+      - Base cases: left gives `d² = (2−1)²+(1−2)² = 2` → `best = 2`. Right gives
+        `(6−4)²+(3−4)² = 5` → `best = 2`.
+      - Merge left+right sorted by `y`: `[(1,2),(2,1),(4,4),(6,3)]`.
+      - Strip: `(x−4)² < 2` → only points with `x ∈ {4±1}` → `(4,4)` only
+        (`(2,1)` has `(2−4)²=4 ≥ 2`, `(6,3)` has `4 ≥ 2`). Single point, no pairs.
+      - `best` stays `2`.
+
+      Output: `2`.
+
+      **Expected `2` — Actual `2` (from the compiled `g++ -std=c++17 -O2`
+      submission). Match.**
+  - type: mcq
+    prompt: 'Why does the strip scan of divide and conquer only compare each point with a constant number of others instead of all points in the strip?'
+    options:
+      - Because points are sorted by x, so later points in the strip can be skipped by binary search
+      - Because within a δ×2δ rectangle no more than a constant number of points can be mutually at least δ apart, so a windowed y-scan is constant-size per point
+      - Because the strip always contains only one point
+      - Because the distance formula is commutative
+    answer: 1
+    explanation: Once points in the strip are sorted by y and we only consider points within y-distance δ (current best), any two candidates in the δ×2δ query rectangle must be at least δ apart — and a packing argument shows at most a constant number (≈6) such points fit, so each point triggers only constant work. That turns the strip cross-check from quadratic into linear. Sorting by x alone, a single-point strip, and commutativity are not the reason.
+type: content
+---

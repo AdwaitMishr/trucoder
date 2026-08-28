@@ -1,0 +1,215 @@
+---
+id: mst-edge-check
+title: MST Edge Check
+difficulty: medium
+order: 305
+tags:
+  - advanced-graph
+  - mst
+  - kruskal
+  - cycle-property
+  - dsu
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — which edges can sit in some minimum spanning tree?
+
+      We must decide, for **each edge on its own**, whether it can be part of *a* minimum spanning
+      tree (MST) — there may be many MSTs when weights tie, and we want the union of all of them.
+
+      **The Kruskal / cycle property.** Kruskal adds edges from lowest to highest weight, keeping an
+      edge only if it joins two different components. Think about the moment before edge `e = (u,v)`
+      of weight `w` is considered: every edge with weight **strictly less than `w`** has already been
+      processed.
+
+      - If `u` and `v` are in **different** components then — regardless of how we break ties among
+        weight-`w` edges — there is an MST that picks `e`. It is the lightest edge crossing some cut,
+        so it is always "safe."
+      - If `u` and `v` are already in the **same** component, then a path made entirely of edges of
+        weight `< w` connects them. Adding `e` would create a cycle where `e` is strictly heavier than
+        the rest, and by the **cycle property** such an edge never belongs to an MST.
+
+      > **Edge `(u,v,w)` is in some MST ⟺ `u` and `v` land in different components after all edges of
+      > weight `< w` are processed.**
+
+      **Equal weights, one subtlety.** If we naively processed edges one at a time in arbitrary order,
+      a weight-`w` edge could "connect" two components that a *different* weight-`w` edge was about to
+      connect — wrongly marking the second as not-in-some-MST. The fix is to handle ties in **batches**:
+      test *all* edges of a given weight group against the components formed only by strictly lighter
+      edges, and only after every edge in the group is tested, commit all of the group's unions.
+
+      **Complexity.** Sorting plus DSU operations: **O(m log m + m·α(n))** time and **O(n + m)** space.
+
+      :::tip
+      **Interview tip:** "is this edge in *some* MST / in *every* MST / can this set extend to an MST"
+      is governed by the **cycle property**: an edge is usable iff it is never the strictly heaviest
+      edge on a cycle. Concretely, run Kruskal and check whether its endpoints are already connected
+      by cheaper edges. The **batch-equal-weights** trick (test the whole weight class, then union it)
+      is the part most people forget — without it tie cases give wrong answers.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an undirected weighted graph, determine for each edge if it can be included in a minimum
+      spanning tree.
+
+      **Input.** The first line has two integers `n` and `m`: the number of nodes and edges. The nodes
+      are numbered `1, 2, …, n`. The following `m` lines describe the edges, each with three integers
+      `a`, `b`, `w`: there is an edge between nodes `a` and `b` with weight `w`. The graph is connected
+      and simple, and each edge appears at most once.
+
+      **Output.** For each edge in the input order, print `YES` if it can be included in a minimum
+      spanning tree and `NO` otherwise.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 10^5`
+      - `1 ≤ m ≤ 2·10^5`
+      - `1 ≤ a, b ≤ n`
+      - `1 ≤ w ≤ 10^9`
+
+      ### Sample
+
+      **Input:**
+      ```
+      5 6
+      1 2 4
+      1 3 2
+      2 4 2
+      3 4 1
+      3 5 3
+      4 5 3
+      ```
+
+      **Output:**
+      ```
+      NO
+      YES
+      YES
+      YES
+      YES
+      YES
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — force each edge into a full MST, O(m²·α).** For every edge `e`, rebuild an
+      MST that is *required* to contain `e` (union its endpoints first, then complete Kruskal) and
+      compare its weight with the global MST weight. `e` is acceptable iff the two weights are equal.
+      Correct but reruns a full Kruskal per edge.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct DSU{ vector<int> p; DSU(int n):p(n){iota(p.begin(),p.end(),0);} int f(int x){return p[x]==x?x:p[x]=f(p[x]);} bool u(int a,int b){a=f(a);b=f(b);if(a==b)return false;p[a]=b;return true;} };
+      int main(){
+          int n,m; cin>>n>>m;
+          vector<array<int,3>> e(m);                 // {w,a,b}
+          for(int i=0;i<m;i++){cin>>e[i][1]>>e[i][2]>>e[i][0]; --e[i][1]; --e[i][2];}
+          vector<array<int,3>> s=e; sort(s.begin(),s.end());
+          DSU d(n); long long W=0;                   // global MST weight
+          for(auto&c:s) if(d.u(c[1],c[2])) W+=c[0];
+          for(int forced=0; forced<m; forced++){     // is 'forced' in some MST?
+              DSU dd(n);
+              if(!dd.u(e[forced][1], e[forced][2])){ cout<<"NO\n"; continue; }
+              long long c=e[forced][0];
+              for(auto&[w,a,b]: s){
+                  if(a==e[forced][1]&&b==e[forced][2] || a==e[forced][2]&&b==e[forced][1]) continue;
+                  if(dd.u(a,b)) c+=w;
+              }
+              cout << (c==W ? "YES" : "NO") << '\n';
+          }
+      }
+      ```
+      **O(m·(m·α))** — correct but one full Kruskal per edge.
+
+      **② Optimization — grouped Kruskal cycle-property test, O(m log m) (submission).** Sort edges
+      ascending; walk weight groups; **test** every edge in the group against the components built
+      from strictly lighter edges, then **union** the whole group:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      struct DSU {
+          vector<int> p, sz;
+          DSU(int n): p(n), sz(n,1){ iota(p.begin(),p.end(),0); }
+          int find(int x){ return p[x]==x ? x : p[x]=find(p[x]); }
+          void unite(int a,int b){ a=find(a); b=find(b); if(a==b) return; if(sz[a]<sz[b]) swap(a,b); p[b]=a; sz[a]+=sz[b]; }
+      };
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; cin>>n>>m;
+          struct E{ int w,a,b,id; };
+          vector<E> es;
+          for(int i=0;i<m;i++){ int a,b,w; cin>>a>>b>>w; --a; --b; es.push_back({w,a,b,i}); }
+          sort(es.begin(), es.end(), [](const E&x,const E&y){ return x.w < y.w; });
+
+          vector<char> ans(m, 0);
+          DSU d(n);
+          for(int i=0; i<m; ){
+              int j=i; while(j<m && es[j].w==es[i].w) ++j;       // weight group [i,j)
+              for(int k=i;k<j;k++)                                // TEST phase: nothing of this weight added yet
+                  ans[es[k].id] = (d.find(es[k].a) != d.find(es[k].b));
+              for(int k=i;k<j;k++) d.unite(es[k].a, es[k].b);     // COMMIT phase: tie-break freely
+              i=j;
+          }
+          for(char ok: ans) cout << (ok ? "YES" : "NO") << '\n';
+          return 0;
+      }
+      ```
+      **O(m log m)** for the sort plus **O(m·α(n))** linear unions — the submission tier.
+
+      **④ Alternative — count distinct MST trees / same test.** This "in some MST" test is exactly the
+      primitive behind *counting* the number of MSTs: within a weight group, the number of ways to
+      choose a forest connecting the group's components determines the multiplicity. No separate
+      algorithm is needed here; the batch test above is the canonical answer.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      - Edges are sorted ascending and scanned in **weight groups**. `j` extends to the first edge with
+        a strictly larger weight, isolating all equal-`w` edges.
+      - **TEST phase:** for each edge `(a,b,w)` in the group, `d` currently holds every edge of weight
+        `< w` (nothing of weight `w` is unioned yet). If `find(a) != find(b)` the endpoints are still
+        disconnected by cheaper edges → the edge can be in some MST → `YES`; otherwise `NO`.
+      - **COMMIT phase:** only *after* the whole group is tested do we union the group's edges. This is
+        what makes tie cases correct — two equal-weight edges are never allowed to block each other.
+      - Output is restored to **input order** via the stored `id`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n=5, m=6`; edges by input order: `(1,2,4),(1,3,2),(2,4,2),(3,4,1),(3,5,3),(4,5,3)`.
+
+      **Sorted by weight:** `(3,4,1) → (1,3,2) → (2,4,2) → (3,5,3) → (4,5,3) → (1,2,4)`.
+
+      | group (w) | edges | DSU before group | test result |
+      |-----------|-------|------------------|-------------|
+      | 1 | (3,4) | all singletons | 3≠4 → YES |
+      | 2 | (1,3),(2,4) | {3,4} | (1,3): 1∉{3,4} → YES; (2,4): 4∈{3,4}, 2→different → YES |
+      | 3 | (3,5),(4,5) | {1,3,4,2} | both connect node 5 (new) → YES, YES |
+      | 4 | (1,2) | all of {1,2,3,4,5} | 1 and 2 already joined → NO |
+
+      **Result (input order):** `(1,2,4)→NO, (1,3,2)→YES, (2,4,2)→YES, (3,4,1)→YES, (3,5,3)→YES,
+      (4,5,3)→YES` — i.e. `NO YES YES YES YES YES`, matching the sample. The only rejected edge,
+      `1-2` (weight 4), is closed by the cheaper chain `1-3-4` and `1-3`/`3-4`, so it is never needed
+      in any MST.
+
+  - type: mcq
+    prompt: "Why must all equal-weight edges of a group be TESTED before any of them is UNIONED?"
+    options:
+      - "So that two equal-weight edges cannot wrongly mark each other as unusable by merging first."
+      - "Because equal-weight edges always belong to the same MST."
+      - "Because unioning must happen exactly once per edge."
+      - "Because lighter edges are tested after heavier ones."
+    answer: 0
+    explanation: "If we unioned edges one at a time, the first equal-weight edge would connect two components that a sibling edge also needs; the sibling would then see its endpoints joined and be wrongly rejected. Testing the entire weight class against the lighter-edge components, and only then committing all of them, is what correctly allows every edge that CAN sit in some MST."
+type: content
+---

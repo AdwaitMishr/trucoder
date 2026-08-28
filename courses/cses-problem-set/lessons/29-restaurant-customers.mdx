@@ -1,0 +1,266 @@
+---
+id: restaurant-customers
+title: Restaurant Customers
+difficulty: medium
+order: 29
+tags:
+  - sorting-and-searching
+  - sweep-line
+  - events
+blocks:
+  - type: markdown
+    content: |
+      # Restaurant Customers
+
+      **The technique: sweep line over arrival/leaving events.** Each customer
+      is present on an interval `[a, b]` (arrival `a`, leaving `b`). We want
+      the **maximum number of customers present at the same time** — the peak
+      concurrency across all intervals.
+
+      **When you reach for it:** any "max number of simultaneous intervals /
+      overlapping intervals / concurrent jobs" problem. Instead of comparing
+      intervals pairwise, we "sweep" time left to right and maintain a running
+      count: each arrival bumps the count up by 1, each leaving drops it by 1;
+      the maximum reached is the answer.
+
+      **Why it works.** A customer is present exactly during `[a, b)`. If we
+      record the arrival as an event `(a, +1)` and the leaving as `(b, -1)`,
+      then sorting all events by time and applying them in order reproduces, at
+      every instant, the exact number of people in the room. This is a
+      **difference-array-style scan** run directly on the raw timestamps, giving
+      a clean O(n log n) solution without coordinate compression.
+
+      **Tie handling.** Arrival and leaving times here are all **distinct**, so
+      no two events collide at one timestamp. If ties were possible, you would
+      process all `+1` (arrivals) at a time before the `-1` (leavings) so a
+      customer who leaves while another arrives still counts the new one — but
+      the problem guarantees distinct times, so ordering is never ambiguous.
+
+      **Worked mini-example.** Customers `(5,8)`, `(2,4)`, `(3,9)`.
+      Events: `2:+1, 3:+1, 4:-1, 5:+1, 8:-1, 9:-1`.
+      Sorted, apply: count goes `1, 2, 1, 2, 1, 0`. Peak = **2**.
+
+      **Complexity.** Sorting `2n` events is **O(n log n)**; the sweep is a
+      single O(n) pass. Total **O(n log n)** time, **O(n)** space (for the
+      event list).
+
+      :::tip
+      **Interview tip:** "max simultaneous intervals" is a staple (it is the
+      basis of meeting-room problems and weighted-activity scheduling). The
+      sweep line turns interval overlap into a running counter — say it out
+      loud as "+1 on start, −1 on end, track the max". Interviewers probe the
+      tie-break (process starts before ends) and may ask you to cite the peek
+      time, which is the coordinate right after applying that instant's starts.
+      Have the O(n log n) argument ready: sorting dominates.
+      :::
+  - type: markdown
+    content: |
+      # Question — Restaurant Customers
+
+      You are given the arrival and leaving times of `n` customers in a
+      restaurant.
+
+      What was the maximum number of customers in the restaurant at any time?
+
+      **Constraints:** `1 ≤ n ≤ 2·10^5`, `1 ≤ a < b ≤ 10^9`. You may assume
+      that all arrival and leaving times are distinct.
+
+      **Input:** The first input line has an integer `n`: the number of
+      customers. After this, there are `n` lines that describe the customers.
+      Each line has two integers `a` and `b`: the arrival and leaving times of
+      a customer.
+
+      **Output:** Print one integer: the maximum number of customers.
+
+      Sample input:
+
+      ```
+      3
+      5 8
+      2 4
+      3 9
+      ```
+
+      Sample output:
+
+      ```
+      2
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²)**
+
+      At each arrival time, count how many customers are present at that
+      instant (their interval contains it). Correct, but a full pass per
+      customer.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(const vector<long long>& a, const vector<long long>& b) {
+          int n = (int)a.size();
+          long long best = 0;
+          for (int i = 0; i < n; ++i) {          // candidate times: each arrival time a[i]
+              long long cur = 0;
+              for (int j = 0; j < n; ++j)
+                  if (a[j] <= a[i] && a[i] < b[j]) cur++;   // customer j present then
+              best = max(best, cur);
+          }
+          return best;
+      }
+      ```
+
+      **O(n²)** time — ~4·10^10 interval checks for `n = 2·10^5`. Too slow.
+
+      **② Sweep line over events — O(n log n) (the solution)**
+
+      Collect a `+1` arrival and a `-1` departure event per customer, sort by
+      time, and track the running maximum.
+
+      ```cpp
+      long long solve(const vector<vector<long long>>& customers) {
+          vector<pair<long long, long long>> events;   // (time, delta)
+          events.reserve(customers.size() * 2);
+          for (auto& c : customers) {
+              events.push_back({c[0], +1});   // arrival: +1
+              events.push_back({c[1], -1});   // leaving: -1
+          }
+          sort(events.begin(), events.end());
+          long long cur = 0, best = 0;
+          for (auto& [t, d] : events) {
+              cur += d;
+              best = max(best, cur);
+          }
+          return best;
+      }
+      ```
+
+      **O(n log n)** time, O(n) space. This is the CSES submission.
+
+      **③ Further optimization — none (sorting is the lower bound)**
+
+      Finding the peak of overlapping intervals requires knowing their order,
+      which needs a sort (or equivalent) working on general timestamps — O(n
+      log n) is the natural bound. No meaningful faster asymptotic exists. Skip.
+
+      **④ Alternative algorithm — coordinate-compressed difference array
+      (O(n log n))**
+
+      Compress all timestamps, build a difference array over the compressed
+      coordinates, then a prefix scan gives the same running counts — the same
+      sweep idea restated offline.
+
+      ```cpp
+      long long solve(const vector<vector<long long>>& c) {
+          vector<long long> times;
+          for (auto& r : c) { times.push_back(r[0]); times.push_back(r[1]); }
+          sort(times.begin(), times.end());
+          times.erase(unique(times.begin(), times.end()), times.end());
+          int m = (int)times.size();
+          vector<long long> diff(m + 1, 0);
+          for (auto& r : c) {
+              int l  = int(lower_bound(times.begin(), times.end(), r[0]) - times.begin());
+              int rr = int(upper_bound(times.begin(), times.end(), r[1]) - times.begin());
+              diff[l]  += 1;   // present on [a, b)
+              diff[rr] -= 1;
+          }
+          long long cur = 0, best = 0;
+          for (int i = 0; i < m; ++i) { cur += diff[i]; best = max(best, cur); }
+          return best;
+      }
+      ```
+
+      **O(n log n)** time, O(n) space. Conceptually identical result, more
+      code — the plain sweep-line is cleaner and preferred.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The sweep line plugs directly into this problem.
+
+      - **Event construction.** For each customer `(a, b)` we push two events:
+        `(a, +1)` because entering bumps the head count, and `(b, -1)` because
+        leaving drops it. The count after applying `(b, -1)` is the count at
+        the instant *just after* `b`, that is after the customer has left.
+      - **Sorting.** `sort(events.begin(), events.end())` orders by time (the
+        pair's first field). All times are guaranteed distinct, so the `+1`/`-1`
+        ordering within an equal time never matters here.
+      - **The sweep.** We maintain `cur`, apply each event's delta, and record
+        `best = max(best, cur)`. Since events are sorted, `cur` at any point
+        equals the true number of customers present, and `best` captures the
+        all-time peak.
+      - **Why it counts, not compares.** No interval is compared to another;
+        every interval contributes a unit at its start and removes it at its
+        end, so the running total is an exact census of concurrency.
+
+      Edge case: `n = 1` gives events `(+1, -1)`, count `1, 0`, best = 1.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+
+      ```
+      3
+      5 8
+      2 4
+      3 9
+      ```
+
+      Expected output: `2`.
+
+      Events: `(2,+1), (3,+1), (4,-1), (5,+1), (8,-1), (9,-1)`.
+
+      | time | delta applied | cur | best |
+      |------|---------------|-----|------|
+      | 2 | +1 (customer 2 arrives) | 1 | 1 |
+      | 3 | +1 (customer 3 arrives) | 2 | 2 |
+      | 4 | -1 (customer 2 leaves) | 1 | 2 |
+      | 5 | +1 (customer 1 arrives) | 2 | 2 |
+      | 8 | -1 (customer 1 leaves) | 1 | 2 |
+      | 9 | -1 (customer 3 leaves) | 0 | 2 |
+
+      Peak concurrency = **2**, matching expected. ✓
+
+      Interpretation: customers 2 `[2,4)` and 3 `[3,9)` overlap between time `3`
+      and `4`; customers 1 `[5,8)` and 3 `[3,9)` overlap between `5` and `8`.
+      Two is the max, exactly as the sample states.
+  - type: flowchart
+    title: Sweep line for peak concurrency
+    nodes:
+      - Read all (a, b) intervals
+      - Build events (+1 at a, -1 at b)
+      - Sort events by time
+      - cur += delta; best = max(best, cur)
+      - Any events left?
+      - Output best
+    edges:
+      - from: 0
+        to: 1
+      - from: 1
+        to: 2
+      - from: 2
+        to: 3
+        label: next event
+      - from: 3
+        to: 4
+      - from: 4
+        to: 3
+        label: yes -> next
+      - from: 4
+        to: 5
+        label: no
+  - type: mcq
+    prompt: Why does the sweep-line approach beat the brute-force O(n²) comparison of every pair of intervals?
+    options:
+      - Because it compares each pair of intervals exactly once instead of twice.
+      - Because it converts interval overlap into a running head count: a single sorted pass over 2n events (+1 on arrival, -1 on leaving) reproduces the exact concurrency at every instant, tracking the maximum in O(n log n) total, whereas the brute force re-checks all O(n²) pairs independently of the times.
+      - Because it uses an unordered map to count arrivals.
+      - Because it assumes all customers arrive at distinct times.
+    answer: 1
+    explanation: The sweep line never inspects interval pairs; each interval contributes one +1 at its start and one -1 at its end. Sorting those 2n events (O(n log n)) and applying them in order makes the running total an exact concurrency census, so the peak is found in one linear pass — far cheaper than comparing O(n²) pairs. The distinct-time assumption only simplifies event ordering; it is not the reason the sweep is fast.
+type: content
+---

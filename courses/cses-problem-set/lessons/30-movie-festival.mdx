@@ -1,0 +1,266 @@
+---
+id: movie-festival
+title: Movie Festival
+difficulty: medium
+order: 30
+tags:
+  - sorting-and-searching
+  - greedy
+  - intervals
+blocks:
+  - type: markdown
+    content: |
+      # Movie Festival
+
+      **The technique: greedy — always watch the movie that ends earliest.**
+      We have `n` movies, each with a start `a` and end `b`. We want the
+      **maximum number** we can watch, without overlap: once you start a movie
+      you watch it fully, and you may start a new one only at or after the
+      previous one ended (a movie `[a, b]` followed by `[b, c]` is allowed).
+
+      **When you reach for it:** "maximize the number of non-overlapping
+      intervals" — the canonical *interval scheduling maximization* problem
+      (classroom booking, conference talks, job selection).
+
+      **Why greedy by earliest end time is optimal.** Sort the movies by ending
+      time. Then scan in that order, and whenever a movie starts at or after
+      the end of the movie we last took, take it. Intuition: picking the movie
+      that frees the time line *soonest* leaves the largest possible remaining
+      window for everything else — an exchange argument shows no other
+      strategy can pack more movies, because the first movie in any optimal
+      schedule can be replaced by the globally-earliest-ending movie without
+      reducing the count.
+
+      **Worked mini-example.** Movies `(3,5), (4,9), (5,8)`. Sorted by end:
+      `(3,5), (5,8), (4,9)`.
+      - Take `(3,5)`; now end = 5.
+      - `(5,8)` starts at 5 ≥ 5 → take it; end = 8.
+      - `(4,9)` starts at 4 < 8 → skip.
+      Result: **2**.
+
+      **Complexity.** Sort by end is **O(n log n)**; the scan is one O(n)
+      pass. Total **O(n log n)** time, O(1) extra space (sorting in place).
+
+      :::tip
+      **Interview tip:** "maximum non-overlapping intervals" is one of the most
+      asked greedy questions (LeetCode's Non-overlapping Intervals / Maximum
+      Number of Events). State the exchange argument explicitly: the interval
+      with the earliest finishing time is always safe to include first, because
+      it ends no later than any alternative and therefore blocks nothing the
+      alternative wouldn't. The super-common error is sorting by **start**
+      time instead of **end** — highlight that the greedy only guarantees
+      optimality when you pick by earliest *finish*. Also confirm the
+      `end == next start` non-overlap convention.
+      :::
+  - type: markdown
+    content: |
+      # Question — Movie Festival
+
+      In a movie festival `n` movies will be shown. You know the starting and
+      ending time of each movie. What is the maximum number of movies you can
+      watch entirely?
+
+      **Constraints:** `1 ≤ n ≤ 2·10^5`, `1 ≤ a < b ≤ 10^9`.
+
+      **Input:** The first input line has an integer `n`: the number of movies.
+      After this, there are `n` lines that describe the movies. Each line has
+      two integers `a` and `b`: the starting and ending times of a movie.
+
+      **Output:** Print one integer: the maximum number of movies.
+
+      Sample input:
+
+      ```
+      3
+      3 5
+      4 9
+      5 8
+      ```
+
+      Sample output:
+
+      ```
+      2
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2^n) bitmask**
+
+      Try every subset of movies and keep the largest one with no overlaps.
+      Correct by definition, but exponential.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(const vector<pair<long long, long long>>& movies) {
+          int n = (int)movies.size();
+          long long best = 0;
+          for (int mask = 0; mask < (1 << n); ++mask) {
+              bool ok = true; long long cnt = 0;
+              for (int i = 0; i < n && ok; ++i)
+                  if (mask & (1 << i)) {
+                      for (int j = 0; j < i; ++j)
+                          if (mask & (1 << j))
+                              if (!(movies[i].second <= movies[j].first ||
+                                    movies[j].second <= movies[i].first)) { ok = false; break; }
+                      if (ok) cnt++;
+                  }
+              if (ok) best = max(best, cnt);
+          }
+          return best;
+      }
+      ```
+
+      **O(2^n · n)** time — impossible for `n = 2·10^5`. Correct only in
+      principle.
+
+      **② Greedy by earliest end time — O(n log n) (the solution)**
+
+      Sort by end time; take every movie that begins no earlier than the last
+      selected movie finished.
+
+      ```cpp
+      long long solve(vector<vector<long long>> movies) {
+          sort(movies.begin(), movies.end(),
+               [](const auto& x, const auto& y) { return x[1] < y[1]; }); // by end
+          long long cnt = 0, lastEnd = -1;   // times are >= 1, so -1 is a safe start
+          for (auto& m : movies) {
+              if (m[0] >= lastEnd) {         // can watch: starts after/at last end
+                  cnt++;
+                  lastEnd = m[1];
+              }
+          }
+          return cnt;
+      }
+      ```
+
+      **O(n log n)** time, O(1) extra space. This is the CSES submission.
+
+      **③ Further optimization — none (already optimal)**
+
+      The greedy runs in one O(n) pass after an O(n log n) sort, which is the
+      lower bound for a comparison-based approach on arbitrary times. Skip.
+
+      **④ Alternative algorithm — DP with binary search (O(n log n))**
+
+      A different (equally optimal) framing: sort by end time, then `dp[i]` =
+      best count using movies `0..i`. Either skip movie `i` (take `dp[i-1]`) or
+      take it and add `1 + dp[p]` where `p` is the last movie that ends at or
+      before movie `i` starts (found by binary search).
+
+      ```cpp
+      long long solve(vector<vector<long long>> movies) {
+          int n = (int)movies.size();
+          sort(movies.begin(), movies.end(),
+               [](const auto& x, const auto& y) { return x[1] < y[1]; });
+          vector<long long> ends(n);
+          for (int i = 0; i < n; ++i) ends[i] = movies[i][1];
+          vector<long long> dp(n);
+          for (int i = 0; i < n; ++i) {
+              int p = int(upper_bound(ends.begin(), ends.begin() + i, movies[i][0])
+                          - ends.begin()) - 1;   // last movie ending <= start of i
+              long long take = (p >= 0 ? dp[p] : 0) + 1;
+              long long skip = (i > 0 ? dp[i - 1] : 0);
+              dp[i] = max(take, skip);
+          }
+          return dp[n - 1];
+      }
+      ```
+
+      **O(n log n)** time, O(n) space. Teaches a nice "weighted interval
+      scheduling" pattern for when movies gain a profit, though the greedy is
+      simpler here.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The greedy maps cleanly onto the problem.
+
+      - **Sort by end.** `sort(... x[1] < y[1])` orders movies by finishing
+        time, which is what makes the greedy correct. The lambda puts the
+        earliest-finishing movie first; ties in end time are irrelevant because
+        you can watch at most one movie ending at a given instant.
+      - **Accumulator `lastEnd`.** This is the finish time of the movie we most
+        recently decided to watch. It starts at `-1` (smaller than any real
+        start time `≥ 1`) so the very first compatible movie is always taken.
+      - **The decision `m[0] >= lastEnd`.** This is the non-overlap test: a new
+        movie may start exactly when the previous one ended (`5` follows a movie
+        ending at `5`) — the `>=` encodes that allowed boundary. Only when
+        compatible do we `cnt++` and advance `lastEnd`; otherwise the movie is
+        simply skipped and the scan continues with the next earliest-finishing
+        movie.
+
+      Because a skipped movie ends *after* `lastEnd` (it started too early),
+      it could never fit later anyway — so the single left-to-right sweep is
+      complete.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+
+      ```
+      3
+      3 5
+      4 9
+      5 8
+      ```
+
+      Expected output: `2`.
+
+      Sort by end time: `(3,5)`, `(5,8)`, `(4,9)`.
+
+      | movie | start | end | start >= lastEnd? | act | cnt | lastEnd |
+      |-------|-------|-----|-------------------|-----|-----|---------|
+      | (3,5) | 3 | 5 | 3 >= -1 → yes | watch | 1 | 5 |
+      | (5,8) | 5 | 8 | 5 >= 5 → yes | watch | 2 | 8 |
+      | (4,9) | 4 | 9 | 4 >= 8 → no | skip | 2 | 8 |
+
+      Total watched = **2**, matching expected. ✓
+
+      We watch `(3,5)` then `(5,8)` back to back (starting exactly as the first
+      ends). Movie `(4,9)` overlaps both and is skipped. An optimal packing of
+      size 2 is `(3,5)` and `(5,8)`.
+  - type: flowchart
+    title: Greedy interval scheduling by earliest end
+    nodes:
+      - Sort movies by end time
+      - lastEnd = -inf; count = 0
+      - Next movie starts >= lastEnd?
+      - Watch it; count++; lastEnd = its end
+      - Movies remain?
+      - Output count
+    edges:
+      - from: 0
+        to: 1
+      - from: 1
+        to: 2
+      - from: 2
+        to: 3
+        label: yes -> watch
+      - from: 2
+        to: 4
+        label: no -> skip
+      - from: 3
+        to: 4
+        label: after watching
+      - from: 4
+        to: 2
+        label: yes
+      - from: 4
+        to: 5
+        label: no
+  - type: mcq
+    prompt: Why must we sort the movies by their ending time (not their starting time) for the greedy to be optimal?
+    options:
+      - Because starting times can never be compared at all.
+      - Because the greedy aims to free up time as early as possible: watching the earliest-finishing movie leaves the largest remaining window for the rest, and an exchange argument shows replacing the first movie of any optimal schedule by the earliest-ending one never reduces the count — a property that only holds when selection is based on finish time.
+      - Because sorting by start time always produces a different answer.
+      - Because the last movie must always end last.
+    answer: 1
+    explanation: Optimal interval-scheduling greedy works on finish times. Taking the movie that ends soonest maximizes what remains available, and by an exchange argument any optimal solution's first interval can be swapped for the globally earliest-ending one without decreasing the total. Sorting by start time breaks this guarantee, which is why the classic error is sorting windows by start.
+type: content
+---

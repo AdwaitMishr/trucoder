@@ -1,0 +1,275 @@
+---
+id: stick-lengths
+title: Stick Lengths
+difficulty: easy
+order: 33
+tags:
+  - median
+  - sorting
+  - prefix-sums
+  - greedy
+  - statistics
+blocks:
+  - type: markdown
+    content: |
+      # Stick Lengths
+
+      **The technique: the median minimizes the sum of absolute deviations.**
+      We have `n` lengths and must make them all equal; changing a stick by
+      `d` costs `d`. Which common length `L` minimizes `Σ |p[i] − L|`?
+
+      The answer is the **median** of the lengths. Intuition: sliding the target
+      `L` one unit right increases the cost for every stick already to its left
+      by `1` and decreases it for every stick to its right by `1`. Moving `L`
+      past a data point swaps which side it lies on. The cost stops dropping
+      exactly when the number of sticks on the left stops being *less than* the
+      number on the right — i.e. when `L` sits on the middle (a) stick. Any target
+      lying between the two middle sticks (for even `n`) is equally optimal.
+
+      **When you reach for it:** "equalize all values, cost = absolute
+      difference" — aligning memory addresses, balancing load, meeting-point
+      problems. The general rule: **median for sum of absolute differences,
+      mean for sum of squared differences.** Mixing these up is a classic trap.
+
+      **Worked mini-example.** `[2, 3, 1, 5, 2]` → sorted `[1, 2, 2, 3, 5]`.
+      `n = 5` (odd), median is the middle element `2`. Cost to reach `2`:
+      `|1−2| + |2−2| + |2−2| + |3−2| + |5−2| = 1 + 0 + 0 + 1 + 3 = 5`.
+
+      Try `L = 3` instead: `|1−3| + |2−3| + |2−3| + |3−3| + |5−3| = 2+1+1+0+2 = 6`.
+      The median (`L = 2`) indeed gives the minimum, `5`.
+
+      **Complexity.** Sort + read off the median → **O(n log n)** time,
+      **O(1)** extra space. The median can also be found in **O(n)** worst case
+      or **O(n)** expected with selection, but sorting is simplest and fast
+      enough for `n ≤ 2·10^5`.
+
+      :::tip
+      **Interview tip:** "minimum cost to equalize" questions almost always get
+      answered correctly only if you know the median rule. Expect the follow-up:
+      *why the mean doesn't work* — with a skewed example like `[1, 1, 100]`,
+      the mean is `34` (cost `132`) while the median `1` costs `99`. Another
+      common twist: minimize the sum of *squared* differences → that target is
+      the mean, not the median. State the rule and justify it by the "sliding
+      target changes cost by `#left − #right`" argument.
+      :::
+  - type: markdown
+    content: |
+      # Question — Stick Lengths
+
+      There are `n` sticks with some lengths. Modify the sticks so that each
+      stick has the same length. You can either lengthen or shorten each stick;
+      both operations cost `x`, where `x` is the difference between the new and
+      the original length. What is the minimum total cost?
+
+      **Constraints:**
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ p[i] ≤ 10^9`
+      - The total cost can be as large as `(n−1)·10^9` ≈ `2·10^14`, so it
+        must be stored in a 64-bit integer.
+
+      **Input:** the first line has an integer `n` (number of sticks). The
+      second line has `n` integers `p[1], ..., p[n]` (the lengths).
+
+      **Output:** one integer — the minimum total cost.
+
+      Sample input:
+
+      ```
+      5
+      2 3 1 5 2
+      ```
+
+      Sample output:
+
+      ```
+      5
+      ```
+
+      (Lengths equalized to the median `2` cost `5`.)
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — try every candidate length, O(n·range)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          vector<long long> p(n);
+          long long lo = LLONG_MAX, hi = 0;
+          for (int i = 0; i < n; ++i) {
+              cin >> p[i];
+              lo = min(lo, p[i]);
+              hi = max(hi, p[i]);
+          }
+          long long best = LLONG_MAX;
+          for (long long L = lo; L <= hi; ++L) {   // every integer length in range
+              long long cost = 0;
+              for (long long v : p) cost += llabs(v - L);
+              best = min(best, cost);
+          }
+          cout << best << "\n";
+          return 0;
+      }
+      ```
+      O(n·range). With lengths up to `10^9` the loop over `L` is infeasible —
+      correct only for tiny ranges.
+
+      **② Optimization — sort and use the median, O(n log n)** (the chosen solution)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          vector<long long> p(n);
+          for (int i = 0; i < n; ++i) cin >> p[i];
+
+          sort(p.begin(), p.end());
+          long long m = p[n / 2];              // median (middle element)
+          long long cost = 0;
+          for (long long v : p) cost += llabs(v - m);
+          cout << cost << "\n";
+          return 0;
+      }
+      ```
+      O(n log n) time, O(n) space (the array). The median minimizes the sum of
+      absolute deviations, so this is optimal.
+
+      **③ Further outcome — prefix-sums cost evaluation, O(n log n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          vector<long long> p(n);
+          for (int i = 0; i < n; ++i) cin >> p[i];
+          sort(p.begin(), p.end());
+
+          vector<long long> pref(n + 1, 0);
+          for (int i = 0; i < n; ++i) pref[i + 1] = pref[i] + p[i];
+
+          auto cost_of = [&](long long L) {
+              int k = upper_bound(p.begin(), p.end(), L) - p.begin();
+              long long left = 1LL * k * L - pref[k];            // k sticks below L
+              long long right = (pref[n] - pref[k]) - 1LL * (n - k) * L; // above
+              return left + right;
+          };
+
+          cout << cost_of(p[n / 2]) << "\n";   // evaluate cost at the median
+          return 0;
+      }
+      ```
+      O(n log n) time, O(n) space. Shows how to compute `cost(L)` for *any*
+      target in O(log n) using sorted order + prefix sums — handy when the
+      problem asks for the cost at several candidate lengths.
+
+      **④ Alternative — selection median, O(n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          vector<long long> p(n);
+          for (int i = 0; i < n; ++i) cin >> p[i];
+
+          nth_element(p.begin(), p.begin() + n / 2, p.end());
+          long long m = p[n / 2];
+          long long cost = 0;
+          for (long long v : p) cost += llabs(v - m);
+          cout << cost << "\n";
+          return 0;
+      }
+      ```
+      O(n) expected time, O(n) space. `nth_element` partially sorts just enough
+      to place the median at index `n/2` — shaves the log factor when it
+      matters.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② sort + median**. The key lines:
+
+      - `sort(p.begin(), p.end())` — brings the elements into order so the
+        median is simply the middle one.
+      - `long long m = p[n / 2]` — the median. For `n = 5` (0-based `n/2 = 2`),
+        that is the third element. For even `n`, `p[n/2]` is the upper-middle
+        element, which is one of the equally optimal targets.
+      - `cost += llabs(v - m)` — total absolute deviation from the median,
+        accumulated in `long long` because it can reach ~`2·10^14`.
+      - The greedy insight is hidden: because moving the target across a stick
+        flips the sign of its contribution, the equilibrium point is where the
+        number of sticks on each side is balanced — the median.
+
+      The prefix-sum tier (③) demonstrates the reusable `cost_of(L)` gadget:
+      `left` counts the `k` elements ≤ `L` contributing `L − v`, `right` counts
+      the rest contributing `v − L`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      5
+      2 3 1 5 2
+      ```
+
+      Sorted: `[1, 2, 2, 3, 5]`. `n = 5`, `n/2 = 2`, median `m = p[2] = 2`.
+      Cost:
+
+      | stick | \|v − 2\| |
+      |-------|----------|
+      | 1 | 1 |
+      | 2 | 0 |
+      | 2 | 0 |
+      | 3 | 1 |
+      | 5 | 3 |
+
+      Total = `1 + 0 + 0 + 1 + 3 = 5` ✓.
+
+      Contrast with the mean (`1 + 2 + 2 + 3 + 5 = 13`, `/5 = 2.6` — not a
+      stick length, rounding to `3` costs `6`), confirming the median `2` at
+      cost `5` is minimal.
+
+      **Edge cases:**
+      - Even count: `4 / 1 1 100 100` → sorted; `p[2] = 100`; cost
+        `99+99+0+0 = 198`. (Any length in `[1, 100]` gives the same, e.g. `1`
+        costs `0+0+99+99 = 198`.)
+      - All equal: `3 / 7 7 7` → median `7`, cost `0`.
+      - Two sticks: `2 / 1 9` → median `9` (or `1`), cost `8`.
+  - type: flowchart
+    title: "Equalizing to the median"
+    nodes:
+      - "Read all stick lengths"
+      - "Sort them ascending"
+      - "m = middle element (median)"
+      - "Sum |p[i] - m|"
+      - "Print total cost"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "p[n/2]"}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "long long"}
+  - type: mcq
+    prompt: 'Why does the median (not the mean) minimize the sum of absolute deviations?'
+    options:
+      - Because the median is always the smallest element, so fewer sticks need changing
+      - Because moving the target one unit right changes the cost by (#sticks on the left) − (#sticks on the right); this stays non-negative only until the target reaches the point where the two sides are balanced — the median — after which the cost only grows
+      - Because the mean requires extra memory while the median does not
+      - Because absolute differences are always non-negative, so any target works
+    answer: 1
+    explanation: If the target L is below the median, there are more sticks to its right than to its left, so increasing L reduces more contributions than it increases (net drop). Once L passes the middle position the counts flip and the cost climbs. The balance point — where #left == #right — is the median, and at that point the sum of absolute deviations is minimal. The mean minimizes the sum of squared deviations instead, which is a different objective.
+type: content
+---

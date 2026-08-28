@@ -1,0 +1,276 @@
+---
+id: missing-coin-sum
+title: Missing Coin Sum
+difficulty: medium
+order: 34
+tags:
+  - greedy
+  - sorting
+  - intervals
+  - subset-sum
+  - constructive
+blocks:
+  - type: markdown
+    content: |
+      # Missing Coin Sum
+
+      **The technique: a greedy reachable-interval invariant.** Given coins with
+      values, we must find the smallest positive integer that *cannot* be formed
+      as the sum of some subset of the coins. The key idea is to keep track of
+      the largest value `r` such that **every** sum in `[1, r]` is formable.
+
+      Sort the coins ascending. Maintain the invariant:
+      *"all sums in `0 .. r` are achievable with the coins seen so far."* For
+      the next coin `c`:
+
+      - If `c <= r + 1`, then every sum in `r+1 .. r+c` is now achievable
+        (take the old `[0, r]` interval and add `c` on top of it). So `r += c`.
+      - If `c > r + 1`, the sum `r + 1` is **unreachable** — the coin is bigger
+        than the gap, so we can never bridge it. That sum is the answer.
+
+      **When you reach for it:** subset/exchange feasibility problems where an
+      interval of achievable values is "contiguous" — small-coin or change-making
+      problems, and CSES's own follow-ups. The move is to prove the achievable
+      set is a contiguous `[0, r]` and then walk coins greedily.
+
+      **Worked mini-example.** Coins `[2, 9, 1, 2, 7]`, sorted `[1, 2, 2, 7, 9]`.
+
+      | coin | condition | action | r |
+      |------|-----------|--------|---|
+      | 1 | 1 ≤ 1 | extend | 1 |
+      | 2 | 2 ≤ 2 | extend | 3 |
+      | 2 | 2 ≤ 4 | extend | 5 |
+      | 7 | 7 ≤ 6? no | **break** | 5 |
+
+      Answer `r + 1 = 6` — you can make `1..5` but not `6`. ✓
+
+      **Complexity.** Sort + a single pass → **O(n log n)** time, **O(1)** extra
+      space. `r` can reach `n · 10^9 ≈ 2·10^14`, so `r` must be a 64-bit value.
+
+      :::tip
+      **Interview tip:** this looks like subset-sum (which is NP-hard in the
+      values) but is solvable greedily because *all* coins are available — the
+      achievable set is a contiguous interval, not a sparse subset-set. The
+      question "smallest amount that cannot be made" frequently appears as a
+      "reachability" variant; the deciding skill is recognizing the `[0, r]`
+      contiguity invariant. Expect a probe like *"what if a coin value ≥ r+2
+      appears early?"* — the answer is that the gap `r+1` is exactly the first
+      unformable value.
+      :::
+  - type: markdown
+    content: |
+      # Question — Missing Coin Sum
+
+      You have `n` coins with positive integer values. What is the **smallest
+      sum you cannot create** using a subset of the coins?
+
+      **Constraints:**
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ x[i] ≤ 10^9`
+      - The answer can be up to `(sum of all coins) + 1 ≈ 2·10^14 + 1`, so it
+        must be stored in a 64-bit integer.
+
+      **Input:** the first line has an integer `n` (number of coins). The
+      second line has `n` integers `x[1], ..., x[n]` (the value of each coin).
+
+      **Output:** one integer — the smallest coin sum that cannot be formed.
+
+      Sample input:
+
+      ```
+      5
+      2 9 1 2 7
+      ```
+
+      Sample output:
+
+      ```
+      6
+      ```
+
+      (With `{1,2,2}` you can make `1..5`; the smallest missing sum is `6`.)
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate subsets, O(2^n · n) (or bitmask O(2^n))**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          vector<long long> c(n);
+          for (int i = 0; i < n; ++i) cin >> c[i];
+
+          set<long long> sums;
+          sums.insert(0);
+          for (long long v : c) {                 // add v to all existing sums
+              vector<long long> add;
+              for (long long s : sums) add.push_back(s + v);
+              sums.insert(add.begin(), add.end());
+          }
+          long long ans = 1;
+          while (sums.count(ans)) ++ans;          // smallest missing
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+      O(2^n) — the `sums` set doubles per coin, infeasible for `n = 2·10^5`.
+      Correct for tiny `n` only.
+
+      **② Optimization — greedy reachable interval, O(n log n)** (the chosen solution)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          vector<long long> c(n);
+          for (int i = 0; i < n; ++i) cin >> c[i];
+
+          sort(c.begin(), c.end());
+          long long r = 0;                 // all sums 1..r are reachable
+          for (long long v : c) {
+              if (v <= r + 1) r += v;      // interval extends to r+v
+              else break;                  // r+1 is unreachable
+          }
+          cout << r + 1 << "\n";
+          return 0;
+      }
+      ```
+      O(n log n) time, O(n) space (the array), O(1) working state. Optimal —
+      sorting is the only super-linear step.
+
+      **③ No further optimization — why it's already optimal**
+      ```cpp
+      // There is no lower-complexity meaningful second optimization: the greedy
+      // is already a single post-sort pass in O(n), and an O(n log n) sort is
+      // required because the argument relies on consuming the smallest gap-
+      // bridging coins first. (A value-partitioning/hashing trick cannot beat
+      // the sort for this problem.)
+      ```
+      The greedy proof makes any slower tier unnecessary — the cost is pinned by
+      the sort at O(n log n), matching the barrier for comparison-based sorting.
+
+      **④ Alternative — subset-sum DP (reachability table), O(n · S)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          vector<long long> c(n);
+          long long S = 0;
+          for (int i = 0; i < n; ++i) { cin >> c[i]; S += c[i]; }
+
+          // feasible[s] = can we make sum s? O(n*S) — only viable for small S.
+          vector<char> feasible(S + 1, 0);
+          feasible[0] = 1;
+          for (long long v : c)
+              for (long long s = S; s >= v; --s)
+                  if (feasible[s - v]) feasible[s] = 1;
+
+          long long ans = 1;
+          while (ans <= S && feasible[ans]) ++ans;
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+      O(n · S) time, O(S) space — polynomial in the total sum `S`, which here
+      reaches `2·10^14`, so it is infeasible at the real constraints. Shown to
+      highlight why the greedy interval insight matters.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② the greedy reachable-interval pass**. Key lines:
+
+      - `sort(c.begin(), c.end())` — we must consider the smallest coins first;
+        the greedy only works because bridging the `[0, r]` interval with the
+        next-smallest coin is always optimal (any larger coin would be even
+        less able to close a gap).
+      - `long long r = 0` — the invariant: every whole sum in `0..r` can be
+        built from coins seen so far. `r` is 64-bit because the final reachable
+        sum can approach `2·10^14`.
+      - `if (v <= r + 1) r += v;` — the new coin extends the interval. Since the
+        old interval covers `0..r`, adding `v` covers `v..r+v`, and because
+        `v ≤ r+1` these two intervals overlap, their union is `0..r+v`
+        (no holes). This is the crux of the proof.
+      - `else break;` — `v > r + 1` means there is a gap of size `> 1` after
+        `r`; no remaining coin (all ≥ `v`) can ever sum to exactly `r + 1`, so
+        `r + 1` is the smallest unformable value.
+      - `cout << r + 1` — if every coin extends cleanly, the answer is the sum
+        of all coins plus 1 (everything formable, next value is the gap).
+
+      The key correctness idea: the achievable set is not sparse (as in general
+      subset-sum) but a *contiguous interval*, which is what makes a single
+      linear greedy pass sufficient.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      5
+      2 9 1 2 7
+      ```
+
+      Sorted coins: `[1, 2, 2, 7, 9]`.
+
+      | coin v | v ≤ r+1? | act | r | reachable now |
+      |--------|----------|-----|---|---------------|
+      | 1 | 1 ≤ 1 ✓ | r += 1 | 1 | `{1}` |
+      | 2 | 2 ≤ 2 ✓ | r += 2 | 3 | `{1,2,3}` |
+      | 2 | 2 ≤ 4 ✓ | r += 2 | 5 | `{1..5}` |
+      | 7 | 7 ≤ 6 ✗ | break | 5 | gap at 6 |
+
+      Answer = `r + 1 = 6` ✓. Indeed `1,2,3,4,5` are all formable (e.g. `4 = 2+2`,
+      `5 = 2+1+2`), but `6` is not — the smallest unformable sum.
+
+      **Why 6 is unavoidable:** coin `7` (and `9`) are each larger than the gap
+      of `6`; you cannot make `6` without a coin `≤ 6`, and the only coins ≤ 6
+      sum to `5`.
+
+      **Edge cases:**
+      - Smallest coin already > 1: `3 / 5 10 1` → sorted `[1,5,10]`: `1 ≤ 1` → r=1;
+        `5 ≤ 2`? no → break; answer `2`. (Even with a `1`, the gap `2` is open.)
+      - All formable: `3 / 1 2 4` → sorted; r: 1→1, 2→3, 4≤4 → r=7; answer `8`
+        (sum+1).
+      - No `1` at all: `3 / 2 3 4` → first coin `2 ≤ 1`? no → answer `1`.
+  - type: flowchart
+    title: "Reachable-interval greedy"
+    nodes:
+      - "Sort coins ascending"
+      - "r = 0 (interval [0, r])"
+      - "Next coin v"
+      - "v <= r + 1?"
+      - "r += v (interval merges, no gap)"
+      - "All coins consumed"
+      - "Answer = r + 1"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 4, to: 2, label: "next"}
+      - {from: 3, to: 6, label: "no: gap at r+1"}
+      - {from: 2, to: 6, label: "done"}
+      - {from: 6, to: 6}
+  - type: mcq
+    prompt: 'Why is a single greedy pass on sorted coins correct for finding the first unformable sum, even though subset-sum is NP-hard?'
+    options:
+      - Because subset-sum is only hard when values are fractional, which never happens here
+      - Because the set of reachable sums stays a contiguous interval [0, r]: each coin that is ≤ r+1 merges the interval with no holes, and a coin > r+1 permanently opens a gap at r+1, so the smallest unreachable sum is found in one sorted pass
+      - Because sorting guarantees every subset is checked
+      - Because greedily always taking the largest coin proves the answer
+    answer: 1
+    explanation: Unlike general subset-sum — where achievable sums form a sparse set and you may need a DP table — here we only need the first 'missing' sum. Sorting allows the invariant 'all of 0..r is reachable' to hold, and each coin either extends the interval (when v ≤ r+1) or exposes a permanent gap (when v > r+1), which is exactly the answer. The DP alternative would be O(n·S) with S up to 2·10^14, infeasible; the interval-greedy sidesteps it entirely.
+type: content
+---

@@ -1,0 +1,160 @@
+---
+id: missing-number
+title: Missing Number
+difficulty: easy
+order: 2
+tags:
+  - intro
+  - math
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — the arithmetic trick
+
+      You are handed the numbers `1, 2, …, n` with exactly **one** of them
+      removed, and asked which one is missing. The direct approach — check for
+      each candidate whether it appears — is `O(n)` per candidate and too slow.
+      A much better idea is to use a **closed-form formula**.
+
+      The sum of the full set `1 + 2 + … + n` is a classic identity:
+
+      `sum_full = n * (n + 1) / 2`
+
+      If you then subtract every number you *actually* received, whatever
+      remains is precisely the missing value:
+
+      `missing = sum_full - sum_of_given`
+
+      **Worked mini-example.** `n = 5`, and you are given `{2, 3, 1, 5}`.
+      - `sum_full = 5 * 6 / 2 = 15`
+      - `sum_of_given = 2 + 3 + 1 + 5 = 11`
+      - `missing = 15 - 11 = 4`
+
+      **Complexity.** One pass to compute the given sum: time `O(n)`, space
+      `O(1)`.
+
+      :::tip
+      **Interview tip:** Closed-form / invariant tricks (sum, product, XOR)
+      are a favourite for "which element is different" questions. Sum works
+      when numbers are distinct and bounded; XOR (`a ⊕ b`) is the classic
+      trick for the same pattern when you must avoid overflow.
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given all numbers between `1, 2, …, n` except one. Your task is
+      to find the missing number.
+
+      **Input:** The first input line contains an integer `n`. The second line
+      contains `n-1` numbers. Each number is distinct and between `1` and `n`
+      (inclusive).
+
+      **Output:** Print the missing number.
+
+      **Constraints:** `2 ≤ n ≤ 2·10^5`
+
+      ### Sample
+
+      Input:
+      ```text
+      5
+      2 3 1 5
+      ```
+
+      Output:
+      ```text
+      4
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n²) time, O(1) space (check every candidate).**
+
+      ```cpp
+      long long solve(long long n, const vector<long long>& a) {
+          for (long long cand = 1; cand <= n; ++cand) {
+              bool found = false;
+              for (long long x : a) {
+                  if (x == cand) { found = true; break; }
+              }
+              if (!found) return cand;
+          }
+          return -1; // unreachable
+      }
+      ```
+
+      For each candidate `cand` in `1..n` we scan the whole input to see whether it
+      appears; the first candidate that is never seen is the missing number. This is
+      correct, but the nested loop is `O(n²)` — with `n` up to `2·10^5` that is roughly
+      `4·10^10` scalar steps, far past the 1-second budget.
+
+      **② Optimization — O(n) time, O(1) space (the sum trick).**
+
+      ```cpp
+      long long solve(long long n, const vector<long long>& a) {
+          long long total = n * (n + 1) / 2;
+          for (long long x : a) total -= x;
+          return total;
+      }
+      ```
+
+      The full sum `1 + 2 + … + n = n(n+1)/2` is a closed-form identity. Subtract every
+      number we actually received and whatever remains is exactly the one missing value.
+      A single `O(n)` pass with `O(1)` space. This works because the given numbers are
+      precisely the set `{1..n}` with one element removed.
+
+      **④ Alternative algorithm — O(n) time, O(1) space (XOR, overflow-proof).**
+
+      ```cpp
+      long long solve(long long n, const vector<long long>& a) {
+          long long xr = 0;
+          for (long long i = 1; i <= n; ++i) xr ^= i;
+          for (long long x : a) xr ^= x;
+          return xr;
+      }
+      ```
+
+      XOR together every number `1..n` and every number we received. Any value that
+      appears in both sets cancels itself (a XOR a = 0), so only the single number that
+      lacks a partner — the missing one — survives. Same `O(n)` time and `O(1)` space as
+      the sum trick, but it never depends on `n(n+1)` fitting a type, making it the
+      classic alternative for "which element is missing/different" questions.
+
+      Reason through the code above with the next block — then trace it on the sample input below.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` receives the count `n` and the `n-1` given numbers in the vector
+      `a`. We initialise `total` to the full sum `n * (n + 1) / 2`, then
+      subtract every element we actually received. The value left over after
+      the loop is exactly the number that was not in the input.
+
+      The whole algorithm is one subtraction-heavy loop — no sorting, no
+      marking array, nothing else — which is why it runs in `O(n)` time and
+      `O(1)` space.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5`, `a = [2, 3, 1, 5]` (the CSES sample).
+
+      **Expected output:** `4`.
+
+      **Actual run:**
+
+      | step | action | running total |
+      |------|--------|---------------|
+      | start | `total = 5 * 6 / 2 = 15` | `15` |
+      | 1 | `total -= 2` | `13` |
+      | 2 | `total -= 3` | `10` |
+      | 3 | `total -= 1` | `9` |
+      | 4 | `total -= 5` | `4` |
+      | end | return `total` | `4` |
+
+      The returned value matches the expected output exactly.
+type: content
+---
+

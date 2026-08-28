@@ -1,0 +1,219 @@
+---
+id: tree-distances-ii
+title: "Tree Distances II"
+type: content
+difficulty: medium
+order: 148
+tags:
+  - tree-algorithms
+  - rerooting
+  - tree-dp
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      # Tree Distances II — rerooting DP for sums
+
+      For *every* node we want the **sum of distances to all other nodes**. The
+      naive method is a BFS from each node (O(n²)). The trick is **rerooting**:
+      compute the answer for one root (the root's total can be built bottom-up),
+      then derive every other node's answer by a single top-down adjustment.
+
+      ## The recurrence
+
+      **Down pass (sums for the root).** Root the tree at `1`. For each node define
+      `sz[u]` = size of its subtree (itself + descendants) and
+      `sum[u]` = sum of distances from `u` to all nodes in its subtree:
+
+      ```
+      sum[u] = sum over children v of ( sum[v] + sz[v] )
+      ```
+
+      Because each node in `v`'s subtree is exactly one edge farther from `u` than
+      from `v`. Then `ans[1] = sum[1]` is the root's full answer.
+
+      **The reroot shift.** Once `ans[u]` is known, moving the root to a child `v`
+      changes the total by `- sz[v] + (n - sz[v])`: everyone in `v`'s subtree
+      comes one step closer, everyone outside one step farther. That single
+      top-down formula produces the answer for every node in O(n).
+
+      :::tip
+      **Interview tip:** rerooting/"tree-with-two-passes" DP — compute an answer
+      bottom-up for one root, then fix it up with a ±constant shift as the root
+      moves to a neighbour — reappears constantly (sums of distances, "closest
+      red node", moving a server). Learn the shift `ans[v] = ans[u] - sz[v] +
+      (n - sz[v])` and the size of each subtree, and you can adapt it to many
+      tree questions.
+      :::
+
+  - type: markdown
+    content: |
+      # Question — Tree Distances II
+
+      You are given a tree consisting of `n` nodes. For each node, what is the sum
+      of distances to all other nodes?
+
+      **Input**
+
+      The first input line contains an integer `n`: the number of nodes. The nodes
+      are numbered `1, 2, ..., n`.
+
+      After this, there are `n-1` lines describing the edges. Each line has two
+      integers `a` and `b`: there is an edge between nodes `a` and `b`.
+
+      **Output**
+
+      Print `n` integers: for each node `1, 2, ..., n`, the sum of distances to
+      all other nodes.
+
+      **Constraints**
+
+      - `1 <= n <= 2 * 10^5`
+
+      **Example**
+
+      Input:
+
+      ```
+      5
+      1 2
+      1 3
+      3 4
+      3 5
+      ```
+
+      Output:
+
+      ```
+      6 9 5 8 8
+      ```
+
+      For node 1, distances to nodes 2,3,4,5 are `1,1,2,2`, sum `6`. For node 4,
+      distances to 1,2,3,5 are `2,3,1,2`, sum `8`.
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — BFS sum from every node, O(n²) time**
+
+      For each node, BFS to collect the distance to every other node and add them.
+      Correct but O(n²) — roughly `4 * 10^10` operations at `n = 2 * 10^5`. Too
+      slow.
+
+      ```cpp
+      // Illustration of the naive idea only — O(n^2), unusable.
+      // For each u: BFS, sum all distances to other nodes.
+      ```
+
+      **② Optimization — rerooting DP, O(n) time, O(n) space**
+
+      Compute `sum[1]` bottom-up, then push answers down with the reroot shift.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<vector<int>> g(n+1);
+          for(int i=0;i<n-1;++i){ int a,b; cin>>a>>b; g[a].push_back(b); g[b].push_back(a); }
+          vector<int> par(n+1,0), order; order.reserve(n);
+          vector<int> stk; stk.push_back(1); par[1]=-1;
+          while(!stk.empty()){
+              int u=stk.back(); stk.pop_back(); order.push_back(u);
+              for(int v:g[u]) if(v!=par[u]){ par[v]=u; stk.push_back(v); }
+          }
+          vector<ll> sz(n+1,1), sum(n+1,0);
+          for(int i=order.size()-1;i>=0;--i){
+              int u=order[i];
+              for(int v:g[u]) if(par[v]==u){ sz[u]+=sz[v]; sum[u]+=sum[v]+sz[v]; }
+          }
+          vector<ll> ans(n+1); ans[1]=sum[1];
+          for(int u:order)
+              for(int v:g[u]) if(par[v]==u)
+                  ans[v] = ans[u] - sz[v] + (ll)(n - sz[v]);
+          for(int i=1;i<=n;++i) cout << ans[i] << (i==n?'\n':' ');
+          return 0;
+      }
+      ```
+
+      The top-down line is the rerooting step (see code logic).
+
+      **③ Further optimization** — not needed: O(n) is optimal.
+
+      **④ Alternative — recursive reroot**
+
+      The same recurrences written as a two-phase recursive DFS: one `dfs` computes
+      `sz`/`sum` for the root, the second `reroot(u, v)` transfers the answer from
+      `u` to child `v` using the same `- sz[v] + (n - sz[v])` shift. Identical
+      result, but recursion risks stack overflow on a chain of depth `2 * 10^5`;
+      the iterative version (②) is the robust choice.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Follow the O(n) rerooting solution in **②**:
+
+      - Two phases over one rooted tree (root = 1): a **bottom-up** pass builds
+        `sz` and `sum`, then a **top-down** pass fills `ans` for every child.
+      - `sz[u] += sz[v]` and `sum[u] += sum[v] + sz[v]`: moving from `v` to `u`,
+        each of the `sz[v]` nodes in `v`'s subtree becomes one edge farther away.
+      - The reroot shift is the crux: going from root `u` to its child `v`,
+        everyone in `v`'s subtree (size `sz[v]`) is now **1 closer**, and everyone
+        outside it (`n - sz[v]`) is now **1 farther**, so
+        `ans[v] = ans[u] - sz[v] + (n - sz[v])`.
+      - `long long` is essential — the sums reach ~`n²` (`4 * 10^10`), far beyond
+        `int`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, edges `1-2`, `1-3`, `3-4`, `3-5`. Root = 1.
+      Children of 1: `{2,3}`; children of 3: `{4,5}`.
+
+      Bottom-up posting order (one valid order): `[4, 5, 3, 2, 1]`.
+
+      | u | children | sz[u] | sum[u] |
+      |---|----------|-------|--------|
+      | 4 | — | 1 | 0 |
+      | 5 | — | 1 | 0 |
+      | 3 | 4,5 | 1+1+1=3 | (0+1)+(0+1)=2 |
+      | 2 | — | 1 | 0 |
+      | 1 | 2,3 | 1+3=4 | (0+1)+(2+3)=6 |
+
+      So `ans[1] = sum[1] = 6`. Reroot top-down (order `[1,3,2,4,5]`):
+
+      | u→child v | ans[v] = ans[u] − sz[v] + (n − sz[v]) | value |
+      |-----------|----------------------------------------|-------|
+      | 1→3 | 6 − 3 + (5−3) | 5 |
+      | 1→2 | 6 − 1 + 4 | 9 |
+      | 3→4 | 5 − 1 + 4 | 8 |
+      | 3→5 | 5 − 1 + 4 | 8 |
+
+      Output: `6 9 5 8 8`, matching the sample.
+  - type: flowchart
+    title: "Rerooting DP"
+    nodes: ["root tree at 1", "postorder bottom-up: sz[u], sum[u]",
+            "ans[1] = sum[1]", "top-down over order",
+            "next child v of u",
+            "ans[v] = ans[u] − sz[v] + (n − sz[v])",
+            "print ans[1..n]"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: "for each child"}
+      - {from: 5, to: 4, label: "last child"}
+      - {from: 4, to: 6, label: "all children done"}
+  - type: mcq
+    prompt: "When rerooting from node u to its child v, why is ans[v] = ans[u] − sz[v] + (n − sz[v]) exactly correct?"
+    options:
+      - "Moving the root from u to v brings every node in v's subtree (sz[v] of them) one edge closer and every other node (n − sz[v]) one edge farther, so we subtract sz[v] and add (n − sz[v]); because subtrees are disjoint this single adjustment is exact"
+      - "Because v always has exactly one more child than u"
+      - "Because distances can only decrease when moving down"
+      - "Because the answer is the same for all nodes on a path"
+    answer: 0
+    explanation: "Only the side that contains v changes distance when the root moves across edge (u,v): all nodes on v's side, exactly sz[v] of them, shrink by 1, and all nodes on u's side, the remaining n − sz[v], grow by 1. Each node changes by the same ±1 because the tree has a unique path between any pair, so the whole sum shifts by −sz[v] + (n − sz[v]) with no further bookkeeping."
+---

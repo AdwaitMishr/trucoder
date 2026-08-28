@@ -1,0 +1,230 @@
+---
+id: game-routes
+title: "Game Routes"
+difficulty: easy
+order: 99
+tags:
+  - graph-algorithms
+  - dag
+  - dynamic-programming
+  - counting-paths
+  - topological-sort
+blocks:
+  - type: markdown
+    content: |
+      # Game Routes — count paths in a DAG (mod M)
+
+      A game has `n` levels connected by `m` **one-way teleporters**, and the
+      underlying graph is guaranteed to have **no directed cycles**. We must
+      count how many ways there are to go from level `1` to level `n`, printed
+      modulo `10^9 + 7`.
+
+      This is the counting sibling of the longest-path lesson: instead of the
+      *maximum* over predecessors, we take the *sum*.
+
+      ## Counting with a topological DP
+
+      Let `ways[v]` = number of distinct routes from level `1` to level `v`.
+      Then:
+
+      ```
+      ways[1] = 1
+      for u in topological order:
+          for each teleporter u -> v:
+              ways[v] += ways[u]   (modulo M)
+      ```
+
+      Because there are no cycles, we can process vertices in topological order
+      and each predecessor's `ways` is final before we add it to `ways[v]`. Every
+      route into `v` enters over exactly one incoming teleporter `u -> v`, so the
+      sum over all such `u` counts every route exactly once — no double counting.
+
+      The modulo is applied at every addition so values never overflow.
+
+      **Time:** O(n + m) — topological sort + one pass over every edge.
+      **Space:** O(n + m).
+
+      :::tip
+      **Interview tip:** "count the number of paths from the source to a target
+      in a DAG, mod 10^9+7" is a very common DP starter. The mental model is
+      always *`ways[to] += ways[from]` in topological order*, and the reason it
+      never over-counts is that each route is uniquely identified by its last
+      edge. Reaching for BFS/DFS enumeration is the trap — it is exponential and
+      re-counts paths with loops.
+      :::
+  - type: markdown
+    content: |
+      # Question — Game Routes
+
+      A game has `n` levels, connected by `m` teleporters, and your task is to
+      get from level `1` to level `n`. The game has been designed so that there
+      are **no directed cycles** in the underlying graph. In how many ways can
+      you complete the game?
+
+      **Input**
+
+      The first input line has two integers `n` and `m`: the number of levels and
+      teleporters. The levels are numbered `1, 2, ..., n`.
+
+      After this, there are `m` lines describing the teleporters. Each line has
+      two integers `a` and `b`: there is a teleporter from level `a` to level
+      `b`.
+
+      **Output**
+
+      Print one integer: the number of ways you can complete the game. Since the
+      result may be large, print it **modulo `10^9 + 7`**.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `1 <= m <= 2*10^5`
+      - `1 <= a, b <= n`
+
+      **Example**
+
+      Input:
+
+      ```
+      4 5
+      1 2
+      2 4
+      1 3
+      3 4
+      1 4
+      ```
+
+      Output:
+
+      ```
+      3
+      ```
+
+      (The three ways are `1->4`, `1->2->4` and `1->3->4`.)
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — enumerate routes, exponential time**
+
+      DFS every route from `1` to `n`, incrementing a counter each time you reach
+      `n`, then take the count mod `M`. Correct on a DAG (routes are finite) but
+      the number of routes grows exponentially, so for `n` up to `10^5` it is
+      unusable — and it would return 0 for any graph with a loop unless you also
+      bound the depth.
+
+      ```cpp
+      // Illustration of the naive idea only — exponential, unusable.
+      long long cnt = 0;
+      void dfs(int u, const vector<vector<int>>& g, int n){
+          if (u == n) { cnt = (cnt + 1) % ((long long)1e9 + 7); return; }
+          for (int v : g[u]) dfs(v, g, n);
+      }
+      ```
+
+      **② Optimization — topological DP, O(n + m) time, O(n + m) space**
+
+      Sum `ways` forward along a topological order, mod `10^9 + 7`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1e9 + 7;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<int>> g(n + 1);
+          vector<int> indeg(n + 1, 0);
+          for (int i = 0; i < m; ++i) { int a, b; cin >> a >> b; g[a].push_back(b); indeg[b]++; }
+          // topological order (Kahn)
+          queue<int> q;
+          for (int i = 1; i <= n; ++i) if (indeg[i] == 0) q.push(i);
+          vector<int> topo;
+          while (!q.empty()) {
+              int u = q.front(); q.pop(); topo.push_back(u);
+              for (int v : g[u]) if (--indeg[v] == 0) q.push(v);
+          }
+          vector<ll> ways(n + 1, 0);
+          ways[1] = 1;
+          for (int u : topo) {
+              for (int v : g[u])
+                  ways[v] = (ways[v] + ways[u]) % MOD;
+          }
+          cout << ways[n] << "\n";
+          return 0;
+      }
+      ```
+
+      **③ Further optimization** — not needed: O(n + m) is optimal; every edge
+      and vertex must be examined at least once.
+
+      **④ Alternative — reverse-direction DP (memoized)**
+
+      Define `f[v]` = number of ways from `v` to `n`, computed by a recursive
+      memoised DFS over incoming edges, or by a backward pass in reverse
+      topological order: `f[n] = 1`, and `f[v] = sum over edges v->u of f[u]`.
+      Same O(n + m), computed from the destination backwards instead of from the
+      source forwards — a useful framing when several different sources are
+      queried against one target.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O(n + m) topological DP in **②**:
+
+      - Kahn's pass yields `topo`, covering all `n` vertices (the graph is a
+        DAG).
+      - `ways[1] = 1` — exactly one way to already be at the start level (the
+        trivial empty route).
+      - For each `u` in `topo`, every out-edge `u -> v` contributes `ways[u]`
+        ways to reach `v`. Processing order guarantees `ways[u]` is complete
+        (all of `u`'s in-edges already handled) when we use it, so we never
+        count a prefix route twice.
+      - Each route to `n` is counted exactly once, through the final teleporter
+        it takes — its last edge — which is why summing over all in-edges of each
+        level is exact.
+      - `% MOD` on every addition keeps `ways` within `long long` (an
+        intermediate sum of two `MOD`-sized values is at most `~2*10^9`, safe in
+        a 64-bit type).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 4`, teleporters `1->2`, `2->4`, `1->3`, `3->4`,
+      `1->4`.
+
+      Topological order `topo = [1, 2, 3, 4]` (level 1 has indegree 0).
+      `ways[1] = 1`. Processing:
+
+      | u | teleporters out | updated ways[] |
+      |---|-----------------|----------------|
+      | 1 | 1->2, 1->3, 1->4 | ways[2]=1, ways[3]=1, ways[4]=1 |
+      | 2 | 2->4 | ways[4] = 1+1 = 2 |
+      | 3 | 3->4 | ways[4] = 2+1 = **3** |
+      | 4 | (none) | — |
+
+      `ways[4] = 3`, matching the sample output. The three routes:
+      `1->4`, `1->2->4`, `1->3->4`.
+  - type: flowchart
+    title: "Counting paths in a DAG"
+    nodes: ["topological sort", "ways[1] = 1", "process u in topo order",
+            "for each edge u->v: ways[v] = (ways[v]+ways[u]) mod M",
+            "print ways[n]"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: "next u"}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 2, label: "loop"}
+      - {from: 2, to: 4, label: "after all vertices"}
+  - type: mcq
+    prompt: "Why does summing ways[v] += ways[u] over incoming edges u->v (in topological order) count each route to level n exactly once?"
+    options:
+      - "Because each route to v arrives over exactly one incoming teleporter, so grouping routes by their last edge partitions them without overlap or omission"
+      - "Because topological order sorts the teleporters by price"
+      - "Because every level has exactly one incoming edge"
+      - "Because the graph is guaranteed connected"
+    answer: 0
+    explanation: "Every path from 1 to v ends with exactly one incoming edge (x -> v). Removing that last edge leaves a unique path from 1 to x, so the sum over all incoming edges of ways[x] counts exactly the paths into v — each once. The topo order ensures ways[x] is final before it is added. That exact one-to-one matching is why summation does not double count."
+type: content
+---

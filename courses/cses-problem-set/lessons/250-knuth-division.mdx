@@ -1,0 +1,264 @@
+---
+id: knuth-division
+title: "Knuth Division"
+type: content
+difficulty: hard
+order: 250
+tags:
+  - advanced-techniques
+  - dynamic-programming
+  - knuth-optimization
+  - interval-dp
+blocks:
+  - type: markdown
+    content: |
+      # Knuth Division — split an interval down to singletons
+
+      Start with the whole array as one subarray. On each move you may pick any
+      subarray and split it into two; splitting a subarray costs the **sum of its
+      values**. You keep splitting until every subarray holds a single element.
+      Minimise the total cost over all split trees.
+
+      This is an **interval DP** — and it is the canonical target of **Knuth's
+      optimization** (the Knuth–Yao speedup), which turns the naive `O(n³)` into
+      `O(n²)`.
+
+      ## The DP
+
+      Let `dp[i][j]` be the minimum cost to completely split the subarray
+      `[i, j]` (inclusive) into singletons. A single element costs nothing:
+      `dp[i][i] = 0`. Otherwise the *first* split of `[i, j]` cuts it at some `k`
+      into `[i, k]` and `[k+1, j]`, paying `sum(i, j)` now and the optimal costs
+      of the two halves recursively:
+
+      ```
+      dp[i][j] = sum(i, j) + min over k in [i, j-1] of ( dp[i][k] + dp[k+1][j] )
+      ```
+
+      The answer is `dp[1][n]`. The naive version tries all `k` for every
+      interval: `O(n³)` — at `n = 5000` that is `1.25·10^11`, far too slow.
+
+      ## Why Knuth's optimization applies
+
+      The extra cost `sum(i, j)` is **Monge**: it satisfies the quadrangle
+      inequality (in fact `sum(a,c) + sum(b,d) = sum(a,d) + sum(b,c)` for
+      `a <= b <= c <= d`). For any interval DP of the form
+      `dp[i][j] = cost(i,j) + min_{i<=k<j}(dp[i][k] + dp[k+1][j])` whose cost is
+      Monge, the optimal split index is **monotone**:
+
+      ```
+      opt[i][j-1]  <=  opt[i][j]  <=  opt[i+1][j]
+      ```
+
+      So when computing `dp[i][j]` we only need to scan
+      `k in [opt[i][j-1], opt[i+1][j]]` — a short window — instead of the whole
+      range. Over all intervals that shrink the total work to `O(n²)`.
+
+      **Complexity:** naive `O(n³)` time; with Knuth, `O(n²)` time and `O(n²)`
+      space (for `n = 5000`, about `25·10^6` cells ≈ 200 MB of `long long`).
+
+      :::tip
+      **Interview tip:** learn to *recognise* the shape. If the DP is an interval
+      split (`dp[i][j] = min_k(dp[i][k] + dp[k+1][j]) + C(i,j)`) and the
+      additive cost `C` is non-decreasing and Monge, then Knuth's optimization is
+      your `O(n³) → O(n²)` lever. Verify the monotone-`opt` inequality holds,
+      then enforce the window — changing only the `for k` bounds. This recurrence
+      family includes optimal binary-search-tree costs and many "merge/split
+      tree" problems.
+      :::
+  - type: markdown
+    content: |
+      # Question — Knuth Division
+
+      Given an array of `n` numbers, your task is to divide it into `n`
+      subarrays, each of which has a single element.
+
+      On each move, you may choose any subarray and split it into two subarrays.
+      The **cost** of such a move is the **sum of values** in the chosen
+      subarray.
+
+      What is the **minimum total cost** if you act optimally?
+
+      **Input**
+
+      The first input line has an integer `n`: the array size. The array elements
+      are numbered `1, 2, ..., n`.
+      The second line has `n` integers `x_1, x_2, ..., x_n`: the contents of the
+      array.
+
+      **Output**
+
+      Print one integer: the minimum total cost.
+
+      **Constraints**
+
+      - `1 <= n <= 5000`
+      - `1 <= x_i <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      5
+      2 7 3 2 5
+      ```
+
+      Output:
+
+      ```
+      43
+      ```
+  - type: markdown
+    content: |
+      ### Solution — Knuth Division
+
+      **① Brute force — O(n³) time, O(n²) space**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll INF = (1LL << 62);
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<ll> x(n + 1), P(n + 1, 0);
+          for (int i = 1; i <= n; ++i) { cin >> x[i]; P[i] = P[i - 1] + x[i]; }
+          auto sum = [&](int i, int j) { return P[j] - P[i - 1]; };
+
+          vector<vector<ll>> dp(n + 2, vector<ll>(n + 2, 0));   // dp[i][i] = 0
+          for (int len = 1; len < n; ++len)
+              for (int i = 1; i + len <= n; ++i) {
+                  int j = i + len;
+                  ll best = INF;
+                  for (int k = i; k <= j - 1; ++k)
+                      best = min(best, dp[i][k] + dp[k + 1][j] + sum(i, j));
+                  dp[i][j] = best;
+              }
+          cout << dp[1][n] << "\n";
+      }
+      ```
+
+      `O(n³)` — at `n = 5000`, `1.25·10^11` inner steps. Far too slow.
+
+      **② Optimisation — Knuth's optimization, O(n²) time, O(n²) space**
+
+      Because `sum(i, j)` is Monge, `opt[i][j]` is monotone. Only scan the small
+      window `k in [opt[i][j-1], opt[i+1][j]]`:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll INF = (1LL << 62);
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<ll> x(n + 1), P(n + 1, 0);
+          for (int i = 1; i <= n; ++i) { cin >> x[i]; P[i] = P[i - 1] + x[i]; }
+          auto sum = [&](int i, int j) { return P[j] - P[i - 1]; };
+
+          vector<vector<ll>> dp(n + 2, vector<ll>(n + 2, 0));
+          vector<vector<int>> opt(n + 2, vector<int>(n + 2, 0));
+          for (int len = 1; len < n; ++len)              // fill by increasing length
+              for (int i = 1; i + len <= n; ++i) {
+                  int j = i + len;
+                  int lo = opt[i][j - 1], hi = opt[i + 1][j];
+                  if (lo == 0) lo = i;                   // first / base windows
+                  if (hi == 0) hi = j - 1;
+                  ll best = INF; int who = i;
+                  for (int k = lo; k <= hi; ++k) {
+                      ll v = dp[i][k] + dp[k + 1][j] + sum(i, j);
+                      if (v < best) { best = v; who = k; }
+                  }
+                  dp[i][j] = best;
+                  opt[i][j] = who;
+              }
+          cout << dp[1][n] << "\n";
+      }
+      ```
+
+      **③ Further optimisation** — none needed: `O(n²)` is the intended bound for
+      `n <= 5000`. (A `O(n²)` table of `long long` is ≈ 200 MB; with
+      `n = 5000` that is within the memory limit, or you can keep rolling rows
+      with care — but the full table is simplest and fine.)
+
+      **④ Alternative** — the same recurrence solves the "optimal binary search
+      tree"-style interval problems, so the *pattern* generalises directly. There
+      is no sub-quadratic exact method for this cost shape; `O(n²)` via Knuth is
+      the intended, canonical solution.
+  - type: markdown
+    content: |
+      # Code logic — Knuth Division
+
+      Focus on **②**:
+
+      - `P` prefix sums make `sum(i, j)` an O(1) look-up.
+      - `dp[i][j]` is filled **by increasing interval length** so that both halves
+        `[i, k]` and `[k+1, j]` are strictly shorter and already computed.
+      - `opt[i][j]` records the best split index. The Knuth–Yao inequality
+        `opt[i][j-1] <= opt[i][j] <= opt[i+1][j]` lets us restrict the scan for
+        interval `[i, j]` to `k in [opt[i][j-1], opt[i+1][j]]`. Both bounds come
+        from intervals of length `len-1`, computed in the previous outer
+        iteration.
+      - For `len = 1` the stored `opt` is `0` (no sub-split), so we substitute
+        `lo = i`, `hi = j - 1` — the only valid split.
+      - We always take the first best `k` in the window when ties occur; because
+        the window bounds are monotone this keeps `opt` consistent and still
+        visits a small total number of candidates across all intervals.
+
+      :::tip
+      **Interview question:** How can you confirm the Knuth–Yao inequality actually
+      holds for a given cost before applying it? — Verify the cost is Monge
+      (quadrangle inequality) and monotone; for `sum(i,j)` it holds with equality.
+      If the inequality were violated, the window would skip the true optimum, so
+      the honest check is to run the optimized DP against the `O(n³)` brute on small
+      random inputs and assert they match (do this on paper or in code).
+      :::
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace on the sample: `n = 5`, array `x = [2, 7, 3, 2, 5]`. The optimal
+      split tree is
+
+      ```
+      ( [1] | [2] )  |  ( ( [3] | [4] ) | [5] )
+      ```
+
+      i.e. first split `[1,5]` (cost `19`), split `[1,2]` (cost `9`), split
+      `[3,5]` (cost `10`), split `[3,4]` (cost `5`). Total
+      `19 + 9 + 10 + 5 = 43`.
+
+      Filling the DP by length (`dp[i][j] = sum(i,j) + min_k(dp[i][k]+dp[k+1][j])`):
+
+      | interval | sum     | min over k of dp[i][k]+dp[k+1][j] | best k | dp[i][j] |
+      |----------|---------|-----------------------------------|--------|----------|
+      | dp[1][2] | 9       | k=1: 0                            | 1      | `9+0=9`  |
+      | dp[2][3] | 10      | k=2: 0                            | 2      | `10+0=10`|
+      | dp[3][4] | 5       | k=3: 0                            | 3      | `5+0=5`  |
+      | dp[4][5] | 7       | k=4: 0                            | 4      | `7+0=7`  |
+      | dp[1][3] | 12      | k=1:10, k=2:9                     | 2      | `12+9=21`|
+      | dp[2][4] | 12      | k=2:5,  k=3:10                    | 2      | `12+5=17`|
+      | dp[3][5] | 10      | k=3:7,  k=4:5                     | 4      | `10+5=15`|
+      | dp[1][4] | 14      | k=1:17,k=2:14,k=3:21              | 2      | `14+14=28`|
+      | dp[2][5] | 17      | k=2:15,k=3:17,k=4:17              | 2      | `17+15=32`|
+      | dp[1][5] | 19      | k=1:32,k=2:24,k=3:28,k=4:28       | 2      | `19+24=43`|
+
+      Reading `dp[1][5] = 43` with `k = 2`: split `[1,5]` into `[1,2]` and
+      `[3,5]`, paying `19`; `dp[1][2] = 9` and `dp[3][5] = 15` (which itself
+      used `k = 4`: `dp[3][4] = 5`). Total `19 + 9 + 15 = 43`, matching the
+      sample output.
+  - type: mcq
+    prompt: "Why does Knuth's optimization reduce an interval split DP from O(n³) to O(n²)?"
+    options:
+      - "Because instead of scanning every split k for every interval, opt[i][j] is bounded by opt[i][j-1] and opt[i+1][j], so the scan window is small and the total scanned candidates over all intervals is O(n²)."
+      - "Because it replaces the DP with a greedy that always splits at the midpoint."
+      - "Because sum(i,j) can be precomputed in O(1), removing one loop."
+      - "Because it sorts the array first, which makes all interval sums zero."
+    answer: 0
+    explanation: "For a Monge cost, the optimal split index is monotone: opt[i][j-1] <= opt[i][j] <= opt[i+1][j]. Restricting the k-loop to this window makes the total number of candidates over all intervals linear per row pair, giving O(n²) instead of O(n³). Precomputing sum(i,j) in O(1) is a separate (also needed) improvement but not what removes the third loop."
+---

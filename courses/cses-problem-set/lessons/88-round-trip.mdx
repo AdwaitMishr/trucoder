@@ -1,0 +1,297 @@
+---
+id: round-trip
+title: Round Trip
+type: content
+difficulty: medium
+order: 88
+tags:
+  - graph-algorithms
+  - cycle-detection
+  - dfs
+  - path-reconstruction
+blocks:
+  - type: markdown
+    content: |
+      # Round Trip — finding a simple cycle in an undirected graph
+
+      Byteland's cities and roads form an undirected graph. You want a *round
+      trip*: a closed walk that starts and ends at the same city after going
+      through two or more distinct intermediate cities (so every intermediate
+      city appears exactly once). In graph terms, find and print any **simple
+      cycle**.
+
+      The clean way uses a **depth-first search** and a clever idea: a DFS keeps
+      a *stack* of the current exploration path, and any edge from the node being
+      explored to a node *still on that stack* (but not its direct parent) closes
+      a cycle — the stack path from the ancestor down to the current node, plus
+      that one edge, is a simple cycle.
+
+      ## The 3-colour trick
+
+      Instead of a plain visited flag, give each vertex one of three states:
+
+      - `0` — unvisited,
+      - `1` — on the current DFS recursion stack,
+      - `2` — finished (its whole sub-tree explored).
+
+      When, at vertex `u`, we look at neighbour `v`:
+
+      - `v == par[u]`: the edge back to the parent — skip it (it would just go
+        out and back along the same edge, not a cycle).
+      - `color[v] == 0`: recurse into `v`.
+      - `color[v] == 1`: `v` is an **ancestor still on the stack** — found a
+        back edge `u → v`. The stack path `v … u` plus edge `u→v` is a simple
+        cycle. Reconstruct it from the parent pointers.
+
+      Because undirected simple cycles always contain such a back edge, one DFS
+      over all components finds a cycle if one exists.
+
+  - type: markdown
+    content: |
+      # The Problem
+
+      Byteland has `n` cities and `m` roads between them. Your task is to design
+      a round trip that begins in a city, goes through two or more other cities,
+      and finally returns to the starting city. Every intermediate city on the
+      route has to be distinct.
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the number of cities
+      and roads. The cities are numbered `1, 2, ..., n`.
+
+      Then, there are `m` lines describing the roads. Each line has two integers
+      `a` and `b`: there is a road between cities `a` and `b`. The road always
+      connects two different cities, and there is at most one road between any
+      two cities.
+
+      **Constraints:** `1 ≤ n ≤ 10^5`, `1 ≤ m ≤ 2·10^5`
+
+      ## Output
+
+      First print an integer `k`: the number of cities on the route. Then print
+      `k` cities in the order of the round trip. The first and last city must be
+      the same, and the other `k-1` cities must be different from each other and
+      from the first city.
+
+      If there are no solutions, print `IMPOSSIBLE`.
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      5 6
+      1 3
+      1 2
+      5 3
+      1 5
+      2 4
+      4 5
+      ```
+
+      **Output:**
+
+      ```
+      4
+      1 3 5 1
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — backtracking DFS from every city, exponential**
+
+      From each city as a fixed start, explore all simple paths; if you return
+      to the start, print the cycle. Correct but explores a tree of options that
+      can blow up exponentially with the branching, so it is unusable at
+      `n = 10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n, m;
+      vector<vector<int>> adj;
+      vector<int> path, vis;
+      bool found = false;
+      void findCycle(int u, int par, int start) {
+          if (found) return;
+          vis[u] = 1; path.push_back(u);
+          for (int v : adj[u]) {
+              if (v == par) continue;
+              if (v == start && (int)path.size() >= 3) {
+                  path.push_back(start);
+                  cout << path.size() << '\n';
+                  for (int x : path) cout << x << ' '; cout << '\n';
+                  found = true; return;
+              }
+              if (!vis[v]) findCycle(v, u, start);
+              if (found) return;
+          }
+          vis[u] = 0; path.pop_back();     // un-choose this branch
+      }
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n >> m;
+          adj.assign(n + 1, {});
+          for (int i = 0; i < m; i++) { int a, b; cin >> a >> b;
+              adj[a].push_back(b); adj[b].push_back(a); }
+          for (int s = 1; s <= n && !found; s++) {
+              path.clear(); vis.assign(n + 1, 0);
+              findCycle(s, -1, s);
+          }
+          if (!found) cout << "IMPOSSIBLE\n";
+          return 0;
+      }
+      ```
+
+      *Time can be exponential — correct only for tiny graphs.*
+
+      **② Optimization — one DFS, 3-colours, back edge, O(n + m)**
+
+      Single DFS over every component; a back edge to a stack ancestor yields a
+      cycle reconstructed via parent pointers. Linear and robust.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<int>> adj(n + 1);
+          for (int i = 0; i < m; i++) {
+              int a, b; cin >> a >> b;
+              adj[a].push_back(b);
+              adj[b].push_back(a);
+          }
+          // colors: 0 unvisited, 1 on the current DFS stack, 2 fully done
+          vector<int> color(n + 1, 0), par(n + 1, 0);
+          int start = -1, end = -1;
+          function<bool(int)> dfs = [&](int u) -> bool {
+              color[u] = 1;
+              for (int v : adj[u]) {
+                  if (v == par[u]) continue;            // ignore edge back to parent
+                  if (color[v] == 0) { par[v] = u; if (dfs(v)) return true; }
+                  else if (color[v] == 1) {             // back edge u->v to an ancestor
+                      start = v; end = u; return true;
+                  }
+              }
+              color[u] = 2;
+              return false;
+          };
+          for (int i = 1; i <= n; i++)
+              if (color[i] == 0 && dfs(i)) break;
+          if (start == -1) { cout << "IMPOSSIBLE\n"; return 0; }
+          vector<int> cyc;
+          for (int cur = end;; cur = par[cur]) { cyc.push_back(cur); if (cur == start) break; }
+          reverse(cyc.begin(), cyc.end());              // now start ... end
+          cyc.push_back(start);                         // close the cycle
+          cout << cyc.size() << '\n';
+          for (int x : cyc) cout << x << ' ';
+          cout << '\n';
+          return 0;
+      }
+      ```
+
+      *O(n + m) time, O(n + m) space — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      Cycle existence can, in the worst case, require examining all edges, so
+      `O(n + m)` is optimal.
+
+      **④ Alternative — iterative DFS (explicit stack)**
+
+      The recursion above revisits at most `n` frames. On a very deep graph
+      (e.g. a single long path of `10^5` vertices) recursion may overflow the
+      call stack in some judges. An explicit-stack version simulates the same
+      DFS with the same colours and parent pointers, giving `O(n + m)` with `O(n)`
+      auxiliary memory and no recursion. (A Disjoint Set can detect cycle
+      *existence* incrementally by finding an edge joining two vertices already
+      in one component — but the 3-colour DFS is far easier when you must also
+      print the cycle.)
+  - type: markdown
+    content: |
+      # Code logic
+
+      Key lines of the 3-colour DFS:
+
+      - **`color[v] == 1` is the detector.** A vertex with colour 1 is still on
+        the current stack. An edge from `u` to such a `v` is a *back edge* — it
+        closes the path that starts at an ancestor of `v`, runs down to `u`, and
+        returns. That closed path is a simple cycle.
+      - **`if (v == par[u]) continue;`** prevents the trivial "go out and back"
+        along a single edge, which is not a cycle.
+      - **Reconstruction.** `start = v, end = u`. Walk `end` up the `par` chain
+        until reaching `start`, giving the vertices of the cycle segment; `reverse`
+        and append `start` again to close it. Because `color[v]==1` guarantees
+        `v` is a proper ancestor on the stack, the parent walk terminates there.
+      - **`color[u] = 2`** when done marks the vertex as fully explored, so a
+        later cross edge to it (`color == 2`) is ignored — that edge does not
+        close a *currently active* path.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample:
+
+      ```
+      5 6
+      1 3
+      1 2
+      5 3
+      1 5
+      2 4
+      4 5
+      ```
+
+      DFS, using adjacency in input order (1: 3,2,5; 3: 1,5; 5: 3,1,4; 2: 1,4; 4: 2,5).
+
+      | step | stack / action | colour states |
+      |------|----------------|---------------|
+      | start | dfs(1), colour[1]=1 | 1:on-stack |
+      | dfs(1) | neighbour 3, colour 0 → par[3]=1, dfs(3) | 1,3 on-stack |
+      | dfs(3) | neighbour 1 == par, skip; neighbour 5 colour 0 → par[5]=3, dfs(5) | 1,3,5 on-stack |
+      | dfs(5) | neighbour 3 == par, skip; neighbour 1 colour **1** (ancestor!) → back edge 5→1 | **DETECTED** |
+
+      Back edge `5 → 1`: `start=1`, `end=5`. Walk parents: `5 → 3 → 1`. Reverse →
+      `[1, 3, 5]`, append `start` → `[1, 3, 5, 1]`.
+
+      Output:
+      ```
+      4
+      1 3 5 1
+      ```
+
+      Expected (sample) — `4` / `1 3 5 1`. Actual — identical. Match.
+  - type: flowchart
+    title: "Find a simple cycle by DFS back-edge"
+    nodes:
+      - "for each city i (component seed)"
+      - "i already fully explored?"
+      - "dfs(i): colour=1, recurse neighbours"
+      - "neighbour v is unvisited?"
+      - "neighbour v is on the current stack?"
+      - "record start=v, end=u (back edge); walk parents to build cycle"
+      - "print the cycle"
+      - "print IMPOSSIBLE"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "no, explore"}
+      - {from: 1, to: 7, label: "yes, no cycle found"}
+      - {from: 2, to: 3}
+      - {from: 3, to: 2, label: "yes, descend"}
+      - {from: 4, to: 5, label: "yes, cycle!"}
+      - {from: 4, to: 2, label: "no, finish neighbour"}
+      - {from: 5, to: 6}
+      - {from: 2, to: 0, label: "component done"}
+  - type: mcq
+    prompt: "Why does a DFS back edge (to a vertex still on the stack) guarantee a simple cycle?"
+    options:
+      - "Because it visits every vertex an even number of times."
+      - "Because the stack holds a simple path from the ancestor down to u; adding the edge u-v closes it into a cycle, and all vertices on that path are distinct."
+      - "Because the graph has as many edges as vertices in that component."
+      - "Because it always triggers on trees."
+    answer: 1
+    explanation: "The DFS stack is a simple path of distinct vertices from the root to u. If an edge from u points to an ancestor v on that stack, that path segment (v to u) plus the edge (u to v) forms a closed walk whose intermediate vertices are all distinct — a simple cycle. The color[v]==1 check specifically tests for such stack ancestors."
+---

@@ -1,0 +1,225 @@
+---
+id: cyclic-array
+title: Cyclic Array
+difficulty: medium
+order: 369
+tags:
+  - additional
+  - binary-lifting
+  - greedy
+  - prefix-sums
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — greedy pieces + binary lifting over a doubled array
+
+      We must cut a **circular** array into the fewest contiguous subarrays, each
+      with sum ≤ `k`. Because the array is *cyclic*, the first cut is "free": we
+      may start a piece anywhere.
+
+      **On a straight line, greedy is optimal.** Packing each piece as far right
+      as possible (take elements while the running sum stays ≤ `k`, then start a
+      new piece) gives the minimum number of pieces — a classic exchange-argument
+      greedy. The subtlety here is only the **choice of starting point**, since a
+      rotation changes the count.
+
+      **Enumerate the start.** For each possible start index `s`, greedy from `s`
+      around the circle yields a piece count; the answer is the minimum. But that
+      is O(n) starts × O(n) per start = O(n²).
+
+      **Speed it up with doubling + binary lifting.** Duplicate the array so a
+      full lap is a subarray of length `2n` starting at `s` and ending at `s+n`.
+      Let `nxt[p]` = the furthest index that the greedy piece *starting at `p`*
+      reaches — the largest `q > p` with `pref[q] − pref[p] ≤ k` (found by
+      binary search on the prefix sums). Then `nxt` is a functional graph: one
+      greedy piece jumps `p → nxt[p]`. We can precompute the position after
+      `2^b` jumps with a **binary-lifting table**, and for each start `s` count
+      the jumps needed to pass `s+n` in `O(log n)` instead of `O(n)`.
+
+      The result: **O(n log n)** total.
+
+      :::tip
+      **Interview tip:** "Minimum pieces/segments with bounded sum" = greedy; a
+      *circular* variant adds "try every rotation"; making that fast is the
+      classic **doubling (binary lifting)** trick, used for range-covering,
+      tree-kth-ancestor, and repeated-application problems. Recognise the pattern
+      "apply a greedy jump repeatedly until a bound" and reach for `nxt[]+lifting`.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given a cyclic array consisting of `n` values. Each element has two
+      neighbors; the elements at positions `n` and `1` are also considered
+      neighbors. Your task is to divide the array into subarrays so that the sum
+      of each subarray is at most `k`. What is the minimum number of subarrays?
+
+      **Input.** The first input line contains integers `n` and `k`. The next
+      line has `n` integers `x_1, x_2, …, x_n`. There is always at least one
+      division (i.e. no value in the array is larger than `k`).
+
+      **Output.** Print one integer: the minimum number of subarrays.
+
+      **Constraints**
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ x_i ≤ 10^9`
+      - `1 ≤ k ≤ 10^18`
+
+      **Sample**
+
+      Input:
+      ```
+      8 5
+      2 2 2 1 3 1 2 1
+      ```
+
+      Output:
+      ```
+      3
+      ```
+
+      *Explanation:* we can create three subarrays: `[2,2,1]`, `[3,1]` and
+      `[2,1,2]` (remember the array is cyclic).
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²).** Duplicate the array; for every possible start
+      `s`, run a straight-line greedy (open a piece, extend while sum ≤ k, else
+      start a new one) and take the min over starts. Correct, but it scans `n`
+      cells per start.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; ll k; cin>>n>>k;
+          vector<ll> x(2*n);
+          for(int i=0;i<n;i++){ cin>>x[i]; x[i+n]=x[i]; }
+          int ans=n;
+          for(int s=0;s<n;s++){
+              ll sum=0; int cnt=1;
+              for(int i=s;i<s+n;i++){
+                  if(sum+x[i]<=k) sum+=x[i];
+                  else { sum=x[i]; ++cnt; }
+              }
+              ans=min(ans,cnt);
+          }
+          cout<<ans<<"\n";
+      }
+      ```
+      *Complexity: O(n²) time — `n = 2·10^5` needs ~4·10¹⁰ steps, far too slow.*
+
+      **② Optimization — O(n log n) doubling + binary lifting.** Build `nxt[p]`
+      for every position via binary search over prefix sums; then a binary-lifting
+      table `up[b][p]` = position after `2^b` greedy jumps from `p`. Per start, a
+      greedy-style descent counts the jumps to reach `s+n`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; ll k; cin>>n>>k;
+          vector<ll> x(2*n);
+          for(int i=0;i<n;i++){ cin>>x[i]; x[i+n]=x[i]; }
+          vector<ll> pref(2*n+1,0);
+          for(int i=0;i<2*n;i++) pref[i+1]=pref[i]+x[i];
+          const int LOG=20;
+          vector<vector<int>> up(LOG, vector<int>(2*n+1));
+          for(int p=0;p<=2*n;p++){                  // nxt[p]: furthest q with pref[q]-pref[p]<=k
+              int lo=p+1, hi=min(p+n,2*n), best=p;
+              while(lo<=hi){ int mid=(lo+hi)/2;
+                  if(pref[mid]-pref[p]<=k){ best=mid; lo=mid+1; } else hi=mid-1; }
+              up[0][p]=best;
+          }
+          for(int b=1;b<LOG;b++)
+              for(int p=0;p<=2*n;p++) up[b][p]=up[b-1][up[b-1][p]];
+          int ans=n;
+          for(int s=0;s<n;s++){
+              if(up[0][s]>=s+n){ ans=1; break; }     // one piece spans the whole circle
+              int pos=s, jumps=0;
+              for(int b=LOG-1;b>=0;b--)
+                  if(up[b][pos]<s+n){ pos=up[b][pos]; jumps+=1<<b; }
+              ans=min(ans, jumps+1);
+          }
+          cout<<ans<<"\n";
+      }
+      ```
+      *Complexity: O(n log n) time, O(n log n) space — instant for `n ≤ 2·10^5`.*
+
+      **④ Alternative / note.** The straight-line greedy is already optimal per
+      start, so the only remaining question was *which start*; the lifting table
+      answers all `n` starts at once. A slower-but-simpler accepted variant
+      runs the greedy once from the "best-looking" start and accepts the result,
+      but it is not worst-case optimal. Keep the doubling version as the canonical
+      solution.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n log n). Key lines:
+
+      1. **Doubling + prefix sums.** `x[i+n]=x[i]` turns a cyclic lap into a
+         linear window `[s, s+n)`. `pref[q] − pref[p] ≤ k` is the "piece from `p`
+         to `q` fits" predicate; because `x_i ≥ 1`, `pref` is sorted, so the
+         furthest `q` is one binary search.
+      2. **`up[0][p]`** = furthest index one greedy piece from `p` reaches.
+      3. **Binary lifting.** `up[b][p] = up[b-1][up[b-1][p]]` gives the position
+         after `2^b` greedy pieces.
+      4. **Per-start count.** From `s`, greedily accept the largest `2^b` batch of
+         pieces that still leaves us short of `s+n`; the final `+1` is the last
+         piece that crosses the finish line. Take the min over all `s`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 8, k = 5`, array `2 2 2 1 3 1 2 1` → expected `3`.
+
+      Try a few rotations (greedy pieces, maxed sum ≤ 5):
+
+      - Start at index 0: `[2,2]` (sum 4; next `2` would make 6), then `[2,1]`,
+        then `[3,1]`, then `[2,1,2]` → 4 pieces.
+      - Start at index 1: `[2,2,1]` (2+2+1=5), `[3,1]` (3+1=4), `[2,1,2]`
+        (2+1+2=5) → **3 pieces**.
+      - Start at index 3: `[1,3]` (4), `[1,2]` (3), `[1,2,2]` (5), `[1,2]` → 4.
+
+      Minimum over all starts is 3, matching the sample (`[2,2,1],[3,1],[2,1,2]`
+      is the rotation at index 1). The brute tier (①) tries every start; the
+      lifting tier (②) computes the same minima in `O(log n)` each. Output: `3`.
+
+  - type: flowchart
+    title: "Min pieces over a circle (greedy + binary lifting)"
+    nodes:
+      - Double the array, build prefix sums
+      - nxt[p] = furthest q with sum(p..q) <= k
+      - Lift table up[b][p] = p after 2^b greedy pieces
+      - For each start s: count jumps to reach s+n via lifting
+      - Take the minimum over all s
+      - Print min
+    edges:
+      - {from: 0, to: 1, label: "binary search"}
+      - {from: 1, to: 2, label: "up[b][p] = up[b-1][up[b-1][p]]"}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: ""}
+
+  - type: mcq
+    prompt: "Why does trying every possible start index s and running a greedy split from there yield the true minimum for a cyclic array?"
+    options:
+      - "Because a straight-line greedy gives the minimum piece count for its start, and any valid circular partition corresponds to some start plus straight pieces."
+      - "Because the greedy always produces exactly the same number regardless of start."
+      - "Because k is large enough that one piece always suffices."
+      - "Because the array's sum is guaranteed to be at most k."
+    answer: 0
+    explanation: "Drawing a circle and cutting between two elements makes the ring a straight line starting at some index s. On that line, the max-each-piece greedy is proven optimal, so for the specific s the greedy count equals the best partition that places a cut at s. Taking the min over all s covers every possible cut location, hence the global optimum."
+
+type: content
+---

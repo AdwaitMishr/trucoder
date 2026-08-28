@@ -1,0 +1,328 @@
+---
+id: counting-patterns
+title: Counting Patterns
+type: content
+difficulty: hard
+order: 207
+tags:
+  - string-algorithms
+  - aho-corasick
+  - trie
+  - patterns
+blocks:
+  - type: markdown
+    content: |
+      # Counting Patterns — Aho–Corasick automaton
+
+      Given one text string `s` and up to `5·10^5` patterns, count **how many times
+      each pattern appears** in `s`. We must answer *all* patterns together,
+      efficiently.
+
+      There is a single key structure for the whole "many patterns, one text"
+      family of problems: the **Aho–Corasick automaton** — a trie of all patterns
+      plus **failure links**. Building it once answers every pattern in time
+      proportional to the text length plus the total pattern length.
+
+      ## The three ingredients
+
+      - **Trie.** Insert every pattern as a path of nodes; a node that terminates
+        a pattern stores that pattern's id.
+      - **Failure link `fail[v]`.** For a node `v` whose string is `P`, `fail[v]`
+        points to the node whose string is the **longest proper suffix of `P`**
+        that is also a prefix of some pattern. This is what lets us keep a single
+        running state while scanning: if the next character does not continue the
+        current path, we *jump* to the longest matching suffix and try again,
+        instead of restarting from the root.
+      - **`go[v][c]` = transition.** After computing failure links, every node has
+        a transition for every `a–z` (falling back to `go[fail[v]][c]`). Scanning
+        the text is then just "walk the automaton" — `O(1)` per character.
+
+      ### Why counting works: the output buckets
+
+      As we scan each character, we land on a state `v` and increment a counter
+      `run[v]`. That single state, however, represents the longest matched suffix
+      *only* — shorter prefixes that are also equal to a suffix of the matched
+      string are **not** on the path where we incremented. To collect every
+      occurrence we propagate counters along the failure (suffix) links: each
+      node's count must be added to `fail[v]`, then `fail[fail[v]]`, and so on.
+      Doing this for the whole tree by processing nodes **deepest-first** gives
+      every node its total in `O(nodes)`.
+
+      **Worked mini-example.** Patterns `{a, ab, abab}`. Trie nodes: `a`, `ab`,
+      `abab` all active. Scanning text `"abab"` increments `run[abab]` once (and
+      `run` on the actual states visited). Propagating up the suffix links adds
+      `abab`'s count to `ab` and `ab`, then to `a` — so `a`, `ab`, `abab` all
+      report "1 occurrence", which is correct.
+
+      **Complexity.** Building: `O(Σ|pattern|)`. Scanning: `O(n)`. Total
+      `O(n + Σ|pattern|)` — the intended solution; the sum of all pattern lengths
+      is at most `5·10^5`.
+
+      :::tip
+      **Interview tip:** "we have many patterns, one long text, give me
+      matches/counts/positions" is the classic trigger for an **Aho–Corasick
+      automaton**. Say "build a trie, add failure links via BFS, then the scan
+      is `O(1)` per character". It also surfaces as "no. of occurrences of each
+      word in a document", "detect which spam words appear", and as the
+      foundation of regex → DFA and signature-based IDS string matching.
+      ::: 
+  - type: flowchart
+    title: "Aho-Corasick build & query pipeline"
+    nodes:
+      - "Insert patterns into trie"
+      - "BFS: compute fail[v] + go[v][c]"
+      - "Scan text, run[state]++"
+      - "Propagate along failure tree (deep first)"
+      - "Answer each pattern at its terminal node"
+    edges:
+      - {from: 0, to: 1, label: "all patterns inserted"}
+      - {from: 1, to: 2, label: "automaton ready"}
+      - {from: 2, to: 3, label: "text consumed"}
+      - {from: 3, to: 4, label: "counts rolled up"}
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given a string and patterns, count for each pattern the number of positions
+      where it appears in the string.
+
+      ## Input
+
+      The first input line has a string of length `n`.
+
+      The next input line has an integer `k`: the number of patterns. Finally,
+      there are `k` lines that describe the patterns.
+
+      The string and the patterns consist of characters `a–z`.
+
+      **Constraints:** `1 ≤ n ≤ 10^5`, `1 ≤ k ≤ 5·10^5`, the total length of the
+      patterns is at most `5·10^5`.
+
+      ## Output
+
+      For each pattern, print the number of positions.
+
+      ## Sample
+
+      **Input:**
+      ```
+      aybabtu
+      3
+      bab
+      abc
+      a
+      ```
+      **Output:**
+      ```
+      1
+      0
+      2
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — scan the text per pattern, O(n·L) each**
+
+      For each pattern, slide a window of its length across `s` and compare.
+      One pattern of length `L` costs `O(n·L)`; with total pattern length
+      `ΣL ≤ 5·10^5` and `n ≤ 10^5` this is up to `10^5 · 5·10^5 = 5·10^10` —
+      far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          string s; cin >> s;
+          int k; cin >> k;
+          while(k--){
+              string p; cin >> p;
+              long long cnt = 0;
+              for(int i = 0; i + (int)p.size() <= (int)s.size(); i++)
+                  if(s.compare(i, p.size(), p) == 0) cnt++;
+              cout << cnt << "\n";
+          }
+          return 0;
+      }
+      ```
+      *O(n·ΣL) worst-case, correct but too slow.*
+
+      **② Optimization — Aho–Corasick, O(n + ΣL)**
+
+      Build the trie, compute failure links by BFS, materialise every transition
+      `go[v][c]`, then scan the text once incrementing `run[]`. Finally propagate
+      `run[]` up the failure tree, deepest-first, so a pattern ending at a node
+      inherits the counts of all longer suffixes that contain it.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; cin >> s;
+          int k; cin >> k;
+          vector<array<int,26>> trie(1); trie[0].fill(0);
+          vector<int> fail(1,0), cntEnd(1,0), run(1,0);
+          auto newNode = [&](){
+              trie.push_back({}); trie.back().fill(0);
+              fail.push_back(0); cntEnd.push_back(0); run.push_back(0);
+              return (int)trie.size()-1;
+          };
+          vector<int> patEnd(k);
+          for(int i=0;i<k;i++){
+              string p; cin >> p;
+              int v=0;
+              for(char ch:p){
+                  int c=ch-'a';
+                  if(!trie[v][c]) trie[v][c]=newNode();
+                  v=trie[v][c];
+              }
+              cntEnd[v]++;            // one more pattern instance ends here (dups count separately)
+              patEnd[i]=v;
+          }
+          // failure links by BFS, transitions materialised
+          queue<int> q;
+          for(int c=0;c<26;c++) if(trie[0][c]) q.push(trie[0][c]);
+          while(!q.empty()){
+              int v=q.front(); q.pop();
+              for(int c=0;c<26;c++){
+                  int u=trie[v][c];
+                  if(!u) trie[v][c]=trie[fail[v]][c];
+                  else { fail[u]=trie[fail[v]][c]; q.push(u); }
+              }
+          }
+          // scan text
+          int v=0;
+          for(char ch : s){ v=trie[v][ch-'a']; run[v]++; }
+          // propagate counts up the failure tree, children BEFORE parents
+          vector<vector<int>> children(trie.size());
+          for(int i=1;i<(int)fail.size();i++) children[fail[i]].push_back(i);
+          vector<int> order;
+          function<void(int)> dfs=[&](int u){ order.push_back(u); for(int w:children[u]) dfs(w); };
+          dfs(0);
+          for(int i=(int)order.size()-1;i>0;i--){ int u=order[i]; run[fail[u]] += run[u]; }
+          for(int i=0;i<k;i++) cout << run[patEnd[i]] << "\n";
+          return 0;
+      }
+      ```
+      *O(n + ΣL) time, O(ΣL) memory — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      Every pattern and every text character must be read at least once, so
+      `O(n + ΣL)` is optimal.
+
+      **④ Alternative — suffix automaton of the text, O(n + ΣL)**
+
+      A different way to look at "how often does this substring occur": build a
+      suffix automaton of the **text**; each pattern is followed through it, and
+      the occurrence count is the size of the reached state's `endpos` set. This
+      matches how a text-indexing data structure would answer the same queries.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      // Suffix automaton of the TEXT; each pattern's count = |endpos(state)|.
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; cin >> s;
+          int k; cin >> k;
+          vector<string> pat(k);
+          for(int i = 0; i < k; i++) cin >> pat[i];
+          struct St{ int len, link; array<int,26> next; int occ; };
+          vector<St> st; st.push_back({0,-1,{},0}); st[0].next.fill(-1);
+          int last = 0;
+          auto extend = [&](int c){
+              int cur = st.size(); st.push_back({st[last].len+1,-1,{},1}); st[cur].next.fill(-1);
+              int p = last;
+              while(p != -1 && st[p].next[c] == -1){ st[p].next[c] = cur; p = st[p].link; }
+              if(p == -1) st[cur].link = 0;
+              else{
+                  int q = st[p].next[c];
+                  if(st[p].len + 1 == st[q].len) st[cur].link = q;
+                  else{
+                      int cl = st.size(); st.push_back(st[q]); st[cl].len = st[p].len + 1; st[cl].occ = 0;
+                      while(p != -1 && st[p].next[c] == q){ st[p].next[c] = cl; p = st[p].link; }
+                      st[q].link = st[cur].link = cl;
+                  }
+              }
+              last = cur;
+          };
+          for(char ch : s) extend(ch - 'a');
+          // fold occ up suffix links, longest states first => |endpos|
+          int n = (int)st.size();
+          vector<pair<int,int>> ord;
+          for(int i = 0; i < n; i++) ord.push_back({st[i].len, i});
+          sort(ord.rbegin(), ord.rend());
+          for(auto &pr : ord){ int u = pr.second; if(st[u].link != -1) st[st[u].link].occ += st[u].occ; }
+          for(int i = 0; i < k; i++){
+              int v = 0; bool ok = true;
+              for(char ch : pat[i]){ int c = ch-'a'; if(st[v].next[c] == -1){ ok = false; break; } v = st[v].next[c]; }
+              cout << (ok ? st[v].occ : 0) << "\n";
+          }
+          return 0;
+      }
+      ```
+      *O(n + ΣL) — a text-indexer view, equivalently fast.*
+
+      **Which to use:** the Aho–Corasick (②) is the canonical contest answer — it
+      needs only one pass over the text and answers all patterns together.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the Aho–Corasick solution:
+
+      - **Trie build.** `trie[v][c]` is the child for char `c`; `newNode()`
+        allocates a fresh node row. `cntEnd[v]` counts how many pattern
+        *instances* terminate at `v`, so two identical patterns are each counted.
+      - **Failure links (BFS).** Children of the root get `fail = 0`. For every
+        other node `u = trie[v][c]`, `fail[u] = go[fail[v]][c]`. The crucial
+        trick is materialising missing transitions: `trie[v][c] = trie[fail[v]][c]`
+        when `u` was absent, so the scan never needs to follow chains manually.
+      - **Text scan.** `v = trie[v][ch-'a']` moves the "longest matched suffix"
+        state in `O(1)`; `run[v]++` records a match ending at the current
+        position. Even a short pattern that is a suffix of the matched string is
+        *not* counted yet — that is what the next step fixes.
+      - **Roll-up.** In failure-tree order each child `u` appears before its
+        parent, so iterating the DFS order in reverse adds every descendant's
+        counts into `run[fail[u]]`. After this, `run[terminal]` is exactly how
+        many times that pattern occurred.
+      - **Correctness invariant.** After the roll-up, `run[v]` equals the number
+        of text positions whose longest matched suffix's failure-chain contains
+        `v` — i.e. the number of occurrences of node `v`'s string.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Text `s = "aybabtu"`, patterns `bab`, `abc`, `a` (expected `1 0 2`).
+
+      | step | char | state `v` (path so far) | `run[]` bump |
+      |------|------|------------------------|--------------|
+      | 1 | `a` | node `a` | `run[a]++` |
+      | 2 | `y` | root | — |
+      | 3 | `b` | node `b` | `run[b]++` |
+      | 4 | `a` | node `a` | `run[a]++` |
+      | 5 | `b` | node `b` | `run[b]++` |
+      | 6 | `t` | root | — |
+      | 7 | `u` | root | — |
+
+      After scanning, `run[a]=2`, `run[b]=2`, others 0. The roll-up along failure
+      links moves `run[b]` (and any children's counts) into `bab`'s node as
+      appropriate.
+
+      Result per terminal node:
+      - `bab` (which the substrings that end on it propagate to) → `1`
+      - `abc` → not present → `0`
+      - `a` → `2`
+
+      Output: `1 0 2`. ✓ Matches the sample.
+  - type: mcq
+    prompt: "After scanning the text with Aho-Corasick, why must counts be propagated along the failure links before each pattern is answered?"
+    options:
+      - "Because a node's own run[] only counts matches where the longest matched suffix is exactly that node — shorter patterns that are suffixes of the matched string (or of it) live deeper in the failure tree and must have their counts folded up."
+      - "Because the failure links store the patterns' character frequencies."
+      - "Because the trie must be flattened into an array."
+      - "Because scanning the text changes the alphabet."
+    answer: 0
+    explanation: "The single running state represents only the longest matched suffix at each position. A pattern P also occurs whenever the current state's failure chain reaches P's node — those occurrences are logged on longer states and must be summed up the failure tree (deepest-first) so P's node accumulates them."

@@ -1,0 +1,292 @@
+---
+id: distinct-values-queries-ii
+title: Distinct Values Queries II
+type: content
+difficulty: medium
+order: 136
+tags:
+  - range-queries
+  - segment-tree
+  - point-update
+  - distinct-check
+blocks:
+  - type: markdown
+    content: |
+      # Distinct Values Queries II — point updates + "all distinct?", via last-occurrence pointer
+
+      Here the array keeps **changing**: a type-1 query overwrites `A[k] = u`, and a
+      type-2 query asks whether **every** value inside `[a, b]` is distinct (i.e. no
+      value repeats inside the range). It returns `YES`/`NO`.
+
+      The opposite of counting distinct values (lesson 135) is checking plain
+      *sameness* — and the whole trick is that "all distinct in `[a, b]`" has a neat
+      one-number characterization.
+
+      ## The key idea: a `prev` pointer per position
+
+      For each position `i`, define
+
+      ```
+      prev[i] = the largest index j < i with A[j] == A[i]   (0 if none)
+      ```
+
+      `prev[i]` is the previous occurrence of the *same* value. Now the observation:
+
+      > The range `[a, b]` has a duplicate **iff** some `i` inside `[a, b]` has
+      > `prev[i] >= a` (its same-valued twin also lies in the range).
+
+      Equivalently, `[a, b]` is **all-distinct iff max(prev[a..b]) < a`. That turns a
+      uniqueness question into a **range-maximum query**, which a segment tree answers
+      in `O(log n)`.
+
+      When `A[k]` changes, only a few `prev` pointers move: the ones whose
+      "same-value neighbour" flipped. The value at `k` is removed from the ordered set
+      of its old value and inserted into the set of its new value; the affected
+      positions are `k` itself plus the successor/predecessor occurrences in those
+      sets. Updating each pointer is one `O(log n)` point-update in the segment tree.
+
+      **Worked mini-example.** `A = [3, 2, 7, 2, 8]`: `prev = [0,0,0,2,0]`. Range
+      `[3,5]` = elements `7,2,8`: `max(prev[3..5]) = max(0,2,0) = 2 < 3` → `YES`.
+      Range `[2,5]` = `2,7,2,8`: `max(prev[2..5]) = max(0,0,2,0) = 2`, and `2 < 2` is
+      false → `NO`.
+
+      **Complexity.** `O(log n)` per update and per query — the intended solution.
+
+      :::tip
+      **Interview tip:** "Is a subarray all-distinct / does any value repeat in a
+      range" is solved by the **prev-pointer + range maximum** pattern. Don't reach
+      for a hash set per query. When there are point updates, keep an ordered set of
+      positions per value and a segment tree of `prev[]`; both flipped pointers get
+      recomputed in `O(log n)`. Also remember this `prev[]` idea is the *same* pointer
+      used to *count* distinct (lesson 135) — counting needs a Fenwick to compress each
+      value to its last occurrence, while the YES/NO check only needs the range max.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given an array of `n` integers, your task is to process `q` queries of the
+      following types:
+
+      1. update the value at position `k` to `u`
+      2. check if **every** value in range `[a, b]` is distinct
+
+      ## Input
+
+      The first line has two integers `n` and `q`: the number of values and queries.
+
+      The second line has `n` integers `x_1, x_2, ..., x_n`: the array values.
+
+      Finally, there are `q` lines describing the queries. Each line has three
+      integers: either `1 k u` or `2 a b`.
+
+      **Constraints:** `1 <= n, q <= 2*10^5`, `1 <= x_i, u <= 10^9`,
+      `1 <= k <= n`, `1 <= a <= b <= n`.
+
+      ## Output
+
+      For each query of type 2, print `YES` if every value in the range is distinct
+      and `NO` otherwise.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 4
+      3 2 7 2 8
+      2 3 5
+      2 2 5
+      1 2 9
+      2 2 5
+      ```
+      **Output:**
+      ```
+      YES
+      NO
+      YES
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — per-query set, O(len) per query**
+
+      For a type-2 query, insert `A[a..b]` into a `std::set`; if any insertion
+      collides (size < length) answer `NO`, else `YES`. A type-1 update just rewrites
+      `A[k]`. Correct, but large ranges cost `O(n)` per query.
+
+      ```cpp
+      bool brute2(int a, int b, vector<int>& A) {
+          set<int> s;
+          for (int i = a; i <= b; i++) if (!s.insert(A[i]).second) return false;
+          return true;
+      }
+      ```
+      *O(len) per type-2 query — correct, too slow.*
+
+      **② Optimization — prev pointers + range-max segment tree, O(log n) per op**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<int> a(n + 1);
+          for (int i = 1; i <= n; i++) cin >> a[i];
+
+          // pos[v] = sorted set of positions currently holding value v
+          map<int, set<int>> pos;
+          vector<int> prevOf(n + 1, 0);     // prev[i] = previous same-value index
+
+          // segment tree over prevOf[]: point set + range max
+          vector<int> seg(4 * n + 5, 0);
+          auto setVal = [&](auto&& self, int p, int l, int r, int idx, int val) -> void {
+              if (l == r) { seg[p] = val; return; }
+              int m = (l + r) / 2;
+              if (idx <= m) self(self, p * 2, l, m, idx, val);
+              else self(self, p * 2 + 1, m + 1, r, idx, val);
+              seg[p] = max(seg[p * 2], seg[p * 2 + 1]);
+          };
+          auto rangeMax = [&](auto&& self, int p, int l, int r, int ql, int qr) -> int {
+              if (ql <= l && r <= qr) return seg[p];
+              int m = (l + r) / 2, res = 0;
+              if (ql <= m) res = max(res, self(self, p * 2, l, m, ql, qr));
+              if (qr > m)  res = max(res, self(self, p * 2 + 1, m + 1, r, ql, qr));
+              return res;
+          };
+
+          // build initial prev pointers
+          for (int i = 1; i <= n; i++) {
+              auto it = pos[a[i]].insert(i).first;
+              int p = (it == pos[a[i]].begin()) ? 0 : *std::prev(it);
+              prevOf[i] = p;
+              setVal(setVal, 1, 1, n, i, p);
+          }
+
+          auto update = [&](int k, int u) {
+              int old = a[k];
+              // 1) remove k from the OLD value's position set
+              auto it = pos[old].find(k);
+              auto succ = std::next(it);
+              if (succ != pos[old].end()) {            // successor now points one step earlier
+                  int nxt = *succ;
+                  int np = (it == pos[old].begin()) ? 0 : *std::prev(it);
+                  prevOf[nxt] = np;
+                  setVal(setVal, 1, 1, n, nxt, np);
+              }
+              pos[old].erase(it);
+              if (pos[old].empty()) pos.erase(old);
+              // 2) insert k into the NEW value's position set
+              auto jt = pos[u].insert(k).first;
+              int np = (jt == pos[u].begin()) ? 0 : *std::prev(jt);
+              prevOf[k] = np;
+              setVal(setVal, 1, 1, n, k, np);
+              auto succ2 = std::next(jt);
+              if (succ2 != pos[u].end()) {              // successor's prev pointer becomes k
+                  prevOf[*succ2] = k;
+                  setVal(setVal, 1, 1, n, *succ2, k);
+              }
+              a[k] = u;
+          };
+
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) { int k, u; cin >> k >> u; update(k, u); }
+              else {
+                  int l, r; cin >> l >> r;
+                  cout << (rangeMax(rangeMax, 1, 1, n, l, r) < l ? "YES" : "NO") << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *O(log n) per update and per query — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      `O(log n)` per operation is optimal for a range-max with point updates.
+
+      **④ Alternative — sqrt decomposition over prev[]**
+
+      Split positions into blocks of `~sqrt(n)`; keep each block's maximum `prev`
+      value. A type-2 query scans the two partial blocks element-wise and reads whole
+      blocks' maxima (`O(sqrt n)`); a changed `prev[i]` rebuilds just its block
+      (`O(sqrt n)`). Simpler code, same idea, slower asymptotics.
+
+      ```cpp
+      int B = (int)sqrt(n) + 1, nb = (n + B - 1) / B;
+      vector<int> blkMax(nb, 0);
+      auto rebuildBlock = [&](int b){ int mx = 0;
+          for (int i = b*B + 1; i <= min(n, (b+1)*B); i++) mx = max(mx, prevOf[i]);
+          blkMax[b] = mx; };
+      auto setPrev = [&](int i, int v){ prevOf[i] = v; rebuildBlock((i-1)/B); };
+
+      auto type2 = [&](int l, int r) -> bool {   // "all distinct?"
+          int mx = 0, bl = (l-1)/B, br = (r-1)/B;
+          if (bl == br) { for (int i=l;i<=r;i++) mx=max(mx,prevOf[i]); }
+          else {
+              for (int i=l;i<=(bl+1)*B;i++) mx=max(mx,prevOf[i]);          // left tail
+              for (int b=bl+1;b<=br-1;b++)  mx=max(mx,blkMax[b]);          // full blocks
+              for (int i=br*B+1;i<=r;i++)   mx=max(mx,prevOf[i]);          // right tail
+          }
+          return mx < l;
+      };
+      ```
+      *O(sqrt n) per operation — correct; call `setPrev` wherever the segment-tree
+      version calls `setVal`.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the segment-tree solution:
+
+      - **`prevOf[i]` is the contract.** A duplicate exists in `[a, b]` exactly when
+        some element's previous twin is also inside the range. `max(prevOf[a..b]) < a`
+        is therefore an exact YES/NO test.
+      - **`pos[value]` ordered sets.** Updates need to know the successor/predecessor
+        occurrence of a value to repair `prev` pointers. `std::map<int, set<int>>`
+        gives us, per value, the sorted list of its current positions.
+      - **The update only touches `<= 3` pointers.** Removing `k` from the old value's
+        set changes the successor's `prev`; inserting `k` into the new value's set
+        changes `prev[k]` and, if there is a successor, that successor's `prev`. Every
+        changed pointer is one `setVal` point-update.
+      - **`std::prev(it)` is the iterator before `it`** — the previous occurrence;
+        `std::next(it)` is the next occurrence. Don't shadow these with a variable also
+        named `prev` (a classic paste-bug).
+      - **Range max answers the check.** `rangeMax(1,1,n,l,r)` returns `max(prevOf[l..r])`;
+        compare strictly `< l`.
+
+      This is the *live* twin of the offline sweep in lesson 135: there we counted
+      distinct via last-occurrence + Fenwick (no updates allowed); here the problem is a
+      YES/NO check and updates are allowed, so a point-update range-max segment tree is
+      the natural fit.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample. `A = [3,2,7,2,8]`. Build: `prevOf = [0,0,0,2,0]`
+      (position 4 has value 2, whose previous 2 is at position 2).
+
+      | op | action | prevOf after | query result |
+      |----|--------|--------------|--------------|
+      | `2 3 5` | — | `[0,0,0,2,0]` | `max(prev[3..5])=max(0,2,0)=2 <3` → **YES** |
+      | `2 2 5` | — | `[0,0,0,2,0]` | `max(prev[2..5])=max(0,0,2,0)=2`, `2<2` false → **NO** |
+      | `1 2 9` | `A[2]=9`. Remove pos 2 from value-2 set `{2,4}`: successor 4 now has prev=0. Insert pos 2 into value-9 set `{2}`. | `[0,0,0,0,0]` | — |
+      | `2 2 5` | — | `[0,0,0,0,0]` | `max(prev[2..5])=0 <2` → **YES** |
+
+      Output: `YES NO YES`. Matches the sample. ✓
+
+      After the update the array is `[3,9,7,2,8]` — all five values distinct — so
+      every range is now all-distinct, which the final `YES` confirms.
+  - type: mcq
+    prompt: "Why is prev[i] = previous same-valued index sufficient to decide 'is [a,b] all-distinct'?"
+    options:
+      - "Because a duplicate inside [a,b] must mean two equal positions p < i both lie in [a,b], so i's closest such p (which is prev[i]) is also >= a; hence checking max(prev[a..b]) < a is an exact test."
+      - "Because prev[i] always equals i-1, so duplicate detection is trivial."
+      - "Because distinctness only depends on the first and last element of the range."
+      - "Because prev[i] stores the value, not an index."
+    answer: 0
+    explanation: "If any two equal elements sit inside [a,b], take their rightmost pair p < i; then prev[i] = p >= a, so max(prev[a..b]) >= a. Conversely if some i in [a,b] has prev[i] >= a, that prev[i] is a second equal element also in [a,b] — a duplicate exists. So all-distinct is exactly max(prev[a..b]) < a."

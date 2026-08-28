@@ -1,0 +1,271 @@
+---
+id: task-assignment
+title: Task Assignment
+type: content
+difficulty: medium
+order: 257
+tags:
+  - hungarian
+  - assignment
+  - min-cost-matching
+  - bipartite
+blocks:
+  - type: markdown
+    content: |
+      # Task Assignment — the Hungarian algorithm
+
+      A company has `n` employees and `n` tasks. Employee `i` costs `c_ij` to do
+      task `j`. Every employee must be assigned exactly one task, no two
+      employees share a task, and we want the **minimum total cost**.
+
+      This is the classic **assignment problem — a minimum-weight perfect
+      matching in a complete bipartite graph** between employees and tasks. The
+      classical solution is the **Hungarian algorithm**, which runs in `O(n³)`.
+
+      ## Turning an optimization into potentials
+
+      The brilliant idea: we maintain potentials `u_i` (one per employee) and
+      `v_j` (one per task) and an alternating matching, always keeping
+
+      ```
+      c_ij - u_i - v_j >= 0        (reduced cost is non-negative)
+      ```
+
+      and raising potentials exactly when a "tight" (reduced-cost-zero) path
+      exists. The invariant guarantees that the matching we maintain is optimal
+      the moment it is perfect. Each employee (`n = 1 … n`) is added one by one:
+      for employee `i`, we run an **augmenting-path search** on the tight-edge
+      graph, adjusting `u`/`v` to create new tight edges, until the employee is
+      matched.
+
+      The single-array implementation with `way[]` (parent pointers of the
+      alternating paths) is the compact classic form and runs in `O(n³)`:
+      outer loop `n` employees × inner `n` tasks × `n` relaxation steps.
+
+      ## Min cost (not max)
+
+      Costs are given raw; the Hungarian algorithm usually maximizes, so we feed
+      it the **negative** of each cost (or subtract from a big constant) — here
+      we use the common trick of working directly with the minimization
+      formulation, yielding the minimum directly.
+
+      :::tip
+      **Interview tip:** "assign N people to N jobs minimizing total cost" is the
+      assignment problem — call the **Hungarian algorithm** and state `O(n³)`.
+      If the bipartite graph is *not* complete (some assignments forbidden), use
+      min-cost max-flow instead, or give forbidden edges a huge cost. The same
+      algorithm solves shortest-paths reweighting, so recognizing "this is an
+      assignment" is the skill interviewers probe.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      A company has `n` employees and there are `n` tasks that need to be done.
+      We know for each employee the cost of carrying out each task. Every
+      employee should be assigned to exactly one task. What is the minimum total
+      cost if we assign the tasks optimally and how could they be assigned?
+
+      ## Input
+
+      The first input line has one integer `n`: the number of employees and the
+      number of tasks that need to be done.
+
+      After this, there are `n` lines each consisting of `n` integers. The `i`-th
+      line consists of integers `c_i1, c_i2, …, c_in`: the cost of each task when
+      it is assigned to the `i`-th employee.
+
+      **Constraints:** `1 <= n <= 200`, `1 <= c_ij <= 1000`
+
+      ## Output
+
+      First print the minimum total cost. Then print `n` lines each consisting of
+      two integers `a` and `b`: you assign the `b`-th task to the `a`-th employee.
+      If there are multiple solutions you can print any of them.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4
+      17 8 16 9
+      7 15 12 19
+      6 9 10 11
+      14 7 13 10
+      ```
+      **Output:**
+      ```
+      33
+      1 4
+      2 1
+      3 3
+      4 2
+      ```
+      The minimum total cost is `33`: assign employee 1 task 4, employee 2 task
+      1, employee 3 task 3 and employee 4 task 2. This costs `9 + 7 + 10 + 7 =
+      33`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — try every permutation, O(n! · n)**
+
+      Every bijection employee→task is a permutation of tasks. Enumerate them
+      all with `next_permutation` and keep the cheapest.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; if(!(cin>>n)) return 0;
+          vector<vector<ll>> c(n, vector<ll>(n));
+          for(int i=0;i<n;i++) for(int j=0;j<n;j++) cin>>c[i][j];
+          vector<int> perm(n); iota(perm.begin(),perm.end(),0);
+          ll best=LLONG_MAX; vector<int> bestPerm;
+          do{
+              ll cost=0; for(int i=0;i<n;i++) cost+=c[i][perm[i]];
+              if(cost<best){ best=cost; bestPerm=perm; }
+          }while(next_permutation(perm.begin(),perm.end()));
+          cout<<best<<"\n";
+          for(int i=0;i<n;i++) cout<<i+1<<" "<<bestPerm[i]+1<<"\n";
+          return 0;
+      }
+      ```
+
+      *Correct for tiny `n`, but `n!` blows up — for `n = 200` it is astronomically
+      too slow.*
+
+      **② Optimization — Hungarian algorithm, O(n³) (optimal)**
+
+      The classic augmented `u/v + way[]` implementation, minimizing directly.
+      Compiled and verified against the sample.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; if(!(cin>>n)) return 0;
+          vector<vector<ll>> c(n+1, vector<ll>(n+1));
+          for(int i=1;i<=n;i++) for(int j=1;j<=n;j++) cin>>c[i][j];
+          vector<ll> u(n+1,0), v(n+1,0), p(n+1,0), way(n+1,0);
+          for(int i=1;i<=n;i++){
+              p[0]=i;
+              int j0=0;
+              vector<ll> minv(n+1, LLONG_MAX);
+              vector<char> used(n+1, false);
+              do{
+                  used[j0]=true;
+                  int i0=p[j0], j1=-1; ll delta=LLONG_MAX;
+                  for(int j=1;j<=n;j++) if(!used[j]){
+                      ll cur=c[i0][j]-u[i0]-v[j];
+                      if(cur<minv[j]){ minv[j]=cur; way[j]=j0; }
+                      if(minv[j]<delta){ delta=minv[j]; j1=j; }
+                  }
+                  for(int j=0;j<=n;j++){
+                      if(used[j]){ u[p[j]]+=delta; v[j]-=delta; }
+                      else minv[j]-=delta;
+                  }
+                  j0=j1;
+              }while(p[j0]!=0);
+              do{
+                  int j1=way[j0]; p[j0]=p[j1]; j0=j1;
+              }while(j0);
+          }
+          vector<int> ans(n+1);
+          for(int j=1;j<=n;j++) ans[p[j]]=j;        // p[j]=i => task j assigned to employee i
+          ll total=-v[0];
+          cout<<total<<"\n";
+          for(int i=1;i<=n;i++) cout<<i<<" "<<ans[i]<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n³)` time, `O(n)` extra space. For `n = 200` that is `8·10⁶` work —
+      trivially fast. This is the recommended solution.*
+
+      **③ Alternative — min-cost max-flow**
+
+      Build a source → each employee → each task → sink network with edge
+      weights `c_ij` and run min-cost flow for `n` units. Equivalent answer, but
+      `O(n³)` to `O(n·E·V)` — slower for dense `n = 200`. Not needed since
+      Hungarian is simpler and faster; this alternative shines only when the
+      assignment graph is sparse or not a perfect square.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Potentials array.** `u[i]` adjusts the employee's base, `v[j]` the
+        task's. The expression `c[i0][j] - u[i0] - v[j]` is the *reduced cost*;
+        the algorithm only ever consumes tight (zero) reduced-cost edges for
+        augmenting paths.
+      - **One employee at a time.** For employee `i`, a Dijkstra-like relaxation
+        spreads through tight edges, updating the min reduced cost `minv[j]` and
+        its predecessor `way[j]`. `delta` is the smallest reduced cost to an
+        unused task; we add it to used employees and subtract from unused tasks,
+        which is exactly the potential update that manufactures a new tight edge.
+      - **Augment.** The inner `do/while` walks `way[]` back, flipping the
+        matching along the alternating path — `p[j1]` gets `p[j0]`. After this,
+        employee `i` is matched and all invariants hold again.
+      - **Decode the assignment.** `p[j]` stores the employee matched to task
+        `j`, so `ans[p[j]] = j` recovers, for each employee, its task. The total
+        cost is `-v[0]`, the classic closed-form accumulator.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 4`, cost matrix:
+      ```
+             task1 task2 task3 task4
+      emp1    17    8    16    9
+      emp2     7   15    12   19
+      emp3     6    9    10   11
+      emp4    14    7    13   10
+      ```
+
+      Running the Hungarian algorithm produces the perfect matching:
+      ```
+      emp1 -> task4 :  9
+      emp2 -> task1 :  7
+      emp3 -> task3 : 10
+      emp4 -> task2 :  7
+      ```
+      Total `9 + 7 + 10 + 7 = 33`.
+
+      Compare: any other assignment is ≥ 33 (e.g. handing task1 to emp1, the
+      natural greedy, is `17 + 15 + 10 + 10 = 52` — the algorithm avoids this
+      trap).
+
+      Printed:
+      ```
+      33
+      1 4
+      2 1
+      3 3
+      4 2
+      ```
+      Expected (sample) `33` and these pairs — **match**.
+  - type: flowchart
+    title: "Hungarian algorithm for minimum-cost assignment"
+    nodes: ["read n x n cost matrix", "for each new employee i", "relax tight edges; find min reduced cost delta", "update potentials u/v by delta", "augment matching along alternating path", "all n employees matched?", "yes: print total (-v[0]) and assignment"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 1, label: "no"}
+      - {from: 5, to: 6, label: "yes"}
+  - type: mcq
+    prompt: "What invariant of the Hungarian algorithm guarantees optimality when the matching becomes perfect?"
+    options:
+      - "That every employee is temporarily assigned to the highest-cost task at each step."
+      - "That reduced costs c_ij - u_i - v_j are kept non-negative while the algorithm only ever matches along zero-reduced-cost (tight) edges, so a perfect matching built from tight edges is a minimum-cost perfect matching."
+      - "That the potentials u_i and v_j are increased monotonically without bound."
+      - "That Dijkstra runs on the directed cost matrix as if it were an unweighted graph."
+    answer: 1
+    explanation: "A matching on tight edges realizes total cost sum(c_ij) = sum(u_i) + sum(v_j) for the matched pairs. Because all reduced costs stay non-negative, any perfect matching has cost at least sum(u) + sum(v); the tight-edge one achieves exactly that bound, so it is optimal. Maintaining non-negative reduced costs and only augmenting on tight edges is the whole engine of the algorithm."
+---

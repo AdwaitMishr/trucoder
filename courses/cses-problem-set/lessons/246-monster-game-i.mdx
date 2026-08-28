@@ -1,0 +1,279 @@
+---
+id: monster-game-i
+title: Monster Game I
+difficulty: hard
+order: 246
+tags:
+  - dp
+  - convex-hull-trick
+  - dynamic-programming-optimization
+  - li-chao
+blocks:
+  - type: markdown
+    content: |
+      # Monster Game I — speeding up a quadratically-convex DP with the Convex Hull Trick
+
+      The game has `n` levels; each level has a monster with strength `s`. On
+      levels `1..n-1` you may **kill or escape**; on level `n` you **must kill**
+      to win. Killing monster `i` costs `s_i × f`, where `f` is your current
+      skill factor, and afterwards your skill factor becomes `f_i` (lower is
+      better). Starting skill is `x`. Minimise the total time.
+
+      Because you may skip levels freely, the optimal play is a chain
+      `0 = j_0 < j_1 < … < j_k = n` of killed monsters, and every skipped monster
+      contributes nothing. That immediately suggests a DP over "which monster did
+      I most recently kill?"
+
+      **The DP.** Let `dp[i]` be the minimum total time such that monster `i` was
+      the most recent kill. The previous kill was some `j < i`, whose skill now
+      applies:
+
+      ```text
+      dp[i] = min over 0 <= j < i of  ( dp[j] + s_i * f_j )
+      ```
+
+      with a virtual kill `j = 0` standing for "nothing killed yet", where
+      `dp[0] = 0` and `f_0 = x`. The answer is `dp[n]` (monster `n` is forced).
+
+      A naive evaluation scans all `j < i`, giving `O(n^2)`. But the transition
+      has a beautiful geometric shape. For a *fixed* previous kill `j`, the term
+      `dp[j] + s_i · f_j` is just a line in the variable `X = s_i`:
+
+      ```text
+      y = (slope f_j) · X + (intercept dp[j])
+      ```
+
+      We query the **minimum** of all such lines at `X = s_i`. This is exactly
+      what the **Convex Hull Trick (CHT)** answers in logarithmic — or, under
+      monotonic queries, amortised constant — time per step.
+
+      **Why the monotonic CHT applies here.** The problem guarantees
+      `s_1 ≤ s_2 ≤ … ≤ s_n` (non-decreasing queries) and
+      `x ≥ f_1 ≥ … ≥ f_n` (non-increasing slopes as we add each monster's line).
+      Lines are added in order of non-increasing slope and queried at
+      non-decreasing `x` — precisely the two conditions that let a `std::deque`
+      maintain the lower hull and pop stale lines from the front. Total: **O(n)**.
+
+      **Complexity.** **O(n)** time, **O(n)** space (the deque holds at most one
+      line per monster).
+
+      :::tip
+      **Interview tip:** the moment a DP recurrence reads
+      `dp[i] = min_j ( dp[j] + cost(i,j) )` where `cost(i,j)` is `s_i·f_j` — a
+      product of a per-`i` term and a per-`j` term — recognise a **Convex Hull
+      Trick**. The giveaway is `s_i` and `f_j` multiplying each other, so the
+      per-`j` part forms a line. Naming "line = slope·X + intercept, query at
+      X = s[i]" is the whole trick; reach for Li Chao when slopes or queries are
+      *not* monotonic (that is Monster Game II).
+      :::
+  - type: markdown
+    content: |
+      # Question — Monster Game I
+
+      You are playing a game that consists of `n` levels. Each level has a
+      monster. On levels `1,2,…,n-1`, you can either kill or escape the monster.
+      However, on level `n` you must kill the final monster to win the game.
+
+      Killing a monster takes `s·f` time where `s` is the monster's strength and
+      `f` is your skill factor (lower skill factor is better). After killing a
+      monster, you get a new skill factor. What is the minimum total time in which
+      you can win the game?
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ x ≤ 10^6`
+      - `1 ≤ s_1 ≤ s_2 ≤ … ≤ s_n ≤ 10^6`
+      - `x ≥ f_1 ≥ f_2 ≥ … ≥ f_n ≥ 1`
+
+      **Input.** The first input line has two integers `n` and `x`: the number of
+      levels and your initial skill factor. The second line has `n` integers
+      `s_1,s_2,…,s_n`: each monster's strength. The third line has `n` integers
+      `f_1,f_2,…,f_n`: your new skill factor after killing a monster.
+
+      **Output.** Print one integer: the minimum total time to win the game.
+
+      Sample input:
+
+      ```
+      5 100
+      20 30 30 50 90
+      90 60 20 20 10
+      ```
+
+      Sample output:
+
+      ```
+      4800
+      ```
+
+      Explanation: The best way to play is to kill the third and fifth monster.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n^2) DP**
+
+      Implement the recurrence directly. `dp[0] = 0`, `f[0] = x`, and for each
+      `i` take the min over all smaller `j`. Correct, but the double loop costs
+      `n²/2 ≈ 2·10^10` when `n = 2·10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      int main(){ // too slow: O(n^2)
+          int n; ll x; cin >> n >> x;
+          vector<ll> s(n), f(n);
+          for (auto& v : s) cin >> v;
+          for (auto& v : f) cin >> v;
+          vector<ll> dp(n + 1); dp[0] = 0;
+          vector<ll> fj(n + 1); fj[0] = x;       // virtual monster 0
+          for (int i = 1; i <= n; ++i) fj[i] = f[i - 1];
+          for (int i = 1; i <= n; ++i){
+              ll best = LLONG_MAX;
+              for (int j = 0; j < i; ++j)
+                  best = min(best, dp[j] + s[i - 1] * fj[j]);
+              dp[i] = best;
+          }
+          cout << dp[n] << "\n";
+      }
+      ```
+
+      **O(n^2)** time, **O(n)** space — correct, too slow.
+
+      **② Optimization — monotonic Convex Hull Trick, O(n) (submission)**
+
+      Keep the lower envelope of the lines `y = f_j·X + dp[j]` in a `std::deque`.
+      Monsters are processed left to right: query the envelope at `X = s[i]`
+      (popping lines from the front while the next one is better), then insert
+      monster `i`'s own line (popping lines from the back that become useless).
+      Because queries are non-decreasing and slopes non-increasing, each line is
+      added once and removed once — amortised `O(1)` per step.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      using ld = long double;
+
+      struct Line { ll m, b; ll val(ll x) const { return m * x + b; } };
+      ld interX(const Line& l1, const Line& l2){            // where l1 and l2 cross
+          return (ld)(l2.b - l1.b) / (ld)(l1.m - l2.m);
+      }
+      bool bad(const Line& l1, const Line& l2, const Line& l3){
+          return interX(l1, l2) >= interX(l2, l3);          // l2 never optimal
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; ll x;
+          cin >> n >> x;
+          vector<ll> s(n), f(n);
+          for (auto& v : s) cin >> v;
+          for (auto& v : f) cin >> v;
+
+          deque<Line> hull;
+          hull.push_back({x, 0});                 // virtual monster 0: dp=0, skill=x
+
+          ll ans = 0;
+          for (int i = 0; i < n; ++i){
+              while (hull.size() >= 2 && hull[0].val(s[i]) >= hull[1].val(s[i]))
+                  hull.pop_front();               // next line already better
+              ll dp = hull.front().val(s[i]);     // dp[i]
+              if (i == n - 1){ ans = dp; break; } // must kill final monster
+              Line nl{f[i], dp};
+              if (!hull.empty() && hull.back().m == nl.m){   // equal slopes: keep smaller intercept
+                  if (hull.back().b <= nl.b) continue;
+                  hull.pop_back();
+              }
+              while (hull.size() >= 2 && bad(hull[hull.size()-2], hull.back(), nl))
+                  hull.pop_back();
+              hull.push_back(nl);
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n)** time, **O(n)** space. This is the submission tier.
+
+      **③ Alternative — Li Chao tree, O(n log C)**
+
+      If the sortedness of `s` / `f` was not promised (as in Monster Game II), the
+      monotonic deque breaks. A **Li Chao tree** inserts each line into a segment
+      tree over the `X`-range (the values of `s`, up to `10^6`) and answers point
+      minimum queries in `O(log C)`, with **no** assumption on order:
+
+      ```cpp
+      // Pseudo-frame: insert(line) at [0, maxS], query min at point x.
+      // Li Chao stores the line that wins for each segment; insert compares at
+      // the midpoint and recurses into the losing half. O(log maxS) per op.
+      ```
+
+      **O(n log C)**, `C = max(s)` — the general, order-agnostic companion to the
+      O(n) monotonic deque; both solve this problem, and Li Chao ports straight
+      to Monster Game II.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **DP as lines.** For each previous kill `j`, monster `i`'s cost is
+        `dp[j] + f_j · s_i`. Fix `j` and treat `s_i` as the variable `X`: that is
+        `y = f_j·X + dp[j]`, a line with slope `f_j` and intercept `dp[j]`.
+      - **Taking the min.** `dp[i]` is the lowest of these lines at `X = s[i]`.
+        The bottom-facing **convex hull** of all lines is exactly the set of
+        candidates that can ever win.
+      - **Front-popping (queries).** Queries `X = s[i]` are non-decreasing, so the
+        optimal line slides right along the hull; once `hull[1]` beats
+        `hull[0]` at the current `X`, `hull[0]` will never be optimal again.
+      - **Back-popping (insertions).** A middle line `l2` is useless when `l1` and
+        `l3` (its neighbours) cross *before or at* `l1`/`l2`'s crossing
+        (`interX(l1,l2) >= interX(l2,l3)`); it never forms part of the lower hull.
+      - **Equal slopes.** `f` may repeat, so the equal-slope branch keeps the
+        smaller intercept and discards the other — avoiding a division by zero in
+        `interX`.
+      - **Answer.** The final monster is forced, so the answer is exactly `dp[n]`,
+        read on the loop's last iteration (`i == n-1`).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 5, x = 100`; `s = 20 30 30 50 90`;
+      `f = 90 60 20 20 10`.
+
+      Virtual monster `0`: `dp[0] = 0`, slope `f_0 = x = 100`. Process monsters
+      left to right (0-indexed), querying the hull at `X = s[i]`:
+
+      | i | monster | X=s[i] | hull lines (m: b) | dp[i] |
+      |---|---------|--------|-------------------|-------|
+      | 0 | 1 | 20 | {100:0} | 2000 |
+      | 1 | 2 | 30 | {100:0} {90:2000} | 3000 |
+      | 2 | 3 | 30 | {100:0} {90:2000} {60:3000} | 3000 |
+      | 3 | 4 | 50 | … {20:3000} | 4000 |
+      | 4 | 5 (forced) | 90 | … {20:3000} | **4800** |
+
+      Worked values: `dp[2]` at `X=30` = `min(0+30·100, 2000+30·90, 3000+30·60)`
+      = `min(3000, 4700, 4800) = 3000`. `dp[4]` at `X=90` = min of the surviving
+      lines: `0+90·100=9000`, `3000+90·20=4800`, `4000+90·20=5800` → **4800**.
+      (The `{90:2000}` and `{60:3000}` lines are long-dominated and gone.)
+
+      **Reconstructing the play.** `dp[4] = 4800` comes from `j = 2` (monster 3,
+      1-based): kill monster 3 with skill `100` → `30·100 = 3000`, new skill
+      `f[2] = 20`; then kill the final monster 5 → `90·20 = 1800`. Total
+      `3000 + 1800 = 4800`. All other monsters are escaped.
+
+      **Output:** **`4800`** — matching the expected sample output and the stated
+      best play ("kill the third and fifth monster").
+  - type: mcq
+    prompt: 'Why does the Convex Hull Trick apply to the recurrence dp[i] = min_{j<i}(dp[j] + s[i]*f[j])?'
+    options:
+      - Because the term s[i]*f[j] is linear in the arrays individually, so each j defines a line in the variable s[i]
+      - Because Dijkstra requires convexity
+      - Because f is always zero
+      - Because the graph is a tree
+    answer: 0
+    explanation: For a fixed j, dp[j] + s[i]*f[j] = f[j] * (s[i]) + dp[j], i.e. a line with slope f[j] and intercept dp[j] in the query variable X = s[i]. Taking the minimum over j of these lines at X = s[i] is exactly a lower-hull (CHT) query, which is O(1) amortised when `s[i]` are sorted and slopes `f[j]` are monotonic.
+type: content
+---

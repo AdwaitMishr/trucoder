@@ -1,0 +1,235 @@
+---
+id: distinct-numbers
+title: Distinct Numbers
+difficulty: easy
+order: 25
+tags:
+  - sorting-and-searching
+  - set
+  - hash
+  - distinct
+blocks:
+  - type: markdown
+    content: |
+      # Distinct Numbers
+
+      **The technique: count distinct elements with a set / hash map.** Given a
+      list of `n` integers, we want the number of *different* values it
+      contains (each value counted once no matter how many times it repeats).
+      The two universal tools for this are **sorting** — after sorting, equal
+      values become adjacent, so we count every value that differs from its
+      left neighbour — and a **hash set** — we simply insert every value and
+      read the size of the set.
+
+      **When you reach for it:** any problem whose core is "how many distinct
+      X are there", "remove duplicates", or "have I seen this before". It is
+      usually a first step before a bigger algorithm (e.g. counting distinct
+      substrings uses the same "seen before" idea). The brute way is to check
+      each element against every earlier one — correct, but quadratic.
+
+      **Why hashing works in O(n).** The trick is *element distinctness*: a
+      hash set stores ~1 entry per distinct value, inserts in **expected O(1)**
+      on average, and its `size()` after inserting everything is exactly the
+      answer. The average case hides behind the hash function; worst cases can
+      degrade, which is why sorting — a guaranteed **O(n log n)** — is the safe
+      "no surprises" fallback.
+
+      **Worked mini-example.** `[2, 3, 2, 2, 3]`. Insert into a set → `{2, 3}`.
+      That is **2** distinct values. Sorting gives `[2, 2, 2, 3, 3]`; walking it
+      we find a *change* once (`2 → 3`), plus the first element, so **2** again.
+
+      **Complexity.** Hash set: **O(n)** expected time, O(n) space. Sort:
+      **O(n log n)** time, O(1) auxiliary space (sorting in place).
+
+      :::tip
+      **Interview tip:** "count distinct / how many unique" questions are
+      everywhere. Reach for the hash set first (O(n) expected). State the
+      trade-off aloud: hashing is faster on average but sorting is
+      worst-case deterministic — either is accepted in interviews. Interviewers
+      also routinely probe what happens when values are huge (here: up to
+      10^9, so a *bool array* indexed by value is impossible — only a hash set
+      or a sort works).
+      :::
+  - type: markdown
+    content: |
+      # Question — Distinct Numbers
+
+      You are given a list of `n` integers, and your task is to calculate the
+      number of distinct values in the list.
+
+      **Constraints:** `1 ≤ n ≤ 2·10^5`, `1 ≤ x_i ≤ 10^9`.
+
+      **Input:** The first input line has an integer `n`: the number of
+      values. The second line has `n` integers `x_1, x_2, ..., x_n`.
+
+      **Output:** Print one integer: the number of distinct values.
+
+      Sample input:
+
+      ```
+      5
+      2 3 2 2 3
+      ```
+
+      Sample output:
+
+      ```
+      2
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²)**
+
+      For each element, scan everything before it to see if the value already
+      appeared; if not, count it.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(const vector<long long>& v) {
+          int n = (int)v.size();
+          long long cnt = 0;
+          for (int i = 0; i < n; ++i) {
+              bool seen = false;
+              for (int j = 0; j < i; ++j)
+                  if (v[j] == v[i]) { seen = true; break; }
+              if (!seen) cnt++;
+          }
+          return cnt;
+      }
+      ```
+
+      **O(n²)** time — for `n = 2·10^5` that is ~4·10^10 comparisons, far
+      beyond the 1-second limit. Correct, but too slow.
+
+      **② Sort + count transitions — O(n log n)**
+
+      After sorting, duplicate values sit side by side. Count the first element
+      plus every position where the value changes.
+
+      ```cpp
+      long long solve(vector<long long> v) {
+          sort(v.begin(), v.end());
+          long long cnt = 0;
+          for (size_t i = 0; i < v.size(); ++i)
+              if (i == 0 || v[i] != v[i - 1]) cnt++;
+          return cnt;
+      }
+      ```
+
+      **O(n log n)** time, O(1) extra space. Fast enough for `2·10^5` and
+      worst-case deterministic.
+
+      **③ Hash set — O(n) expected (fastest)**
+
+      Insert every value into a hash set; the answer is its size.
+
+      ```cpp
+      long long solve(const vector<long long>& v) {
+          unordered_set<long long> s;
+          for (long long x : v) s.insert(x);
+          return (long long)s.size();
+      }
+      ```
+
+      **O(n)** expected time, O(n) space. This is the tier you'd submit to CSES.
+
+      **④ Alternative algorithm — none meaningful (skip)**
+
+      We already have the two canonical approaches (hashing for average-case
+      speed, sorting for worst-case determinism). A tree-based set (`std::set`)
+      gives O(n log n) — never better than hashing here — so there is no
+      genuinely different algorithm worth teaching. Skip.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      All three tiers solve "how many distinct values". The mapping onto this
+      problem:
+
+      - **Tier ① (brute).** For `v[i]`, loop over all `j < i`. The flag
+        `seen` is `true` the moment an equal earlier value is found. We count
+        `v[i]` only when it is the *first* occurrence of its value. The logic is
+        correct but every element cost a scan of everything before it, giving
+        the quadratic blow-up.
+      - **Tier ② (sort).** Sorting brings equal values together, so counting is
+        now a single pass: `cnt` starts with the first element and grows every
+        time `v[i] != v[i-1]`. The comparison `i == 0 || v[i] != v[i-1]`
+        shields the first element (which has no left neighbour) from an
+        out-of-bounds read.
+      - **Tier ③ (hash).** `unordered_set` stores at most one copy per value.
+        `insert` is O(1) on average; after all inserts, `s.size()` is the number
+        of distinct values. No loop bookkeeping, no sort — this is the compact
+        submission solution.
+
+      Values reach `10^9`, so a direct lookup array is impossible — the hash
+      set (or sorting) handles arbitrarily large values naturally.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+
+      ```
+      5
+      2 3 2 2 3
+      ```
+
+      Expected output: `2`.
+
+      **Tier ③ (hash set) trace:**
+
+      | step | value x | set after insert |
+      |------|---------|------------------|
+      | 1 | `2` | `{2}` |
+      | 2 | `3` | `{2, 3}` |
+      | 3 | `2` | `{2, 3}` (already present) |
+      | 4 | `2` | `{2, 3}` |
+      | 5 | `3` | `{2, 3}` |
+
+      Final set size = **2**.
+
+      **Tier ② (sort) trace:** sorted array becomes `[2, 2, 2, 3, 3]`.
+
+      | index i | v[i] | v[i] != v[i-1]? | cnt |
+      |---------|------|-----------------|-----|
+      | 0 | `2` | i == 0 → count | 1 |
+      | 1 | `2` | no | 1 |
+      | 2 | `2` | no | 1 |
+      | 3 | `3` | yes | 2 |
+      | 4 | `3` | no | 2 |
+
+      Count = **2**, matching the expected output. ✓
+  - type: flowchart
+    title: Counting distinct values
+    nodes:
+      - Read list
+      - Sort the array
+      - Walk left to right; count v[i] when it differs from v[i-1]
+      - The count is the number of distinct values
+      - Return count
+    edges:
+      - from: 0
+        to: 1
+        label: O(n log n) sort
+      - from: 1
+        to: 2
+        label: single pass
+      - from: 2
+        to: 3
+      - from: 3
+        to: 4
+  - type: mcq
+    prompt: Why is a hash set generally preferred over the sort-based method for counting distinct values in an O(n log n)-vs-O(n) sense, and what is the catch?
+    options:
+      - A hash set is deterministic, guaranteeing O(n) in every case, so sorting is never needed.
+      - A hash set gives O(n) expected time by storing values in a hash table at roughly O(1) per insert, but its O(1) is average-case — a bad hash distribution can degrade inserts, whereas sorting's O(n log n) is guaranteed, so the choice is speed-on-average versus deterministic worst case.
+      - Sorting is always faster because the CPU caches the array.
+      - Both are O(n²); the choice is cosmetic.
+    answer: 1
+    explanation: A hash set relies on the average O(1) behavior of the hash function, so n inserts and a size() read give O(n) expected time and O(n) space. The trade-off is that hashing is probabilistic — pathological inputs (collisions) can push it toward O(n²) — whereas sorting is reliably O(n log n). For CSES constraints, the hash set is the usual submission; sorting is the deterministic fallback.
+type: content
+---

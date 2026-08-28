@@ -1,0 +1,258 @@
+---
+id: required-substring
+title: "Required Substring"
+type: content
+difficulty: medium
+order: 204
+tags:
+  - string-algorithms
+  - knuth-morris-pratt
+  - automaton
+  - dp
+blocks:
+  - type: markdown
+    content: |
+      # Required Substring — DP over a KMP automaton
+
+      Count how many strings of length `n` over the 26 uppercase letters contain
+      a given pattern `P` (length `m`) as a **substring**, modulo `10^9+7`.
+      Example: with `n = 6, P = "ABCDB"`, every valid string is either
+      `ABCDBx` or `xABCDB` (26 + 26 = **52**, no overlap), but for larger `n`
+      a pattern can sit at many positions and overlap with itself — so a naive
+      "pick a position, fix the pattern there, fill the rest" double counts and
+      needs inclusion-exclusion.
+
+      ## When you reach for it
+
+      This is the textbook "count strings matching a pattern" DP. The trick that
+      makes it work is the **KMP automaton**: track, as you build the string left
+      to right, the length of the *longest prefix of `P` that is a suffix of what
+      you've built so far*. From that single number `j` and the next letter, the
+      KMP failure function tells you the new state `j'` in `O(1)` amortized —
+      no `O(m)` substring comparison per letter.
+
+      ## Why it works
+
+      The only thing that matters about the string built so far is how much of a
+      prefix of `P` it ends with. When that reaches `m`, the pattern has fully
+      appeared and we never worry again (it stays "matched"). This state is
+      small (`0..m`), so a simple DP over `(length, state)` counts everything:
+
+      - `dp[i][j]` = number of length-`i` strings whose automaton state is `j`.
+      - Transition: for each of 26 letters, compute `ns = go(j, letter)` and add
+        `dp[i][j]` into `dp[i+1][ns]`.
+      - Answer: `dp[n][m]` (state `m` = matched somewhere).
+
+      :::tip
+      **Interview tip:** "Count strings of length n containing a forbidden /
+      required word" is a classic. The canonical solution is a DP whose state is
+      the KMP failure state (or the Aho-Corasick state for *several* words). Be
+      ready to say why a plain "fix the word at position k and fill the rest"
+      overcounts (self-overlapping patterns appear at multiple positions in the
+      same string) — automaton DP avoids it because it ends exactly where the
+      match occurred.
+      :::
+
+      **Complexities:** build the transition table `O(m·26)`, DP `O(n·m·26)`,
+      space `O(n·m)` (or `O(m)` with two rolling rows).
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to calculate the number of strings of length `n` that have a
+      given pattern of length `m` as their substring. All strings consist of
+      characters `A–Z`.
+
+      ## Input
+
+      The first input line has an integer `n`: the length of the final string.
+
+      The second line has a pattern of length `m`.
+
+      ## Output
+
+      Print the number of strings modulo `10^9+7`.
+
+      **Constraints:** `1 ≤ n ≤ 1000`, `1 ≤ m ≤ 100`
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      6
+      ABCDB
+      ```
+
+      **Output:**
+
+      ```
+      52
+      ```
+
+      Explanation: the final string is of the form `ABCDBx` or `xABCDB` where
+      `x` is any character between `A–Z`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(26ⁿ · n)**
+
+      Generate every string of length `n`, check whether it contains the pattern
+      as a substring. `26¹⁰⁰⁰` strings for `n = 1000` — utterly impossible.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; string p; cin >> n >> p;
+          ll cnt = 0; string cur(n, 'A');
+          string A = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+          function<void(int)> rec = [&](int i) {
+              if (i == n) { cnt = (cnt + (cur.find(p) != string::npos)) % MOD; return; }
+              for (int c = 0; c < 26; c++) { cur[i] = A[c]; rec(i + 1); }
+          };
+          rec(0);
+          cout << cnt << "\n";
+          return 0;
+      }
+      ```
+
+      *Correct, but exponential — only useful for `n ≤ 4` sanity checks.*
+
+      **② Optimization — KMP automaton + DP, O(n·m·26) (optimal tier)**
+
+      Precompute the KMP automaton (state = longest prefix of `P` that is a
+      suffix of the build), then run a DP over `(length, state)`. State `m` is
+      absorbing: once matched, it stays matched.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; string p;
+          cin >> n >> p;
+          int m = (int)p.size();
+          vector<int> pi(m, 0);                 // KMP prefix function
+          for (int i = 1; i < m; i++) {
+              int k = pi[i - 1];
+              while (k > 0 && p[i] != p[k]) k = pi[k - 1];
+              if (p[i] == p[k]) k++;
+              pi[i] = k;
+          }
+          auto go = [&](int s, int c) {         // automaton: state s, reading letter c (0..25)
+              char ch = char('A' + c);
+              while (s > 0 && p[s] != ch) s = pi[s - 1];
+              if (p[s] == ch) s++;
+              return s;
+          };
+          vector<vector<ll>> dp(n + 1, vector<ll>(m + 1, 0));
+          dp[0][0] = 1;                         // empty string
+          for (int i = 0; i < n; i++)
+              for (int s = 0; s <= m; s++)
+                  if (dp[i][s])
+                      for (int c = 0; c < 26; c++) {
+                          int ns = (s == m) ? m : go(s, c);   // matched stays matched
+                          dp[i + 1][ns] = (dp[i + 1][ns] + dp[i][s]) % MOD;
+                      }
+          cout << dp[n][m] % MOD << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n·m·26)` time, `O(n·m)` space — for `n ≤ 1000, m ≤ 100` that's about
+      `2.6·10^6` transitions, well within the time limit. Compiled and run on the
+      sample, it prints `52`.*
+
+      **③ Further notes**
+
+      - The `26` factor is the alphabet size and can't drop for a 26-letter set;
+        for a general alphabet of size `σ` it's `O(n·m·σ)`.
+      - **Multiple patterns:** the same DP works with the **Aho-Corasick**
+        automaton instead of KMP — state becomes a trie node (see lesson 206).
+      - The **inclusion-exclusion** alternative (pick match positions, subtract
+        overlaps) is messy exactly because `P` may overlap itself; the automaton
+        DP sidesteps it by ending at the *first* match state rather than at a
+        chosen position.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Prefix function `pi`.** `pi[i]` is the length of the longest proper
+        prefix of `P` that is also a suffix of `P[0..i]`. It encodes all the
+        "back-off" edges of the automaton: when a letter doesn't extend the
+        current matched prefix, jump to `pi[previous]` and retry.
+      - **`go(s, c)`.** From state `s` (how much of `P` is matched), reading
+        letter `c`, repeatedly fall back `s = pi[s-1]` until `P[s] == c`, then
+        advance `s`. This is the standard KMP transition; it's `O(1)` amortized.
+      - **DP loop.** `dp[i][s]` counts length-`i` strings ending in state `s`.
+        For every state and every of the 26 letters we extend by one character.
+        If `s == m` we clamp to `m` (once the pattern appeared it always
+        appeared), otherwise we run it through `go`.
+      - **Answer.** After all `n` positions, `dp[n][m]` is the number of strings
+        whose automaton ended at the matched state — every string containing the
+        pattern, each counted exactly once.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `n = 6, P = "ABCDB"` (`m = 5`). States are the matched-prefix
+      lengths `0..5`; `dp[0][0] = 1`. We count the strings that land in state 5
+      (matched) after 6 characters.
+
+      - **After 1 char.** Only `A` advances (state 1); the other 25 letters fall
+        back to state 0 (none of them matches `P[0] = 'A'`).
+        `dp[1][0] = 25, dp[1][1] = 1`.
+      - **After 5 chars.** The *only* length-5 string in state 5 is exactly
+        `ABCDB` (prefix 5 matched cleanly, `dp[5][5] = 1`). Every other length-5
+        string either fails early or matches only a proper prefix, so it ends in
+        some state `< 5`.
+      - **After 6 chars.** State 5 receives strings from two places:
+        - already matched at length 5 — `dp[5][5] = 1` string, then any of the
+          26 letters keeps it absorbing → `26` strings of the form `ABCDBx`;
+        - matched only at length 6 — the single string that reaches state 5 on
+          the last letter. That is `xABCDB`: each of the 26 choices for `x`
+          leaves `ABCDB` appearing at positions `2..6` → `26` strings.
+
+      These two families are disjoint (overlap would force
+      `s[1..5] = s[2..6] = ABCDB`, impossible), so the total is `26 + 26 = 52`.
+
+      ```
+      Expected (sample):  52
+      Actual (automaton): 52    ← match
+      ```
+
+      The automaton's `dp[6][5]` sums *all* length-6 strings whose end state is
+      the absorbing matched state — exactly the list of strings containing
+      `ABCDB`, each counted once, which is what the two disjoint families above
+      enumerate.
+  - type: flowchart
+    title: "Count strings containing a pattern"
+    nodes: ["read n and pattern P", "build KMP prefix function pi", "dp[0][0] = 1", "for i = 0..n-1, for each state s", "for each of 26 letters, ns = go(s, letter), add dp[i][s] into dp[i+1][ns]", "state m is absorbing once matched", "answer = dp[n][m] mod 1e9+7"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 3, label: "next i"}
+      - {from: 4, to: 5}
+      - {from: 5, to: 4}
+      - {from: 3, to: 6, label: "i = n"}
+  - type: mcq
+    prompt: "Why does a naive \"pick the position where the pattern starts and fill the rest arbitrarily\" overcount?"
+    options:
+      - "It counts strings where the pattern appears more than once multiple times."
+      - "It misses strings where the pattern only appears overlapping itself."
+      - "It is only wrong for even-length patterns; odd ones are fine."
+      - "It is actually exact, so no overcount occurs."
+    answer: 0
+    explanation: "A string that contains the pattern at several start positions (including overlapping placements of a self-overlapping pattern) is counted separately for each of those starts, so its total is inflated. The KMP-automaton DP counts each string exactly once because its state (longest matched prefix, capped at m) pins down precisely when the match first completes."
+---

@@ -1,0 +1,228 @@
+---
+id: fixed-length-walk-queries
+title: Fixed Length Walk Queries
+difficulty: hard
+order: 303
+tags:
+  - advanced-graph
+  - walks
+  - parity
+  - bfs
+  - bipartite-states
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — can I be at `b` after exactly `x` moves?
+
+      We have an undirected graph. A **walk** is any sequence of moves along edges — vertices and
+      edges may be reused. A walk from `a` to `b` of **length `x`** means: start at `a`, and after
+      stepping through exactly `x` edges arrive at `b`. For each of many queries we must answer
+      `YES`/`NO`.
+
+      **The parity trick.** Because the graph is *undirected*, once you can reach `b` with a walk of
+      length `L`, you can always reach it with length `L + 2`: take the walk to `b`, step to any
+      neighbour and step straight back. (The graph is connected and simple with `n ≥ 2`, so every
+      node has at least one neighbour.) Padding only ever changes the length by **2**, so it preserves
+      **parity**. Hence:
+
+      > A walk of length exactly `x` from `a` to `b` exists iff the **shortest even (resp. odd) walk**
+      > from `a` to `b`, with the same parity as `x`, has length **≤ x**.
+
+      **Computing shortest even/odd walks — the doubled graph.** We need, from every source `a`, the
+      shortest walk of each parity to every node. Model the state `(v, p)` = "at node `v`, having taken
+      a walk whose length has parity `p`". An edge step `v → w` flips parity: `(v, p) → (w, p⊕1)`.
+      This is an unweighted graph on `2n` states, so a **BFS** from the source state `(a, 0)` gives the
+      exact shortest walk length of each parity to each node:
+
+      - `dist[0][w]` = shortest **even** walk from `a` to `w`,
+      - `dist[1][w]` = shortest **odd** walk from `a` to `w`.
+
+      For a query `(a, b, x)`, let `p = x mod 2`. If `dist[p][b]` is defined and `≤ x`, answer `YES`;
+      otherwise `NO`.
+
+      **Complexity.** Precomputing for all `n` sources is `O(n·(n + m))` time and `O(n·2·n) = O(n²)`
+      memory; each of the `q` queries is answered in **O(1)**. With `n ≤ 2500, m ≤ 5000, q ≤ 10^5` this
+      is ≈ `10^8` light BFS steps — fine under a second.
+
+      :::tip
+      **Interview tip:** "exactly `k` steps, is it possible?" in an *undirected* graph reduces to one
+      parity + one shortest-walk question, because a back-and-forth pad adds 2 and preserves parity.
+      This "lift the graph by parity (or by remainder mod `k`)" move is a reusable pattern: any
+      `dist[n][residue]` layered BFS turns a "how many steps, with a congruence condition" problem
+      into an ordinary shortest-path problem. When you genuinely need the *count* of walks (not just
+      existence), reach for **matrix exponentiation** of the adjacency matrix instead — see tier ③.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given an undirected graph with `n` nodes and `m` edges. The graph is simple and
+      connected. You start at a specific node, and on each turn you must move through an edge to
+      another node. Answer `q` queries of the form: "is it possible to start at node `a` and end up
+      on node `b` after exactly `x` turns?"
+
+      **Input.** The first line contains three integers `n`, `m` and `q`: the number of nodes, edges
+      and queries. The nodes are numbered `1, 2, …, n`. After this, there are `m` lines describing the
+      edges, each with two integers `a` and `b`. Finally, there are `q` lines, each describing a query
+      with three integers `a`, `b` and `x`.
+
+      **Output.** For each query, print `YES` or `NO` on its own line.
+
+      **Constraints.**
+      - `2 ≤ n ≤ 2500`
+      - `1 ≤ m ≤ 5000`
+      - `1 ≤ q ≤ 10^5`
+      - `0 ≤ x ≤ 10^9`
+
+      ### Sample
+
+      **Input:**
+      ```
+      4 5 6
+      1 2
+      2 3
+      1 3
+      2 4
+      3 4
+      1 2 2
+      1 4 1
+      1 4 5
+      2 2 1
+      2 2 2
+      3 4 8
+      ```
+
+      **Output:**
+      ```
+      YES
+      NO
+      YES
+      NO
+      YES
+      YES
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — DP over the walk length, O(x·(n + m)) per query.** From `a`, propagate
+      reachability one step at a time for `x` steps: `reach_{t+1}[w] = OR over neighbours`, tracking a
+      boolean reachable set. Exact, but with `x` up to `10^9` it is hopeless.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n,m,q; cin>>n>>m>>q;
+          vector<vector<int>> adj(n);
+          for(int i=0;i<m;i++){int a,b;cin>>a>>b;--a;--b;adj[a].push_back(b);adj[b].push_back(a);}
+          while(q--){
+              long long a,b,x; cin>>a>>b>>x; --a; --b;
+              vector<char> reach(n,0); reach[a]=1;
+              for(long long t=0;t<x;t++){               // up to 1e9 steps -> too slow
+                  vector<char> nr(n,0);
+                  for(int v=0;v<n;v++) if(reach[v]) for(int w:adj[v]) nr[w]=1;
+                  reach=nr;
+              }
+              cout<<(reach[b]?"YES":"NO")<<"\n";
+          }
+      }
+      ```
+      **O(x·(n + m))** per query — exponential in the input's requested length.
+
+      **② Optimization — layered-parity BFS, O(n·(n + m) + q) (submission).** Compute, for every
+      source, the shortest even and odd walk to every node using a BFS over states `(node, parity)`.
+      Every query then reduces to a single `dist[a][x&1][b] ≤ x` check:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m,q; cin>>n>>m>>q;
+          vector<vector<int>> adj(n);
+          for(int i=0;i<m;i++){int a,b;cin>>a>>b;--a;--b;adj[a].push_back(b);adj[b].push_back(a);}
+          // dist[a][parity][v] = shortest walk length from a to v with that parity
+          vector<vector<vector<int>>> dist(n, vector<vector<int>>(2, vector<int>(n, -1)));
+          for(int s=0; s<n; ++s){
+              dist[s][0][s]=0;
+              deque<pair<int,int>> dq;            // state = (node, parity of length so far)
+              dq.push_back({s,0});
+              while(!dq.empty()){
+                  auto [v,par] = dq.front(); dq.pop_front();
+                  for(int w : adj[v]){
+                      int np = par^1;             // one step flips parity
+                      if(dist[s][np][w]==-1){ dist[s][np][w]=dist[s][par][v]+1; dq.push_back({w,np}); }
+                  }
+              }
+          }
+          while(q--){
+              int a,b; long long x; cin>>a>>b>>x; --a; --b;
+              int p = (int)(x & 1LL);
+              int d = dist[a][p][b];
+              cout << ((d!=-1 && (long long)d<=x) ? "YES" : "NO") << '\n';
+          }
+          return 0;
+      }
+      ```
+      **O(n·(n + m))** precomputation, **O(1)** per query, **O(n²)** memory — the submission tier.
+
+      **③ Alternative — matrix exponentiation (not viable at these limits).** The number of walks of
+      length exactly `x` from `a` to `b` is the entry `(A^x)[a][b]` of the `x`-th power of the
+      adjacency matrix `A`, computable in `O(n³·log x)` per query. That is elegant for *counting*
+      walks on tiny graphs, but `n=2500` makes `n³` infeasible and it also wastes the parity structure.
+      The layered-BFS tier ② is the intended, efficient answer; matrix powers are the right tool when
+      the graph is small and the number of walks (not just reachability) is requested.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      - **The doubled graph.** For each source `s`, `dist[s][par][v]` stores the shortest walk from
+        `s` to `v` whose length has parity `par`. Starting state `(s, 0)` has length `0` (even).
+      - **A step flips parity.** `(v, par) → (w, par^1)` for every neighbour `w`, so one BFS over
+        `n` nodes × 2 parities computes both even and odd shortest walks.
+      - **Answering a query.** A walk of odd length `O` can be extended to `O+2, O+4, …` by stepping
+        out and back, so exact reachability for length `x` needs only `d = dist[a][x&1][b]` defined and
+        `d ≤ x`. The `(long long)` cast avoids overflow when `x` is near `10^9`.
+      - **Why padding never gets stuck.** Connectivity and `n ≥ 2` guarantee every node has a
+        neighbour, so the 2-step pad is always available at `b`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n=4, m=5, q=6`, edges `1-2, 2-3, 1-3, 2-4, 3-4` (nodes `{2,3,4}` form a
+      triangle; `1` connects to `2,3`).
+
+      **Even/odd shortest walks from node 1** (distances): `dist[1][even][1]=0`, `[2]=2` (`1-3-2`),
+      `[3]=2` (`1-2-3`), `[4]=2` (`1-2-4`); odd: `dist[1][odd][2]=1`, `[3]=1`, `[4]=3` (`1-2-3-4`).
+
+      Evaluating each query via `dist[a][x&1][b] ≤ x`:
+
+      | # | query | parity x | shortest with that parity | length ≤ x? | answer |
+      |---|-------|----------|---------------------------|-------------|--------|
+      | 1 | 1→2, x=2 | even | 2 | 2 ≤ 2 ✓ | YES |
+      | 2 | 1→4, x=1 | odd | 3 | 3 ≤ 1 ✗ | NO |
+      | 3 | 1→4, x=5 | odd | 3 | 3 ≤ 5 ✓ (pad 3→5) | YES |
+      | 4 | 2→2, x=1 | odd | 3 | 3 ≤ 1 ✗ | NO |
+      | 5 | 2→2, x=2 | even | 0 | 0 ≤ 2 ✓ | YES |
+      | 6 | 3→4, x=8 | even | 2 | 2 ≤ 8 ✓ | YES |
+
+      **Result:** `YES NO YES NO YES YES` — exactly the sample output. Query 4 shows why odd length
+      `1` fails to stay at `2`: the shortest odd closed walk (`2-1-3-2`, length 3) is too long; an
+      even closed walk of length `0` exists, so query 5 succeeds.
+
+  - type: mcq
+    prompt: "For query (a, b, x), when can we immediately answer NO without any special cases?"
+    options:
+      - "When the shortest walk from a to b with parity equal to x mod 2 is longer than x."
+      - "When x is even and a has no self-loop."
+      - "When b has even degree."
+      - "When x is a large power of two."
+    answer: 0
+    explanation: "Exact length x is reachable iff, at the target parity, the shortest walk is at most x — because any shorter walk of the same parity can be padded by 2 (step out and back). If even that shortest walk exceeds x, no walk of length x exists."
+type: content
+---

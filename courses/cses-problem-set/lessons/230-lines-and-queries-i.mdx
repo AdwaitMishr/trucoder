@@ -1,0 +1,326 @@
+---
+id: lines-and-queries-i
+title: "Lines and Queries I — Max at a Query Point (Li Chao tree)"
+type: content
+difficulty: medium
+order: 230
+tags:
+  - geometry
+  - li-chao-tree
+  - convex-hull-trick
+  - maximum-query
+  - adhoc
+blocks:
+  - type: markdown
+    content: |
+      # Lines and Queries I — answer "max of many lines at x" fast
+
+      You are handed a set of `n` straight lines `y = m·x + b` and then `q`
+      point queries. Each query gives an `x`; you must print the **largest `y`**
+      any single line takes at that `x`. This is a tiny but extremely reusable
+      building block, and the point is to learn the **Li Chao tree** — a
+      segment tree that stores lines and answers "best-of-all-lines at x" in
+      `O(log C)`.
+
+      ## Why lines appear everywhere
+
+      When you read "max of `m·x + b` over many candidate options at a point",
+      you are doing geometry: each option is a line, and your query is a
+      vertical slice through a stack of them. The **upper envelope** is the
+      max of all lines at each `x`. Classic uses: scheduling where each job
+      costs `a·time + b`, DP transitions of the form
+      `dp[j] = max_k (m_k·x_j + b_k)` (convex-hull-optimised DP), and
+      "highest rocket altitude at time x" style physics problems.
+
+      ## The Li Chao tree at a glance
+
+      Build an ordinary segment tree over the **x-domain** (after coordinate
+      compression, the tree spans the sorted unique query `x` values). Each
+      node stores **one line** — the line that is "currently best at the middle
+      of that node's interval". To insert a new line, walk from the root:
+
+      - at each node compare the new line vs the stored line **at the node's
+        midpoint** `mid`;
+      - the line that wins at `mid` stays at the node;
+      - the loser is **pushed into whichever child actually beats it more**
+        (the comparison uses the ends `l` and `mid` to decide left or right).
+
+      To query, walk the path from the root to the leaf holding `x`, taking the
+      max of every stored line seen along the way.
+
+      A node can hold any line (each insert touches only `O(log K)` nodes, one
+      line per node), so inserting all `n` lines costs `O(n log C)` and each
+      query costs `O(log C)` — a massive win over checking every line.
+
+      **Time:** `O((n + q) log C)`. **Space:** `O(4·K)` for the tree nodes.
+
+      :::tip
+      **Interview tip:** "max of `a·x + b` over a set of options" is the signal
+      to reach for a convex-hull trick or a Li Chao tree. The Li Chao tree is
+      the version that **works with arbitrary query order and online inserts**
+      — memorise its insert/query recursion, because a variant of it solves
+      "best mail route at step t", "min fuel cost at time x", and many DP
+      optimisations. The compression step (build the tree over only the `x`
+      values that are actually queried) is what keeps the tree small.
+      :::
+  - type: markdown
+    content: |
+      # Question — Lines and Queries I
+
+      You are given `n` lines `y = m·x + b`, and then `q` queries. For each
+      query, print the maximum `y` over all lines at that `x`.
+
+      **Input**
+
+      The first line contains two integers `n` and `q`. Then `n` lines follow,
+      each with two integers `m` and `b`. Then `q` lines follow, each with one
+      integer `x`.
+
+      **Output**
+
+      Print one integer per query: `max_i ( m_i · x + b_i )`.
+
+      **Constraints**
+
+      - `1 <= n, q <= 2 * 10^5`
+      - `-10^6 <= m <= 10^6`
+      - `-10^9 <= b <= 10^9`
+      - `-10^9 <= x <= 10^9`
+      - all results fit in a signed 64-bit integer
+
+      **Example**
+
+      Input:
+      ```
+      4 3
+      2 1
+      -1 4
+      0 5
+      3 -2
+      -2
+      0
+      2
+      ```
+
+      Output:
+      ```
+      6
+      5
+      5
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — check every line per query, O(n·q) time, O(n) space**
+
+      For each query, evaluate every line and take the max. Correct on small
+      cases, but `2·10^5` lines × `2·10^5` queries is `4·10^10` evaluations —
+      far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<ll> m(n), b(n);
+          for (int i = 0; i < n; ++i) cin >> m[i] >> b[i];
+          while (q--){
+              ll x; cin >> x;
+              ll best = LLONG_MIN;
+              for (int i = 0; i < n; ++i)
+                  best = max(best, m[i] * x + b[i]);
+              cout << best << "\n";   // O(n) per query -> 4e10 ops, too slow
+          }
+          return 0;
+      }
+      ```
+
+      **② Optimization — Li Chao tree, O(n log C + q log C) time, O(4K) space**
+
+      Compress the `q` query `x` values into the tree's leaf coordinates, then
+      insert every line, then answer each query by walking the root-to-leaf path.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      struct Line { ll m, b; };
+      const ll NEG = LLONG_MIN / 4;
+      vector<ll> xs;          // sorted unique query x
+      vector<Line> st;        // Li Chao node lines
+
+      inline ll val(const Line &l, ll x) { return l.m * x + l.b; }
+
+      void add(int node, int l, int r, Line nw) {
+          int mid = (l + r) >> 1;
+          bool leftBetter = val(nw, xs[l]) > val(st[node], xs[l]);
+          bool midBetter  = val(nw, xs[mid]) > val(st[node], xs[mid]);
+          if (midBetter) swap(st[node], nw);          // keep winner at midpoint
+          if (l == r) return;
+          if (leftBetter != midBetter) add(node << 1, l, mid, nw);
+          else add(node << 1 | 1, mid + 1, r, nw);    // loser descends the winning side
+      }
+
+      ll query(int node, int l, int r, int pos) {
+          ll best = val(st[node], xs[pos]);           // line stored here
+          if (l == r) return best;
+          int mid = (l + r) >> 1;
+          if (pos <= mid) return max(best, query(node << 1, l, mid, pos));
+          return max(best, query(node << 1 | 1, mid + 1, r, pos));
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<Line> lines(n);
+          for (auto &ln : lines) cin >> ln.m >> ln.b;
+          xs.resize(q);
+          vector<ll> orig(q);
+          for (int i = 0; i < q; ++i) { cin >> xs[i]; orig[i] = xs[i]; }
+          sort(xs.begin(), xs.end());
+          xs.erase(unique(xs.begin(), xs.end()), xs.end());
+          int K = (int)xs.size();
+          st.assign(4 * K + 4, {0, NEG});
+          if (K == 0) return 0;                       // no query points
+          for (auto &ln : lines) add(1, 0, K - 1, ln);
+          for (ll x : orig) {
+              int pos = (int)(lower_bound(xs.begin(), xs.end(), x) - xs.begin());
+              cout << query(1, 0, K - 1, pos) << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      **③ Further optimization** — for this exact problem (all lines known in
+      advance, fixed query points) we could precompute the **upper convex hull**
+      (CHT) and binary-search the breakpoints, which is also `O((n+q) log n)`.
+      The Li Chao tree above is already optimal in spirit and is strictly more
+      general (it handles online insert), so nothing further is needed here —
+      the same code is reused verbatim in "Lines and Queries II".
+
+      **④ Alternative — divide and conquer optimisation (static)**
+
+      Because every line and every query `x` are known up front, we can also
+      answer each query with a **convex hull trick**: sort lines by slope,
+      build the upper envelope with a monotonic stack, then for each query
+      binary-search the segment where `x` peaks. The envelope is the exact same
+      concept as the Li Chao upper envelope — it is the "outer face" of the
+      arrangement of lines.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      struct Line { ll m, b; };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<Line> L(n);
+          for (auto &ln : L) cin >> ln.m >> ln.b;
+          sort(L.begin(), L.end(), [](const Line &a, const Line &b){
+              if (a.m != b.m) return a.m < b.m;
+              return a.b > b.b; });
+          vector<Line> hull;                                  // upper envelope
+          for (auto &ln : L){
+              if (!hull.empty() && hull.back().m == ln.m) continue; // keep higher intercept
+              // drop hull.back() if the three intersections are not increasing
+              while (hull.size() >= 2){
+                  const Line &a = hull[hull.size()-2];
+                  const Line &b = hull[hull.size()-1];
+                  // crossX(a,b) >= crossX(b,ln): (b.b-a.b)*(b.m-ln.m) >= (ln.b-b.b)*(a.m-b.m)
+                  __int128 lhs = (__int128)(b.b - a.b) * (b.m - ln.m);
+                  __int128 rhs = (__int128)(ln.b - b.b) * (a.m - b.m);
+                  if (lhs >= rhs) hull.pop_back();
+                  else break;
+              }
+              hull.push_back(ln);
+          }
+          // breakpoint[i] = x where hull[i] is overtaken by hull[i+1], kept as a fraction
+          vector<pair<__int128,__int128>> bp;                 // {num, den} with den>0
+          for (int i = 0; i + 1 < (int)hull.size(); ++i){
+              __int128 num = (__int128)(hull[i+1].b - hull[i].b);
+              __int128 den = (__int128)(hull[i].m - hull[i+1].m);  // <0 for ascending slopes
+              if (den < 0){ num = -num; den = -den; }
+              bp.push_back({num, den});
+          }
+          while (q--){
+              ll x; cin >> x;
+              int lo = 0, hi = (int)bp.size();                // number of passed breakpoints
+              while (lo < hi){ int md = (lo + hi) >> 1;
+                  if (bp[md].first <= bp[md].second * x) lo = md + 1; else hi = md; }
+              cout << hull[lo].m * x + hull[lo].b << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      Both ② and ④ output the identical upper envelope; the Li Chao tree is the
+      one to keep because it needs no sorted slopes and extends to online inserts.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Zoom in on the Li Chao tree **②**:
+
+      - `xs` holds the sorted, de-duplicated query coordinates; the tree's
+        leaves `[0, K-1]` correspond to these `x` values. Compressing is what
+        keeps the tree at `O(K)` nodes instead of `O(10^9)`.
+      - `add` compares the new line to the node's stored line **at `mid`**. The
+        line winning at `mid` stays; the loser is pushed into the child where
+        it could beat the winner. The `leftBetter != midBetter` test tells us
+        which child: it means the winner changes sides between `l` and `mid`,
+        so the loser belongs on the left; otherwise push right.
+      - Each insert touches `O(log K)` nodes — one line kept per node, not per
+        leaf — which is why ``n`` inserts cost `O(n log K)`.
+      - `query` accumulates the max of every stored line on the root-to-leaf
+        path. This is correct because any line lives in exactly one node whose
+        interval fully contains `x`.
+      - `NEG` is the identity line (a huge negative constant) so an empty node
+        never wins a comparison.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Run `n = 4, q = 3` with lines `y = 2x+1`, `y = -x+4`, `y = 5`, `y = 3x-2`
+      and queries `x ∈ {-2, 0, 2}`.
+
+      The compressed `xs = [-2, 0, 2]`. Evaluate every line at each query to see
+      the upper envelope:
+
+      | x  | 2x+1 | -x+4 | 5  | 3x-2 | max |
+      |----|------|------|----|------|-----|
+      | -2 | -3   | 6    | 5  | -8   | 6   |
+      | 0  | 1    | 4    | 5  | -2   | 5   |
+      | 2  | 5    | 2    | 5  | 4    | 5   |
+
+      So the tree must return `6, 5, 5`. Sorting the lines by slope
+      (`-x+4`, `0x+5`, `2x+1`, `3x-2`) and taking the upper hull gives exactly
+      the peaks: at `x=-2` the line `-x+4` peaks at `6`; moving right, `y=5`
+      takes over and holds `5` at both `x=0` and `x=2` (tying `2x+1` at `5`).
+      The Li Chao query walks the path and returns the same `6, 5, 5`.
+  - type: flowchart
+    title: "Li Chao insert and query"
+    nodes: ["Sort+dedup query x", "st[] = identity lines", "Insert each line (add: compare at mid)",
+            "Line wins at mid? keep it", "Push loser to winning child",
+            "Answer query: max along root→leaf path", "Print result"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: "no"}
+      - {from: 4, to: 2, label: "next line"}
+      - {from: 3, to: 2, label: "all lines left"}
+      - {from: 2, to: 5, label: "repeat for each query"}
+      - {from: 5, to: 6, label: ""}
+  - type: mcq
+    prompt: "Why does a single Li Chao insert only touch O(log K) nodes while still allowing any query to return the exact global maximum?"
+    options:
+      - "Each node stores the line that wins at its own midpoint; a losing line is pushed into the one child where it can still beat the winner, and all comparisons for a query happen along a single root-to-leaf path whose nodes I check one by one"
+      - "Every line is copied into a full copy of the array at every node, doubling storage but fixing correctness"
+      - "The tree stores aggregate sums instead of single lines, so no per-line bookkeeping is needed"
+      - "The insert re-sorts all previously inserted lines, which is why it stays small"
+    answer: 0
+    explanation: "A node keeps exactly one line (the midpoint winner); any inserted line flows down only one branch per level, so an insert is O(depth)=O(log K). Any query x lives at one leaf, and every line whose interval contains x is one of the stored lines on that leaf's root-to-leaf path, so taking the max along that path yields the true global maximum."

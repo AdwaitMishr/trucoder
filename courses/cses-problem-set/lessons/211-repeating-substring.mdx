@@ -1,0 +1,265 @@
+---
+id: repeating-substring
+title: Repeating Substring
+type: content
+difficulty: hard
+order: 211
+tags:
+  - string-algorithms
+  - suffix-array
+  - suffix-automaton
+  - lcp
+blocks:
+  - type: markdown
+    content: |
+      # Repeating Substring — longest repeat via suffix array + LCP
+
+      A *repeating substring* occurs in two or more (possibly overlapping)
+      positions. We must find the **longest** one; any tied answer is fine, and
+      `-1` if the string has no repeat.
+
+      Two identical occurrences of a substring = two suffixes that **share a
+      common prefix** of that length. So the problem reduces to: find the longest
+      common prefix between **any two suffixes**. After sorting suffixes (suffix
+      array) and computing the LCP of each adjacent pair, the answer is simply the
+      **maximum LCP value** — adjacent sorted suffixes are the closest, so the
+      longest shared prefix among *all* pairs is always found among neighbours.
+
+      ```
+      longest repeating substring = s.substr(sa[i], LCP[i])
+                                     for i with the maximum LCP[i]
+      ```
+
+      If every `LCP[i] = 0`, print `-1`.
+
+      **Worked idea.** `s = "cabababc"`: suffixes `ababc` and `abababc` share the
+      prefix `abab` (length 4) and are adjacent in sorted order → answer `abab`.
+
+      **Complexity.** Suffix array `O(n log n)` + Kasai LCP `O(n)` → total
+      `O(n log n)`, the intended solution.
+
+      ### Alternative in the same family
+
+      A **suffix automaton (SAM)** finds it too: an endpos set of size ≥ 2 means a
+      repeated substring; the longest is the largest `len[state]` over such states,
+      and a concrete occurrence is reconstructable from the state's stored
+      end-position.
+
+      :::tip
+      **Interview tip:** "longest substring occurring at least twice" is the
+      poster child for **max LCP on a suffix array** — it is a restating of
+      "longest common prefix of two suffixes". Know it cold; the same max-LCP
+      question powers longest common substring and repeated-pattern detection.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      A repeating substring is a substring that occurs in two (or more) locations
+      in the string. Your task is to find the longest repeating substring in a
+      given string.
+
+      ## Input
+
+      The only input line has a string of length `n` that consists of characters
+      `a–z`.
+
+      **Constraints:** `1 ≤ n ≤ 10^5`.
+
+      ## Output
+
+      Print the longest repeating substring. If there are several possibilities,
+      you can print any of them. If there is no repeating substring, print `-1`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      cabababc
+      ```
+      **Output:**
+      ```
+      abab
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — compare every pair of suffixes, O(n³)**
+
+      For every pair `(i, j)` compute their longest common prefix by direct
+      comparison; keep the longest. `O(n²)` pairs × `O(n)` comparison each.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          string s; cin >> s;
+          int n = (int)s.size(), best = 0, besti = 0;
+          for(int i = 0; i < n; i++)
+              for(int j = i + 1; j < n; j++){
+                  int l = 0;
+                  while(i + l < n && j + l < n && s[i+l] == s[j+l]) l++;
+                  if(l > best){ best = l; besti = i; }
+              }
+          if(best == 0) cout << -1 << "\n"; else cout << s.substr(besti, best) << "\n";
+          return 0;
+      }
+      ```
+      *O(n³) worst-case — correct, far too slow.*
+
+      **② Optimization — suffix array + max LCP, O(n log n)**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      vector<int> build_sa(const string& S){
+          string s = S + (char)('a'-1);
+          int n = (int)s.size(), classes = 1;
+          vector<int> sa(n), c(n), pn(n), cn(n), cnt(max(n,256));
+          iota(sa.begin(), sa.end(), 0);
+          sort(sa.begin(), sa.end(), [&](int i,int j){ return s[i] < s[j]; });
+          c[sa[0]] = 0;
+          for(int i = 1; i < n; i++) c[sa[i]] = c[sa[i-1]] + (s[sa[i]] != s[sa[i-1]]);
+          classes = c[sa[n-1]] + 1;
+          for(int h = 0; (1 << h) < n; h++){
+              int sh = 1 << h;
+              for(int i = 0; i < n; i++){ pn[i] = sa[i] - sh; if(pn[i] < 0) pn[i] += n; }
+              fill(cnt.begin(), cnt.begin()+classes, 0);
+              for(int i = 0; i < n; i++) cnt[c[pn[i]]]++;
+              for(int i = 1; i < classes; i++) cnt[i] += cnt[i-1];
+              for(int i = n-1; i >= 0; i--) sa[--cnt[c[pn[i]]]] = pn[i];
+              cn[sa[0]] = 0; classes = 1;
+              for(int i = 1; i < n; i++){
+                  pair<int,int> cur  = {c[sa[i]],   c[(sa[i]+sh)%n]};
+                  pair<int,int> pre  = {c[sa[i-1]], c[(sa[i-1]+sh)%n]};
+                  if(cur != pre) classes++;
+                  cn[sa[i]] = classes-1;
+              }
+              c.swap(cn);
+          }
+          vector<int> res;
+          for(int x : sa) if(x != sa[0]) res.push_back(x);
+          return res;
+      }
+      vector<int> kasai_lcp(const string& s, const vector<int>& sa){
+          int n = (int)s.size();
+          vector<int> lcp(n, 0), pos(n);
+          for(int i = 0; i < n; i++) pos[sa[i]] = i;
+          int k = 0;
+          for(int i = 0; i < n; i++){
+              if(pos[i] == n-1){ k = 0; continue; }
+              int j = sa[pos[i]+1];
+              while(i+k < n && j+k < n && s[i+k] == s[j+k]) k++;
+              lcp[pos[i]] = k;
+              if(k) k--;
+          }
+          return lcp;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; cin >> s;
+          int n = (int)s.size();
+          vector<int> sa = build_sa(s);
+          vector<int> lcp = kasai_lcp(s, sa);
+          int best = 0, besti = 0;
+          for(int i = 0; i < n-1; i++) if(lcp[i] > best){ best = lcp[i]; besti = sa[i]; }
+          if(best == 0) cout << -1 << "\n"; else cout << s.substr(besti, best) << "\n";
+          return 0;
+      }
+      ```
+      *O(n log n) — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      `O(n log n)` fits the 1 s limit easily.
+
+      **④ Alternative — suffix automaton, O(n)**
+
+      Build the SAM of the text; states with endpos size ≥ 2 are repeated
+      substrings. Pick the maximum `len` among them and reconstruct the string
+      from the state's stored end-position.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; cin >> s;
+          struct St{ int len, link; array<int,26> next; int occ; int first; };
+          vector<St> st; st.push_back({0,-1,{},0,-1}); st[0].next.fill(-1);
+          int last = 0;
+          auto extend = [&](int c){
+              int cur = st.size(); st.push_back({st[last].len+1,-1,{},1,(int)st[last].len}); st[cur].next.fill(-1);
+              int p = last;
+              while(p != -1 && st[p].next[c] == -1){ st[p].next[c] = cur; p = st[p].link; }
+              if(p == -1) st[cur].link = 0;
+              else{
+                  int q = st[p].next[c];
+                  if(st[p].len + 1 == st[q].len) st[cur].link = q;
+                  else{
+                      int cl = st.size(); st.push_back(st[q]); st[cl].len = st[p].len + 1; st[cl].occ = 0;
+                      while(p != -1 && st[p].next[c] == q){ st[p].next[c] = cl; p = st[p].link; }
+                      st[q].link = st[cur].link = cl;
+                  }
+              }
+              last = cur;
+          };
+          for(char ch : s) extend(ch - 'a');
+          // |endpos|: fold occ up suffix links, longest states first
+          int n = (int)st.size();
+          vector<pair<int,int>> ord;
+          for(int i = 0; i < n; i++) ord.push_back({st[i].len, i});
+          sort(ord.rbegin(), ord.rend());
+          for(auto &pr : ord){ int u = pr.second; if(st[u].link != -1) st[st[u].link].occ += st[u].occ; }
+          int best = 0, bestv = -1;
+          for(int i = 1; i < n; i++)
+              if(st[i].occ >= 2 && st[i].len > best){ best = st[i].len; bestv = i; }
+          if(best == 0) cout << -1 << "\n";
+          else cout << s.substr(st[bestv].first - best + 1, best) << "\n";
+          return 0;
+      }
+      ```
+      *O(n) — linear, but requires SAM theory.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through ②:
+
+      - **`build_sa`.** Doubling with a sentinel (`'a'-1`) sorts suffixes by class
+        rank; the sentinel suffix is dropped. `c[]` is the equivalence class of
+        each suffix's rank after the current power-of-two prefix length.
+      - **`kasai_lcp`.** For adjacent sorted suffixes computes their longest
+        common prefix in `O(n)` total via the rank-order trick (`k` never drops by
+        more than one).
+      - **`max lcp -> answer`.** Any repeated substring of length `L` is a common
+        prefix of two suffixes of length `≥ L`; those two suffixes are adjacent
+        (or connected by a run of equal-LCP suffixes) in sorted order, so the
+        global maximum LCP captures the longest such repeat. `best = lcp[i]`,
+        `besti = sa[i]` → the substring has one occurrence starting at `sa[i]`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      `s = "cabababc"` (indices 0..7). The two relevant suffixes:
+
+      | suffix (start) | string |
+      |----------------|--------|
+      | idx 1 | `abababc` |
+      | idx 3 | `ababc` |
+
+      Their common prefix is `a b a b` → LCP = 4. No other pair of suffixes
+      shares a longer prefix (the answer `abab` is the longest repeat).
+
+      `max LCP = 4` at `besti = 1` → output `s.substr(1, 4) = "abab"`. ✓ Matches
+      the sample.
+  - type: mcq
+    prompt: "Why is the longest repeating substring given by the maximum of the LCP array (adjacent sorted suffixes) rather than needing to compare every pair of suffixes?"
+    options:
+      - "Because if two substrings of length L coincide at positions i, j, then those two suffixes are at distance at most one in sorted order with LCP at least L, so the max over neighbours already equals the true longest repeat."
+      - "Because the suffix array is always sorted by length."
+      - "Because LCP only exists between the first and last suffix."
+      - "Because repeating substrings are only ever length one."
+    answer: 0
+    explanation: "Suffixes that share the longest prefix must be adjacent (or within a block of equal prefixes) once sorted; the LCP of neighbours therefore already reaches the global maximum, so a single pass over the LCP array yields the longest repeated substring."

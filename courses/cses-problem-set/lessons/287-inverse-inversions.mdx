@@ -1,0 +1,192 @@
+---
+id: inverse-inversions
+title: "Inverse Inversions — Build a Permutation"
+difficulty: medium
+order: 287
+tags:
+  - construction
+  - inversion-count
+  - greedy
+  - permutation
+  - combinatorics
+blocks:
+  - type: markdown
+    content: |
+      # Constructing a permutation with a given inversion count
+
+      An **inversion** in a permutation `p` is a pair `(i, j)` with `i < j` and
+      `p[i] > p[j]`. The index-reversed problem is: given `n` and a number
+      `k`, **construct** any permutation of `[1..n]` that has **exactly `k`
+      inversions** — or report that it is impossible.
+
+      First, `k` is achievable **iff** `0 ≤ k ≤ n(n-1)/2` (the maximum is the
+      fully reversed permutation `[n, ..., 1]`). Within that range it is always
+      possible, and the construction is a greedy that decides, for each element
+      in turn, whether to *create* inversions now or *defer* them.
+
+      The key decision rule: while the smallest remaining value is `lo` and the
+      largest is `hi`:
+      - placing `lo` **next** creates **0** new inversions (nothing smaller can
+        follow it);
+      - placing `hi` **next** creates **`hi - lo`** new inversions (every
+        currently-remaining smaller value will be placed later, after it).
+
+      So we place `hi` (spend `k`) when `k ≥ hi - lo`, otherwise place `lo`,
+      until all `n` numbers are placed. This is the classic O(n) greedy for the
+      "k-th inverse" construction.
+
+      :::tip
+      **Interview tip:** this is the inverse/inversion construction — the bread
+      and butter of "give me a permutation of length n with property X" prompts.
+      The standard mental models are: any inversion count in `[0, n(n-1)/2]` is
+      achievable; greedy `max-vs-min` placement yields exactly `k`; and to check
+      an inversion count in an interview, a Fenwick tree or a merge-sort
+      "counting" routine is the O(n log n) reference answer.
+      :::
+  - type: markdown
+    content: |
+      # Question — Inverse Inversions
+
+      Given `n` and an integer `k`, construct a permutation of `1, 2, …, n` that
+      has **exactly `k` inversions**. If no such permutation exists, print
+      `IMPOSSIBLE`.
+
+      **Input.** A single line with two integers `n` and `k`.
+
+      **Output.** If achievable, print a permutation of `[1..n]` with exactly `k`
+      inversions (any valid one). Otherwise print `IMPOSSIBLE`.
+
+      **Constraints**
+      - `1 ≤ n ≤ 5·10^5`
+      - `0 ≤ k ≤ 10^12`
+
+      **Example**
+      ```
+      Input:
+      5 5
+
+      Output:
+      5 1 2 4 3
+      ```
+      Explanation: `5 > 1,2,4,3` (4 inversions), `4 > 3` (1 more) → total `5`.
+      (The greedy construction outputs this and any permutation with 5
+      inversions is accepted.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — backtracking over permutations, O(n! · n)**
+
+      Generate permutations of `[1..n]` in increasing lexicographic order, count
+      each one's inversions, and stop at the first that matches `k`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          long long n,k; if(!(cin>>n>>k)) return 0;
+          if(k < 0 || k > n*(n-1)/2){ cout<<"IMPOSSIBLE\n"; return 0; }
+          vector<int> p(n);
+          iota(p.begin(), p.end(), 1);
+          do{
+              long long inv = 0;
+              for(int i=0;i<n;i++) for(int j=i+1;j<n;j++) if(p[i]>p[j]) inv++;
+              if(inv == k){
+                  for(int v:p) cout<<v<<" ";
+                  cout<<"\n"; return 0;
+              }
+          } while(next_permutation(p.begin(), p.end()));
+          cout<<"IMPOSSIBLE\n";
+          return 0;
+      }
+      ```
+
+      **O(n! · n²)** time in the worst case — for `n = 12` that is already
+      billions of steps. Fine for `n ≤ 8`, hopeless for `n = 5·10^5`.
+
+      **② Optimization — greedy max/min placement, O(n) (submission)**
+
+      Maintain `lo` (smallest unused) and `hi` (largest unused). At each of the
+      `n` positions: if `k >= hi - lo`, place `hi` (spending `hi - lo`
+      inversions) and decrement `hi`; otherwise place `lo` (spending zero) and
+      increment `lo`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          long long n,k; if(!(cin>>n>>k)) return 0;
+          if(k < 0 || k > n*(n-1)/2){ cout<<"IMPOSSIBLE\n"; return 0; }
+          long long lo = 1, hi = n;
+          vector<long long> res(n);
+          for(int i=0;i<n;i++){
+              long long spend = hi - lo;          // inversions if we place hi now
+              if(spend <= k){ res[i] = hi--; k -= spend; }
+              else           { res[i] = lo++; }
+          }
+          for(int i=0;i<n;i++) cout << res[i] << " \n"[i==n-1];
+          return 0;
+      }
+      ```
+
+      **O(n)** time, **O(n)** output space. Each step either drains the whole
+      remaining budget (`hi` case) or lowers `lo`, so `n` positions always
+      finish exactly with `k = 0`. This is the submission.
+  - type: markdown
+    content: |
+      ### Solution — ③ further optimization / alternative
+
+      The greedy is already optimal — an O(n) output cannot be produced faster
+      than O(n) time. No asymptotic gain is possible.
+
+      A *different* (equally valid) construction is an **insertion** version:
+      start with the empty sequence and insert `n, n-1, …, 1` in a chosen spot —
+      inserting value `v` at position `p` of a current list of length `L`
+      contributes exactly `L - p` inversions (each element already to its right
+      that is smaller). Picking spots to realize `k` from the contributions
+      `{0,1,…,L}` is O(n + k) but O(n²) moves in a naive vector. The max/min
+      greedy above is the compact closed form of exactly that idea — slide `lo`
+      entries that contribute 0 and `hi` entries that contribute maximally,
+      mixing the two to hit `k`.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **Feasibility gate first.** `k` outside `[0, n(n-1)/2]` is impossible;
+        inside it, the greedy always succeeds.
+      - **`spend = hi - lo`.** If we emit `hi` now, every smaller unused value
+        (there are `hi - lo` of them) lands after it and forms an inversion.
+      - **Emit `hi` only when affordable.** `spend <= k` means we can absorb the
+        whole cost now; if `spend > k`, emitting `hi` would overshoot, so emit
+        `lo` (cost 0) instead.
+      - **Invariant `k ≥ 0` and non-increasing.** After the loop `k == 0`
+        exactly; every `lo`/`hi` emitted is decremented/incremented once, using
+        each number `1..n` precisely once.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 5`, `k = 5`. State per position
+      (`lo, hi, spend, decision`):
+
+      | step | `lo` | `hi` | `spend=hi-lo` | `k` now | decision | res so far |
+      |------|------|------|---------------|---------|----------|------------|
+      | 1 | 1 | 5 | 4 | 5 | 4 ≤ 5 → emit 5 | `[5]`, k=1 |
+      | 2 | 1 | 4 | 3 | 1 | 3 > 1 → emit 1 | `[5,1]`, k=1 |
+      | 3 | 2 | 4 | 2 | 1 | 2 > 1 → emit 2 | `[5,1,2]`, k=1 |
+      | 4 | 3 | 4 | 1 | 1 | 1 ≤ 1 → emit 4 | `[5,1,2,4]`, k=0 |
+      | 5 | 3 | 3 | 0 | 0 | 0 ≤ 0 → emit 3 | `[5,1,2,4,3]`, k=0 |
+
+      Output: **`5 1 2 4 3`** — matches the sample output, and a manual inversion
+      count gives exactly `5`.
+  - type: mcq
+    prompt: "In the greedy construction, why does placing the current largest element hi contribute exactly (hi - lo) inversions ?"
+    options:
+      - Because every smaller unused value (there are hi - lo of them) must be placed later, and each forms an inversion with hi
+      - Because hi is larger than all n elements, contributing n - i inversions for its position i
+      - Because large values are always moved to the end, halving the count
+      - Because inversions only count adjacent swaps, and hi equals the number of swaps
+    answer: 0
+    explanation: When we place hi now, the remaining unused values are exactly lo…hi-1 — that is hi-lo numbers, all smaller than hi. Each is placed afterwards, to the right of hi, creating one inversion each, so hi contributes hi-lo inversions. This is precisely why the greedy can spend "hi-lo" of the remaining budget by moving hi to the front of the remaining subsequence, or spend zero by placing lo instead.

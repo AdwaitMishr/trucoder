@@ -1,0 +1,278 @@
+---
+id: range-update-queries
+title: "Range Update Queries"
+type: content
+difficulty: medium
+order: 124
+tags:
+  - range-queries
+  - fenwick
+  - difference-array
+blocks:
+  - type: markdown
+    content: |
+      # Range Update Queries — range add, point query
+
+      We have an array of `n` values. Two kinds of operations arrive
+      interleaved: a **range update** (add `u` to every element in
+      `[a, b]`), and a **point query** (what is the value at position `k`).
+      We must process all `q` operations fast.
+
+      This is a classic *asymmetric* problem: the update touches a whole
+      range, but the query only reads one position. When a query is a
+      single point, a **difference array** (差分数组) is the standard trick.
+
+      ## The difference-array view
+
+      Instead of the array itself, store the array of *differences between
+      consecutive elements*:
+
+      ```
+      d[1] = x[1]
+      d[i] = x[i] - x[i-1]   for i in 2..n
+      ```
+
+      The original value is the **prefix sum** of `d`:
+
+      ```
+      x[k] = d[1] + d[2] + ... + d[k]
+      ```
+
+      Now observe what a range add does to the differences. If we add `u`
+      to every `x[i]` for `i in [a, b]`:
+
+      - `x[a]` jumps by `u`, so `d[a]` increases by `u`;
+      - every middle element `x[i]` (`i in a+1..b`) jumps and its left
+        neighbour also jumps by the same `u`, so `d[i]` is unchanged;
+      - `x[b+1]` does not jump but `x[b]` does, so `d[b+1]` decreases by `u`.
+
+      **Result:** a range add `[a, b]` by `u` is just two point updates on
+      the difference array: `d[a] += u` and `d[b+1] -= u`. And a point
+      query `x[k]` is a prefix sum of `d` up to `k`.
+
+      This inverts the difficulty: range becomes *cheap* (two point adds),
+      and the point query becomes a *prefix sum* — the same shape a
+      **Fenwick tree (BIT)** answers in `O(log n)`.
+
+      ## Putting it on a Fenwick tree
+
+      A Fenwick tree is a compact array that supports:
+
+      - `add(i, v)` — add `v` to element `i`: `O(log n)`;
+      - `sum(i)` — prefix sum of elements `1..i`: `O(log n)`.
+
+      We put the difference array `d` *inside* the BIT. Then:
+
+      - **Range update** `[a, b] += u` → `add(a, u)` and `add(b+1, -u)`.
+      - **Point query** `x[k]` → `sum(k)`.
+
+      Every operation is `O(log n)`. Total `O((n + q) log n)`.
+
+      :::tip
+      **Interview tip:** "range update, point query" is the *entry level*
+      of Fenwick/segment-tree problems and appears early in most
+      competitive-programming sets (CSES, Codeforces). The difference-array
+      insight — that you can move work into a prefix-sum structure — is the
+      single most reusable idea here: it is also the backbone of counting
+      prefix-impact problems (how many intervals cover a point) and of the
+      2D difference trick used on grids.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given an array of `n` integers, your task is to process `q` queries of
+      the following types:
+
+      - **increase each value in range `[a, b]` by `u`**
+      - **what is the value at position `k`?**
+
+      ## Input
+
+      The first input line has two integers `n` and `q`: the number of values
+      and queries.
+
+      The second line has `n` integers `x_1, x_2, ..., x_n`: the array values.
+
+      Finally, there are `q` lines describing the queries. The format of each
+      line is either `1 a b u` or `2 k`.
+
+      **Constraints**
+
+      - `1 <= n, q <= 2 * 10^5`
+      - `1 <= x_i, u <= 10^9`
+      - `1 <= a <= b <= n`
+      - `1 <= k <= n`
+
+      ## Output
+
+      Print the result of each query of type 2.
+
+      ## Example
+
+      Input:
+
+      ```
+      8 3
+      3 2 4 5 1 1 5 3
+      2 4
+      1 2 5 1
+      2 4
+      ```
+
+      Output:
+
+      ```
+      5
+      6
+      ```
+
+      (Initially `x[4] = 5`. After adding `1` to indices `[2, 5]` the array is
+      `[3, 3, 5, 6, 2, 1, 5, 3]`, so `x[4] = 6`.)
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — apply ranges by looping, O(n · q)**
+
+      For each type-1 update, walk the loop from `a` to `b` adding `u` to a
+      plain array; for each type-2 query print `x[k]`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<long long> x(n + 1);
+          for (int i = 1; i <= n; i++) cin >> x[i];
+          while (q--) {
+              int t; cin >> t;
+              if (t == 1) { int a, b; long long u; cin >> a >> b >> u;
+                  for (int i = a; i <= b; i++) x[i] += u;
+              } else { int k; cin >> k; cout << x[k] << "\n"; }
+          }
+          return 0;
+      }
+      ```
+
+      *`O(n · q)` — with `n = q = 2*10^5` that is up to `4 * 10^10` steps.
+      Too slow.*
+
+      **② Optimization — Fenwick tree over a difference array, O((n + q) log n)**
+
+      Store the difference array `d` in a BIT. Update `[a, b]` by `u` becomes
+      `add(a, u)` + `add(b+1, -u)`; a point query is `sum(k)`. This is the
+      optimal tier.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      struct BIT {
+          int n; vector<ll> t;
+          BIT(int n) : n(n), t(n + 1, 0) {}
+          void add(int i, ll v) { for (; i <= n; i += i & -i) t[i] += v; }
+          ll sum(int i) { ll s = 0; for (; i > 0; i -= i & -i) s += t[i]; return s; }
+      };
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          BIT bit(n);
+          ll prev = 0;                       // build d[i] = x[i] - x[i-1]
+          for (int i = 1; i <= n; i++) { ll v; cin >> v; bit.add(i, v - prev); prev = v; }
+          while (q--) {
+              int type; cin >> type;
+              if (type == 1) {               // += u on [a, b]
+                  int a, b; ll u; cin >> a >> b >> u;
+                  bit.add(a, u);
+                  if (b + 1 <= n) bit.add(b + 1, -u);
+              } else {                       // point query at k
+                  int k; cin >> k;
+                  cout << bit.sum(k) << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`O((n + q) log n)` time, `O(n)` space. Fast enough and the intended
+      solution.*
+
+      **③ Alternative — segment tree with lazy range-add, O(log n) per op**
+
+      A segment tree can also do range adds with lazy propagation and answer a
+      point query by accumulating the lazy values on the root-to-leaf path.
+      Same complexity, more code. The mismatch — heavy machinery for the case
+      where only point queries are needed — is exactly why the Fenwick
+      difference approach is preferred here.
+
+      **④ Further optimization —** none needed: `O(log n)` per operation is
+      already optimal (you must at least read every input line).
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the Fenwick-difference solution in **②**:
+
+      - **Every value is a prefix sum.** `bit.sum(k)` returns `d[1]+...+d[k]`,
+        which equals the current `x[k]`. Because `d[i] = x[i] - x[i-1]`, the
+        telescopes to `x[k]` exactly.
+
+      - **Building.** We stream the input once, and for each `x[i]` call
+        `bit.add(i, v - prev)` where `prev = x[i-1]`. This inserts exactly the
+        difference `d[i]` at position `i`. Afterward `sum(k)` reproduces
+        `x[k]`.
+
+      - **Range update = two point adds.** `add(a, u)` kicks `d[a]` up, which
+        raises every prefix `sum(k)` for `k >= a` by `u`; `add(b+1, -u)`
+        cancels that for `k >= b+1`, so only `k in [a, b]` are affected. The
+        `if (b+1 <= n)` guard skips an add past the end of the array (a
+        prefix `sum(k)` never reaches it anyway, but the guard keeps the add
+        in range).
+
+      - **Point query = one prefix sum.** `sum(k)` is `O(log n)`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 8`, array `[3, 2, 4, 5, 1, 1, 5, 3]`, queries
+      `2 4`, `1 2 5 1`, `2 4`.
+
+      Differences when built: `d = [3, -1, 2, 1, -4, 0, 4, -2]`.
+
+      | step | operation | differences stored | value at k |
+      |------|-----------|--------------------|------------|
+      | build | ingest array | `d = [3,-1,2,1,-4,0,4,-2]` | — |
+      | 1 | `2 4` → print `sum(4)` | unchanged | `3-1+2+1 = 5` → **5** |
+      | 2 | `1 2 5 1` → `add(2,+1)`, `add(6,-1)` | `d = [3,0,2,1,-4,-1,4,-2]` | — |
+      | 3 | `2 4` → print `sum(4)` | unchanged | `3+0+2+1 = 6` → **6** |
+
+      At step 3, `sum(4) = 3 + 0 + 2 + 1 = 6`, i.e. the new `x[4]` after adding
+      1 to indices `[2,5]`.
+
+      Expected (sample) — `5`, then `6`. Actual — `5`, then `6`. Match.
+  - type: flowchart
+    title: "Fenwick range-add / point-query"
+    nodes: ["read array, build difference d into BIT", "read operation", "type 1 (range update)?", "add(a,+u) and add(b+1,-u)", "type 2: print sum(k)", "more ops?", "done"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 4, label: "no (point query)"}
+      - {from: 2, to: 3, label: "yes"}
+      - {from: 3, to: 5}
+      - {from: 4, to: 5}
+      - {from: 5, to: 1, label: "yes"}
+      - {from: 5, to: 6, label: "no"}
+  - type: mcq
+    prompt: "Why does a range add [a, b] += u only require two point updates on the difference array d?"
+    options:
+      - "Because every element in [a, b] must be updated one at a time."
+      - "Because adding u to each x[i] in [a, b] shifts d[a] up by u (start) and d[b+1] down by u (boundary), while all interior differences d[i] stay unchanged; the operation is fully captured by those two deltas."
+      - "Because the Fenwick tree stores prefix sums, not values."
+      - "Because updates are never allowed to overlap."
+    answer: 1
+    explanation: "Inside [a, b] every element and its left neighbour grow by the same u, so their difference d[i] is constant. Only the left edge of the range (x[a] jumps, its left neighbour does not) and the right edge (x[b+1] does not jump, x[b] does) change — giving exactly d[a]+=u and d[b+1]-=u. The point value x[k] is the prefix sum of d, which the BIT answers in O(log n)."
+---

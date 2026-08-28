@@ -1,0 +1,210 @@
+---
+id: water-containers-queries
+title: "Water Containers Queries"
+type: content
+difficulty: medium
+order: 357
+tags:
+  - number-theory
+  - gcd
+  - queries
+blocks:
+  - type: markdown
+    content: |
+      # Water Containers Queries — answer many feasibility queries with one gcd
+
+      ## Theory
+
+      This is the *query* sibling of the two-jug family: given the capacities `a` and `b`,
+      we must answer `q` independent questions of the form *"can we measure exactly `x`
+      units, with the final amount sitting in container `A`?"* Unlike the sibling problem
+      **Water Containers Moves** (which outputs an actual move sequence minimising the water
+      moved), here we never construct moves — we only decide feasibility, and we must do it
+      fast for up to `q = 2·10⁵` questions.
+
+      **Reachability criterion.** Two pouring facts settle the entire problem:
+
+      1. Every amount that ever appears in either container is a multiple of `g = gcd(a, b)`.
+         Filling, emptying, and pouring never create an amount that is not divisible by `g`,
+         because all capacities and all transfers are multiples of `g`.
+      2. Because `g` is an *integer linear combination* of `a` and `b` (Bézout's identity),
+         **every multiple of `g` can actually be reached** — so container `A` can hold `x`
+         exactly when `x` is a multiple of `g`.
+
+      Container `A` has capacity `a`, so `x` must also satisfy `x ≤ a`. Combining the two
+      conditions:
+
+      > **`x` is measurable (with the final amount in `A`)  ⟺  `x ≤ a` and `x % g == 0`.**
+
+      That is the whole algorithm. Compute `g = gcd(a, b)` once, then every query is an
+      **O(1)** divisibility check.
+
+      **Time:** `O(log(max(a,b)) + q)`. **Space:** `O(1)`.
+
+      :::tip
+      **Interview tip:** "Can we measure X with jugs of capacities a and b?" is a disguised
+      **gcd / Bézout** question, not a search question, whenever you are only asked *whether*
+      it is possible. The invariant "every reachable amount is a multiple of gcd(a,b)" — plus
+      the fact that every such multiple is reachable — lets you answer each case in O(1). The
+      contrast between *feasibility* (a one-line number-theory check) and *reconstruction*
+      (a search generating the moves) shows up constantly in interviews.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Question
+
+      There are two water containers: container `A` has volume `a` and container `B` has
+      volume `b`. You are given `q` queries. In each query you must decide whether it is
+      possible to measure exactly `x` units of water so that, after some sequence of
+      fill / empty / transfer moves, container `A` holds exactly `x` units. Both containers
+      start empty.
+
+      **Input.** The first line has three integers `a`, `b`, and `q`. The next `q` lines
+      each have one integer `x`.
+
+      **Output.** For each query, print `YES` if `x` units can be measured into container
+      `A`, and `NO` otherwise.
+
+      **Constraints.**
+      - `1 ≤ a, b ≤ 10⁹`
+      - `1 ≤ q ≤ 2·10⁵`
+      - `1 ≤ x ≤ 10⁹`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      6 4 4
+      2
+      3
+      6
+      5
+      ```
+
+      **Output:**
+      ```
+      YES
+      NO
+      YES
+      NO
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(q·(a+1)(b+1)) BFS per query.** For each query build the whole
+      state graph `(A, B) ∈ [0..a]×[0..b]` and run a BFS to see whether any state with
+      `A == x` is reachable. Correct (it mirrors the earlier *moves* lesson's search), but
+      the state space grows with the *capacities* themselves — which can be `10⁹` — so it is
+      hopeless for the real constraints.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int a,b,q; cin>>a>>b>>q;
+          while(q--){
+              int x; cin>>x;
+              vector<vector<char>> vis(a+1, vector<char>(b+1, 0));
+              queue<pair<int,int>> qu({ {0,0} }); vis[0][0]=1;
+              bool ok=false;
+              while(!qu.empty()){
+                  auto [A,B]=qu.front(); qu.pop();
+                  if(A==x){ ok=true; break; }
+                  auto add=[&](int nA,int nB){
+                      if(vis[nA][nB]) return; vis[nA][nB]=1; qu.push({nA,nB});
+                  };
+                  add(a,B); add(A,b); add(0,B); add(A,0);          // fill / empty
+                  add(A-min(A,b-B), B+min(A,b-B));                  // pour A -> B
+                  add(A+min(B,a-A), B-min(B,a-A));                  // pour B -> A
+              }
+              cout<<(ok ? "YES" : "NO")<<"\n";
+          }
+      }
+      ```
+      *Complexity: O(q·(a+1)(b+1)) — explodes for `a,b ≤ 10⁹`.*
+
+      **② Optimization — gcd feasibility, O(1) per query (intended).** Compute `g = gcd(a,b)`
+      once, outside the loop; each query just checks `x ≤ a && x % g == 0` toward a quick `YES` / `NO`:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          ll a,b; int q; cin>>a>>b>>q;
+          ll g = __gcd(a,b);                     // computed exactly once
+          while(q--){
+              ll x; cin>>x;
+              if(x <= a && x % g == 0) cout<<"YES\n";
+              else cout<<"NO\n";
+          }
+      }
+      ```
+      *Complexity: O(log max(a,b) + q) time, O(1) space — handles `q = 2·10⁵` instantly.*
+
+      **③ Further optimization — nothing left to prune.** One gcd plus an O(1) check per query
+      is already optimal, since we must read every `x`. If many queries repeat, cache results
+      in an `unordered_map` to skip the divisibility test entirely — optional, because the
+      check itself is constant-time.
+
+      **④ Alternative — the same test in different containers.** Swapping roles, `x` is
+      measurable in `B` iff `x ≤ b && x % g == 0`, and in *either* container iff
+      `x ≤ max(a,b) && x % g == 0` — the identical Bézout argument, since the amount in any
+      single container can be any multiple of `g` up to that container's capacity. If the
+      problem instead asked you to *produce the moves*, that is the sibling **Water Containers
+      Moves** problem, which needs a shortest-path search, not this closed form.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      - **One gcd, many checks.** `g = __gcd(a, b)` is computed once outside the query loop
+        and reused by every query. That single value summarises everything the jug system can
+        produce.
+      - **Capacity bound.** `x <= a` enforces that container `A` — the final home of the
+        water — can physically hold `x`. `x` may exceed `b` freely, because `B` never needs to
+        hold the final amount.
+      - **Divisibility.** `x % g == 0` is the Bézout reachability condition: any multiple of
+        `gcd(a,b)` that fits is reachable.
+      - **Both conditions are necessary and sufficient**, so the `&&` produces the exact
+        answer for each query.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `a = 6, b = 4, q = 4`, queries `x = 2, 3, 6, 5`.
+
+      Compute `g = gcd(6, 4) = 2` once.
+
+      - `x = 2`: `2 ≤ 6` ✓, `2 % 2 == 0` ✓ → `YES`.
+      - `x = 3`: `3 ≤ 6` ✓, `3 % 2 == 1` ✗ → `NO`. (Every reachable amount is even.)
+      - `x = 6`: `6 ≤ 6` ✓, `6 % 2 == 0` ✓ → `YES` (just `FILL A`).
+      - `x = 5`: `5 ≤ 6` ✓, `5 % 2 == 1` ✗ → `NO`.
+
+      Outputs exactly:
+      ```
+      YES
+      NO
+      YES
+      NO
+      ```
+      which matches the sample. ✓
+
+      *(Verify `x = 2` is truly reachable: `FILL A` → `(6,0)`; `MOVE A B` → `(0,4)`;
+      `FILL A` → `(6,4)`; `MOVE A B` → `(2,6)` leaves `A = 2`. Odd amounts like `3` or `5`
+      are impossible because every state stays a multiple of `g = 2`.)*
+
+  - type: mcq
+    prompt: "For jugs of capacities a and b, why is 'x % gcd(a,b) == 0' sufficient (not merely necessary) for x to be measurable?"
+    options:
+      - "Because gcd(a,b) can be written as an integer linear combination of a and b, so the pouring process can realize every multiple of gcd(a,b) up to a container's capacity."
+      - "Because every reachable amount is a multiple of gcd(a,b), which alone already makes any amount reachable."
+      - "Because both containers always end completely full."
+      - "Because the answer never depends on which container must hold the water."
+    answer: 0
+    explanation: "Bézout's identity guarantees g = gcd(a,b) = a·u + b·v for integers u, v, and the fill/pour/empty moves are exactly the operations that realize this combination in the jugs. So every multiple of g that fits in a container is reachable (sufficient), not merely forced to be a multiple of g (necessary). Together, x is measurable iff x ≤ a and x % g == 0."

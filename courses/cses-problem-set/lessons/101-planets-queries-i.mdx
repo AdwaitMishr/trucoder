@@ -1,0 +1,235 @@
+---
+id: planets-queries-i
+title: "Planets Queries I"
+type: content
+difficulty: medium
+order: 101
+tags:
+  - graph-algorithms
+  - functional-graph
+  - binary-lifting
+blocks:
+  - type: markdown
+    content: |
+      # Planets Queries I — the k-th successor via binary lifting
+
+      Each planet has a teleporter to exactly one other planet. If a planet can
+      only *leave* toward one destination, the whole graph is a **functional
+      graph**: every node has out-degree 1, so every component is a single
+      directed cycle (possibly a self-loop) with trees of planets feeding into
+      it. The job is to answer up to `q` queries of the form: *start on planet
+      `x`, take `k` teleporters, where do you end up?*
+
+      The naive answer — walking `k` steps one at a time — costs `O(k)` per
+      query, and `k` can be `10^9`. That's the whole challenge.
+
+      ## Binary lifting (binary jumping)
+
+      **Binary lifting** answers "where do I land after exactly `k` jumps?" in
+      `O(log k)` by precomputing powers of two. Define
+
+          up[0][v] = the node you reach after 1 teleport = nxt[v]
+          up[j][v] = the node you reach after 2^j teleports
+                   = up[j-1][ up[j-1][v] ]
+
+      Since `2^j = 2^(j-1) + 2^(j-1)`, jumping `2^j` steps is the same as
+      jumping `2^(j-1)` steps twice. That gives one clean recurrence — every
+      entry is built from a previous level, `O(n log K)` total.
+
+      To answer a query, decompose `k` into its binary bits:
+
+          cur = x
+          for j in 0..LOG-1:
+              if bit j of k is set: cur = up[j][cur]
+          answer = cur
+
+      Because `up[j]` is defined for *every* node (out-degree 1 means the
+      successor always exists), this works filelessly on all nodes. With
+      `k <= 10^9`, `LOG = 31` (`2^30 > 10^9`) is plenty; with
+      `n <= 2*10^5`, even `LOG = 20` (`2^19 > 2*10^5`) already reaches every
+      reachable node.
+
+      **Time:** `O(n log K)` to build + `O(log K)` per query. **Space:** `O(n log K)`.
+
+      :::tip
+      **Interview tip:** binary lifting is the standard tool for "n-th
+      successor / n-th ancestor" queries on any structure where the transition
+      is deterministic — functional graphs, tree ancestors (LCA), tries, even
+      the "jump pointers" in some geometry. The moment you hear "k-th step, k
+      large", think doubling. It is also the cornerstone of the more advanced
+      functional-graph problems (Queries II, Planets Cycles) in this chapter,
+      so learn the recurrence cold.
+      :::
+  - type: markdown
+    content: |
+      # Question
+
+      You are playing a game consisting of `n` planets. Each planet has a
+      teleporter to another planet (or the planet itself). Your task is to
+      process `q` queries of the form: when you begin on planet `x` and travel
+      through `k` teleporters, which planet will you reach?
+
+      **Input**
+
+      The first input line has two integers `n` and `q`: the number of planets
+      and queries. The planets are numbered `1, 2, ..., n`.
+
+      The second line has `n` integers `t_1, t_2, ..., t_n`: for each planet,
+      the destination of the teleporter. It is possible that `t_i = i`.
+
+      Finally, there are `q` lines describing the queries. Each line has two
+      integers `x` and `k`: you start on planet `x` and travel through `k`
+      teleporters.
+
+      **Output**
+
+      Print the answer to each query — the planet you reach.
+
+      **Constraints**
+
+      - `1 <= n, q <= 2*10^5`
+      - `1 <= t_i <= n`
+      - `1 <= x <= n`
+      - `0 <= k <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      4 3
+      2 1 1 4
+      1 2
+      3 4
+      4 1
+      ```
+
+      Output:
+
+      ```
+      1
+      2
+      4
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — walk one teleporter per step, O(k) per query**
+
+      For each query, repeat `k` times: move to `nxt[cur]`. Correct but with
+      `k` up to `10^9` and `q` up to `2*10^5`, a single worst-case query is
+      ten billion steps — hopeless. This is why binary lifting exists.
+
+      **② Optimization — binary lifting, O((n + q) log k)**
+
+      Precompute `up[j][v]` = node after `2^j` teleports, then answer each
+      query by adding one `up[j]` jump per set bit of `k`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<int> nxt(n);
+          for (int i = 0; i < n; ++i){ int t; cin >> t; nxt[i] = t - 1; }
+          const int LOG = 31;                       // 2^30 > 1e9
+          vector<vector<int>> up(LOG, vector<int>(n));
+          up[0] = nxt;
+          for (int j = 1; j < LOG; ++j)
+              for (int v = 0; v < n; ++v)
+                  up[j][v] = up[j-1][ up[j-1][v] ];
+          while (q--){
+              int x; long long k; cin >> x >> k;
+              int cur = x - 1;
+              for (int j = 0; j < LOG; ++j)
+                  if ((k >> j) & 1) cur = up[j][cur];
+              cout << cur + 1 << '\n';
+          }
+          return 0;
+      }
+      ```
+
+      *O(n log k) build, O(log k) per query — the intended solution.*
+
+      **③ Further optimization** — none needed; `O(log k)` per query is
+      optimal for the input format (you must read every query, and each answer
+      needs `O(log k)` bits of information to specify).
+
+      **④ Alternative algorithm** — functionally identical implementations: a
+      flat 2-D table vs. a vector-of-vectors, or `LOG` tuned to `n` instead of
+      `k` (any value strictly greater than `log2(k)` is correct). The idea is
+      the same; there is no meaningfully different algorithm for single
+      successor queries.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the `O((n + q) log k)` solution:
+
+      - **`up[0] = nxt`** — the base level is just "one teleport". Planet
+        `x` (0-indexed) goes to planet `t_x - 1`.
+      - **The doubling recurrence** `up[j][v] = up[j-1][ up[j-1][v] ]` —
+        "jump `2^(j-1)` twice is jump `2^j`". Hand-build every level bottom-up;
+        each depends only on the previous level, so one loop over `j` suffices.
+      - **Answering** `(x, k)`: start `cur = x - 1`, and for each set bit `j`
+        of `k`, apply `up[j]`. Addition of powers of two from a set of bits
+        reconstructs `k` exactly, so we land on the `k`-th successor.
+      - Note `k` is read as a **`long long`** — `k` can be `10^9`, which fits
+        in `int`, but treating it as `long long` is free insurance and keeps
+        the shift `(k >> j)` well-defined for all `31` bits.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 4`, teleporters `t = [2, 1, 1, 4]`, so
+      0-indexed `nxt = [1, 0, 0, 3]` (planet 1→2, planet 2→1, planet 3→1,
+      planet 4→4).
+
+      Build a few `up` levels (0-indexed):
+
+      | j | up[j] |
+      |---|-------|
+      | 0 | [1, 0, 0, 3] |
+      | 1 | up[j-1][up[j-1][v]] = [0, 1, 1, 3] |
+      | 2 | [1, 0, 0, 3] |
+
+      (Every even power of two returns to the same values through the
+      2-cycle `1 ↔ 2`.)
+
+      | query | k (binary) | jump through `up` | answer (1-indexed) |
+      |-------|-----------|-------------------|--------------------|
+      | (1, 2) | `10` → bit 1 | up[1][0] = up[0][ up[0][0] ] = up[0][1] = 0 | **1** |
+      | (3, 4) | `100` → bit 2 | up[2][2] = up[1][ up[1][2] ]; up[1][2] = 1, so up[2][2] = up[1][1] = 1 → planet 2 | **2** |
+      | (4, 1) | `1` → bit 0 | up[0][3] = 3 | **4** |
+
+      For (3, 4): `up[1][2] = up[0][ up[0][2] ] = up[0][0] = 1`, and then
+      `up[2][2] = up[1][ up[1][2] ] = up[1][1]`. Computed once: planet 3 (index 2)
+      → planet 2 (index 1) → planet 1... the 4-th successor lands on planet 2.
+
+      Final results: (1,2) → 1, (3,4) → 2, (4,1) → 4.
+
+      Expected (sample) — `1 2 4`. Actual — `1 2 4`. Match.
+  - type: flowchart
+    title: "Binary lifting for k-th successor"
+    nodes: ["up[0] = nxt (1 step)", "j = 1..LOG-1: up[j][v] = up[j-1][up[j-1][v]]", "for query (x, k): cur = x-1", "bit j of k set?", "cur = up[j][cur]", "next bit / next query", "print cur + 1"]
+    edges:
+      - {from: 0, to: 1, label: "preprocess"}
+      - {from: 1, to: 2, label: "per query"}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 4, to: 5, label: ""}
+      - {from: 3, to: 5, label: "no"}
+      - {from: 5, to: 2, label: "more bits/queries"}
+      - {from: 5, to: 6, label: "answer ready"}
+  - type: mcq
+    prompt: "Why does binary lifting reduce a k-step successor query to O(log k)?"
+    options:
+      - "Because it rewrites the answer in base-2, so the k-th successor is found by adding log k precomputed power-of-two jumps."
+      - "Because up[0] already stores the final successor, so only one lookup is needed."
+      - "Because it replaces each query with a table scan over up[0..LOG], requiring LOG lookups regardless of k."
+      - "Because it stores every possible answer in memory, making all queries O(1)."
+    answer: 0
+    explanation: "The doubling table stores the successor after every power-of-two number of teleports. Any k is a sum of at most O(log k) powers of two, and each power-of-two is one precomputed entry-up lookup. That converts a walk of k steps into O(log k) table lookups — the essence of binary lifting."
+---

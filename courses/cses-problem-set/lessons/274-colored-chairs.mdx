@@ -1,0 +1,256 @@
+---
+id: colored-chairs
+title: Colored Chairs
+type: content
+difficulty: hard
+order: 274
+tags:
+  - interactive
+  - binary-search
+  - parity
+  - invariant
+blocks:
+  - type: markdown
+    content: |
+      # Colored Chairs — binary search with a parity oracle
+
+      `n` chairs sit in a circle, each red (`R`) or blue (`B`). Consecutive
+      chairs are neighbours (chair `n` is next to chair `1`). The chairs are
+      guaranteed to contain **two neighbouring chairs of the same colour**, and
+      you must find any such pair. The twist: the only question allowed is
+      "what colour is chair `i`?" — and you may ask at most **20** such
+      questions for `n` up to `2·10^5`.
+
+      A circle is interesting because the **size is odd** (`3 ≤ n ≤ 2·10^5`,
+      `n` odd). Why does oddness matter? If chairs strictly alternated
+      `R B R B …` around the circle, an *even* number of chairs could close the
+      loop (last chair differs from first). With an **odd** `n`, alternating
+      around the whole circle is impossible — you would need chair `n` and
+      chair `1` to be both different (neighbours) and equal (the alternation
+      wraps), a contradiction. So an odd circle *must* contain a same-colour
+      adjacent pair. The guarantee, "at least one exists", is exactly the odd
+      case.
+
+      ## The oracle: does a consecutive block contain a same-colour pair?
+
+      The trick is to test, using only the two **endpoint** colours, whether a
+      consecutive block `l..r` has a same-colour adjacent pair inside it.
+
+      If the block has **no** same-colour pair, its colours must strictly
+      alternate: `c_l, c_{l+1}, …, c_r` swap with every step. Alternation forces
+      the endpoints to agree exactly when the block length is **odd**, and to
+      differ exactly when it is **even**. Flip that around:
+
+      ```
+      block l..r HAS a same-colour adjacent pair iff
+        (c_l == c_r and length is even)   or   (c_l != c_r and length is odd)
+      ```
+
+      Two endpoint colours and one parity check — no scanning the middle.
+
+      :::tip
+      **Interview tip:** problems that give you a *colour/side* of every element
+      but force you to find an adjacent equal pair often hide a binary-searchable
+      "is there a pair in this range?" boolean that depends only on endpoints and
+      length parity. Noticing that a pair-free stretch must alternate, which pins
+      the endpoints' relation to the length, is the key leap. Interviewers like
+      this because the solution is a clean invariant-hunting exercise: define the
+      range predicate, prove it, halve. This "monotone shrunken interval" pattern
+      transfers to many geometric/interval existence questions.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` chairs arranged in a circle. Each chair is either red or
+      blue. The chairs are numbered `1, 2, …, n`; chairs `i` and `i+1` are next
+      to each other for all `1 <= i <= n`. Here chair `n+1` refers to chair `1`.
+
+      Your task is to find two chairs that have the same color and are next to
+      each other.
+
+      To do this, you can ask questions: choose a chair and you will be told
+      the color of that chair.
+
+      ## Interaction
+
+      This is an interactive problem. Your code will interact with the grader
+      using standard input and output. You should start by reading a single
+      integer `n`: the number of chairs.
+
+      On your turn, you can print one of the following:
+
+      - `? i`, where `1 <= i <= n`: ask the color of chair `i`. The grader will
+        return `R` or `B` for red or blue.
+      - `! i`: report that chairs `i` and `i+1` have the same color. Your
+        program must terminate after this.
+
+      Each line should be followed by a line break. You must make sure the output
+      gets flushed after printing each line.
+
+      ## Constraints
+
+      - `3 <= n <= 2·10^5`, `n` is odd
+      - you can ask **at most `20` questions** of type `?`
+
+      ## Sample
+
+      **Input:**
+      ```
+      5
+      ? 1
+      R
+      ? 2
+      B
+      ? 3
+      B
+      ! 2
+      ```
+      **Explanation:** the first three chairs are `R B B`. Chairs `2` and `3`
+      are next to each other and both `B`, so reporting `! 2` (chairs `2` and
+      `3`) is valid. (Any same-colour adjacent pair is acceptable.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — ask every chair, O(n) queries (NOT allowed)**
+
+      Query chair `1`, then `2`, …, and stop at the first equal neighbouring
+      pair. `O(n)` queries — up to `2·10^5`, a thousand times the `20`-query
+      cap.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<char> c(n+1);
+          for(int i=1;i<=n;i++){ cout<<"? "<<i<<"\n"; cout.flush(); cin>>c[i]; }
+          for(int i=1;i<=n;i++)
+              if(c[i]==c[i%n+1]){ cout<<"! "<<i<<"\n"; return 0; }
+          return 0;
+      }
+      ```
+
+      *Correct (a pair must exist), but `n` queries — illegal.*
+
+      **② Optimization — binary search by parity, O(log n) queries (optimal)**
+
+      Query chairs `1` and `n`. If they are **equal**, the wrapping pair
+      `(n, 1)` already answers — report `! n`. Otherwise they differ, so (with
+      `n` odd) the block `1..n` contains a same-colour pair; binary-search it
+      down to a length-2 block. Each halving step queries one midpoint. This is
+      the tier we compile and verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n;
+      vector<char> col;                    // cached colours, '\0' = unknown
+
+      char get(int i){
+          if(col[i]) return col[i];
+          cout<<"? "<<i<<"\n"; cout.flush();
+          char c; cin>>c; return col[i]=c;
+      }
+      bool hasPair(int l,int r,int cl,int cr){          // endpoint-colour parity oracle
+          int len = r-l+1;
+          return (cl==cr && len%2==0) || (cl!=cr && len%2==1);
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          cin>>n; col.assign(n+2, '\0');
+
+          char c1=get(1), cn=get(n);
+          if(c1==cn){ cout<<"! "<<n<<"\n"; return 0; }   // wrap pair (n,1) is equal
+
+          int l=1, r=n, cl=c1;                              // [l,r] definitely has a pair
+          while(r-l+1 > 2){
+              int mid=(l+r)/2;
+              char cm=get(mid);
+              if(hasPair(l, mid, cl, cm)){ r=mid; }        // pair in left half
+              else                        { l=mid; cl=cm; }     // pair in right half
+          }
+          cout<<"! "<<l<<"\n";                             // chairs l and l+1 equal
+          return 0;
+      }
+      ```
+
+      *`≤ 2 + ⌈log₂ n⌉` queries (`≈ 20` at `n = 2·10^5`), `O(n)` memory.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Odd `n` makes the endpoints memorable.** Querying chair `1` and `n`
+        first is not arbitrary: if they are equal, the *wrapping* neighbours
+        `(n, 1)` are the answer (`! n`). If they differ, then because `n` is odd,
+        `hasPair(1, n)` is true — the linear block already contains a same-colour
+        adjacent pair, and we never need the wrap edge again.
+      - **The parity oracle is the whole engine.** `hasPair(l,r,cl,cr)` says a
+        pair-free block must alternate, so equal endpoints require an even
+        length and different endpoints require an odd length. Its negation is
+        exactly "a same-colour adjacent pair is present".
+      - **Invariant: the current `[l,r]` contains a pair.** It starts true for
+        `[1,n]` (`c1 != cn`, `n` odd). At the split, query `cm` at `mid`. The two
+        halves' internal adjacencies cover every adjacency of `[l,r]`, so if the
+        left half (`evaluated with cl,cm`) has no pair, the right half must —
+        our `hasPair(mid,r,cm,cr)` is guaranteed true. We shrink to whichever
+        half still carries the pair, keeping `cl`/`cr` as that half's endpoints.
+      - **Cache with a flat array.** `col[i]` is filled once; binary search
+        re-probes boundary chairs (`cl`, `cr`) that are already known, so no query
+        is wasted. Total distinct chairs queried `≤ 2 + ⌈log₂ n⌉`.
+      - **Report the pair.** The loop stops at `r - l + 1 == 2`; the invariant
+        guarantees chairs `l` and `l+1` are equal, so `! l` is valid.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5`, an odd circle consistent with the transcript
+      `R B B R B` (chairs `1..5`).
+
+      - Query `? 1` → `R`, `? 5` → `B`. Different, so `[1,5]` contains a pair.
+      - `[l,r]=[1,5]`, `cl=R`, `cr=B`. Length `5 > 2`; `mid = 3`. `? 3` → `B`;
+        `cm = B`.
+        - Left check `hasPair(1,3,R,B)`: different endpoints, length 3 odd →
+          pair present. Go left: `[1,3]`, `cr = B`.
+      - Length `3 > 2`; `mid = 2`. `? 2` → `B`; `cm = B`.
+        - Left check `hasPair(1,2,R,B)`: different endpoints, length 2 even →
+          no pair. Go right: `[2,3]`, `cl = B`.
+      - Length `2` → stop. Report `! 2` (chairs `2` and `3`).
+
+      Output:
+
+      ```
+      ! 2
+      ```
+
+      Expected (sample) `! 2` — **match**: chairs `2` and `3` are both `B` and
+      adjacent. Query budget used: 4 chairs queried (`1, 5, 3, 2`), far under
+      the `20`-query cap.
+  - type: flowchart
+    title: "Colored Chairs via parity binary search"
+    nodes: ["query chair 1 and chair n", "same color?", "report ! n (wrap pair)", "no: block [1,n] has a pair", "split [l,r] at mid, query mid", "left half has pair?", "shrink to left", "shrink to right", "length 2", "report ! l"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "yes"}
+      - {from: 1, to: 3, label: "no"}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6, label: "yes"}
+      - {from: 5, to: 7, label: "no"}
+      - {from: 6, to: 4}
+      - {from: 7, to: 4}
+      - {from: 4, to: 8, label: "length == 2"}
+      - {from: 8, to: 9}
+  - type: mcq
+    prompt: "Why does querying chairs 1 and n first let us either finish immediately or reduce to a smaller binary search?"
+    options:
+      - "Because chairs 1 and n are always same-colored, so we can always answer immediately."
+      - "If they have the same color, the neighbouring wrap pair (n, 1) is the answer. If they differ, then since n is odd the linear block 1..n contains a same-colour adjacent pair, and we can search inside it; the wrap edge never needs to be reconsidered."
+      - "Because n is even, chairs 1 and n are guaranteed neighbors of the same color."
+      - "Chair 1 and n are the only chairs whose colors the parity oracle needs."
+    answer: 1
+    explanation: "In a circle, chair n and chair 1 are adjacent. If their colors match, that pair is a valid answer (report ! n). If they differ, then no pair-free string can cover the linear block of odd length n while keeping those endpoints different — alternation would force equal endpoints at odd length — so the block must contain a same-colour adjacent pair, giving a well-defined interior interval to halve with the parity oracle."
+---

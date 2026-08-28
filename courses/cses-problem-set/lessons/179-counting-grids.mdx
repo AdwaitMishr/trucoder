@@ -1,0 +1,215 @@
+---
+id: counting-grids
+title: "Counting Grids"
+type: content
+difficulty: medium
+order: 179
+tags:
+  - mathematics
+  - combinatorics
+  - burnside
+  - group-theory
+  - modular-arithmetic
+blocks:
+  - type: markdown
+    content: |
+      # Counting Grids — Burnside's lemma on a square
+
+      We must count the number of `n x n` grids whose squares are coloured **black
+      or white**, where two grids are the same if one can be **rotated** into the
+      other (by 90, 180 or 270 degrees). Reflections do *not* count as the same.
+
+      This is Burnside's lemma again, but now the symmetry group is the **cyclic
+      group `C4`** of the four rotations of a square, acting on all `2^(n^2)`
+      colourings of the grid.
+
+      ## The four rotations and what they fix
+
+      | symmetry | number of orbits of cells | fixed colourings |
+      |----------|---------------------------|------------------|
+      | identity (0°) | `n^2` | `2^(n^2)` |
+      | rotate 90° | `ceil(n^2/4)` | `2^ceil(n^2/4)` |
+      | rotate 180° | `ceil(n^2/2)` | `2^ceil(n^2/2)` |
+      | rotate 270° | `ceil(n^2/4)` | `2^ceil(n^2/4)` |
+
+      A colouring is fixed by a rotation iff every **orbit** of cells that the
+      rotation sweeps is one constant colour — so `fix(g) = 2^(number of orbits)`
+      (each orbit may be black or white independently).
+
+      For a 90° rotation the cells split into orbits of size 4 (general position)
+      plus, when `n` is odd, the single centre cell; that is `ceil(n^2/4)` orbits.
+      A 180° rotation gives orbits of size 2 (plus the centre), i.e. `ceil(n^2/2)`.
+
+      ```
+      answer = (2^n^2 + 2 * 2^ceil(n^2/4) + 2^ceil(n^2/2)) / 4   (mod 10^9+7)
+      ```
+
+      Division by the group size `4` uses the modular inverse of `4`, since
+      `M = 10^9+7` is prime.
+
+      **Time:** `O(log n)` — three modular exponentiations. **Space:** `O(1)`.
+
+      :::tip
+      **Interview tip:** for any "count colourings up to symmetry" question the
+      recipe is identical: list the symmetries, count the per-symmetry **orbits**,
+      and sum `colours^orbits`, dividing by the group order. The only thinking is
+      computing the orbit count per symmetry (for a grid, the 90°/180° orbit sizes
+      above). Changing the colour count is trivial — replace the base `2` by `c`
+      and use `c^orbits`.
+      :::
+  - type: markdown
+    content: |
+      # Question — Counting Grids
+
+      Your task is to count the number of different `n x n` grids whose each square
+      is black or white.
+
+      Two grids are considered to be different if it is **not** possible to rotate
+      one of them so that they look the same.
+
+      **Input**
+
+      The only input line has an integer `n`: the size of the grid.
+
+      **Output**
+
+      Print one integer: the number of grids modulo `10^9+7`.
+
+      **Constraints**
+
+      - `1 <= n <= 10^9`
+
+      **Example**
+
+      Input:
+      ```
+      4
+      ```
+
+      Output:
+      ```
+      16456
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — enumerate all grids, O(2^(n^2))**
+
+      Generate every `2^(n^2)` black/white grid, try all four rotations, keep the
+      canonical one, count distinct. Correct but hopeless even for small `n`
+      (`n = 6` already means `2^36` grids). Only conceivable for `n <= 4`.
+
+      ```cpp
+      // Illustration only — O(2^(n^2)), unusable.
+      // set<string> seen; for each of 2^(n^2) grids: rotate to a canonical form, insert.
+      ```
+
+      **② Optimization — Burnside over the rotation group, O(log n) time, O(1) space**
+
+      Sum the fixed colourings over the four rotations and divide by 4.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1e9 + 7;
+
+      ll modpow(ll b, ll e){
+          ll r = 1 % MOD; b %= MOD;
+          while (e){
+              if (e & 1) r = r * b % MOD;
+              b = b * b % MOD; e >>= 1;
+          }
+          return r;
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          ll n; cin >> n;
+          ll sq = n * n;                     // number of cells, up to 1e18 (fits long long)
+          ll orbs90, orbs180;
+          if (sq % 4 == 0) orbs90 = sq / 4;              // even n
+          else orbs90 = (sq + 3) / 4;                    // odd n: +1 fixed centre
+          orbs180 = (sq % 2 == 0) ? sq / 2 : (sq + 1) / 2;
+          ll sum = modpow(2, sq);                        // identity rotation
+          sum = (sum + 2 * modpow(2, orbs90)) % MOD;     // 90 and 270 degrees
+          sum = (sum + modpow(2, orbs180)) % MOD;        // 180 degrees
+          ll answer = sum * modpow(4, MOD - 2) % MOD;    // divide by group size 4
+          cout << answer << "\n";
+          return 0;
+      }
+      ```
+
+      `orbs90 = ceil(n^2/4)` and `orbs180 = ceil(n^2/2)`. The identity fixes every
+      colouring (`2^n^2`), and two rotations (90, 270) contribute the same term.
+
+      **③ Further optimization** — none needed: the computation is already just
+      three modular exponentiations, `O(log n)`, which is optimal for `n` up to
+      `10^9`. There is nothing left to save.
+
+      **④ Alternative** — Burnside's lemma *is* the whole method here; there is no
+      faster separate algorithm. Two useful generalisations you should recognise:
+      (a) with `c` colours instead of 2, use `c^orbits` for each term (replace the
+      base `2`); (b) if reflections were also allowed (the full dihedral group `D4`)
+      you would add four more terms — the 2 axis reflections and the 2 diagonal
+      reflections — each contributing `2^(orbits under that reflection)`. That is a
+      different problem, but the orbit-counting recipe is identical.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on **②**:
+
+      - `sq = n*n` is the total cell count — up to `10^18`, still within a signed
+        64-bit integer.
+      - `orbs90`: for the 90° rotation, cells fall into orbits of size 4; when `n`
+        is odd the centre cell is its own orbit, so `orbs90 = (sq+3)/4`, otherwise
+        `sq/4`. The `sq % 4 == 0` test distinguishes even `n` (if `n` is even,
+        `sq` is a multiple of 4).
+      - `orbs180`: orbits of size 2 plus (odd `n`) the centre, giving
+        `ceil(sq/2)`.
+      - `modpow(2, orbs)` counts colourings constant on each orbit (each orbit its
+        own colour).
+      - The identity term `modpow(2, sq)` is total colourings; 90° and 270° share
+        one term (multiplied by 2).
+      - Dividing by the group size 4 = multiplying by `4^(MOD-2)` (Fermat's little
+        theorem), valid because `MOD` is prime and 4 is not a multiple of `MOD`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `n = 4` (even). `sq = 16`, `orbs90 = 16/4 = 4`, `orbs180 = 16/2 = 8`.
+
+      | rotation | orbits | fixed colourings |
+      |----------|--------|------------------|
+      | identity | 16 | 2^16 = 65536 |
+      | 90° / 270° | 4 | 2^4 = 16 (each) |
+      | 180° | 8 | 2^8 = 256 |
+
+      Burnside sum = `65536 + 16 + 256 + 16 = 65824`. Divide by 4 →
+      `65824 / 4 = 16456`, matching the sample output `16456`.
+  - type: flowchart
+    title: "Burnside over the square's rotations"
+    nodes: ["Read n", "sq = n*n",
+            "orbs90 = ceil(sq/4)",
+            "orbs180 = ceil(sq/2)",
+            "sum = 2^sq + 2*2^orbs90 + 2^orbs180",
+            "answer = sum * 4^(-1) mod M", "Print answer"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: "90° orbits"}
+      - {from: 1, to: 3, label: "180° orbits"}
+      - {from: 2, to: 4, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: ""}
+      - {from: 5, to: 6, label: ""}
+  - type: mcq
+    prompt: "Why does a 90° rotation fix exactly 2^ceil(n^2/4) colourings, and what is the divisor in the final Burnside division?"
+    options:
+      - "The 90° rotation sweeps cells into orbits of size 4 (or one centre when n is odd); each orbit must be one colour, giving 2^orbits fixed colourings, and we divide by the group size 4"
+      - "The 90° rotation fixes every fourth cell, so 2^(n^2/4) colourings, and we multiply by 4"
+      - "A 90° rotation keeps only the grid's centre fixed, so every colouring is fixed, and we divide by n^2"
+      - "The 90° rotation gives 4 orbits total for any n, so 2^4 colourings, and we divide by the number of colours"
+    answer: 0
+    explanation: "Cells under a 90° rotation group into orbits of size 4 (general position) plus, for odd n, the fixed centre — hence ceil(n^2/4) orbits. A colouring is invariant iff each orbit is uniformly black or white, so fix = 2^ceil(n^2/4). Burnside's lemma averages fixed counts over the 4 rotations, so we divide the total by the group order 4 (a modular inverse, since M is prime)."

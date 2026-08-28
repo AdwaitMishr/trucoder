@@ -1,0 +1,94 @@
+---
+id: dp-practice-note
+title: Dynamic Programming — Consolidation & Practice
+type: content
+difficulty: medium
+order: 82
+tags:
+  - dp
+  - practice
+  - recap
+blocks:
+  - type: markdown
+    content: |
+      # Dynamic Programming — what we just built
+
+      The previous four lessons each reached for a *different* DP structure. The
+      real skill is choosing which one. Here is the map we used:
+
+      | Problem | DP kind | State insight | Complexity |
+      |---------|---------|---------------|------------|
+      | Elevator Rides | **Subset (bitmask) DP** | who is already carried, `dp[mask]` | `O(2^n · n)` |
+      | Counting Tilings | **Profile DP** | the thin frontier between columns, `dp[mask]` over rows | `O(m · 2^n · n)` |
+      | Counting Numbers | **Digit DP** | position, previous digit, started, tight | `O(len · 10)` |
+      | Increasing Subseq. II | **DP accelerated by Fenwick** | last element's value, `dp = 1 + sum of smaller` | `O(n log n)` |
+
+      ## How to choose
+
+      - **Small `n <= 20` and the decision is "which subset of items"?**
+        → subset/bitmask DP. Encode the chosen set as an integer, add one item
+        at a time, minimize/maximize a scalar riding along (`dp[mask]` may carry
+        a second value as a tie-break, like the elevator's load).
+      - **One dimension is tiny (`<= 10`) and the other is long?**
+        → profile/broken-profile DP: sweep the long axis, put the thin axis in a
+        bitmask, and keep only the boundary. Works for tiling, matching,
+        grid-traversal counting.
+      - **"How many integers in `[a,b]` with a digit-local property"?**
+        → digit DP: write `f(N) = count[0..N]`, answer `f(b) - f(a-1)`, thread
+        `tight` + `started`. Led by "no two adjacent equal digits".
+      - **"Count sequences/subsequences where the DP recurrence sums over
+        earlier, value-comparable states"?**
+        → reorganize the DP value-axis and accelerate with a Fenwick/segment
+        tree (with coordinate compression if values are large).
+
+      ## Common threads
+
+      1. **State must be a *sufficient* statistic.** You only keep what the
+         future needs: the set already taken (subset DP), the frontier (profile
+         DP), the previous digit (digit DP), the previous value's count (Fenwick
+         DP). Everything else is discarded.
+      2. **Process in an order where dependencies are already computed.**
+         Masks in increasing order, columns left to right, digits most-to-least
+         significant, array positions left to right.
+      3. **Counts blow up** — reduce modulo `10^9 + 7` at every sum/update, and
+         use `long long`.
+      4. **Verify a tier against a brute force first.** Always write the obvious
+         correct solution (the ① tier), then confirm your optimized tier matches
+         it on small random inputs before trusting the fast one.
+
+      ## Practice path
+
+      Before moving on, re-derive each of the four solves from scratch on paper,
+      then code them with your eyes closed:
+
+      1. **Elevator Rides** — code the subset DP; check `4 10 / 4 8 6 1 → 2`.
+      2. **Counting Tilings** — code the profile DP; check `4 7 → 781`.
+      3. **Counting Numbers** — code the digit DP; check `123 321 → 171`.
+      4. **Increasing Subsequence II** — code the Fenwick DP; check `2 1 3 → 5`.
+
+      Then harden yourself: run each against the brute-force tier on a few dozen
+      random tiny inputs and confirm they always agree. If they do, you own the
+      technique — not just the code.
+
+      These four transfer directly to further DP problems (knapsack-family
+      subset DP, grid/profile DP on boards, digit constraints like
+      divide-by-k), so treat this note as your reusable cheat sheet.
+  - type: flowchart
+    title: "Choosing the right DP structure"
+    nodes: ["Read the constraints", "n small (<=20), choose a subset? -> subset/bitmask DP", "one dimension tiny, other long -> profile DP", "range [a,b] with digit property -> digit DP", "count subsequences summing over earlier values -> Fenwick/seg-tree DP", "none clearly fit -> re-read; state must be a sufficient statistic"]
+    edges:
+      - {from: 0, to: 1, label: "e.g. n<=20"}
+      - {from: 0, to: 2, label: "e.g. n<=10, m<=1000"}
+      - {from: 0, to: 3, label: "e.g. [a,b]<=1e18"}
+      - {from: 0, to: 4, label: "e.g. n<=2e5"}
+      - {from: 0, to: 5}
+  - type: mcq
+    prompt: "You must count integers in [1, 10^18] whose sum of digits is divisible by 9. Which DP should you use, and why?"
+    options:
+      - "Subset DP, because we choose which digits to include."
+      - "Profile DP, because the array of digits is long and thin."
+      - "Digit DP with a 'remainder (mod 9)' axis threading through f(N), because the constraint is digit-local over a huge numeric range."
+      - "Fenwick DP, because we sum counts over earlier digit states."
+    answer: 2
+    explanation: "A huge range [a,b] with a property decided by the digits is the exact signature of digit DP. Keep a remainder state (0..8) alongside position/started, plus the tight flag, and use f(b) - f(a-1). The other techniques solve different problems (subset choice, thin-grid frontiers, value-ordered subsequence counting)."
+---

@@ -1,0 +1,238 @@
+---
+id: permuted-binary-strings
+title: Permuted Binary Strings
+type: content
+difficulty: medium
+order: 273
+tags:
+  - interactive
+  - bits
+  - encoding
+  - permutation
+blocks:
+  - type: markdown
+    content: |
+      # Permuted Binary Strings — learn a permutation from permuted bit rows
+
+      There is a hidden permutation `a_1, a_2, …, a_n` of `1..n`. Your only
+      probe is this: you send the judge a **binary string** `b_1 b_2 … b_n`, and
+      it replies with `b_{a_1} b_{a_2} … b_{a_n}` — i.e. the *same* bits, but
+      shuffled so that position `t` of the reply holds `b_{a_t}`. You have
+      **10 queries** and `n` can be `1000`.
+
+      The key observation: the reply tells you, for every position `t`, the
+      *value* of `b` at the position `a_t`. Written differently, the bit at
+      reply-position `t` is the bit `a_t` "wears" — if I label each integer
+      `1..n` with a bit `b_x`, the reply reads off each label `b_{a_t}` in
+      hidden order.
+
+      ## Turning labels into numbers
+
+      If we could, in `⌈log₂ n⌉` queries, learn *all* the bits of every
+      `a_t`, we would know each `a_t` exactly and be done. And we can: use one
+      query per **bit position**. For the b-th query, send the string whose
+      `x`-th character is the b-th bit of `x` (the integers `1..n` written in
+      binary). Then the reply's `t`-th character is the b-th bit of `a_t`, and
+      we OR that bit into our running value of `a_t`.
+
+      Because `n ≤ 1000 < 2^10`, ten bit positions (`0…9`) encode every value, so
+      exactly `10` queries reconstruct the whole permutation. The "label the
+      positions, call each label back" trick is a clean use of the
+      **bit-parallel** nature of the judge.
+
+      :::tip
+      **Interview tip:** "recover a hidden value using few oracle queries" is a
+      frequent interactive setup. Whenever the unknown is an integer in a range,
+      think in bits: one query per bit, chosen so the reply exposes that bit for
+      every unknown at once. Here a *single* query answers `n` separate
+      bit-questions simultaneously, which is why `10` queries suffice for
+      `n = 1000`. The same "batch many questions into one probe" idea appears in
+      coin-weighing and group-testing problems, and is a strong signal for
+      "encode with `log n` bits, query per bit".
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There is a hidden permutation `a_1, a_2, …, a_n` of integers `1, 2, …, n`.
+      Your task is to find this permutation.
+
+      To do this, you can ask questions: choose a binary string
+      `b_1 b_2 … b_n` and you will receive the binary string
+      `b_{a_1} b_{a_2} … b_{a_n}`.
+
+      ## Interaction
+
+      This is an interactive problem. Your code will interact with the grader
+      using standard input and output. You should start by reading a single
+      integer `n`: the length of the permutation.
+
+      On your turn, you can print one of the following:
+
+      - `? b_1 b_2 ... b_n`, where `b_i` is `0` or `1`: the grader will return
+        the binary string `b_{a_1} b_{a_2} ... b_{a_n}`.
+      - `! a_1 a_2 ... a_n`: report that the hidden permutation is
+        `a_1, a_2, …, a_n`. Your program must terminate after this.
+
+      Each line should be followed by a line break. You must make sure the output
+      gets flushed after printing each line.
+
+      ## Constraints
+
+      - `1 <= n <= 1000`
+      - you can ask **at most `10` questions** of type `?`
+
+      ## Sample
+
+      **Input:**
+      ```
+      3
+      ? 100
+      100
+      ? 010
+      001
+      ? 001
+      010
+      ! 1 3 2
+      ```
+      **Explanation:** the hidden permutation is `[1, 3, 2]`. In the first
+      question `b_1 b_2 b_3 = 100`, and the grader returns
+      `b_{a_1} b_{a_2} b_{a_3} = b_1 b_3 b_2 = 100`. In the second,
+      `b_1 b_2 b_3 = 010` and the grader returns `b_1 b_3 b_2 = 001`. (The sample
+      uses one-hot single-`1` strings; the solution below uses bit-encoding
+      strings and achieves the same answer with even fewer questions.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — one-hot queries, O(n) queries (edge-case legal, too slow for n = 1000)**
+
+      Send `? 100…0`, `? 010…0`, …, one `1` at a time. The single `1` that
+      started at position `x` appears at reply position `t`, which tells you
+      `a_t = x`. Collecting all `n` positions takes `n` queries — fine for tiny
+      `n`, but `1000` queries blows the `10`-query cap.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<int> a(n+1, 0);
+          for(int x=1;x<=n;x++){
+              string q(n,'0'); q[x-1]='1';
+              cout<<"? "<<q<<"\n"; cout.flush();
+              string r; cin>>r;
+              for(int t=1;t<=n;t++) if(r[t-1]=='1') a[t]=x;
+          }
+          cout<<"!";
+          for(int t=1;t<=n;t++) cout<<" "<<a[t];
+          cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n)` queries — `≈ 10³` for `n = 1000`, over the cap.*
+
+      **② Optimization — bit-encode labels, O(log n) queries (optimal)**
+
+      Use one query per bit position. The b-th query string has `1` exactly
+      where the b-th bit of the integer `x` is `1`; the reply's `t`-th character
+      is then the b-th bit of `a_t`. OR it in and all of `a_1..a_n` are
+      recovered in `⌈log₂(n+1)⌉ ≤ 10` queries. This is the tier we compile and
+      verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+
+          vector<int> a(n+1, 0);
+          int bits = 0;
+          while((1<<bits) <= n) bits++;          // values 1..n need this many bits
+
+          for(int b=0; b<bits; b++){
+              string q(n,'0');
+              for(int x=1; x<=n; x++)
+                  if((x>>b)&1) q[x-1]='1';       // b-th bit of label x
+
+              cout<<"? "<<q<<"\n"; cout.flush();
+              string r; cin>>r;
+              for(int t=1; t<=n; t++)
+                  if(r[t-1]=='1') a[t] |= (1<<b); // bit b of a_t is set
+          }
+
+          cout<<"!";
+          for(int t=1; t<=n; t++) cout<<" "<<a[t];
+          cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`⌈log₂ n⌉ ≤ 10` queries, `O(n)` memory. For `n = 1000`, exactly 10.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`bits = ⌈log₂ n⌉`.** Every label `1..n` fits in `bits` binary digits
+        (`1000 < 2^10`, so `10`). Larger bit positions are always `0` for every
+        label and would only waste queries.
+      - **One query encodes all `n` labels' b-th bit.** Query string `q[x-1]` is
+        `1` iff the b-th bit of `x` is set. This is the bit-parallelism: a single
+        judge reply answers the b-th bit for *every* position at once.
+      - **The reply is in hidden order, and that's fine.** `r[t-1] = q[a_t-1]`
+        equals the b-th bit of the *number* `a_t`. We don't need to know `a_t`
+        yet — we accumulate the bit into `a[t]` directly.
+      - **OR builds the number.** After all `bits` queries, `a[t]` holds every
+        bit of the hidden value at position `t`, so `a[t]` *is* the value. Output
+        it.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 3`, hidden permutation `a = [1, 3, 2]`. Labels `1, 2, 3` fit
+      in `bits = 2` (values `01, 10, 11`).
+
+      **Bit 0** — query `q[x] = (x>>0)&1`: `x=1→1, 2→0, 3→1`, so `q = "101"`.
+      Reply = bits of `a_1, a_2, a_3` = bit0 of `1, 3, 2` = `1, 1, 0` → `"110"`.
+      So `a_1 |= 1, a_2 |= 1`.
+
+      **Bit 1** — query `q[x] = (x>>1)&1`: `x=1→0, 2→1, 3→1`, so `q = "011"`.
+      Reply = bit1 of `1, 3, 2` = `0, 1, 1` → `"011"`.
+      So `a_2 |= 2, a_3 |= 2`.
+
+      Reconstructed:
+      ```
+      a_1 = 01 = 1,  a_2 = 11 = 3,  a_3 = 10 = 2
+      ```
+      Output:
+
+      ```
+      ! 1 3 2
+      ```
+
+      Printed vs. expected (sample) `1 3 2` — **match**, using only 2 of the 10
+      allowed queries (the sample's one-hot strategy used 3).
+  - type: flowchart
+    title: "Permuted Binary Strings via per-bit encoding"
+    nodes: ["read n", "bits = ceil(log2 n)", "for each bit b: build query char x = b-th bit of x", "judge returns b-th bit of every a_t", "OR bit into a[t] where reply = '1'", "all a[t] now complete", "print '!' + values"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 2, label: "next bit"}
+      - {from: 4, to: 5, label: "last bit"}
+      - {from: 5, to: 6}
+  - type: mcq
+    prompt: "Why does one bit-encoding query reveal a bit of EVERY hidden value at once?"
+    options:
+      - "The judge sorts the reply, so all bits come back aligned by value."
+      - "A reply character r[t] equals b_{a_t}, so setting b_x = b-th bit of x makes r[t] the b-th bit of a_t — one query answers n separate bit questions about every position simultaneously."
+      - "Because n < 1000 guarantees a single query is enough for all values."
+      - "It only reveals one value per query; the saving is purely in output formatting."
+    answer: 1
+    explanation: "The judge returns the query string permuted by the hidden permutation: position t holds b_{a_t}. If we label every integer x with its own b-th bit (b_x = bit b of x), then r[t] is literally a_t's b-th bit. So the one reply carries n independent bits of information about all n hidden values, and ⌈log2 n⌉ such queries reconstruct every a_t completely. This bit-parallel batching is the whole reason 10 queries suffice at n = 1000."
+---

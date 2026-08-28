@@ -1,0 +1,231 @@
+---
+id: list-of-sums
+title: List of Sums
+difficulty: hard
+order: 370
+tags:
+  - additional
+  - reconstruction
+  - greedy
+  - multiset
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — recovering a multiset from its pairwise sums
+
+      `A` is `n` positive integers; `B` is the (sorted) list of the sums of every
+      pair `i<j`, a multiset of size `n(n-1)/2`. Given only `B`, we must rebuild
+      one valid `A`. This is an inverse problem: *the pair-sums have a lot of
+      global structure, and the two smallest sums pin down the three smallest
+      values.*
+
+      Sort `A` so `a0 ≤ a1 ≤ a2 ≤ …`. Then the **smallest** pair-sum is `a0+a1`
+      (it's the two smallest values), and the **second-smallest** is `a0+a2`
+      (since `a0+a2 ≤ a1+a2` always, and it's the next after `a0+a1`). So:
+
+      ```
+      b0 = a0 + a1,   b1 = a0 + a2
+      ```
+
+      **The reconstruction loop.** Once `a0` is known, the rest follows greedily:
+      maintain a multiset `R` of *unused* sums. The next smallest unused sum must
+      be `a0 + a_i` (every other unused sum involves two values ≥ `a_i`), so we
+      read it, derive `a_i = min(R) − a0`, and delete the `i` sums
+      `a_j + a_i` (j < i) from `R`. Repeat until `A` is complete and `R` is empty.
+
+      **The only unknown is `a0` (equivalently `a1+a2`).** Naively guessing `a0`
+      over `1..k` (k up to 10⁹) is too slow. Instead observe that if we fix the
+      pair `a1+a2 = b[j]`, then from
+      `s = a0+a1+a2`:
+
+      ```
+      b0 + b1 + b[j] = (a0+a1)+(a0+a2)+(a1+a2) = 2s
+      a0 = s − b[j],  a1 = s − b1,  a2 = s − b0
+      ```
+
+      So each distinct candidate `b[j]` yields one candidate triple `(a0,a1,a2)`
+      — that is only `O(n)` candidates to try, each verified in `O(n² log n)` by
+      the greedy loop. A guaranteed-valid candidate exists because the true
+      `a1+a2` is among the `b[j]`.
+
+      :::tip
+      **Interview tip:** Reconstructing a hidden array from aggregate queries
+      (pairwise sums, prefix XORs, pair differences) is a recurring theme. The
+      playbook: **find the most informative few aggregate values** (here the two
+      smallest sums), then **greedily peel** the rest, validating with a
+      multiset. When a direct unknown (`a0`) has an unbounded range, re-parameterise
+      it against the finite input (via `a1+a2 ∈ B`) to cut the search to O(n).
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      List `A` consists of `n` positive integers, and list `B` contains the sum
+      of each element pair of list `A`. For example, if `A = [1,2,3]`, then
+      `B = [3,4,5]`; if `A = [1,3,3,3]`, then `B = [4,4,4,6,6,6]`. Given list `B`,
+      your task is to reconstruct list `A`.
+
+      **Input.** The first input line has an integer `n`. The next line has
+      `n(n-1)/2` integers: the contents of `B`. You can assume that there is a
+      list `A` that corresponds to the input, and each value in `A` is between
+      `1 … k`.
+
+      **Output.** Print `n` integers: the contents of `A`. You may print the
+      values in any order; if more than one solution exists, print any of them.
+
+      **Constraints**
+      - `3 ≤ n ≤ 100`
+      - `1 ≤ k ≤ 10^9`
+
+      **Sample**
+
+      Input:
+      ```
+      4
+      4 4 4 6 6 6
+      ```
+
+      Output:
+      ```
+      1 3 3 3
+      ```
+
+      *Explanation:* here `A` can be either `[1,3,3,3]` or `[2,2,2,4]`, and both
+      solutions are accepted.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(k·n²).** Loop a candidate smallest element `a0` from
+      `1` to `k`. For each, set `a1 = b0 − a0`, `a2 = b1 − a0`, then run the greedy
+      multiset reconstruction. Return the first `a0` that works. Exact, but `k`
+      up to `10⁹` makes it far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n; int m=n*(n-1)/2;
+          vector<ll> b(m); multiset<ll> all;
+          for(int i=0;i<m;i++){ cin>>b[i]; all.insert(b[i]); }
+          sort(b.begin(), b.end());
+          ll k=b.back(), b0=b[0], b1=b[1];
+          for(ll a0=1; a0<=k; ++a0){
+              ll a1=b0-a0, a2=b1-a0;
+              if(a1<a0 || a2<a1 || a1<1) continue;
+              multiset<ll> R=all; vector<ll> A={a0,a1,a2};
+              auto del=[&](ll v){ auto it=R.find(v); if(it==R.end()) return false; R.erase(it); return true; };
+              bool ok=true;
+              if(!del(a0+a1)||!del(a0+a2)||!del(a1+a2)) ok=false;
+              for(int i=3;i<n&&ok;i++){
+                  ll ai=*R.begin()-a0;
+                  if(ai<A.back()){ ok=false; break; }
+                  A.push_back(ai);
+                  for(int jj=0;jj<=i-1&&ok;jj++) if(!del(A[jj]+ai)) ok=false;
+              }
+              if(ok&&R.empty()){ for(ll v:A) cout<<v<<" "; cout<<"\n"; return 0; }
+          }
+      }
+      ```
+      *Complexity: O(k·n²) — up to 10⁹ × 10⁴, hopeless for real constraints.*
+
+      **② Optimization — O(n² log n).** Instead of guessing `a0`, enumerate the
+      candidate pair `a1+a2 = b[j]`. Each distinct `b[j]` gives one candidate
+      triple via the `2s` formula, and the greedy loop verifies it. Only O(n)
+      candidates; a working one always exists.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n; int m=n*(n-1)/2;
+          vector<ll> b(m); multiset<ll> all;
+          for(int i=0;i<m;i++){ cin>>b[i]; all.insert(b[i]); }
+          sort(b.begin(), b.end());
+          ll b0=b[0], b1=b[1];
+          vector<char> tried(m,0);
+          for(int j=0;j<m;j++){
+              if(tried[j]) continue; tried[j]=1;
+              ll bj=b[j], tot=b0+b1+bj;
+              if(tot%2) continue;
+              ll a0=tot/2-bj, a1=tot/2-b1, a2=tot/2-b0;
+              if(a0<1 || a1<a0 || a2<a1) continue;
+              multiset<ll> R=all; vector<ll> A={a0,a1,a2};
+              auto del=[&](ll v){ auto it=R.find(v); if(it==R.end()) return false; R.erase(it); return true; };
+              bool ok=true;
+              if(!del(a0+a1)||!del(a0+a2)||!del(a1+a2)) ok=false;
+              for(int i=3;i<n&&ok;i++){
+                  ll ai=*R.begin()-a0;
+                  if(ai<A.back()){ ok=false; break; }
+                  A.push_back(ai);
+                  for(int jj=0;jj<=i-1&&ok;jj++) if(!del(A[jj]+ai)) ok=false;
+              }
+              if(ok&&R.empty()){ for(ll v:A) cout<<v<<" "; cout<<"\n"; return 0; }
+          }
+          return 0;
+      }
+      ```
+      *Complexity: O(n) candidates × O(n² log n) verification ≈ O(n² log n) —
+      trivial for `n ≤ 100`.*
+
+      **④ Alternative / note.** The greedy reconstruction is the only real
+      "extraction" step; there is no faster exact method. The brute tier (①) and
+      the candidate tier (②) can legally return *different* valid answers for the
+      same input — the problem accepts any — so on the sample ① prints
+      `1 3 3 3` while ② prints `2 2 2 4`; both are correct.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n² log n) reconstruction. Key lines:
+
+      1. **Sorted `b`, candidate enumeration.** `b0+b1+b[j] = 2s`, so
+         `a0 = (b0+b1+b[j])/2 − b[j]`, `a1 = (b0+b1+b[j])/2 − b1`,
+         `a2 = (b0+b1+b[j])/2 − b0`. Skip candidates that aren't valid positive
+         integers or break the ordering `a0 ≤ a1 ≤ a2`.
+      2. **Peel the fixed triple.** Remove `a0+a1, a0+a2, a1+a2` from a copy of
+         `B`.
+      3. **Greedy loop.** The current minimum of `R` must be `a0 + a_i`; derive
+         `a_i`, require it non-decreasing, then delete the `i` pair-sums it forms
+         with earlier values. Any missing deletion invalidates the candidate.
+      4. **Success** when `R` is empty — print `A` in any order.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 4`, `B = 4 4 4 6 6 6` → expected `1 3 3 3` (or `2 2 2 4`).
+
+      `b0 = 4, b1 = 4`. Try candidate `b[j] = 4` (i.e. `a1+a2 = 4`):
+      `tot = 4+4+4 = 12`, so `a0 = 6−4 = 2, a1 = 6−4 = 2, a2 = 6−4 = 2`.
+
+      | step | `R` (unused sums) | action |
+      |------|--------------------|--------|
+      | init | `{4,4,4,6,6,6}` | — |
+      | peel triple | `{6,6,6}` | remove `2+2=4` three times |
+      | i=3 | `min = 6 → a3 = 6−2 = 4` | `A = [2,2,2,4]`; remove `6,6,6` |
+      | done | `{}` | valid → print `2 2 2 4` |
+
+      Verified against `B`: pairs of `[2,2,2,4]` are `4,4,4,6,6,6` ✓. The brute
+      tier (①), which starts at `a0=1`, finds `1 3 3 3` first — also valid
+      (`1+3,1+3,1+3,3+3,3+3,3+3 = 4,4,4,6,6,6` ✓). Either answer is accepted.
+
+  - type: mcq
+    prompt: "Why does enumerating the candidate value 'a1+a2' over the elements of B only give O(n) candidates instead of the O(k) of guessing a0 directly?"
+    options:
+      - "Because a1+a2 is itself one of the pair-sums in B, and B has only O(n^2) elements — so each distinct b[j] fixes a0 via the 2s formula."
+      - "Because a1+a2 is always equal to b0."
+      - "Because k is at most 100 so there are few a0 values."
+      - "Because a0 is always exactly 1."
+    answer: 0
+    explanation: "The three smallest sums satisfy b0+b1+b[j] = 2(a0+a1+a2) whenever b[j] = a1+a2, so naming b[j] uniquely determines a0, a1, a2. Iterating over the (at most n(n-1)/2) distinct members of B — even just the distinct ones — is a finite O(n^2) candidate set, far smaller than the unbounded range 1..k for a0. Verification then filters to whichever candidate reconstructs B completely."
+
+type: content
+---

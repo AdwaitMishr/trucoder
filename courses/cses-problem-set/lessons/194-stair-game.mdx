@@ -1,0 +1,219 @@
+---
+id: stair-game
+title: "Stair Game"
+difficulty: medium
+order: 194
+tags:
+  - mathematics
+  - game-theory
+  - nim
+  - staircase
+blocks:
+  - type: markdown
+    content: |
+      # Stair Game — Nim restricted to the odd stairs
+
+      A staircase has `n` stairs with some balls on each. On a move a player
+      picks a stair `k ≥ 2` that still has balls and moves **any number** of
+      them one step down to stair `k-1`. Last move wins (if no move exists, the
+      second player wins). Who wins with optimal play?
+
+      At first this looks unrelated to Nim — balls drift downward one stair at
+      a time — but the Sprague-Grundy view reduces it to a tiny XOR. The trick:
+      **only balls on odd-numbered stairs matter.**
+
+      ## Why odd stairs?
+
+      Think of the game in two halves:
+
+      - Balls **on even stairs** can never be "spent" to win — any move from an
+        even stair `2i` moves them to the odd stair `2i-1`, handing the
+        *opponent* an odd-pile coin to play with.
+      - Balls **on odd stairs** are the real Nim heaps. From an odd stair
+        `2i-1` a move pushes any number down to the even stair `2i-2`, which is
+        exactly the abstraction "remove any number from this heap" — because an
+        even stair only ever feeds odd stairs in the future.
+
+      So the game coincides with **Nim played on the odd-level heaps**: treat
+      each odd stair as a Nim heap and XOR their ball counts (the even stairs
+      can be ignored, as they only ever recycle back into odd piles). First wins
+      iff the XOR of balls on odd-indexed stairs is non-zero.
+
+      **Time:** O(n) per test, **Space:** O(1).
+
+      :::tip
+      **Interview tip:** stairs/tokens that only move one position down (or
+      one pile to its left) reduce to *Nim on a parity class*. The reflex to
+      build is: "colour the positions by parity, discard the safe colour, XOR
+      the rest." It is a recurring shortcut for staircase-style games in both
+      contests and interviews.
+      :::
+  - type: markdown
+    content: |
+      # Question — Stair Game
+
+      There is a staircase consisting of `n` stairs, numbered `1, 2, ..., n`.
+      Initially, each stair has some number of balls.
+
+      There are two players who move alternately. On each move, a player chooses
+      a stair `k` where `k != 1` and it has at least one ball. Then, the player
+      moves any number of balls from stair `k` to stair `k-1`. The player who
+      moves last wins the game.
+
+      Your task is to find out who wins the game when both players play
+      optimally.
+
+      Note that if there are no possible moves at all, the second player wins.
+
+      **Input**
+
+      The first input line has an integer `t`: the number of tests. After this,
+      `t` test cases are described:
+
+      The first line contains an integer `n`: the number of stairs.
+
+      The next line has `n` integers `p_1, p_2, ..., p_n`: the initial number of
+      balls on each stair.
+
+      **Output**
+
+      For each test, print "first" if the first player wins the game and
+      "second" if the second player wins the game.
+
+      **Constraints**
+
+      - `1 <= t <= 2·10^5`
+      - `1 <= n <= 2·10^5`
+      - `0 <= p_i <= 10^9`
+      - the sum of all `n` is at most `2·10^5`
+
+      **Example**
+
+      Input:
+
+      ```
+      3
+      3
+      0 2 1
+      4
+      1 1 1 1
+      2
+      5 3
+      ```
+
+      Output:
+
+      ```
+      first
+      second
+      first
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — minimax over ball configurations, exponential**
+
+      Model each stair's ball count as a state coordinate and recursively search
+      all legal downward moves. Exhaustive and correct, but the reachable
+      configuration space blows up with the ball counts (`p_i` up to `10^9`),
+      so it cannot run:
+
+      ```cpp
+      // each state is a vector of counts; try every (k, amount) downward move
+      bool win(vector<long long> s) {
+          for (int k = 2; k < (int)s.size(); k++)
+              for (long long c = 1; c <= s[k]; c++) {
+                  auto u = s; u[k] -= c; u[k-1] += c;
+                  if (!win(u)) return true;
+              }
+          return false;
+      }
+      ```
+
+      **② Optimization — XOR the odd stairs, O(n) time, O(1) space**
+
+      Ignore even-indexed stairs and XOR the balls on stairs `1, 3, 5, ...`:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+
+          int t;
+          cin >> t;
+          while (t--) {
+              int n;
+              cin >> n;
+              long long xr = 0;
+              for (int i = 1; i <= n; i++) {
+                  long long b;
+                  cin >> b;
+                  if (i & 1) xr ^= b;          // odd-numbered stairs only
+              }
+              cout << (xr ? "first" : "second") << "\n";
+          }
+      }
+      ```
+
+      **③ Further optimisation** — none: reading all `n` balls is the minimum
+      required work.
+
+      **④ Alternative algorithm** — you can re-derive the same rule by mapping
+      each stair directly onto a Nim heap and applying the *parity-colouring*
+      argument: separate stairs into "safe" (even) and "spendable" (odd), then
+      run the ordinary Nim XOR on the spendable ones. This is the same code,
+      just reached through a Nim-Nim equivalence instead of the colouring
+      intuition.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walk through the `O(n)` solution:
+
+      - We XOR `b` (balls) into `xr` only when `i` is odd (`i & 1` is true for
+        stairs `1, 3, 5, ...`).
+      - Even stairs are skipped entirely. Their balls only move to an odd stair
+        later, where they eventually get XOR-ed; they never directly decide the
+        game.
+      - After scanning, `xr` is the nim-sum of the odd stair heaps.
+      - `xr != 0` means the first player has the winning move (reduce some odd
+        pile to make the XOR zero); `xr == 0` means the position is a P-position
+        and the second player wins.
+      - `long long` handles ball counts up to `10^9`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      For each test, XOR the balls on odd-numbered stairs.
+
+      - Test 1: `p = [0, 2, 1]`. Odd stairs are `1` (0 balls) and `3` (1 ball).
+        XOR `= 0 ⊕ 1 = 1 ≠ 0` → **first**.
+      - Test 2: `p = [1, 1, 1, 1]`. Odd stairs `1` and `3` both have `1` ball.
+        XOR `= 1 ⊕ 1 = 0` → **second**.
+      - Test 3: `p = [5, 3]`. Odd stair `1` has `5` balls (stair 2 is even and
+        ignored). XOR `= 5 ≠ 0` → **first**.
+
+      | test | odd-stair counts | XOR | result |
+      |------|------------------|-----|--------|
+      | 1 | 0, 1 | 1 | **first** |
+      | 2 | 1, 1 | 0 | **second** |
+      | 3 | 5 | 5 | **first** |
+
+      All three match the expected output. Test 1 is the subtle one: the big
+      pile of `2` on the *even* stair is a decoy — the game is decided by the
+      single ball on stair 3, giving the first player the win.
+  - type: mcq
+    prompt: 'Why can we ignore balls on even-numbered stairs when computing the winner?'
+    options:
+      - 'Any move from an even stair only shifts balls to an odd stair below it, so even-stair balls are never directly part of the Nim sum; they only feed odd piles later.'
+      - 'Even stairs always have zero balls in the sample.'
+      - 'Because XOR of an even-sized set is always zero.'
+      - 'Because the rules forbid moving balls from even stairs at all.'
+    answer: 0
+    explanation: 'Balls on even stairs, when moved, land on an odd stair and simply become part of that odd heap; they never immediately end the game. Thus the decisive game is exactly Nim over the odd stairs, combined with an XOR.'
+type: content
+---

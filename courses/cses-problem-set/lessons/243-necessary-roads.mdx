@@ -1,0 +1,284 @@
+---
+id: necessary-roads
+title: Necessary Roads
+difficulty: medium
+order: 243
+tags:
+  - bridges
+  - tarjan
+  - lowlink
+  - graph
+blocks:
+  - type: markdown
+    content: |
+      # Necessary Roads — finding the bridges of a connected graph
+
+      You are given a **connected** undirected graph of `n` cities and `m`
+      roads. A road is **necessary** if, once you remove it, some pair of cities
+      becomes unreachable — i.e. the graph stops being connected. We must list
+      every necessary road.
+
+      A road whose removal disconnects the graph is called a **bridge** (or a
+      *cut edge*). So the whole problem reduces to: **find all bridges in
+      `O(n + m)`**.
+
+      **The core idea — Tarjan's DFS lowlink.** Run a DFS. For each vertex `v`
+      record:
+
+      - `tin[v]` — the discovery time (the DFS entering time).
+      - `low[v]` — the smallest `tin` reachable from `v` by following tree edges
+        downwards and then at most **one** back edge.
+
+      Consider a tree edge `v → to` (where `to` is a DFS child of `v`). That
+      edge is a **bridge if and only if** no back edge from `to`'s subtree can
+      climb back above `v`:
+      `low[to] > tin[v]`.
+
+      Why? If `low[to] > tin[v]`, then starting inside `to`'s subtree there is
+      no way to touch any vertex discovered before `v` — the *only* connection
+      from that subtree to the rest of the graph is the edge `(v, to)`. Cutting
+      it severs the subtree, so it is a bridge. If instead `low[to] ≤ tin[v]`,
+      some back edge ties the subtree back above `v`, so `(v, to)` is `not`
+      needed to stay connected.
+
+      There is **an edge case**: the back edge to the immediate parent. When we
+      are at `to` and see the edge back to its parent `v`, that is not a "back
+      edge" in the lowlink sense (it is the tree edge we came down). We skip it
+      by remembering the parent edge (or parent vertex) in the DFS.
+
+      Bridges are exactly the edges that belong to *every spanning tree* — the
+      "necessary" ones you cannot leave out. This lesson pairs with the next
+      one (articulation points / necessary cities) which uses the identical
+      lowlink machinery on vertices instead of edges.
+
+      **Complexity.** One DFS touches every vertex and edge:
+      **O(n + m)** time and **O(n + m)** space.
+
+      :::tip
+      **Interview tip:** the lowlink condition `low[to] > tin[v]` for bridges is
+      a top-five graph interview staple. If you can reproduce the DFS lowlink
+      loop (back edge → `low[v] = min(low[v], tin[to])`; tree edge → recurse then
+      `low[v] = min(low[v], low[to])` and test `low[to] > tin[v]`), you can also
+      derive the articulation-point test in the next lesson with one changed
+      comparison.
+      :::
+  - type: markdown
+    content: |
+      # Question — Necessary Roads
+
+      There are `n` cities and `m` roads between them. There is a route between
+      any two cities. A road is called *necessary* if there is no route between
+      some two cities after removing that road. Your task is to find all
+      necessary roads.
+
+      **Constraints**
+
+      - `2 ≤ n ≤ 10^5`
+      - `1 ≤ m ≤ 2·10^5`
+      - `1 ≤ a, b ≤ n`
+
+      **Input.** The first input line has two integers `n` and `m`: the number
+      of cities and roads. The cities are numbered `1,2,…,n`. After this, there
+      are `m` lines that describe the roads. Each line has two integers `a` and
+      `b`: there is a road between cities `a` and `b`. There is at most one road
+      between two cities, and every road connects two distinct cities.
+
+      **Output.** First print an integer `k`: the number of necessary roads.
+      After that, print `k` lines that describe the roads. You may print the
+      roads in any order.
+
+      Sample input:
+
+      ```
+      5 5
+      1 2
+      1 4
+      2 4
+      3 5
+      4 5
+      ```
+
+      Sample output:
+
+      ```
+      2
+      3 5
+      4 5
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — remove each road and check connectivity, O(m·(n+m))**
+
+      For every road, delete it, run a BFS/DFS from city 1 to see whether all
+      cities are still reachable; if not, it is necessary. Correct, but it does
+      one full traversal per road, i.e. `O(m·(n+m))` — up to
+      `2·10^5 · 3·10^5 ≈ 6·10^10` operations.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main(){ // too slow: O(m * (n + m))
+          int n, m; cin >> n >> m;
+          vector<pair<int,int>> es(m);
+          vector<vector<int>> g(n);
+          for (int i = 0; i < m; ++i){ int a, b; cin >> a >> b; --a; --b;
+              es[i] = {a, b}; g[a].push_back(b); g[b].push_back(a);
+          }
+          vector<pair<int,int>> ans;
+          for (int i = 0; i < m; ++i){
+              auto [u, v] = es[i];
+              vector<bool> seen(n); seen[0] = true;
+              stack<int> st; st.push(0); int cnt = 1;
+              while (!st.empty()){
+                  int x = st.top(); st.pop();
+                  for (int w : g[x]) if (!seen[w] && !(x==u && w==v) && !(x==v && w==u))
+                      { seen[w] = true; st.push(w); ++cnt; }
+              }
+              if (cnt < n) ans.push_back({min(u,v)+1, max(u,v)+1});
+          }
+          cout << ans.size() << "\n";
+          for (auto [a, b] : ans) cout << a << " " << b << "\n";
+      }
+      ```
+
+      **O(m·(n+m))** — correct, unusable at the real limits.
+
+      **② Optimization — Tarjan's lowlink DFS, O(n + m) (submission)**
+
+      One DFS computes `tin` and `low` for every vertex. A tree edge
+      `v → to` is a bridge exactly when `low[to] > tin[v]`. We track the parent
+      **edge id** (not just parent vertex) so multi-edges never by-pass the skip
+      — though the statement forbids parallel roads, using the edge id is the
+      robust habit. The graph is connected, but we still loop over all start
+      vertices to be safe.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int n, m, timer;
+      vector<vector<pair<int,int>>> adj;   // (neighbor, edgeId)
+      vector<int> tin, low;
+      vector<bool> isBridge;
+
+      void dfs(int v, int pe){
+          tin[v] = low[v] = timer++;
+          for (auto [to, id] : adj[v]){
+              if (id == pe) continue;                     // skip the edge we descended
+              if (tin[to] != -1){                         // back edge to an ancestor
+                  low[v] = min(low[v], tin[to]);
+              } else {                                    // tree edge to a child
+                  dfs(to, id);
+                  low[v] = min(low[v], low[to]);
+                  if (low[to] > tin[v]) isBridge[id] = true;  // bridge!
+              }
+          }
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n >> m;
+          adj.assign(n, {});
+          vector<pair<int,int>> edges(m);
+          for (int i = 0; i < m; ++i){
+              int a, b; cin >> a >> b; --a; --b;
+              edges[i] = {a, b};
+              adj[a].push_back({b, i});
+              adj[b].push_back({a, i});
+          }
+          tin.assign(n, -1); low.assign(n, -1); isBridge.assign(m, false);
+          timer = 0;
+          for (int i = 0; i < n; ++i) if (tin[i] == -1) dfs(i, -1);
+          vector<pair<int,int>> ans;
+          for (int i = 0; i < m; ++i)
+              if (isBridge[i]) ans.push_back({edges[i].first + 1, edges[i].second + 1});
+          cout << ans.size() << "\n";
+          for (auto [a, b] : ans) cout << a << " " << b << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n + m)** time and **O(n + m)** space. This is the submission tier.
+
+      **③ Alternative — equivalent viewpoint, no new algorithm**
+
+      There is no meaningfully different fast algorithm: any connected graph
+      needs a linear pass to even read its edges, so `O(n + m)` is optimal. But
+      the *mental model* is worth stating clearly: **a road is necessary iff it
+      belongs to every spanning tree**, which is exactly the bridge test. If you
+      already knew the lowlink machinery, this problem is that concept verbatim —
+      the only real implementation choices are remembering whether we stored the
+      edge's endpoints and converting to 1-based output.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **`tin` and `low`.** `tin[v]` stamps when DFS enters `v`; `low[v]` is the
+        smallest `tin` reachable from `v`'s subtree via tree edges plus one back
+        edge. Initialising `low[v] = tin[v]` and relaxing with both `tin[to]`
+        (back edge) and `low[to]` (child) is the whole mechanic.
+      - **`low[to] > tin[v]` ⇒ bridge.** The strict `>` is important: `>`
+        means the child's subtree has *no* back edge reaching `v` or above.
+        If `low[to] == tin[v]` the subtree still reaches `v` itself, so the
+        edge is not alone in connecting it.
+      - **Skipping the parent edge by id.** `if (id == pe) continue;` steps over
+        the tree edge we just descended. Using the edge id (rather than vertex)
+        makes the code correct even for the theoretically-forbidden parallel
+        edges, and it is the recommended pattern.
+      - **Output order.** The problem accepts any order, so we simply print in
+        input order of edge id, recoloured to 1-based vertex labels.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 5`, roads `1-2, 1-4, 2-4, 3-5, 4-5`.
+
+      Run Tarjan's DFS from city `1`. Adjacency is scanned in input order, so
+      `1` first visits `4`. The edge-ids in square brackets are the road indices
+      `0..4`.
+
+      | action | tin | low |
+      |--------|-----|-----|
+      | dfs(1) | 0 | 0 |
+      | dfs(4) via `1-4[1]` | 1 | 1 |
+      | dfs(2) via `4-2[2]` | 2 | 2 |
+      | `2` sees `1` (edge `2-1[0]`, visited) | back edge → low[2]=min(2, tin[1]=0)=0 |
+      | dfs(5) via `4-5[4]` | 3 | 3 |
+      | dfs(3) via `5-3[3]` | 4 | 4 |
+      | `3` sees `5` (`5-3[3]`) | skip parent edge |
+      | backtrack to `5` | bridge check edge `5-3[3]`: low[3]=4 > tin[5]=3 → **BRIDGE**; low[5]=min(3,4)=3 |
+      | backtrack to `4` | bridge check edge `4-5[4]`: low[5]=3 > tin[4]=1 → **BRIDGE**; low[4]=min(1,3)=1 |
+      | `4` sees `1` (edge `4-1[1]`, visited) | skip parent edge |
+      | backtrack to `1` | bridge check edge `1-4[1]`: low[4]=1 > tin[1]=0? no |
+      | `1` sees `2` (edge `1-2[0]`, visited) | back edge — not a bridge |
+
+      Bridges `[3]` = `3-5` and `[4]` = `4-5`:
+
+      | road | endpoints | test | bridge? |
+      |------|-----------|------|---------|
+      | [0] | 1-2 | back edge | no |
+      | [1] | 1-4 | low[4]=1 > tin[1]=0? no | no |
+      | [2] | 2-4 | low[2]=0 > tin[4]=1? no | no |
+      | [3] | 3-5 | low[3]=4 > tin[5]=3? yes | **yes** |
+      | [4] | 4-5 | low[5]=3 > tin[4]=1? yes | **yes** |
+
+      The subtree of `3` reaches nothing above `5` (low[3]=4), and the subtree of
+      `5` reaches nothing above `4` (low[5]=3) — those two roads are the only
+      paths in and out, so cutting either disconnects `3` or the `{3,5}` block.
+      Roads `1-2, 1-4, 2-4` all loop back to `1`, so none is necessary.
+
+      **Output:** `2`, then `3 5` and `4 5` — matching the sample exactly.
+  - type: mcq
+    prompt: 'For a DFS tree edge from v to its child to, which condition marks the edge (v, to) as a bridge?'
+    options:
+      - low[to] > tin[v]
+      - low[to] < tin[v]
+      - low[v] > tin[to]
+      - low[to] == tin[to]
+    answer: 0
+    explanation: The edge (v, to) is a bridge exactly when to's subtree has no back edge reaching v or above, i.e. low[to] > tin[v]. If low[to] <= tin[v], some back edge from below ties the subtree back to v or higher, so removing (v, to) keeps everything connected.
+type: content
+---

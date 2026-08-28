@@ -1,0 +1,259 @@
+---
+id: nearest-shops
+title: Nearest Shops
+difficulty: medium
+order: 295
+tags:
+  - graph-algorithms
+  - dijkstra
+  - multisource
+  - shortest-paths
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — many sources, one answer: multisource Dijkstra
+
+      In the classic single-source problem we run Dijkstra once and learn the
+      distance from **one** node to everyone. Now we have **several** sources at
+      once (the shops) and every other node should learn "how far is my *nearest*
+      shop". Running Dijkstra once per shop is wasteful: `k` runs cost
+      `O(k·(n+m)log n)`.
+
+      **The trick — one run, many entry points.** A shop is just a node whose
+      distance is known to be `0`. So seed the priority queue with **every shop
+      at distance 0** instead of one node at 0. Then run the exact same
+      relaxation loop. The guarantee inside Dijkstra — "when a node is popped,
+      its distance is final" — still holds, because all shops start at 0 and the
+      queue always extracts the globally smallest tentative distance. The value
+      we get for every node is the shortest distance to *any* shortest start,
+      i.e. the nearest shop.
+
+      This is **multisource Dijkstra**. The complexity is a single
+      `O((n+m)log n)` run — independent of the number of shops. Multisource BFS
+      is the identical idea for unit weights (all edges weight 1), where a queue
+      replaces the priority queue and we get `O(n+m)`.
+
+      :::tip
+      **Interview tip:** Multisource shortest path is one of those "add a
+      virtual node" style tricks interviewers love. Whenever the problem says
+      "nearest *to any* of these landmarks" (shops, restaurants, airports),
+      push all landmarks into the frontier at once instead of looping a single
+      source per landmark. Ability to swap Dijkstra's priority queue for a plain
+      queue when weights are all 1 (multisource BFS, `O(n+m)`) is a common
+      follow-up question.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      A city has `n` intersections and `m` two-way roads connecting them. There
+      is a shop at each of `k` distinct intersections. You are given `q` person
+      positions; for each one find the length of the **shortest route from that
+      person to their nearest shop** using the roads.
+
+      Distance is the sum of road lengths along the route (roads have
+      non-negative integer lengths).
+
+      **Input.** The first line has `n` and `m`. Then `m` lines describe the
+      roads: each has three integers `u v w` — a road of length `w` between
+      intersections `u` and `v`. Next a line with `k`, then `k` lines each with
+      one shop intersection. Then a line with `q`, then `q` lines each with one
+      person's intersection.
+
+      **Output.** For each person, print the distance to the nearest shop.
+
+      **Constraints**
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ m ≤ 2·10^5`
+      - `1 ≤ k ≤ n`
+      - `1 ≤ q ≤ 2·10^5`
+      - `0 ≤ w ≤ 10^9`
+      - The graph is connected.
+
+      **Sample**
+      ```
+      Input:
+      4 4
+      1 2 2
+      2 3 3
+      1 3 6
+      4 3 1
+      2
+      2
+      4
+      3
+      1
+      3
+      4
+
+      Output:
+      2
+      1
+      0
+      ```
+      Explanation: shops are at 2 and 4. Person at 1 → nearest shop 2 by the
+      direct edge (length 2). Person at 3 → shop 4 via edge 3–4 (length 1).
+      Person at 4 → shop at 4 itself (length 0).
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(k·(n+m)log n).** Run a full single-source Dijkstra
+      *once for every shop*, storing a distance array per shop; a person answers
+      by taking the minimum of their distances over all `k` shops. Correct but
+      `k` full runs blow up when `k ≈ n ≈ 2·10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; cin>>n>>m;
+          vector<vector<pair<int,int>>> adj(n+1);
+          for(int i=0;i<m;i++){int u,v,w;cin>>u>>v>>w;adj[u].push_back({v,w});adj[v].push_back({u,w});}
+          int k; cin>>k; vector<int> shops(k);
+          for(int i=0;i<k;i++) cin>>shops[i];
+          int q; cin>>q;
+          auto dij=[&](int s, vector<long long>&d){
+              d.assign(n+1, (long long)4e18);
+              priority_queue<pair<long long,int>,vector<pair<long long,int>>,greater<>> pq;
+              d[s]=0; pq.push({0,s});
+              while(!pq.empty()){
+                  auto [du,u]=pq.top(); pq.pop();
+                  if(du!=d[u]) continue;
+                  for(auto [v,w]:adj[u]) if(d[v]>du+w){d[v]=du+w; pq.push({d[v],v});}
+              }
+          };
+          vector<vector<long long>> all(k);
+          for(int i=0;i<k;i++) dij(shops[i], all[i]);
+          while(q--){
+              int p; cin>>p; long long ans=(long long)4e18;
+              for(int i=0;i<k;i++) ans=min(ans, all[i][p]);
+              cout<<ans<<"\n";
+          }
+      }
+      ```
+
+      **② Optimization — multisource Dijkstra, O((n+m)log n) (submission).**
+      Seed the priority queue with **all `k` shops at distance 0** and run one
+      Dijkstra. Every node's settled distance = distance to its nearest shop.
+      One run regardless of `k`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; cin>>n>>m;
+          vector<vector<pair<int,int>>> adj(n+1);
+          for(int i=0;i<m;i++){int u,v,w;cin>>u>>v>>w;adj[u].push_back({v,w});adj[v].push_back({u,w});}
+          int k; cin>>k;
+          const long long INF=(long long)4e18;
+          vector<long long> d(n+1, INF);
+          priority_queue<pair<long long,int>,vector<pair<long long,int>>,greater<>> pq;
+          for(int i=0;i<k;i++){ int s; cin>>s; d[s]=0; pq.push({0,s}); }
+          while(!pq.empty()){
+              auto [du,u]=pq.top(); pq.pop();
+              if(du!=d[u]) continue;
+              for(auto [v,w]:adj[u])
+                  if(d[v]>du+w){ d[v]=du+w; pq.push({d[v],v}); }
+          }
+          int q; cin>>q;
+          while(q--){ int p; cin>>p; cout<<d[p]<<"\n"; }
+      }
+      ```
+
+      **③ Further optimization — a note.** Dijkstra's `O((n+m)log n)` is optimal
+      for general positive weights (comparison-based), so there is no meaningful
+      third step for the weighted case. If every road had length 1, replace the
+      priority queue with a plain queue → **multisource BFS** at `O(n+m)`.
+
+      **④ Alternative — multisource BFS (for unit weights), O(n+m).** When all
+      edge weights are equal (say 1), the frontier can be a FIFO queue: push all
+      shops, then process layer by layer. This is Dijkstra's relaxation running
+      in `O(n+m)` because a queue alone preserves the non-decreasing-distance
+      invariant.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,m; cin>>n>>m;
+          vector<vector<int>> adj(n+1);
+          for(int i=0;i<m;i++){int u,v;cin>>u>>v;adj[u].push_back(v);adj[v].push_back(u);}
+          int k; cin>>k;
+          vector<int> d(n+1, -1);
+          queue<int> q;
+          for(int i=0;i<k;i++){ int s; cin>>s; if(d[s]==-1){ d[s]=0; q.push(s); } }
+          while(!q.empty()){
+              int u=q.front(); q.pop();
+              for(int v: adj[u]) if(d[v]==-1){ d[v]=d[u]+1; q.push(v); }
+          }
+          int qn; cin>>qn;
+          while(qn--){ int p; cin>>p; cout<<d[p]<<"\n"; }
+      }
+      ```
+      The first loop seeds all shops at distance 0 into the queue, then the
+      second loop floods layer by layer — a classic multi-source BFS.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The submission (②) is just Dijkstra with a bigger starting set.
+
+      1. **Build adjacency** from the `m` undirected roads, storing `{neighbor,
+         weight}` on both ends.
+      2. **Seed all shops.** For each shop `s` set `d[s] = 0` and push `(0, s)`
+         into the min-heap. Several nodes start alongside one another — this is
+         the entire trick.
+      3. **Standard relaxation loop.** Pop the pair with smallest distance; skip
+         stale entries (`du != d[u]`); for each neighbor relax if we found a
+         shorter distance and push the improvement.
+      4. **Answer queries.** A query for person `p` prints `d[p]` — the settled
+         shortest distance to *some* shop, which is by definition the nearest
+         shop distance.
+
+      Nothing about the relaxation changes: correctness comes purely from
+      initialising *every* shop to 0. The heap invariant "the minimum element is
+      finalised" is unaffected by how many nodes begin at distance zero.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):**
+      ```
+      4 4
+      1 2 2   2 3 3   1 3 6   4 3 1
+      shops: 2, 4
+      queries: 1, 3, 4
+      ```
+
+      1. **Seed** the heap with `(0,2)` and `(0,4)`; `d = [2:0, 4:0, rest: ∞]`.
+      2. **Pop (0,2):** relax edges → `1 diff 2`, `3 diff 3`:
+         `d[1]=2`, `d[3]=3`. Heap: `(0,4),(2,1),(3,3)`.
+      3. **Pop (0,4):** relax edge 4–3 (`1`): `d[3]=min(3,1)=1`. Heap:
+         `(1,3),(2,1),(3,3)`.
+      4. **Pop (1,3):** relax 3–1 (`6`): `d[1]=min(2,7)=2` (no change), 3–2 (`3`):
+         no change.
+      5. **Pop (2,1):** relax 1–2 (`2`): no change. Heap empties.
+
+      **Answers:** `d[1]=2`, `d[3]=1`, `d[4]=0` → output `2 1 0`.
+
+      **Actual vs expected:** exactly `2 / 1 / 0` — matches the sample.
+
+  - type: mcq
+    prompt: "Why is multisource Dijkstra no slower than Dijkstra from a single source?"
+    options:
+      - "Because the heap is emptied once, not once per shop."
+      - "Because multisource Dijkstra visits no back edges."
+      - "Because shops are always adjacent to the query nodes."
+      - "Because the graph is a tree, so all runs share the same labels."
+    answer: 0
+    explanation: "All k shops are pushed at distance 0 into the single heap, and the one relaxation loop settles every node's shortest distance exactly once — total work is O((n+m) log n), identical in big-O to a single-source run. Seeding more starting nodes does not multiply the number of runs; it multiplies only the initial heap size."
+type: content
+---

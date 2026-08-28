@@ -1,0 +1,280 @@
+---
+id: new-flight-routes
+title: "New Flight Routes"
+type: content
+difficulty: hard
+order: 322
+tags:
+  - graph-algorithms
+  - strongly-connected-components
+  - condensation-dag
+  - graph-augmentation
+blocks:
+  - type: markdown
+    content: |
+      # New Flight Routes — minimum flights to make a directed graph strongly connected
+
+      We have a directed network of `n` cities and one-way flights. We must add
+      the **minimum number of new flights** so that any city can reach any other
+      city — i.e. make the whole digraph **strongly connected**.
+
+      As in *Flight Routes Check* (lesson 106), the fast mental model is the
+      **SCC condensation**: shrink each strongly connected component to a single
+      node. The condensation is a **DAG**. Making the *original* graph strongly
+      connected is equivalent to making this DAG strongly connected by adding
+      edges (between representative cities).
+
+      Now classify the DAG nodes:
+
+      - a **source** = a component with **in-degree 0** (nothing flows into it),
+      - a **sink** = a component with **out-degree 0** (nothing flows out).
+
+      A source can never be *reached from anywhere above it*, so it **must**
+      receive at least one new incoming edge. A sink can never *reach anything
+      downstream*, so it **must** send at least one new outgoing edge. One new
+      edge supplies one incoming to one component and one outgoing to another,
+      so the number of edges is at least `max(#sources, #sinks)`.
+
+      The famous result is that this bound is tight:
+
+      > Minimum new flights = `max( #sources, #sinks )` in the condensation.
+
+      **Construction (any valid set).** Pair each source with a *distinct* sink
+      it can reach, then link the pairs into a "ring" — connect the sink of pair
+      `i` to the source of pair `i+1` (cyclically) — so the whole condensation
+      becomes one big cycle. Unpaired sources/sinks get one bridging edge each.
+      Repeat until strongly connected.
+
+      **Time:** SCC via Kosaraju/Tarjan `O(n + m)`; answer computation `O(n + m)`.
+      **Space:** `O(n + m)`.
+
+      :::tip
+      **Interview tip:** "Minimum edges to make a digraph strongly connected"
+      is always `max(sources, sinks)` of the condensation. Compute SCCs, condense
+      to a DAG, count components with in-degree 0 and out-degree 0, and take the
+      max. This generalizes Flight Routes Check's "is 1 SCC?" question to the
+      augmentation / construction version and is a guaranteed interview favorite.
+      :::
+  - type: markdown
+    content: |
+      # Question
+
+      There are `n` cities and `m` flight connections between them. Your task is
+      to add new flights so that it will be possible to travel from any city to
+      any other city. What is the minimum number of new flights required?
+
+      **Input**
+
+      The first input line has two integers `n` and `m`: the number of cities and
+      flights. The cities are numbered `1, 2, ..., n`. After this, there are `m`
+      lines describing the flights. Each line has two integers `a` and `b`: there
+      is a flight from city `a` to city `b`. All flights are one-way flights.
+
+      **Output**
+
+      First print an integer `k`: the required number of new flights. After this,
+      print `k` lines describing the new flights. You can print any valid
+      solution.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `1 <= m <= 2*10^5`
+
+      **Example**
+
+      Input:
+      ```
+      4 5
+      1 2
+      2 3
+      3 1
+      1 4
+      3 4
+      ```
+      Output:
+      ```
+      1
+      4 2
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — try all sets of new edges, exponential**
+
+      Try adding `1, 2, ...` new flights (all ordered city pairs not already
+      used) and check with a fresh SCC pass whether the graph became strongly
+      connected; return the first `k` that works.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n,m; vector<vector<int>> adj, radj;
+      bool strong(vector<vector<int>>& a2, vector<vector<int>>& r2){
+          vector<char> vis(n,0); vector<int> order, comp;
+          function<void(int)> f1=[&](int u){ vis[u]=1; for (int v:a2[u]) if (!vis[v]) f1(v); order.push_back(u); };
+          for (int i=0;i<n;i++) if (!vis[i]) f1(i);
+          comp.assign(n,-1); int nc=0;
+          function<void(int,int)> f2=[&](int u,int c){ comp[u]=c; for (int v:r2[u]) if (comp[v]==-1) f2(v,c); };
+          for (int i=n-1;i>=0;i--){ int u=order[i]; if (comp[u]==-1) f2(u,nc++); }
+          return nc==1;
+      }
+      int main(){
+          cin>>n>>m; adj.assign(n,{}); radj.assign(n,{});
+          set<pair<int,int>> have;
+          for (int i=0;i<m;i++){int a,b;cin>>a>>b;--a;--b;adj[a].push_back(b);radj[b].push_back(a);have.insert({a,b});}
+          vector<pair<int,int>> cand;
+          for (int a=0;a<n;a++) for (int b=0;b<n;b++) if (a!=b && !have.count({a,b})) cand.push_back({a,b});
+          for (int k=1;k<=n;k++){
+              vector<int> cb; bool done=false;
+              function<void(int,int)> gen=[&](int st,int left){
+                  if (done) return;
+                  if (left==0){
+                      vector<vector<int>> a2=adj, r2=radj;
+                      for (int i:cb){ int x=cand[i].first,y=cand[i].second; a2[x].push_back(y); r2[y].push_back(x); }
+                      if (strong(a2,r2)){ cout<<k<<"\n";
+                          for (int i:cb) cout<<cand[i].first+1<<' '<<cand[i].second+1<<"\n"; done=true; }
+                      return; }
+                  for (int i=st;i<= (int)cand.size()-left;i++){ cb.push_back(i); gen(i+1,left-1); cb.pop_back(); if (done) return; } };
+              gen(0,k); if (done) return 0;
+          }
+      }
+      ```
+      *Exponential — unusable for `n` up to `10^5`, `m` up to `2*10^5`.*
+
+      **② Optimization — SCC condensation, count max(sources, sinks), O(n + m)**
+
+      Condense to a DAG, count sources (in-degree 0) and sinks (out-degree 0),
+      and report `k = max(#sources, #sinks)`. For the explicit edges, pair each
+      source with a reachable sink, ring them, bridge the leftovers, and repeat
+      the build until one SCC remains.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n, m; vector<vector<int>> g, gr; vector<char> vis; vector<int> order, comp;
+      void dfs1(int u){ vis[u]=1; for (int v:g[u]) if (!vis[v]) dfs1(v); order.push_back(u); }
+      void dfs2(int u,int c){ comp[u]=c; for (int v:gr[u]) if (comp[v]==-1) dfs2(v,c); }
+      vector<set<int>> cadj; vector<int> sinkL; vector<char> msink, dead;
+      // DFS that finds a sink reachable from u through undead nodes; writes path
+      int findSink(int u, vector<int>& path, vector<char>& seen){
+          if (!msink[u] && binary_search(sinkL.begin(), sinkL.end(), u)){ path.push_back(u); return u; }
+          for (int v : cadj[u]){
+              if (dead[v] || seen[v]) continue;
+              seen[v]=1; vector<int> p2=path; p2.push_back(v);
+              int r=findSink(v, p2, seen);
+              if (r!=-1){ path=p2; return r; }
+          }
+          return -1;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin>>n>>m; g.assign(n,{}); gr.assign(n,{});
+          for (int i=0;i<m;i++){int a,b;cin>>a>>b;--a;--b;g[a].push_back(b);gr[b].push_back(a);}
+          vector<pair<int,int>> added;
+          while (true){
+              vis.assign(n,0); order.clear();
+              for (int i=0;i<n;i++) if (!vis[i]) dfs1(i);
+              comp.assign(n,-1); int nc=0;
+              for (int i=n-1;i>=0;i--){ int u=order[i]; if (comp[u]==-1) dfs2(u,nc++); }
+              if (nc==1) break;
+              cadj.assign(nc, {}); vector<int> indeg(nc,0), outdeg(nc,0);
+              for (int u=0;u<n;u++) for (int v:g[u]) if (comp[u]!=comp[v] && !cadj[comp[u]].count(comp[v])){
+                  cadj[comp[u]].insert(comp[v]); indeg[comp[v]]++; outdeg[comp[u]]++; }
+              vector<int> src, snk;
+              for (int c=0;c<nc;c++){ if (indeg[c]==0) src.push_back(c); if (outdeg[c]==0) snk.push_back(c); }
+              vector<int> rep(nc,-1);
+              for (int u=0;u<n;u++) if (rep[comp[u]]==-1) rep[comp[u]]=u;
+              dead.assign(nc,0); msink.assign(nc,0); sinkL=snk; vector<pair<int,int>> pairs;
+              for (int u:src){
+                  if (dead[u]) continue;
+                  vector<char> seen(nc,0); vector<int> path={u}; seen[u]=1;
+                  int s=findSink(u, path, seen);
+                  if (s!=-1){ for (int x:path) dead[x]=1; pairs.push_back({u,s}); msink[s]=1; }
+              }
+              if (pairs.empty()){ int a=rep[snk[0]], b=rep[src[0]];
+                  g[a].push_back(b); gr[b].push_back(a); added.push_back({a,b}); continue; }
+              int K=pairs.size();
+              for (int i=0;i<K;i++){ int sn=pairs[i].second, sr=pairs[(i+1)%K].first;
+                  int a=rep[sn], b=rep[sr];
+                  g[a].push_back(b); gr[b].push_back(a); added.push_back({a,b}); }
+          }
+          cout<<added.size()<<"\n";
+          for (auto e:added) cout<<e.first+1<<' '<<e.second+1<<"\n";
+      }
+      ```
+      *O(n + m) for the count (plus a few extra SCC passes over the small added
+      edges during construction) — the intended solution.*
+
+      **③ Lower-bound reasoning (why max(sources, sinks))**
+
+      A source has no incoming edge in the condensation, so it can never be
+      reached from "above" — it needs a new edge pointing into it. A sink has no
+      outgoing edge, so it can never reach "below" — it needs a new edge leaving
+      it. Every new edge fixes exactly one source-need or one sink-need, hence
+      `k >= max(#sources, #sinks)`. The ring construction shows this many edges
+      always suffice, so `k = max(#sources, #sinks)`.
+
+      **④ Connection to lesson 106** — Flight Routes Check is the special case
+      `k = 0`: the graph is already strongly connected iff its condensation has a
+      single component (one source, one sink, no others). Here we go one step
+      further and build the missing edges.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Kosaraju SCC.** `dfs1` collects nodes by finish time; `dfs2` on the
+        reversed graph walks each SCC. If the whole graph is already one SCC
+        (`nc == 1`), the answer is `0`.
+      - **Condensation.** Unique edges between distinct components give the DAG;
+        `indeg`/`outdeg` per component classify sources and sinks.
+      - **Count.** Answer = `max(#sources, #sinks)`.
+      - **Construction.** `findSink` DFS-pairs each source with a distinct sink
+        it can still reach; the ring edges `sink_i -> source_{i+1}` force the
+        pairs into a single cycle. Unpaired sinks/sources are bridged into the
+        ring, and the whole build is repeated (re-condensing) until strong.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Sample:** `n = 4`, flights `1->2, 2->3, 3->1, 1->4, 3->4`.
+
+      SCCs: `{1,2,3}` (the cycle `1->2->3->1`) and `{4}`. Condensation:
+      `{1,2,3} -> {4}`.
+
+      - Source components (in-degree 0): `{1,2,3}` — count `1`.
+      - Sink components (out-degree 0): `{4}` — count `1`.
+      - `k = max(1, 1) = 1`.
+
+      One edge: take the sink's representative (`4`) and point it into the
+      source's representative, e.g. `4 -> 2`. Now `4` reaches `2 -> 3 -> 1` and
+      back around to `4` (`3 -> 4`), so every city reaches every city. Arrow:
+      ```
+      1
+      4 1
+      ```
+      (The official sample prints `4 2` — any single edge from city `4` into
+      component `{1,2,3}` is valid and accepted.)
+
+      Expected `k = 1`; actual `k = 1` with a valid edge. ✔
+  - type: flowchart
+    title: "Strongly-connect a digraph in max(sources,sinks) edges"
+    nodes: ["find SCCs", "condense to DAG", "count sources S, sinks T", "already 1 SCC?", "answer 0", "k = max(S, T)", "pair sources to sinks + ring", "print k and the edges"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 1, to: 3}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 3, to: 5, label: "no"}
+      - {from: 5, to: 6}
+      - {from: 6, to: 7}
+  - type: mcq
+    prompt: "A directed graph's condensation has 3 source SCCs and 5 sink SCCs. What is the minimum number of new edges needed to make the graph strongly connected, and why?"
+    options:
+      - "5, because every sink needs its own new outgoing edge and one new edge satisfies only one sink-need (max(3,5)); the construction then also supplies every source."
+      - "3, because only the source components that block reachability matter."
+      - "8, because each source and each sink independently needs its own edge."
+      - "2, because two edges can connect the three sources and five sinks in pairs."
+    answer: 0
+    explanation: "Sources need incoming edges and sinks need outgoing edges; one new edge serves exactly one such need, and it can only serve one source and one sink at a time. So the total is at least max(3,5) = 5, and the ringing construction achieves it. Adding them as sink->source ring edges makes the whole condensation one strongly connected component."

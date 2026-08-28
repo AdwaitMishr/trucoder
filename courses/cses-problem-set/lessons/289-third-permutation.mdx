@@ -1,0 +1,300 @@
+---
+id: third-permutation
+title: Third Permutation
+difficulty: hard
+order: 289
+tags:
+  - construction
+  - permutation
+  - functional-graph
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — building a permutation from a functional graph
+
+      This is a pure **construction** problem: given two permutations `a` and
+      `b` (with `a[i] ≠ b[i]` everywhere), build a third permutation `c` that
+      avoids both: `c[i] ≠ a[i]` **and** `c[i] ≠ b[i]` for every position `i`.
+      There is nothing to optimise by "searching" — we want a fast, *guaranteed
+      correct* recipe, or a proof that none exists.
+
+      **Model each position as a directed edge between values.** At position
+      `i` the two values `a[i]` and `b[i]` sit together. Build a function
+      `g[v] = the value that shares a position with v`:
+
+      ```
+      g[a[i]] = b[i]        for every position i
+      ```
+
+      Because `a` uses every value exactly once, `g` is defined on all of
+      `1..n`; because `b` uses every value exactly once, `g` is a **bijection**
+      — a permutation. A permutation decomposes into disjoint **cycles**
+      (e.g. `1 → 5 → 2 → 1`).
+
+      **Why cycles solve the problem directly.** At the position holding value
+      `v` (i.e. where `a[i] = v`), the forbidden values are `v` and `g[v]`.
+      If we assign `c[i] = g(g(a[i]))` — walk **two** steps around the cycle —
+      then `c[i]` is neither `a[i]` nor `b[i]`, *as long as the cycle has length
+      at least 3*. Also, since `g²` is a permutation, `c` itself is a
+      permutation. The *only* obstacle is a **2-cycle** `{u, v}`: there
+      `g(g(u)) = u`, so the two-step walk folds back onto the forbidden value.
+      The whole problem reduces to **repairing the 2-cycles**.
+
+      **Repair tools.**
+      - Two 2-cycles `{u,v}` and `{s,t}` merge into one valid 4-cycle: put `s,t`
+        into the slots of the first pair and `v,u` into the slots of the second.
+      - One leftover 2-cycle splices into an existing longer cycle by two value
+        swaps (both transpositions keep `c` a permutation).
+      - Three 2-cycles (no longer cycle exists) merge into one 6-cycle.
+
+      **What is impossible?** Only `n = 2`: the two positions both forbid
+      `{1, 2}`, and every permutation must place `1` and `2` there. For every
+      `n ≥ 3` the tools above always succeed.
+
+      **Complexity.** Each value is touched O(1) times — `O(n)` time and `O(n)`
+      space. The output itself is `n` numbers, so you cannot beat this.
+
+      :::tip
+      **Interview tip:** Turn a "find one valid object" problem into a graph
+      problem and look for structure (here: the functional-graph cycles).
+      Construction problems reward naming a *local rule* that provably works
+      (here: "walk two steps on a cycle") plus handling the one exceptional
+      case. Interviewers specifically watch whether you *prove* the small-`n`
+      corners — here `n = 2` is impossible, everything else works.
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given two permutations `a` and `b` such that `a[i] ≠ b[i]` in
+      every position. Create a third permutation `c` such that `a[i] ≠ c[i]`
+      and `b[i] ≠ c[i]` in every position.
+
+      **Input.** The first line has an integer `n`. The second line has
+      `n` integers `a[1], …, a[n]`. The third line has `n` integers
+      `b[1], …, b[n]`.
+
+      **Output.** Print `n` integers `c[1], …, c[n]`. You can print any valid
+      solution. If there are no solutions, print `IMPOSSIBLE`.
+
+      **Constraints.** `2 ≤ n ≤ 10^5`
+
+      ### Sample
+
+      **Input:**
+      ```
+      5
+      1 3 2 5 4
+      4 1 3 2 5
+      ```
+
+      **Output:**
+      ```
+      3 2 5 4 1
+      ```
+      (Any valid `c` is accepted; `3 2 5 4 1` is one example.)
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n! · n) time, O(n) space (try every permutation).**
+      Enumerate all permutations of `1..n` in lexicographic order and return the
+      first one that satisfies `c[i] ≠ a[i]` and `c[i] ≠ b[i]` everywhere. This
+      is unambiguously correct but there are `n!` permutations — hopeless for
+      `n = 10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(int n, const vector<int>& a, const vector<int>& b) {
+          vector<int> c(n);
+          iota(c.begin(), c.end(), 1);
+          do {
+              bool ok = true;
+              for (int i = 0; i < n; ++i)
+                  if (c[i] == a[i] || c[i] == b[i]) { ok = false; break; }
+              if (ok) { stringstream ss; for (int i=0;i<n;i++){ if(i)ss<<' '; ss<<c[i]; } return ss.str(); }
+          } while (next_permutation(c.begin(), c.end()));
+          return "IMPOSSIBLE";
+      }
+      ```
+
+      **② Optimization — O(n) time, O(n) space (2-cycle repair).** Build the
+      functional graph `g`, tentatively set `c[i] = g(g(a[i]))`, detect the
+      2-cycles, and repair them: pair them into 4-cycles when even in number;
+      when the count is odd, splice the last pair into a longer cycle with two
+      transpositions (or merge three pairs into a 6-cycle if no longer cycle
+      exists). The walkthrough below traces it; the reference `solve` returns
+      the permutation as a string (`IMPOSSIBLE` for `n = 2`).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(int n, const vector<int>& a, const vector<int>& b) {
+          if (n == 2) return "IMPOSSIBLE";
+          vector<int> g(n + 1), posA(n + 1);
+          for (int i = 0; i < n; ++i) { g[a[i]] = b[i]; posA[a[i]] = i; }
+
+          vector<int> c(n);
+          for (int i = 0; i < n; ++i) c[i] = g[g[a[i]]];
+
+          vector<pair<int,int>> two;
+          vector<char> seen(n, 0);
+          for (int i = 0; i < n; ++i) {
+              if (c[i] == a[i] && !seen[i]) {
+                  int j = posA[b[i]];
+                  seen[i] = seen[j] = 1;
+                  two.push_back({i, j});
+              }
+          }
+          int K = (int)two.size();
+          if (K % 2 == 1) {
+              if (n > 2 * K) {
+                  int p = two[K-1].first, q = two[K-1].second;
+                  int x0 = 1; while (g[g[x0]] == x0) ++x0;
+                  int x1 = g[x0];
+                  swap(c[p], c[posA[x0]]);
+                  swap(c[q], c[posA[x1]]);
+                  --K;
+              } else {
+                  int p1=two[K-1].first,q1=two[K-1].second;
+                  int p2=two[K-2].first,q2=two[K-2].second;
+                  int p3=two[K-3].first,q3=two[K-3].second;
+                  int u=a[p1],v=a[q1], s=a[p2],t=a[q2], P=a[p3],Q=a[q3];
+                  c[p1]=s; c[q1]=t; c[p2]=P; c[q2]=Q; c[p3]=u; c[q3]=v;
+                  K -= 3;
+              }
+          }
+          for (int k = 0; k < K; k += 2) {
+              int p1=two[k].first,  q1=two[k].second;
+              int p2=two[k+1].first, q2=two[k+1].second;
+              int u=a[p1],v=a[q1], s=a[p2],t=a[q2];
+              c[p1]=s; c[q1]=t; c[p2]=v; c[q2]=u;
+          }
+
+          ostringstream out;
+          for (int i = 0; i < n; ++i) { if (i) out << ' '; out << c[i]; }
+          return out.str();
+      }
+      ```
+      Complexity: O(n) time, O(n) space.
+
+      **④ Alternative algorithm — O(n²) worst case (cyclic shift + swap fix).**
+      A completely different, simpler-to-verify construction: start with
+      `c[i] = a[(i+1) % n]` (a cyclic shift of `a`, already a permutation with
+      `c[i] ≠ a[i]`). Then for every position where `c[i] == b[i]`, find a
+      partner `j` such that swapping `c[i] ↔ c[j]` repairs `i` without breaking
+      `j`, and swap. This is correct but the "find a partner" scan can repeat,
+      giving O(n²) on bad inputs — fine to reason about, but the cycle repair
+      in ② is the version you would ship for `n = 10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(int n, const vector<int>& a, const vector<int>& b) {
+          if (n == 2) return "IMPOSSIBLE";
+          vector<int> c(n);
+          for (int i = 0; i < n; ++i) c[i] = a[(i + 1) % n];   // cyclic shift of a
+          for (int i = 0; i < n; ++i) {
+              while (c[i] == b[i]) {
+                  bool fixed = false;
+                  for (int j = 0; j < n; ++j) {
+                      if (c[i] != a[j] && c[i] != b[j] && c[j] != a[i] && c[j] != b[i]) {
+                          swap(c[i], c[j]);
+                          fixed = true; break;
+                      }
+                  }
+                  if (!fixed) return "IMPOSSIBLE";
+              }
+          }
+          ostringstream out;
+          for (int i = 0; i < n; ++i) { if (i) out << ' '; out << c[i]; }
+          return out.str();
+      }
+      ```
+      Complexity: O(n²) worst case, O(n) space. Good to study; per-worst-case
+      use ②.
+
+      Now reason through the chosen tier (②) in the next block, then trace it.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n, a, b)` — the O(n) cycle-repair version.
+
+      1. **`g[a[i]] = b[i]`** builds the value-successor function; because
+         `a` and `b` are both permutations, `g` is a bijection, so walking it
+         (`g[g[x]]`) is always defined.
+      2. **`c[i] = g[g[a[i]]]`** is the naive two-step walk. For a position in a
+         cycle of length ≥ 3 this already satisfies both inequalities.
+      3. **Detect 2-cycles:** a position is "stuck" exactly when `c[i] == a[i]`
+         (the two-step walk folded back). For such a position `i`, its partner
+         slot is `posA[b[i]]` — the position whose `a` is the other value of
+         the same 2-cycle. These come in pairs, so a `seen` flag deduplicates.
+      4. **Repair, by cases on `K`** (number of 2-cycles):
+         - `K` even → pair adjacent 2-cycles into 4-cycles (the small comment
+           block at the bottom).
+         - `K` odd with a longer cycle present (`n > 2K`) → take the last pair
+           and swap its two values with the two-step successors of two vertices
+           of a longer cycle. A swap of values keeps `c` a permutation.
+         - `K` odd with *no* longer cycle → merge the last three pairs into a
+           6-cycle.
+      5. The repairs never revisit the rest of `c`, so the total work is a
+         couple of passes: O(n).
+
+      Each repaired value is placed in a slot whose forbidden set it avoids, so
+      every invariant (`c[i] ≠ a[i]`, `c[i] ≠ b[i]`, `c` a permutation) is
+      preserved. `n == 2` is the only impossible input and returns
+      `IMPOSSIBLE` up front.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 5`, `a = [1 3 2 5 4]`, `b = [4 1 3 2 5]`.
+
+      **Step 1 — build `g`.** Positions pair `a[i] → b[i]`:
+      ```
+      1→4   3→1   2→3   5→2   4→5
+      ```
+      so `g` = {1→4, 2→3, 3→1, 4→5, 5→2}. Following the arrows:
+      ```
+      1→4→5→2→3→1   (one cycle of length 5)
+      ```
+      All 5 values live in one 5-cycle — **no 2-cycles at all**.
+
+      **Step 4 — two-step walk `c[i] = g(g(a[i]))`.**
+      - `i=0`: `g(g(1)) = g(4) = 5`
+      - `i=1`: `g(g(3)) = g(1) = 4`
+      - `i=2`: `g(g(2)) = g(3) = 1`
+      - `i=3`: `g(g(5)) = g(2) = 3`
+      - `i=4`: `g(g(4)) = g(5) = 2`
+
+      So the reference delivers `c = [5 4 1 3 2]`.
+
+      **Verify against `a` and `b`:**
+      - vs `a = [1 3 2 5 4]`: `5≠1 ✓  4≠3 ✓  1≠2 ✓  3≠5 ✓  2≠4 ✓`
+      - vs `b = [4 1 3 2 5]`: `5≠4 ✓  4≠1 ✓  1≠3 ✓  3≠2 ✓  2≠5 ✓`
+      - `c = {1,2,3,4,5}` is a permutation. ✓
+
+      **Actual vs expected:** The CSES sample prints `3 2 5 4 1` and our code
+      prints `5 4 1 3 2`. Both are valid — every `c` satisfying the two
+      inequalities is accepted, so our answer matches the problem's expected
+      class of outputs. (No 2-cycle arose, so the repair section was not
+      triggered on this input.)
+
+      **Boundary case `n = 2`:** every position forbids `{1, 2}`, so no `c`
+      exists → `IMPOSSIBLE`. For any `n ≥ 3` the cycle tools guarantee success.
+  - type: mcq
+    prompt: "In Third Permutation, why does walking two steps g(g(a[i])) fail exactly on 2-cycles?"
+    options:
+      - "Because a 2-cycle has length 2, so g²(u) returns the same value u."
+      - "Because 2-cycles contain the value b[i] itself."
+      - "Because a 2-cycle is the only place where a[i] and b[i] are equal."
+      - "Because c must be the identity permutation there."
+    answer: 0
+    explanation: "In a 2-cycle {u,v}, g(u)=v and g(v)=u, so g²(u)=u — the two-step walk folds back onto the value we must avoid. In cycles of length ≥ 3, g²(v) is a third distinct value, so both inequalities hold automatically. The whole repair machinery exists just to handle these 2-cycles."
+type: content
+---

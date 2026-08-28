@@ -1,0 +1,306 @@
+---
+id: chessboard-and-queens
+title: Chessboard and Queens
+difficulty: hard
+order: 17
+tags:
+  - intro
+  - backtracking
+blocks:
+  - type: markdown
+    content: |
+      # Chessboard and Queens — backtracking
+
+      Place **8 queens** on an 8×8 board so that **no two attack each other** —
+      i.e. no two share a row, column, or diagonal — while some squares are
+      blocked (`*`) and may not hold a queen. Count how many valid arrangements
+      exist.
+
+      The classic approach is **backtracking**: place queens one row at a time,
+      and as soon as a placement conflicts with queens already on the board,
+      abandon that branch (the moves are not reversible into a valid solution,
+      so it is safe to *backtrack* and try the next column).
+
+      ## Key optimization: one queen per row
+
+      Because queens attack along rows, any valid arrangement has **at most one
+      queen per row** — so we place exactly one queen per row and recurse over
+      rows 0…7. When trying row `r`, we only need to check columns and the two
+      diagonals against squares already used.
+
+      We track three sets of booleans:
+
+      - `col[c]` — is column `c` taken?
+      - `diag1[r-c+7]` — the `\` diagonals (constant `r-c`, shifted to `0..14`).
+      - `diag2[r+c]` — the `/` diagonals (constant `r+c`, naturally `0..14`).
+
+      A square `(r,c)` is safe iff it is not blocked and none of
+      `col[c]`, `diag1[r-c+7]`, `diag2[r+c]` is set.
+
+      **Complexity:** at most 8 queens, 8 columns each; with pruning the search
+      visits only the valid partial boards — a few thousand nodes, trivially
+      fast. Worst-case bound is O(8!) placements.
+
+      :::tip
+      **Interview tip:** N-queens (counting solutions, printing them, or with
+      blocked squares) is one of the most common backtracking problems. The
+      "one queen per row + diagonal index arithmetic" pruning is the core trick
+      — if you can explain why the `\` diagonals have constant `r-c` and the `/`
+      diagonals have constant `r+c`, you have the problem solved.
+      :::
+  - type: flowchart
+    title: backtracking over rows
+    nodes:
+      - 'Start: row 0'
+      - Column c = 0..7
+      - Blocked or attacked?
+      - 'Place queen, mark col/diags'
+      - row+1 == 8?
+      - count++  (valid solution)
+      - 'Unmark, try next c'
+    edges:
+      - from: 0
+        to: 1
+      - from: 1
+        to: 2
+        label: for c
+      - from: 2
+        to: 3
+        label: safe
+      - from: 2
+        to: 1
+        label: skip
+      - from: 3
+        to: 4
+      - from: 4
+        to: 5
+        label: yes
+      - from: 4
+        to: 0
+        label: recurse row+1
+      - from: 5
+        to: 6
+      - from: 6
+        to: 1
+        label: backtrack
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to count the number of ways to place 8 queens on an 8×8
+      chessboard so that no two queens attack each other, and no queen is placed
+      on a blocked square.
+
+      ## Input
+
+      The input has 8 lines, each with 8 characters: `.` (an empty square) or
+      `*` (a blocked square). There is no input for the size of the board — it is
+      always 8×8.
+
+      ## Output
+
+      Print one integer: the number of ways.
+
+      ## Sample
+
+      **Input:**
+      ```
+      ........
+      ........
+      ..*.....
+      ........
+      ........
+      .....**.
+      ...*....
+      ........
+      ```
+      **Output:**
+      ```
+      65
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — four tiers
+
+      Every tier below counts the same set of valid placements. They differ in
+      how aggressively they prune the search.
+
+      **① Brute force — O(8! · 8) (generate-and-test).** A queen occupies one
+      square per row, so an arrangement is described by the 8 column choices
+      `q[0..7]`. Enumerate **all** `8^8` row→column assignments, and for each
+      fully validate that no two share a column or diagonal and none sits on a
+      blocked square. Simple and obviously correct, but it churns through far
+      more candidates than real solutions and wastes time checking complete
+      boards that are already doomed.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(const std::vector<std::string>& board) {   // brute: generate-and-test
+          int n = 8;
+          long long ways = 0;
+          std::vector<int> q(n, 0);
+          // base-8 counter over q[0..7]
+          long long limit = 1;
+          for (int i = 0; i < n; i++) limit *= n;
+          for (long long code = 0; code < limit; code++) {
+              long long tmp = code;
+              for (int r = 0; r < n; r++) { q[r] = tmp % n; tmp /= n; }
+
+              bool ok = true;
+              std::vector<bool> col(8, false);
+              for (int r = 0; r < n && ok; r++) {
+                  int c = q[r];
+                  if (board[r][c] == '*') { ok = false; break; }
+                  if (col[c]) { ok = false; break; }        // share column
+                  col[c] = true;
+                  for (int p = 0; p < r; p++)               // share diagonal
+                      if (std::abs(p - r) == std::abs(q[p] - c)) { ok = false; break; }
+              }
+              if (ok) ways++;
+          }
+          return ways;
+      }
+      ```
+      Complexity: O(8^8 · 8) — ~16 million assignments, each checked in O(8).
+      Fine for a google-able brute but wasteful; for larger boards it is hopeless.
+
+      **② Optimization — O(≤8!) (backtracking with col/diag sets).** The classic:
+      one queen per row, recurse over rows, and prune the moment a square is
+      attacked or blocked. `col`, `diag1`, `diag2` make each test O(1), and the
+      search only visits partial boards that can still succeed. This is the
+      canonical CSES solution.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(const std::vector<std::string>& board) {
+          std::vector<bool> col(8, false), d1(15, false), d2(15, false);
+          long long ways = 0;
+
+          std::function<void(int)> bt = [&](int r) {
+              if (r == 8) { ways++; return; }
+              for (int c = 0; c < 8; c++) {
+                  if (board[r][c] == '*') continue;             // blocked
+                  int a = r - c + 7, b = r + c;                 // diagonal ids
+                  if (col[c] || d1[a] || d2[b]) continue;       // attacked
+                  col[c] = d1[a] = d2[b] = true;                // place queen
+                  bt(r + 1);                                     // next row
+                  col[c] = d1[a] = d2[b] = false;               // backtrack
+              }
+          };
+          bt(0);
+          return ways;
+      }
+      ```
+      Complexity: O(8!) worst case, in practice only a few thousand nodes;
+      O(1) extra space. This is what you ship.
+
+      **③ Further optimization — O(≤8!) (bitmask backtracking).** Replace the
+      three boolean arrays with three integers whose bits record taken columns /
+      `\` diagonals / `/` diagonals. The safety test becomes a mask `&` and
+      placement an `|`, eliminating the arrays and all indexing math — the same
+      pruning with smaller constants and zero memory.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(const std::vector<std::string>& board) {
+          long long ways = 0;
+
+          std::function<void(int,int,int,int)> bt =
+              [&](int r, int cols, int nd, int pd) {
+                  if (r == 8) { ways++; return; }
+                  for (int c = 0; c < 8; c++) {
+                      if (board[r][c] == '*') continue;
+                      int b1 = 1 << c;                     // column bit
+                      int b2 = 1 << (r - c + 7);           // '\' diagonal bit
+                      int b3 = 1 << (r + c);               // '/' diagonal bit
+                      if (cols & b1 || nd & b2 || pd & b3) continue;
+                      bt(r + 1, cols | b1, nd | b2, pd | b3);
+                  }
+              };
+          bt(0, 0, 0, 0);
+          return ways;
+      }
+      ```
+      Complexity: O(8!) worst case, O(1) space — bitmasks instead of arrays.
+
+      **④ Alternative algorithm — O(8! · 8) (permutations + validation).** A
+      different, elegant framing: since each column must also be used at most
+      once, the column vector `q[0..7]` is a **permutation** of `0..7`. Generate
+      all `8!` permutations with `std::next_permutation`, then only check that
+      no two queens share a diagonal and none lands on a blocked square (columns
+      are automatically distinct). Non-recursive and conceptually distinct.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(const std::vector<std::string>& board) {
+          std::vector<int> q = {0,1,2,3,4,5,6,7};
+          long long ways = 0;
+          do {
+              bool ok = true;
+              for (int r = 0; r < 8 && ok; r++) {
+                  if (board[r][q[r]] == '*') { ok = false; break; }
+                  for (int p = 0; p < r; p++)
+                      if (std::abs(p - r) == std::abs(q[p] - q[r])) { ok = false; break; }
+              }
+              if (ok) ways++;
+          } while (std::next_permutation(q.begin(), q.end()));
+          return ways;
+      }
+      ```
+      Complexity: O(8! · 8) — 40320 permutations to test, still instant. A poor
+      man's backtracking that relies on the permutation invariant instead of the
+      col/diag pruning.
+
+      Now walk through the chosen tier (②) in the next block — then trace it on
+      the sample input.
+  - type: markdown
+    content: |
+      # Code logic
+
+      `bt(r)` places a queen on row `r` and recurses. When `r == 8`, every row
+      has exactly one queen with no conflicts, so `ways++`. For each column `c`
+      on the current row:
+
+      - if the square is `'*'`, skip it;
+      - otherwise map the square to its column id `c` and its two diagonal ids
+        `a = r - c + 7` and `b = r + c`. A queen on any square with the same
+        `r-c` or `r+c` would share that diagonal and is already recorded in
+        `d1`/`d2`;
+      - if nothing is taken (`col`, `d1`, `d2` all false), place the queen by
+        flipping all three flags, recurse to `r+1`, then **undo** the flags.
+        The undo is what makes this backtracking — every path is explored once
+        without duplication.
+
+      Diagonals are indexed so that any two squares sharing a `r-c` value land
+      on the same `d1` slot (shifted by +7 to stay non-negative), and any two
+      sharing a `r+c` land on the same `d2` slot — verifying a square takes O(1).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Run `bt(0)` on the sample board. Row 0 is all-open, so we try `c = 0`:
+      place at `(0,0)`, mark `col[0], d1[7], d2[0]`, recurse to row 1. Row 1
+      `c=2` shares diagonal with `(0,0)`? `d1 = 1-2+7 = 6` (unset) but
+      `col[2]`, `d2=3` free — actually `(0,0)` is `d1=7`, so `(1,2)` is safe;
+      place it and continue. Some branches die quickly:
+
+      - a queen at `(2,2)` is blocked (`*` at the sample's third row), so column
+        2 on row 2 is skipped — we try its other columns.
+      - Rows 5 and 6 each drop two columns, and row 6's third column, which
+        prunes several otherwise-valid trees.
+
+      Whenever `r` reaches 8, the current queen columns form a valid solution and
+      `ways` increments; the recursion then unmarks the top row's queen and
+      slides it to the next column, scanning the whole search space.
+
+      Expected (sample) — `65`. Actual — `65`. Match. On the all-open board the
+      same code returns the known count `92`.
+type: content

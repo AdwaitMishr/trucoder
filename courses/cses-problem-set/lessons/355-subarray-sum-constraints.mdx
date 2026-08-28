@@ -1,0 +1,229 @@
+---
+id: subarray-sum-constraints
+title: "Subarray Sum Constraints"
+type: content
+difficulty: medium
+order: 355
+tags:
+  - prefix-sums
+  - graphs
+  - bfs
+  - dsu
+  - constructive
+blocks:
+  - type: markdown
+    content: |
+      # Subarray Sum Constraints — build an array from range-sum requirements
+
+      ## Theory
+
+      A range-sum constraint `xl + … + xr = s` screams **prefix sums**. Let
+      `p[i] = x₁ + … + xᵢ` with `p[0] = 0`. Then the constraint `(l, r, s)` becomes an
+      equation between two prefix variables:
+
+      `p[r] − p[l−1] = s`  ⇔  `p[r] = p[l−1] + s`.
+
+      Each element is recovered as `xᵢ = p[i] − p[i−1]`, so the whole problem is: find
+      values `p[0..n]` satisfying `n+1` variables but `m` pairwise *difference*
+      equations, with `p[0] = 0` fixed.
+
+      **Think of it as a graph.** Nodes are prefix indices `0..n`; every constraint
+      adds an undirected edge between `l−1` and `r` with a label `s` meaning
+      `p[r] − p[l−1] = s` when traversing in that direction. Within a connected
+      component, the equations determine all values relative to one anchor. A
+      solution exists **iff no component contains a contradictory cycle** (a path
+      `u → v` forces two different differences). Find values with a **BFS/DFS that
+      propagates `p[neighbor] = p[u] + label` and aborts on disagreement**.
+
+      Wait — is this really just a "no contradiction" question? Yes: any difference
+      system is feasible iff it is consistent, i.e. iff the sum of labels around every
+      cycle is zero. Because there is no restriction tying the *absolute* values (only
+      `p[0] = 0` and the loose `±10¹⁵` bounds, which are easily satisfied), consistency
+      is the *only* thing to check.
+
+      **Time:** `O(n + m)` for the BFS over the constraint graph. **Space:** `O(n + m)`.
+
+      :::tip
+      **Interview tip:** Turn each linear relation between two unknowns into a weighted
+      edge and BFS-assign potentials; a contradiction is just "the same node assigned
+      two values". This *difference-constraint graph* pattern shows up constantly —
+      range-sum/range-diff constraints, "relationship" queries, weighted union-find
+      problems — all reduce to checking cycle consistency and reading off potentials.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Question
+
+      Your task is to construct an array `x₁,…,xₙ` of integers satisfying `m`
+      constraints of the form `(l, r, s)`: the sum `xl + xl+1 + … + xr` must equal `s`.
+
+      **Input.** The first line has two integers `n` and `m`: the array length and the
+      number of constraints. The next `m` lines each have three integers `l`, `r` and
+      `s`.
+
+      **Output.** If a solution exists, print `YES` on the first line. On the second
+      line print `n` integers `x₁,…,xₙ`; all elements must satisfy
+      `−10¹⁵ ≤ xᵢ ≤ 10¹⁵` and the array must satisfy all constraints. You may print any
+      valid solution. If no solution exists, print `NO`.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 5000`
+      - `0 ≤ m ≤ 2·10⁵`
+      - `1 ≤ l ≤ r ≤ n`
+      - `−10⁹ ≤ s ≤ 10⁹`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      5 3
+      1 3 3
+      3 5 3
+      4 4 -1
+      ```
+
+      **Output:**
+      ```
+      YES
+      0 2 1 -1 3
+      ```
+
+      *(Check: `x₁+x₂+x₃ = 0+2+1 = 3`, `x₃+x₄+x₅ = 1+(−1)+3 = 3`, `x₄ = −1`.)*
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·m) iterative substitution.** Start each prefix at 0; scan
+      the constraints repeatedly, using a constraint whenever one of its two endpoints
+      is already "known"; if two known values force a different difference, report `NO`.
+      Correct, but each scan may settle only a few variables, so worst case is `O(n·m)`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          int n,m; cin>>n>>m;
+          vector<int> A(m),B(m); vector<ll> S(m);
+          for(int i=0;i<m;i++){ int l,r; ll s; cin>>l>>r>>s; A[i]=l-1; B[i]=r; S[i]=s; }
+          const ll UNV=-9e18; vector<ll> p(n+1, UNV); p[0]=0;
+          bool changed=true;
+          while(changed){
+              changed=false;
+              for(int i=0;i<m;i++){ int a=A[i],b=B[i]; ll s=S[i];
+                  if(p[a]!=UNV && p[b]==UNV){ p[b]=p[a]+s; changed=true; }
+                  else if(p[a]==UNV && p[b]!=UNV){ p[a]=p[b]-s; changed=true; }
+                  else if(p[a]!=UNV && p[b]!=UNV && p[b]-p[a]!=s){ cout<<"NO\n"; return 0; }
+              }
+          }
+          for(int i=0;i<=n;i++) if(p[i]==UNV) p[i]=0;  // free components anchor at 0
+          cout<<"YES\n";
+          for(int i=1;i<=n;i++){ if(i>1) cout<<" "; cout<<(p[i]-p[i-1]); }
+          cout<<"\n";
+      }
+      ```
+      *Complexity: O(n·m) — too slow for `m = 2·10⁵` in the worst case.*
+
+      **② Optimization — BFS on the constraint graph, O(n + m) (intended).** Build the
+      weighted graph once; anchor `p[0] = 0` and BFS-assign every node, aborting on a
+      contradiction; anchor leftover components at `0`:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,m; if(!(cin>>n>>m)) return 0;
+          vector<vector<pair<int,ll>>> adj(n+1);
+          for(int i=0;i<m;i++){ int l,r; ll s; cin>>l>>r>>s;
+              adj[l-1].push_back({r, s});    // p[r]-p[l-1]=s
+              adj[r].push_back({l-1, -s});   // p[l-1]-p[r]=-s
+          }
+          const ll UNV=-9e18; vector<ll> val(n+1,UNV); val[0]=0;
+          queue<int> q; bool ok=true;
+          q.push(0);
+          while(!q.empty() && ok){ int u=q.front(); q.pop();
+              for(auto &e: adj[u]){ int v=e.first; ll w=e.second; // val[v]-val[u]=w
+                  if(val[v]==UNV){ val[v]=val[u]+w; q.push(v); }
+                  else if(val[v]!=val[u]+w){ ok=false; break; } }}
+          for(int s0=1; s0<=n && ok; s0++){           // node-0-free components
+              if(val[s0]!=UNV) continue; val[s0]=0; q.push(s0);
+              while(!q.empty() && ok){ int u=q.front(); q.pop();
+                  for(auto &e: adj[u]){ int v=e.first; ll w=e.second;
+                      if(val[v]==UNV){ val[v]=val[u]+w; q.push(v); }
+                      else if(val[v]!=val[u]+w){ ok=false; break; } }} }
+          if(!ok){ cout<<"NO\n"; return 0; }
+          cout<<"YES\n";
+          for(int i=1;i<=n;i++){ if(i>1) cout<<" "; cout<<(val[i]-val[i-1]); }
+          cout<<"\n";
+      }
+      ```
+      *Complexity: O(n + m) time, O(n + m) space — solves `m ≤ 2·10⁵` instantly.*
+
+      **③ Further optimization — weighted union-find (DSU with potentials).** The same
+      consistency check can run as a *disjoint-set union that carries a signed distance*
+      from each node to its root; unions either link two trees or verify
+      `d[x] − d[y] = (target)`, and a mismatch inside one set means `NO`. Asymptotically
+      `O((n+m)·α(n))` with the inverse-Ackermann factor — an elegant drop-in
+      alternative when you prefer DSU to BFS.
+
+      **④ Alternative — DFS spanning forests.** Replace the queue by a stack/DFS and
+      assign potentials recursively; reconstruction is identical. Nothing deeper is
+      needed: the graph is built lazily from `m ≤ 2·10⁵` edges, so `O(n + m)` BFS (②) or
+      DSU (③) is already optimal. No other meaningful optimisation exists.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      - **`p[0] = 0` is the single absolute anchor.** Every other prefix is fixed only
+        *relative* to its component. Node-0's component is BFS'd from the true value 0;
+        the remaining components (which never contain node 0) can be anchored anywhere,
+        so they are anchored at `0` too — this is legitimate because shifting a whole
+        independent component preserves all differences.
+      - **Each edge carries a signed difference.** `(l−1, r, s)` is stored as both
+        `p[r] − p[l−1] = s` and `p[l−1] − p[r] = −s`, so BFS can move either direction.
+      - **Contradiction detection.** Reaching a node whose value is already set with a
+        *different* implied value means a cycle with non-zero label sum → infeasible →
+        `NO`.
+      - **Reconstruction.** With all `p[i]` known, `xᵢ = p[i] − p[i−1]`; values are tiny
+        (sums of at most ~5000 `s` in `±10⁹`) so well within `±10¹⁵`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5, m = 3`, constraints `(1,3,3)`, `(3,5,3)`, `(4,4,-1)`.
+
+      Prefix equations: `p[3]−p[0]=3`, `p[5]−p[2]=3`, `p[4]−p[3]=−1`.
+
+      BFS anchor `p[0] = 0`:
+      - `p[3] = p[0] + 3 = 3`.
+      - `p[4] = p[3] + (−1) = 2`.
+      - Component `{2,5}` (from `p[5]−p[2]=3`) doesn't contain node 0 → anchor
+        `p[2] = 0`, giving `p[5] = 3`.
+      - `p[1]` is untouched → anchor at `0`.
+
+      Prefix array `p = [0, 0, 0, 3, 2, 3]`. Elements `xᵢ = p[i]−p[i−1]`:
+      `[0, 0, 3, −1, 1]` → prints `YES` and `0 0 3 -1 1`. Check:
+      `x₁+x₂+x₃ = 3` ✓, `x₃+x₄+x₅ = 3` ✓, `x₄ = −1` ✓.
+
+      (The statement's sample output `0 2 1 -1 3` corresponds to anchoring `p[2]=2` —
+      another valid assignment. Any consistent assignment is accepted.)
+
+      A contradiction, e.g. `(1,2,5)` with `(1,1,3)` and `(2,2,3)`, forces
+      `x₁+x₂=5` but `x₁=3, x₂=3` → `6 ≠ 5`, so the BFS flags a cycle mismatch and
+      prints `NO`.
+
+  - type: mcq
+    prompt: "Why is checking 'no contradictory cycle' sufficient for this problem to always print YES when a solution exists?"
+    options:
+      - "Because the constraints only impose differences between prefix sums, so any consistent assignment (no cycle sum breaking an equation) can always be shifted to fit in ±10^15."
+      - "Because m is small enough that the system always has a solution."
+      - "Because prefix sums are always non-negative."
+      - "Because all constraints must be usable in increasing order of l."
+    answer: 0
+    explanation: "Each constraint fixes only the difference p[r] − p[l−1]. Feasibility of a pure difference system is exactly 'no cycle whose label sum contradicts an edge'; if that holds, every component gets a value and the loose ±10^15 bound is trivially satisfiable (values are tiny sums of the given s). Hence consistency ⟺ YES, and the BFS that detects cycle mismatch decides the whole answer."

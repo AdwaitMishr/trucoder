@@ -1,0 +1,195 @@
+---
+id: increasing-array
+title: Increasing Array
+difficulty: easy
+order: 4
+tags:
+  - intro
+  - greedy
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — greedy "fix as you go"
+
+      You may only ever **increase** elements (each +1 costs one move) and you
+      want the array to be **non-decreasing** (`a[i] ≥ a[i-1]` for all `i`).
+      Since you can only push values up, the natural strategy is to scan left
+      to right and, whenever an element is too small, raise *it* just enough to
+      meet the previous element.
+
+      **Why is this greedy optimal?** The minimum legal value for position `i`
+      is the value we fixed at position `i-1`. Raising position `i-1` any more
+      than necessary would only force **more** increases later, never fewer.
+      So keeping each element as small as possible while satisfying the
+      constraint is globally optimal — and the left-to-right scan constructs
+      exactly that.
+
+      **Worked mini-example.** `[3, 2, 5, 1, 7]`:
+      - element `2 < 3` → raise to `3` (cost 1);
+      - element `5 ≥ 3`, keep it `5`;
+      - element `1 < 5` → raise to `5` (cost 4);
+      - element `7 ≥ 5`, keep it `7`.
+      Total cost = `1 + 4 = 5`. The final array `[3, 3, 5, 5, 7]` is perfectly
+      non-decreasing.
+
+      **Complexity.** One scan: time `O(n)`, space `O(1)`.
+
+      :::tip
+      **Interview tip:** Greedy "fix violations left to right" is a recurring
+      pattern for *minimum moves to satisfy an order constraint*. Always argue
+      *why the greedy choice can't hurt* (here: any alternative raises the
+      ceiling earlier, which only forces more work) before coding it.
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given an array of `n` integers. You want to modify the array so
+      that it is increasing, i.e., every element is at least as large as the
+      previous element.
+
+      On each move, you may increase the value of any element by one. What is
+      the minimum number of moves required?
+
+      **Input:** The first input line contains an integer `n` (the size of the
+      array). The second line contains `n` integers `x_1, x_2, …, x_n`: the
+      contents of the array.
+
+      **Output:** Print the minimum number of moves.
+
+      **Constraints:** `1 ≤ n ≤ 2·10^5`, `1 ≤ x_i ≤ 10^9`
+
+      ### Sample
+
+      Input:
+      ```text
+      5
+      3 2 5 1 7
+      ```
+
+      Output:
+      ```text
+      5
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(total moves) time, O(n) space (simulate the +1 moves).**
+
+      ```cpp
+      long long solve(long long n, const vector<long long>& a) {
+          vector<long long> b = a;
+          long long moves = 0;
+          bool changed = true;
+          while (changed) {
+              changed = false;
+              for (size_t i = 1; i < b.size(); ++i) {
+                  if (b[i] < b[i - 1]) { b[i]++; moves++; changed = true; }
+              }
+          }
+          return moves;
+      }
+      ```
+
+      Directly apply the single allowed operation: repeatedly find any violation
+      `b[i] < b[i-1]` and bump `b[i]` up by one, counting each bump. Each bump only ever
+      helps, so the loop terminates with the correct answer — but it runs one iteration
+      per unit increase, and the total can be ≈ `10^9 · n`, making this far too slow for
+      the real constraints.
+
+      **② Optimization — O(n) time, O(1) space (greedy fix-as-you-go).**
+
+      ```cpp
+      long long solve(long long n, const vector<long long>& a) {
+          long long moves = 0;
+          long long prev = a[0];
+          for (size_t i = 1; i < a.size(); ++i) {
+              if (a[i] < prev) {
+                  moves += prev - a[i];
+              } else {
+                  prev = a[i];
+              }
+          }
+          return moves;
+      }
+      ```
+
+      Scan left to right keeping `prev` = the value the previous element now holds. A
+      violation `a[i] < prev` is fixed in one arithmetic step by raising `a[i]` to
+      exactly `prev` (cost `prev - a[i]`), replacing the brute force's one bump at a time
+      and collapsing the whole loop into a single `O(n)` pass. This greedy is optimal
+      because raising a ceiling earlier than necessary would only force more work later.
+
+      There is no further or alternative algorithm worth adding: every solution must fix
+      exactly the same ascending violations, and once an element is too small the greedy
+      choice (raise it to precisely the previous ceiling) is the forced, minimal move.
+
+      Reason through the code above with the next block — then trace it on the sample input below.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` keeps `prev` = the value the previous element currently holds.
+      Walking the array, an element `a[i] ≥ prev` is already fine, so it
+      becomes the new `prev`. An element `a[i] < prev` is a violation — we
+      raise it to exactly `prev`, costing `prev - a[i]` moves, and `prev`
+      stays unchanged (the element now equals it).
+
+      Raising to exactly `prev` is deliberately minimal: anything more would
+      only inflate the ceiling for later elements. The total accumulates into
+      `long long` because the sum of differences can exceed `2^31` (e.g. a drop
+      from `10^9` to `1` costs almost `10^9` moves).
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5`, `a = [3, 2, 5, 1, 7]` (the CSES sample).
+
+      **Expected output:** `5`.
+
+      **Actual run** (`prev` starts at `a[0] = 3`, `moves = 0`):
+
+      | i | `a[i]` | `prev` | outcome | moves |
+      |---|--------|--------|---------|-------|
+      | 1 | 2 | 3 | `2 < 3` → add `3-2=1` | 1 |
+      | 2 | 5 | 3 | `5 ≥ 3` → `prev = 5` | 1 |
+      | 3 | 1 | 5 | `1 < 5` → add `5-1=4` | 5 |
+      | 4 | 7 | 5 | `7 ≥ 5` → `prev = 7` | 5 |
+
+      Final `moves = 5`, matching the expected output exactly. The resulting
+      non-decreasing array is `[3, 3, 5, 5, 7]`.
+  - type: flowchart
+    title: Greedy scan
+    nodes:
+      - 'Start: prev = a[0], moves = 0'
+      - More elements?
+      - 'a[i] < prev?'
+      - 'moves += prev - a[i]'
+      - 'prev = a[i]'
+      - Return moves
+    edges:
+      - from: 0
+        to: 1
+        label: ''
+      - from: 1
+        to: 2
+        label: yes
+      - from: 1
+        to: 5
+        label: no
+      - from: 2
+        to: 3
+        label: yes
+      - from: 2
+        to: 4
+        label: no
+      - from: 3
+        to: 1
+        label: next
+      - from: 4
+        to: 1
+        label: next
+type: content
+---
+

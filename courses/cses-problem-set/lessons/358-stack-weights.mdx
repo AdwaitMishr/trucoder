@@ -1,0 +1,196 @@
+---
+id: stack-weights
+title: "Stack Weights"
+type: content
+difficulty: easy
+order: 358
+tags:
+  - monotonic-stack
+  - stack
+  - arrays
+blocks:
+  - type: markdown
+    content: |
+      # Stack Weights — how many consecutive lighter items does each one dominate?
+
+      ## Theory
+
+      We push weights onto a stack one at a time, left to right. A weight that reaches the
+      stack **dominates** every *consecutive* lighter weight immediately beneath it. The
+      standard question is: for each item `i`, how many items in total is it the "nearest
+      heavier barrier" for? More concretely we compute the **span** of `i`:
+
+      > `span[i] =` the number of consecutive elements ending at `i` whose weight is
+      > **strictly less than** `w[i]` (counting `i` itself). Equivalently, `i` stops at the
+      > nearest element to its left with weight `≥ w[i]`.
+
+      This is the classic *stock-span* / *nearest-greater-element* pattern. The brute way is
+      to scan left from each `i` until hitting a non-smaller weight — `O(n²)`. A **monotonic
+      stack** makes it `O(n)`:
+
+      - Maintain a stack of indices whose weights are **strictly decreasing** from bottom to
+        top.
+      - Before pushing `i`, pop every index whose weight is `< w[i]`. Those are exactly the
+        items that do *not* block `i` — they are dominated by `i`.
+      - After popping, the new top is the nearest index to the left with `weight ≥ w[i]`
+        (the barrier). If the stack is empty, no element blocks `i`.
+      - So `span[i] = i − (top of stack)` or `i + 1` when the stack empties.
+      - Push `i` and repeat.
+
+      Each index is pushed once and popped at most once, so the work is linear. The invariant
+      is that the stack holds *candidates*, in decreasing-weight order, each still able to be
+      the barrier for a future item.
+
+      **Time:** `O(n)`. **Space:** `O(n)` (the stack / span array).
+
+      :::tip
+      **Interview tip:** "For each element, how far does it see / what is it the nearest
+      heavier (or lighter) thing to?" is the signature of a **monotonic stack**. Same skeleton
+      powers next-greater-element, stock-span, the largest-rectangle-in-a-histogram family,
+      and sliding "skyline" problems. Remember the two directions: a strictly-decreasing stack
+      gives nearest *greater-or-equal* barriers; tweak the comparison to `<` or `≤` to flip
+      strictness.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Question
+
+      Given an array of `n` weights `w[1..n]`, compute for each position `i` the **span**:
+      the number of consecutive elements ending at `i` (including `i`) whose weights are
+      strictly smaller than `w[i]`. That is, starting at `i` and moving left, count how many
+      weights are `< w[i]`; stop at the first weight that is `≥ w[i]` (or at the start of the
+      array).
+
+      **Input.** The first line has an integer `n`. The second line has `n` integers
+      `w[1..n]`.
+
+      **Output.** Print `n` integers: `span[1]` … `span[n]`, separated by spaces.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 2·10⁵`
+      - `1 ≤ w[i] ≤ 10⁹`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      5
+      3 1 2 4 2
+      ```
+
+      **Output:**
+      ```
+      1 1 2 4 1
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²).** For each `i`, walk left while the neighbouring weights are
+      `< w[i]`, counting; stop at the first `≥`. Simple and obviously correct, but quadratic.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin>>n;
+          vector<long long> w(n);
+          for(int i=0;i<n;i++) cin>>w[i];
+          for(int i=0;i<n;i++){
+              int span=1;
+              for(int j=i-1; j>=0 && w[j] < w[i]; j--) span++;
+              if(i) cout<<" ";
+              cout<<span;
+          }
+          cout<<"\n";
+      }
+      ```
+      *Complexity: O(n²) — too slow for `n = 2·10⁵`.*
+
+      **② Optimization — monotonic stack, O(n) (intended).** Keep a stack of indices whose
+      weights are strictly decreasing bottom-to-top. Before pushing `i`, pop all indices with
+      weight `< w[i]` (they are dominated by `i`); the remaining top is the nearest index to
+      the left with weight `≥ w[i]`, so `span[i]` is `i − top` (or `i+1` if empty):
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<long long> w(n);
+          for(int i=0;i<n;i++) cin>>w[i];
+          vector<int> span(n), st;          // st = monotonic stack of indices
+          for(int i=0;i<n;i++){
+              while(!st.empty() && w[st.back()] < w[i]) st.pop_back();  // dominated keys
+              span[i] = st.empty() ? i + 1 : i - st.back();             // nearest >= barrier
+              st.push_back(i);
+          }
+          for(int i=0;i<n;i++){ if(i) cout<<" "; cout<<span[i]; }
+          cout<<"\n";
+      }
+      ```
+      *Complexity: O(n) time, O(n) space — each index pushed/popped once.*
+
+      **③ Further optimization — D only at most once.** The `O(n)` bound is optimal: every
+      element must be read, and the stack already touches each index a constant number of
+      times (`push` once, `pop` at most once). There is no sub-linear route, so this tier is
+      done — linear is the answer.
+
+      **④ Alternative — a right-to-left pass (next-greater-element symmetry).** The same
+      stack idea run *right to left* assigns to each `i` the nearest index to the **right** with
+      weight `> w[i]`. Because "span of consecutive strictly-smaller to the left" is the mirror
+      of "nearest-greater-or-equal to the left", both traversals use the identical
+      strictly-decreasing stack. If the problem asked for *next greater element to the right*
+      instead, you would only change the pop condition (`while w[st.back()] < w[i]`) and the
+      nowhere-else handling. No fundamentally different algorithm beats O(n).
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      - **Stack of indices, not values.** We store indices so that `i - st.back()` directly
+        gives a count; the *weights* are compared by dereferencing `w[...]`.
+      - **The pop rule.** `w[st.back()] < w[i]` removes every lighter candidate. These items
+        can never be the barrier for `i` — and since `w[i]` is bigger, they cannot be a barrier
+        for any later item either, so throwing them away is safe.
+      - **The barrier.** After popping, `st.back()` is the nearest index to the left with
+        `weight ≥ w[i]` (the invariant keeps the stack decreasing, so every further-down index
+        is even heavier and farther away). `span[i] = i - st.back()`.
+      - **Empty stack.** Then nothing blocks `i`, and all of `w[0..i]` before it are smaller
+        in the relevant consecutive sense, so `span[i] = i + 1`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `w = [3, 1, 2, 4, 2]`, `n = 5`.
+
+      Step through with the monotonic stack `st` (showing indices):
+
+      - `i=0, w=3` — stack empty → `span[0] = 0+1 = 1`. Stack: `[0]`.
+      - `i=1, w=1` — top `w[0]=3`, not `< 1`, no pop → `span[1] = 1-0 = 1`. Stack: `[0,1]`.
+      - `i=2, w=2` — pop `1` (`w=1 < 2`); top is `0` (`w=3 ≥ 2`) → `span[2] = 2-0 = 2`. Stack: `[0,2]`.
+      - `i=3, w=4` — pop `2` (`2<4`), pop `0` (`3<4`) → empty → `span[3] = 3+1 = 4`. Stack: `[3]`.
+      - `i=4, w=2` — top `w[3]=4` (not `< 2`) → `span[4] = 4-3 = 1`. Stack: `[3,4]`.
+
+      Spans: `[1, 1, 2, 4, 1]`. Output:
+      ```
+      1 1 2 4 1
+      ```
+      which matches the sample. ✓
+
+      *(Check by hand: at `i=2` the consecutive smaller-than-2 run is `[1, 2]` → 2; at `i=3`
+      the smaller-than-4 run is `[3, 1, 2, 4]` → 4; at `i=4` only `[2]` → 1.)*
+
+  - type: mcq
+    prompt: "In the monotonic-stack solution, why is it safe to permanently pop an index whose weight is strictly less than the current w[i]?"
+    options:
+      - "Because that index's weight is smaller than w[i], so it is dominated by i and can never be the nearest heavy barrier for i or for any future (even heavier) element."
+      - "Because popped indices never mattered for any earlier element either."
+      - "Because the stack is sorted by value and we always pop from the bottom."
+      - "Because each remaining element in the stack has weight exactly equal to w[i]."
+    answer: 0
+    explanation: "An index with weight < w[i] cannot be the nearest 'weight ≥ current' barrier for i (w[i] itself already beats it), and it can't be a barrier for any later element either — later elements are at least as heavy as w[i]. So popping it forever is correct; the strictly-decreasing stack keeps only live candidates."

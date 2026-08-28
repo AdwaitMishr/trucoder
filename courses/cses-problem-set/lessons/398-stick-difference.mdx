@@ -1,0 +1,178 @@
+---
+id: stick-difference
+title: "Stick Difference"
+type: content
+difficulty: easy
+order: 398
+tags:
+  - greedy
+  - sorting
+  - exchange-argument
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — adjacent pairing after sorting
+
+      Problems of the form *"pair up `n` items to minimize the sum of some
+      pairwise cost"* often hide a sorting trick: when the cost of pairing two items
+      is an increasing function of how "far apart" they are, the optimal matching is
+      **pairs of adjacent items once the list is sorted**. Here the cost of a pair of
+      sticks lengths `x,y` is the absolute difference `|x − y|`, and the total cost
+      is the sum over all pairs.
+
+      **Why adjacent pairing is optimal — an exchange argument.** In any matching,
+      focus on two non-crossing pairs `(a,b)` and `(c,d)` with `a ≤ b ≤ c ≤ d`. If we
+      pair *inside* (`a,c`) and (`b,d`) — the "crossing" alternative — the cost
+      becomes `(c−a)+(d−b)`, which is `(b−a)+(d−c)+2·(c−b)`, strictly larger than the
+      non-crossing `(b−a)+(d−c)` whenever `c > b`. So crossing pairs are never
+      better, and by uncrossing repeatedly we reach a matching of *consecutive*
+      partners — unique up to the choice of which element is the first of each pair.
+      Taking every two consecutive elements from the sorted array realizes the
+      minimum.
+
+      :::tip
+      **Interview tip:** "Sort, then pair adjacent" solves a whole family of
+      minimization-over-pairing problems (min sum of absolute differences, min sum
+      of squared differences, minimize wasted space). The standard follow-up is the
+      caveat: it only works when the pair cost is monotone in the gap — a classic
+      trap to flag in a review.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      :::note
+      **Concrete formulation.** The set lists "Stick Difference". We adopt this
+      coherent version: pair every stick with exactly one other to minimize the sum
+      of the absolute length differences. `n` is guaranteed even so every stick is
+      paired.
+      :::
+
+      You have `n` sticks (with `n` even) whose lengths are `a[1..n]`. You must pair
+      them up into `n/2` pairs; each stick is in exactly one pair. The cost of a pair
+      is `|x − y|` for its two lengths, and the total cost is the sum over all pairs.
+      Minimize the total cost.
+
+      **Input.** The first line has an integer `n`. The second line has `n` integers
+      `a[1..n]`.
+
+      **Output.** Print the minimum possible total cost.
+
+      **Constraints.**
+      - `2 ≤ n ≤ 2·10^5`, `n` is even
+      - `1 ≤ a[i] ≤ 10^9`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      6
+      6 2 8 1 3 4
+      ```
+
+      **Output:**
+      ```
+      4
+      ```
+
+      (Sorted `1,2,3,4,6,8`; pairs `(1,2)`,`(3,4)`,`(6,8)` cost `1+1+2 = 4`.)
+
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2ⁿ · n) over subsets.** Enumerate all ways to choose `n/2`
+      disjoint pairs and evaluate the cost.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin>>n; vector<long long> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          const long long INF=LLONG_MAX/4;
+          vector<long long> dp(1<<n, INF);
+          dp[0]=0;
+          for(int mask=0; mask<(1<<n); mask++){
+              if(dp[mask]>=INF) continue;
+              int b=0; while(b<n && (mask>>b&1)) b++;
+              if(b==n) continue;
+              for(int c=b+1;c<n;c++) if(!(mask>>c&1)){
+                  int nxt=mask|(1<<b)|(1<<c);
+                  dp[nxt]=min(dp[nxt], dp[mask]+llabs(a[b]-a[c]));
+              }
+          }
+          cout<<dp[(1<<n)-1]<<"\n";
+      }
+      ```
+      *Complexity: O(2ⁿ · n) — only for tiny `n` (≤ ~20).*
+
+      **② Optimization — sort + adjacent pairing, O(n log n) (the solution).** Sort
+      `a`, then pair elements at positions `(0,1),(2,3),…` and sum the differences.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin>>n; vector<long long> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          sort(a.begin(), a.end());
+          long long total=0;
+          for(int i=0;i<n;i+=2) total += a[i+1]-a[i];
+          cout<<total<<"\n";
+      }
+      ```
+      *Complexity: O(n log n) time, O(n) memory — instant for `n = 2·10^5`.
+      (A counting/bucket sort turns it into O(n + max)` when lengths are bounded,
+      but the sort is already fast.)*
+
+      **③ Further optimization — none meaningful; it is already near-linear.** The
+      dominant step is the sort. If `a[i]` were bounded by a small constant,
+      counting sort would give **O(n)** after all, but under the generic
+      `≤ 10^9` constraint, `O(n log n)` is the practical optimum.
+
+      **④ Alternative technique — related "make all sticks equal" (CSES *Stick
+      Lengths*).** A subtly different objective is to *change the lengths* of all
+      sticks until they are equal, paying `Σ|a[i] − t|` for a chosen target `t`. The
+      minimizer of `Σ|a[i] − t|` is the **median** (not the mean) — a useful fact that
+      shares the same "sort first" instinct but answers a different question. Do not
+      confuse the two: here sticks are only *paired*, not resized.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n log n). Key lines of tier ②:
+
+      1. **`sort(a.begin(), a.end())`** — non-crossing optimality lets us assume
+         partners are consecutive after sorting.
+      2. **`for (i = 0; i < n; i += 2) total += a[i+1] - a[i]`** — pair consecutive
+         elements `(0,1),(2,3),…`; since the array is sorted, `a[i+1] ≥ a[i]`, so
+         `a[i+1]-a[i]` is the non-negative pair cost.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 6`, lengths `a = 6 2 8 1 3 4`.
+
+      1. **Sort:** `1 2 3 4 6 8`.
+      2. **Pair:** `(1,2) → 1`, `(3,4) → 1`, `(6,8) → 2`.
+      3. **Total:** `1 + 1 + 2 = 4`.
+
+      ✓ Output `4` matches the sample. Crossing pairs, e.g. `(1,3)` and `(2,4)`,
+      cost `2 + 2 = 4` too, but the adjacent matching is never worse than any
+      crossing one (the exchange argument). The brute tier (①) confirms that no
+      matching beats `4`.
+
+  - type: mcq
+    prompt: "Why can we restrict to pairing adjacent elements after sorting?"
+    options:
+      - "Because two crossing pairs can always be 'uncrossed' to a matching that is no more expensive, so an optimal solution pairs consecutive elements."
+      - "Because sorting always leaves elements already paired."
+      - "Because the median, not the mean, minimizes the total difference."
+      - "Because pair costs are always zero for adjacent elements."
+    answer: 0
+    explanation: "For pairs (a,b),(c,d) with a≤b≤c≤d the crossing cost (c−a)+(d−b) exceeds the non-crossing (b−a)+(d−c) by 2(c−b)≥0. Repeatedly uncrossing shows an optimal matching never crosses, i.e. it pairs consecutive sorted elements, and taking (0,1),(2,3),… realizes it. The median fact is a different problem (making all sticks equal), so it is a distractor."
+---

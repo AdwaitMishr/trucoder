@@ -1,0 +1,309 @@
+---
+id: counting-coprime-pairs
+title: Counting Coprime Pairs
+difficulty: hard
+order: 168
+tags:
+  - math
+  - number-theory
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting coprime pairs with the Möbius function
+
+      Two integers are **coprime** if their gcd is `1`. Counting unordered pairs with
+      gcd exactly `1` over a multiset is hard to do directly, but it is easy to count
+      pairs whose gcd is a **multiple** of `d`: a pair `(u, v)` both divisible by `d`
+      is `C(cnt_d, 2)`, where `cnt_d` is the number of array elements divisible by
+      `d`.
+
+      The **Möbius function** `μ(d)` — `μ(d) = 0` if `d` has a squared prime factor,
+      else `μ(d) = (−1)^(number of prime factors)` — is the inverse (over the
+      divisor lattice) of the constant function. It turns the counts "divisible by
+      some multiple" back into "gcd exactly one":
+
+      ```
+      answer = Σ_d μ(d) · C(cnt_d, 2)
+      ```
+
+      A pair has gcd `g > 1` iff it is counted with `C(cnt_1,2)` and not removed; the
+      Möbius weights cancel the non-one gcds, leaving exactly the coprime pairs. The
+      magic is that `cnt_d` is available by a simple divisor sieve:
+
+      ```
+      cnt_d = Σ_{m multiple of d} freq[m]
+      ```
+
+      **Time complexity:** computing `freq`, then `cnt_d` for all `d` is
+      `O(A log A)` with `A = 10^6` (the `d + 2d + 3d + …` harmonic sum ≈
+      `A log A`), plus building `μ` in `O(A log log A)`.
+
+      :::tip
+      **Interview tip:** "count pairs with gcd = 1 / a given condition" is a strong
+      Möbius-inversion cue. Whenever the per-`d` quantity is easy (`C(cnt_d,2)`) but
+      the exact quantity is not, transform with `Σ μ(d)`. Interviews rarely need the
+      proof, but you'll be expected to know that `μ` is `0` when a prime square
+      divides `d` and `(−1)^ω(d)` otherwise.
+      :::
+  - type: markdown
+    content: |
+      ## Question
+
+      Given a list of `n` positive integers, your task is to count the number of
+      pairs of integers that are **coprime** (i.e., their greatest common divisor is
+      one).
+
+      **Input**
+
+      The first input line has an integer `n`: the number of elements.
+
+      The next line has `n` integers `x_1, x_2, …, x_n`: the contents of the list.
+
+      **Output**
+
+      Print one integer: the answer for the task.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `1 <= x_i <= 10^6`
+
+      **Example**
+
+      Input:
+
+      ```
+      8
+      5 4 20 1 16 17 5 15
+      ```
+
+      Output:
+
+      ```
+      19
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n² log A) time, O(1) space (gcd all pairs).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          vector<int> a(n);
+          for (int i = 0; i < n; i++) cin >> a[i];
+          ll ans = 0;
+          for (int i = 0; i < n; i++)
+              for (int j = i + 1; j < n; j++)
+                  if (std::gcd(a[i], a[j]) == 1) ans++;
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      The literal definition: test every pair with Euclid's algorithm. Simple and
+      obviously correct, but there are `C(n,2) ≈ 5·10^9` pairs for `n = 10^5` — far
+      beyond any time limit. It only finishes on the tiny sample.
+
+      **② Optimization — O(A log A) time, O(A) space (Möbius divisor sieve).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const int MAXV = 1000000;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          vector<int> f(MAXV + 1, 0);
+          for (int i = 0; i < n; i++) { int v; cin >> v; f[v]++; }
+
+          // Möbius function μ: 0 if a square divides d, else (-1)^(#prime factors)
+          vector<int> mu(MAXV + 1, 1);
+          vector<char> comp(MAXV + 1, 0);
+          for (int i = 2; i <= MAXV; i++) {
+              if (!comp[i]) {
+                  for (int m = i; m <= MAXV; m += i) { comp[m] = 1; mu[m] = -mu[m]; }
+                  long long sq = 1LL * i * i;
+                  for (long long m = sq; m <= MAXV; m += sq) mu[(int)m] = 0;
+              }
+          }
+
+          ll ans = 0;
+          for (int d = 1; d <= MAXV; d++) {
+              ll c = 0;                                // elements divisible by d
+              for (int m = d; m <= MAXV; m += d) c += f[m];
+              if (mu[d] != 0 && c >= 2) ans += mu[d] * c * (c - 1) / 2;
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      `cnt_d` is gathered by a divisor sieve and weighted by `μ(d)`; each contributes
+      `μ(d)·C(cnt_d,2)`. Summing over all `d` leaves exactly the coprime pairs. This
+      is `O(A log A)` (the divisor I–I loop) and easily handles `A = 10^6`. This is
+      the intended solution.
+
+      **③ Further optimization — O(A log log A) for μ, O(A log A) overall (linear sieve μ).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const int MAXV = 1000000;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          vector<int> f(MAXV + 1, 0);
+          for (int i = 0; i < n; i++) { int v; cin >> v; f[v]++; }
+
+          int lp[MAXV + 1] = {};
+          vector<int> mu(MAXV + 1, 0), primes;
+          mu[1] = 1;
+          for (int i = 2; i <= MAXV; i++) {            // linear sieve computes mu
+              if (lp[i] == 0) { lp[i] = i; primes.push_back(i); mu[i] = -1; }
+              for (int p : primes) {
+                  if (p > lp[i] || 1LL * i * p > MAXV) break;
+                  lp[i * p] = p;
+                  mu[i * p] = (p == lp[i]) ? 0 : -mu[i];
+              }
+          }
+
+          ll ans = 0;
+          for (int d = 1; d <= MAXV; d++) {
+              ll c = 0;
+              for (int m = d; m <= MAXV; m += d) c += f[m];
+              if (mu[d] != 0 && c >= 2) ans += mu[d] * c * (c - 1) / 2;
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      Same answer; only `μ` is now assembled in a linear sieve (`O(A log log A)`,
+      lower constant) instead of the double-mark sieve. The overall cost is still the
+      `O(A log A)` `cnt_d` loop, so this is a constant-factor refinement — understand
+      the recursion `μ(i·p) = 0` if `p` already divides `i`, else `−μ(i)`.
+
+      **④ Alternative algorithm — O(n · 2^ω) ≤ O(64n) time, O(A) space (online prime-factor IE).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const int MAXV = 1000000;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n; cin >> n;
+          vector<ll> mult(MAXV + 1, 0);   // how many seen elements share each squarefree product
+          ll ans = 0;
+          for (int idx = 0; idx < n; idx++) {
+              int v; cin >> v;
+              // distinct prime factors of v
+              vector<int> pf;
+              int x = v;
+              for (int d = 2; 1LL * d * d <= x; d++) {
+                  if (x % d == 0) { pf.push_back(d); while (x % d == 0) x /= d; }
+              }
+              if (x > 1) pf.push_back(x);
+              int m = (int)pf.size();
+
+              // among the idx previous elements, how many share at least one factor? (IE)
+              ll share = 0;
+              for (int mask = 1; mask < (1 << m); mask++) {
+                  ll prod = 1; int bits = 0; bool ok = true;
+                  for (int i = 0; i < m; i++) if (mask & (1 << i)) {
+                      bits++;
+                      if (prod > MAXV / pf[i]) { ok = false; break; }
+                      prod *= pf[i];
+                  }
+                  if (!ok) continue;
+                  share += (bits & 1) ? mult[prod] : -mult[prod];
+              }
+              ans += (ll)idx - share;      // all previous minus the non-coprime ones
+
+              for (int mask = 1; mask < (1 << m); mask++) {   // register v's factors
+                  ll prod = 1; bool ok = true;
+                  for (int i = 0; i < m; i++) if (mask & (1 << i)) {
+                      if (prod > MAXV / pf[i]) { ok = false; break; }
+                      prod *= pf[i];
+                  }
+                  if (ok) mult[prod]++;
+              }
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      A genuinely different, **online** strategy: process numbers left to right; for
+      each new value, count the already-seen elements that share *no* prime factor by
+      inclusion–excluding over its (≤ 7) distinct prime factors against a running
+      count of squarefree products. Each element costs ≤ `2^7 = 128` subset steps, so
+      `O(128n)`. The Möbius sieve ② is offline and simpler to implement; this one
+      favours small `ω` and streaming input.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      Tier ② does two things:
+
+      1. **Build `μ`.** For every prime `i`, negate `μ` on all multiples (a new prime
+         factor flips the sign), then zero out multiples of `i²` (a squared factor).
+         This matches the definition of `μ`.
+      2. **Sum `μ(d)·C(cnt_d, 2)`.** The inner loop over multiples accumulates, for
+         each `d`, the number of array elements divisible by `d`. A pair with gcd
+         exactly `d` appears in `cnt_{d}`, and the Möbius filter guarantees each pair
+         whose actual gcd `g` is `1` survives exactly once (Σ_{d|g} μ(d) = 1 iff g=1).
+
+      Every quantity fits: `cnt_d ≤ n = 10^5`, so `c·(c−1)/2 ≤ 5·10^9` — stored in a
+      `long long` running `ans`. The sieve arrays are `int` size `10^6`, comfortably
+      small in memory.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      Trace the sample `8` / `5 4 20 1 16 17 5 15` (expected `19`). Frequencies of the
+      relevant divisors:
+
+      | d | divisible elements | cnt_d | μ(d) | μ·C(cnt_d,2) |
+      |----|-------------------|-------|------|----------------|
+      | 1  | all 8             | 8     | 1    | 1·C(8,2) = 28  |
+      | 2  | 4, 16, 20         | 3     | −1   | −1·C(3,2) = −3  |
+      | 4  | 4, 16, 20         | 3     | 0    | 0               |
+      | 5  | 5, 5, 15, 20      | 4     | −1   | −1·C(4,2) = −6  |
+      | 16 | 16                | 1     | 0    | 0               |
+      | 20 | 20                | 1     | 0    | 0               |
+      | 34 | 17                | 1     | −1   | 0               |
+      | other d | –            | ≤1    | –    | 0               |
+
+      Total `28 − 3 − 6 = 19`, matching the sample. The +28 counts all pairs, then
+      −3 removes pairs that share the factor `2` (e.g. `(4,16)`, `(4,20)`, `(16,20)`)
+      and −6 removes pairs sharing the factor `5` (e.g. `(5,20)`, `(5,5)`, `(5,15)`,
+      `(15,20)`) — with `μ` correctly not double-penalising pairs like `(4,20)` that
+      share several common divisors.
+  - type: mcq
+    prompt: A pair of numbers whose actual gcd is 6 appears in cnt_1, cnt_2, cnt_3 and cnt_6. Why does it contribute zero overall in the sum Σ μ(d)·C(cnt_d,2)?
+    options:
+      - 'Because C(cnt_d,2) is the same for every divisor d of 6.'
+      - 'Because Σ_{d | 6} μ(d) = μ(1)+μ(2)+μ(3)+μ(6) = 1−1−1+1 = 0, so the pair cancels out; only pairs with gcd 1 (where Σ_{d|gcd} μ(d) = 1) survive.'
+      - 'Because μ(6) = 0, so every multiple counted for 6 vanishes.'
+      - 'Because cnt_2 and cnt_3 are both always zero when the gcd is 6.'
+    answer: 1
+    explanation: 'For a fixed pair with gcd g, it is included in C(cnt_d,2) for every d that divides g. Its total weight is Σ_{d|g} μ(d), which Möbius inversion guarantees is 1 when g = 1 and 0 otherwise. For g = 6, μ(1)+μ(2)+μ(3)+μ(6) = 1 + (−1) + (−1) + (+1) = 0, so the pair cancels out; only coprime pairs (gcd 1) survive.'
+type: content
+---

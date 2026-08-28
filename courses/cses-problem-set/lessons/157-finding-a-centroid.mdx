@@ -1,0 +1,263 @@
+---
+id: finding-a-centroid
+title: Finding a Centroid
+type: content
+difficulty: medium
+order: 157
+tags:
+  - tree
+  - centroid
+  - subtree-sizes
+blocks:
+  - type: markdown
+    content: |
+      # Finding a Centroid — the subdivision point of a tree
+
+      A **centroid** of a tree is a node such that, when it is chosen as the
+      root, every component hanging off it (each subtree of that root) has at
+      most `floor(n / 2)` nodes. Equivalently: deleting the centroid splits the
+      tree into components, each of size at most `n / 2`. Every tree has either
+      one or two centroids.
+
+      The key counting primitive is **subtree size**. Count from any root; the
+      centroid is then a purely local condition — every *branch* it owns must be
+      small.
+
+      ## Why finding the centroid is a size-comparison
+
+      Root the tree anywhere, say at node `1`, and compute `sz[v]` = size of
+      `v`'s subtree. If we suspend the tree at `v`, the components after
+      removing `v` are:
+
+      - for each **child** `u` of `v`: size `sz[u]`;
+      - the **rest of the tree** (everything not in `v`'s subtree): size
+        `n - sz[v]`.
+
+      So `v` is a centroid exactly when every child `sz[u] <= n/2` **and**
+      `n - sz[v] <= n/2`. The largest of these numbers is called the *max
+      component* of `v`; the centroid is the node minimizing it (the minimum is
+      always `<= floor(n/2)`).
+
+      ## Complexity
+
+      - One DFS for subtree sizes: `O(n)`.
+      - Handling the size test per node, in total over all edges: `O(n)`.
+      - Space: `O(n)`.
+
+      :::tip
+      **Interview tip:** Finding a centroid is a one-liner once you know the
+      *max-component* way to think about it. Its real value is that the
+      **centroid decomposition** — repeatedly removing centroids to split a tree
+      into `O(log n)`-deep nesting — is *the* framework for counting paths of a
+      given length (see Fixed-Length Paths I & II). Interviewers ask "find the
+      centroid" as a warm-up that checks you can reason about subtree sizes.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given a tree of `n` nodes, find a **centroid**: a node such that when it
+      is appointed the root of the tree, each subtree has at most
+      `floor(n / 2)` nodes.
+
+      ## Input
+
+      The first input line has an integer `n`: the number of nodes. The nodes
+      are numbered `1, 2, ..., n`.
+
+      Then there are `n - 1` lines describing the edges: each has two integers
+      `a` and `b` — an edge between `a` and `b`.
+
+      **Constraints:** `1 <= n <= 2 * 10^5`, `1 <= a, b <= n`
+
+      ## Output
+
+      Print one integer: a centroid node. If there are several possibilities,
+      you may print any of them.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5
+      1 2
+      2 3
+      3 4
+      3 5
+      ```
+      **Output:**
+      ```
+      3
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — try every root, O(n²)**
+
+      For each candidate node `v`, remove it (conceptually) and DFS each of its
+      incident components to confirm every component size is `<= n/2`. Any node
+      that passes is a centroid. Checking one node costs `O(n)` and there are
+      `n` candidates → `O(n²)`, too slow for `n = 2 * 10^5`.
+
+      **② Optimization — subtree sizes + max-component test, O(n) (optimal)**
+
+      One DFS computes `sz[v]`. A second pass evaluates the *max component* for
+      each node:
+
+      ```
+      maxComp(v) = max( n - sz[v],  max { sz[u] : u is a child of v } )
+      ```
+
+      Any node achieving the minimum `maxComp` is a centroid — print it. This is
+      the optimal tier (compiled and run against the sample below).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int n;
+      vector<int> g[200005];
+      int sz[200005];
+
+      void dfs(int v, int p) {
+          sz[v] = 1;
+          for (int u : g[v]) if (u != p) { dfs(u, v); sz[v] += sz[u]; }
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          cin >> n;
+          for (int i = 0; i + 1 < n; i++) {
+              int a, b; cin >> a >> b; --a; --b;
+              g[a].push_back(b); g[b].push_back(a);
+          }
+          dfs(0, -1);
+
+          int centroid = -1, best = INT_MAX;
+          for (int v = 0; v < n; v++) {
+              // components after removing v:
+              int mx = n - sz[v];                     // the "up" part of the tree
+              for (int u : g[v])
+                  if (sz[u] < sz[v])                  // u is a child (descendant)
+                      mx = max(mx, sz[u]);
+              if (mx < best) { best = mx; centroid = v; }
+          }
+          cout << centroid + 1 << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n)` time, `O(n)` space. (Seed the tie-break so the min is tracked
+      correctly; any node whose `maxComp <= n/2` qualifies.)*
+
+      **③ Alternative algorithm — walk down the heavy branch, O(n)**
+
+      Fold the test into a single descent instead of scanning every node: start
+      at the root and, while some child subtree has size `> n/2`, move into it.
+      The node where no child exceeds `n/2` is a centroid.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int n;
+      vector<int> g[200005];
+      int sz[200005];
+
+      void dfs(int v, int p) {
+          sz[v] = 1;
+          for (int u : g[v]) if (u != p) { dfs(u, v); sz[v] += sz[u]; }
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          cin >> n;
+          for (int i = 0; i + 1 < n; i++) {
+              int a, b; cin >> a >> b; --a; --b;
+              g[a].push_back(b); g[b].push_back(a);
+          }
+          dfs(0, -1);
+          int v = 0, p = -1;
+          while (true) {
+              int nxt = -1;
+              for (int u : g[v])
+                  if (u != p && sz[u] > n / 2) { nxt = u; break; }
+              if (nxt == -1) break;
+              p = v; v = nxt;
+          }
+          cout << v + 1 << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n)` time, `O(n)` space. Each step descends into a subtree of size
+      `> n/2`, which strictly reduces the "tree above", landing on a centroid —
+      exactly one `complement` is under `n/2` automatically.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Preprocessing.** `dfs(0, -1)` fills `sz[v]` root-subtree sizes from an
+        arbitrary root (node `1`). Nothing yet decides the centroid.
+      - **Child detection.** In the loop over `v`'s neighbors, `sz[u] < sz[v]`
+        means `u` lies below `v` (a child), because in a rooted tree a subtree
+        is always *larger than* the subtrees it contains. The neighbor with the
+        parent relationship has `sz[u] > sz[v]`.
+      - **Max component.** Start `mx` at `n - sz[v]` (the part of the tree that
+        is *not* in `v`'s subtree — the "upward" component after removing `v`).
+        Fold in every child subtree size; the maximum is the largest component
+        that deletion of `v` would produce.
+      - **Answer.** A centroid has `maxComp <= n/2`; picking the global minimum
+        `maxComp` is guaranteed to produce one. The result is printed `+1` for
+        1-based indexing.
+
+      In the descent variant, notice we never need the `n - sz[v]` test on the
+      way *down* — once we enter a subtree of size `> n/2`, its complement is
+      `< n/2` and stays that way, so only the child test matters.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5`, edges `1-2, 2-3, 3-4, 3-5`. Root the size DFS at node `1`.
+
+      Subtree sizes (root 1): `sz[1]=5, sz[2]=4, sz[3]=3, sz[4]=1, sz[5]=1`.
+
+      | node | children (sz < sz[v]) | `n - sz[v]` | maxComp |
+      |------|----------------------|-------------|---------|
+      | 1 | 2 (sz 4) | 0 | 4 |
+      | 2 | 3 (sz 3) | 1 | 3 |
+      | 3 | 4 (1), 5 (1) | 2 | 2 |
+      | 4 | — | 4 | 4 |
+      | 5 | — | 4 | 4 |
+
+      The minimum `maxComp` is `2`, achieved at node **3**. So the centroid is
+      `3`:
+
+      Printed:
+      ```
+      3
+      ```
+      Expected `3` — match. (Sanity check: with node 3 as root its three hanging
+      subtrees have sizes 2, 1, 1 — all `<= floor(5/2)=2`.)
+
+      The descent variant agrees: start `v=1` (child 2 has `sz=4 > 2`), move to
+      `v=2` (child 3 has `sz=3 > 2`), move to `v=3` (children 4,5 have `sz=1`),
+      no child exceeds `2` → centroid `3`.
+  - type: flowchart
+    title: "Find a centroid"
+    nodes: ["DFS subtree sizes from any root", "for each node: max component (children ∪ n - sz)", "pick minimum max component", "print it"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+  - type: mcq
+    prompt: "In the size-DFS from a chosen root, how do you tell that a neighbor u of v is one of v's children rather than its parent?"
+    options:
+      - "By checking whether the edge (v,u) was the last one added to the graph."
+      - "Because a child's subtree is always strictly smaller than its parent's, you can test sz[u] < sz[v]."
+      - "By comparing node labels and taking the smaller."
+      - "You cannot tell without storing the parent array separately."
+    answer: 1
+    explanation: "Subtree sizes strictly increase as you move up the tree (a parent's subtree contains its child's plus itself), so sz[u] < sz[v] exactly characterizes 'u is a descendant/child of v'. This lets the max-component loop classify neighbors without an explicit parent lookup."
+---

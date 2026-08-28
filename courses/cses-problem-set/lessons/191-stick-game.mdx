@@ -1,0 +1,232 @@
+---
+id: stick-game
+title: "Stick Game"
+difficulty: easy
+order: 191
+tags:
+  - mathematics
+  - game-theory
+  - dynamic-programming
+  - nim
+blocks:
+  - type: markdown
+    content: |
+      # Stick Game — a single-pile removal game (nim-like)
+
+      Two players remove sticks from a single heap. A set `P = {p_1, ..., p_k}`
+      lists the allowed moves: on each turn a player removes exactly `p_i`
+      sticks for some `p_i ∈ P`. The player who removes the **last** stick
+      wins. You must say, for every heap size `1..n`, whether the position is
+      **winning (W)** or **losing (L)** for the player to move.
+
+      This is a *subraction game* — the single-pile special case that seeds all
+      of game-theoretic DP. Instead of guessing, model the game as a DAG of
+      states: state `i` (heap of `i` sticks) has an edge to `i - p` for every
+      legal move `p ≤ i`. A position is losing exactly when **every** move leads
+      to a winning position; it is winning when **some** move leads to a losing
+      position. That is the classic win/lose recurrence:
+
+      ```
+      win[0] = LOSE                    // no move available
+      win[i] = WIN  if exists p ∈ P with p ≤ i and win[i-p] = LOSE
+             = LOSE otherwise
+      ```
+
+      Because every move strictly decreases `i`, filling `i` in increasing order
+      gives us all successors `i - p < i` before their parent — no recursion
+      required.
+
+      **Time:** O(n·k) to fill the table (`n` states × `k` moves each),
+      **Space:** O(n). For `n ≤ 10^6` and `k ≤ 100` this is at most `10^8`
+      iterations, comfortably fast in C++.
+
+      :::tip
+      **Interview tip:** "a player may take `p` items from a set, last move
+      wins / first to run out loses" is the template for every
+      take-away game. Once you write `win[i] = any win[i-p] is LOSE`, you own
+      subtraction games, and the same idea (turn the game into a DAG and DP the
+      win/lose label) recurs in much harder problems. Interviewers often follow
+      up with: "what if there are many heaps?" — that is exactly Nim Game I.
+      :::
+  - type: markdown
+    content: |
+      # Question — Stick Game
+
+      Consider a game where two players remove sticks from a heap. The players
+      move alternately, and the player who removes the last stick wins the
+      game.
+
+      A set `P = {p_1, p_2, ..., p_k}` determines the allowed moves. For
+      example, if `P = {1, 3, 4}`, a player may remove `1`, `3` or `4` sticks.
+
+      Your task is to find out for each number of sticks `1, 2, ..., n` if the
+      first player has a winning or losing position.
+
+      **Input**
+
+      The first input line has two integers `n` and `k`: the number of sticks
+      and moves.
+
+      The next line has `k` integers `p_1, p_2, ..., p_k` that describe the
+      allowed moves. All integers are distinct, and one of them is `1`.
+
+      **Output**
+
+      Print a string containing `n` characters: `W` means a winning position,
+      and `L` means a losing position.
+
+      **Constraints**
+
+      - `1 <= n <= 10^6`
+      - `1 <= k <= 100`
+      - `1 <= p_i <= n`
+
+      **Example**
+
+      Input:
+
+      ```
+      10 3
+      1 3 4
+      ```
+
+      Output:
+
+      ```
+      WLWWWWLWLW
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — scan the whole table per state, O(n²) time, O(n) space**
+
+      A correctly-reasoned but wasteful version: for each state `i`, iterate over
+      all smaller positions `j` and test whether `i - j` is a legal move *and*
+      `j` is losing. Correct, but its inner scan makes it `O(n²)` — far too slow
+      for `n = 10^6`:
+
+      ```cpp
+      bool isLegal(int d) {                       // d = p_i values
+          static const vector<int> moves = {1, 3, 4};
+          return find(moves.begin(), moves.end(), d) != moves.end();
+      }
+
+      // for i in 1..n:
+      //   bool w = false;
+      //   for (int j = 0; j < i; ++j)
+      //       if (!win[j] && isLegal(i - j)) { w = true; break; }
+      //   win[i] = w;
+      ```
+
+      Every state rescans all previous states, giving the quadratic blow-up the
+      task actively punishes.
+
+      **② Optimization — direct DP over the move set, O(n·k) time, O(n) space**
+
+      The fix is to ask the move set directly instead of rescanning history. For
+      each state `i`, test each legal move `p ≤ i` and stop at the first move
+      that lands on a losing state — that immediately makes `i` winning:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+
+          int n, k;
+          cin >> n >> k;
+          vector<int> p(k);
+          for (auto &v : p) cin >> v;
+
+          vector<char> win(n + 1, 0);        // 0 = losing, 1 = winning
+          for (int i = 1; i <= n; i++) {
+              bool w = false;
+              for (int m : p) {
+                  if (m > i) continue;       // can't remove more than we have
+                  if (!win[i - m]) { w = true; break; }   // reach a losing state
+              }
+              win[i] = w;
+          }
+
+          for (int i = 1; i <= n; i++) cout << (win[i] ? 'W' : 'L');
+          cout << "\n";
+      }
+      ```
+
+      Each state does at most `k` lookups, for `O(n·k)` total. With
+      `n·k ≤ 10^8` and the early break on the common `p = 1` (which is always
+      present, per the constraints), the real work in practice is far below the
+      worst case.
+
+      **③ Further optimisation** — there is no lower asymptotic bound to reach
+      for: you must emit `n` chars and inspect each of the `k` moves to decide
+      membership, so `O(n·k)` is the natural floor. A bit-packed table
+      (packing `win` into machine words) reduces the *constant*, not the order.
+
+      **④ Alternative algorithm** — framing the same recurrence through
+      *Grundy numbers* (a losing state has Grundy `0`) gives an identical
+      answer and shines when the problem grows to several simultaneous heaps.
+      For the single pile here the plain `win` array is all you need.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the `O(n·k)` DP in **②**:
+
+      - `win[i]` records whether a player facing `i` sticks can force a win.
+      - Base: `win[0] = 0` — with no sticks there is no move, so the player to
+        move loses.
+      - For each `i`, we try every allowed move `m`. If `m ≤ i` (we actually
+        have enough sticks) and `win[i - m] == 0` (the resulting position is
+        losing for the opponent), then `i` is winning — we found a good move and
+        `break`.
+      - If no move leads to a losing successor, every option hands the opponent
+        a winning position, so `i` stays losing.
+      - The `m > i` guard is essential: removing more sticks than remain would
+        be illegal.
+      - Because `i` runs upward, `i - m` is always `< i`, so every successor is
+        already decided — the loop needs no memo or recursion.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the DP on the sample `n = 10`, moves `P = {1, 3, 4}`, starting from
+      `win[0] = L`.
+
+      | i | moves ≤ i → successors | any successor losing? | win |
+      |---|------------------------|-----------------------|-----|
+      | 1 | 1 → L | yes (win[0]=L) | W |
+      | 2 | 1 → win[1]=W | no | L |
+      | 3 | 1 → L | yes | W |
+      | 4 | 1→W, 3→L, 4→L | yes | W |
+      | 5 | 1→W, 3→L | yes | W |
+      | 6 | 1→W, 3→W, 4→L | yes | W |
+      | 7 | 1→W, 3→W, 4→W | no | L |
+      | 8 | 1→L | yes | W |
+      | 9 | 1→W, 3→W, 4→W | no | L |
+      | 10 | 1→L | yes | W |
+
+      Compacting the `win` column for `i = 1..10` gives
+
+      ```
+      W L W W W W L W L W
+      ```
+
+      which is exactly the expected output **`WLWWWWLWLW`**. Notice the losing
+      positions `{0, 2, 7, 9}`: from them every legal move hands the opponent a
+      winning position, and only they let the *next* player be the one to grab
+      the last stick.
+  - type: mcq
+    prompt: 'For the single-pile take-away game, which statement is the reason filling win[i] in increasing i needs no recursion?'
+    options:
+      - 'Every move decreases the heap, so all successors i - p are smaller than i and therefore already computed.'
+      - 'The allowed-move set P is sorted before the DP starts.'
+      - 'The answer is always W for even i and L for odd i.'
+      - 'win[i] only depends on win[i-1], never on earlier states.'
+    answer: 0
+    explanation: 'Because removing p sticks strictly shrinks the heap to i - p < i, processing states in increasing order guarantees every successor is known before its parent — a purely DAG (acyclic) structure that needs no memoized recursion.'
+type: content
+---

@@ -1,0 +1,208 @@
+---
+id: movie-festival-ii
+title: "Movie Festival II"
+difficulty: medium
+order: 58
+tags:
+  - sorting-searching
+  - greedy
+  - sorting
+  - multiset
+blocks:
+  - type: markdown
+    content: |
+      # Movie Festival II — greedy scheduling with k members
+
+      We have `n` movies (each with a start `a` and an end `b`) and `k` members
+      of the club. A member can watch a movie only if they are free at its
+      start, i.e. the member's previously watched movie ended **at or before**
+      `a`. We want the maximum total number of movies the `k` members can watch.
+
+      With one person this is the classic interval-scheduling problem: sort by
+      **end time** and greedily take the earliest-finishing compatible movie.
+      With `k` people we generalise that same greedy, keeping track of when each
+      member next becomes free.
+
+      ## The greedy rule (sort by end time)
+
+      Process movies in ascending end time. For each movie `(a, b)`:
+      - If some member finished a movie at a time `<= a`, that member can watch
+        this one — assign it to the member who finished **most recently** (the
+        latest such finish time). This preserves the earliest-free members for
+        future movies, which is exactly what maximizes capacity.
+      - Otherwise, if fewer than `k` members have started yet, this movie can
+        start a **new member**.
+      - If neither applies, the movie is skipped.
+
+      A **multiset of end times** lets us quickly find, for a movie starting at
+      `a`, the largest member free-time that is still `<= a`.
+
+      ## Why "latest finishing <= a"?
+
+      Assigning to the member who finished most recently saves the members who
+      finish earliest for movies that start earlier in the future, mirroring
+      why the single-person greedy sorts by end time. This exchange argument
+      gives the optimal assignment.
+
+      **Time:** O(n log n) for the sort + O(n log k) for the multiset lookups;
+      **Space:** O(n).
+
+      :::tip
+      **Interview tip:** "maximize the number of tasks/meetings you can attend"
+      is a very common greedy question — the rank-1 rule is *sort by end time
+      and always pick the one that finishes earliest*. The `k`-person variant
+      is the natural follow-up: keep a multiset (or heap) of each person's
+      finish time and, per task, assign to the person free **latest** before
+      the start. Knowing both versions cold is a strong interview signal.
+      :::
+  - type: markdown
+    content: |
+      # Question — Movie Festival II
+
+      In a movie festival, `n` movies will be shown. Syrjälä's movie club
+      consists of `k` members, who will all be attending the festival.
+
+      You know the starting and ending time of each movie. What is the maximum
+      total number of movies the club members can watch entirely if they act
+      optimally?
+
+      **Input**
+
+      The first input line has two integers `n` and `k`: the number of movies
+      and club members.
+
+      After this, there are `n` lines that describe the movies. Each line has
+      two integers `a` and `b`: the starting and ending time of a movie.
+
+      **Output**
+
+      Print one integer: the maximum total number of movies.
+
+      **Constraints**
+
+      - `1 <= k <= n <= 2*10^5`
+      - `1 <= a < b <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 2
+      1 5
+      8 10
+      3 6
+      2 5
+      6 9
+      ```
+
+      Output:
+
+      ```
+      4
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — exponential / backtracking**
+
+      Try every subset of movies and every assignment to members, checking time
+      conflicts. This is `2^n` subsets — impossible for `n = 2*10^5`. A small
+      DP over members × movies is also exponential or worse.
+
+      ```cpp
+      // Backtracking assign(schedule): for each movie decide who (if anyone)
+      // watches it. 2^n branches — infeasible for n up to 2*10^5.
+      ```
+
+      **② Optimisation — greedy + multiset of end times, O(n log n)**
+
+      Sort movies by end time. Maintain a multiset of the times each member
+      becomes free next (i.e. the end of their most recent movie). For each
+      movie, try to assign it to a member free at or before its start.
+
+      ```cpp
+      long long solve(int n, int k, const vector<pair<long long, long long>>& mov) {
+          vector<pair<long long, long long>> m = mov;       // copy to sort by end
+          sort(m.begin(), m.end(),
+               [](const auto& x, const auto& y){ return x.second < y.second; });
+          multiset<long long> free;                          // time each member is next free
+          long long count = 0;
+          for (auto& mv : m) {
+              auto it = free.upper_bound(mv.first);          // first free-time > start
+              if (it != free.begin()) {
+                  --it;                                      // latest member free <= start
+                  free.erase(it);
+                  free.insert(mv.second);                    // that member now free at end
+                  count++;
+              } else if ((int)free.size() < k) {             // no free member, but room for one
+                  free.insert(mv.second);
+                  count++;
+              }
+              // else: every member busy -> skip this movie
+          }
+          return count;
+      }
+      ```
+
+      **③ Further optimisation / alternative** — instead of a multiset you can
+      keep a **max-heap of finish times** and, per movie, greedily reassign the
+      member with the latest finish `<= start`; the multiset's
+      `upper_bound`-then-step-back is the same idea and is clean, so the
+      multiset version is the accepted solution.
+
+      **④ Special case** — with `k = 1` this degenerates to Movie Festival I:
+      sort by end time, jump to the next compatible movie, `O(n log n)`.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Step through the O(n log n) solution in **②**:
+
+      - `free` is a `multiset<long long>` holding the next available time of
+        each member who has already been assigned a movie. `free.size() <= k`,
+        and an empty multiset means no member is booked yet.
+      - For a movie `(a, b)`, `free.upper_bound(a)` finds the *first* member who
+        becomes free strictly after `a`. If that iterator is not `begin()`,
+        then the element just before it is a member who becomes free at some
+        time `<= a` — the one finishing **latest** before this movie starts.
+        `--it` selects that member; erase their old finish, insert `b`, and add
+        to the count.
+      - If every free time is `> a` (`upper_bound` returned `begin()`), no
+        existing member can attend; but if we haven't used all `k` members yet
+        (`free.size() < k`), this movie starts a brand-new member.
+      - Otherwise the movie is skipped.
+
+      Sorting by **end** is what keeps the greedy exchange valid: processing in
+      end order guarantees we never regret using a member, because we consider
+      each movie at the earliest possible moment someone could finish and move on.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(5, 2, [(1,5),(8,10),(3,6),(2,5),(6,9)])`.
+
+      Sort by end time: `(1,5), (2,5), (3,6), (6,9), (8,10)`.
+
+      | movie | free (multiset) | action | count |
+      |-------|-----------------|--------|-------|
+      | (1,5) | {} | no member; start new member -> free={5} | 1 |
+      | (2,5) | {5} | upper_bound(2)=5 -> free all >2; but size<2 -> new member -> {5,5} | 2 |
+      | (3,6) | {5,5} | upper_bound(3)=5 -> no free <=3; size=2 filled -> skip | 2 |
+      | (6,9) | {5,5} | upper_bound(6)=5; step back -> member free at 5; replace with 9 -> {5,9} | 3 |
+      | (8,10) | {5,9} | upper_bound(8)=9; step back -> 5; replace with 10 -> {9,10} | 4 |
+
+      The two members end up watching `{1-5, 8-10}` and `{2-5, 6-9}` = 4 movies
+      total, matching the sample output.
+  - type: mcq
+    prompt: 'When assigning a movie (a, b) to an existing member, why do we pick the member finishing latest before time a?'
+    options:
+      - 'Because the latest-finishing member is always idle'
+      - 'Because it saves the members who finish earliest for future movies that may start sooner, preserving maximum future capacity'
+      - 'Because the member must have finished exactly at time a'
+      - 'Because the movie can then be split between two members'
+    answer: 1
+    explanation: 'Assigning to the member who became free most recently (still <= a) leaves the members who finish earliest untouched, and those early-finishing members are the ones needed for movies that start soonest in the future. This exchange keeps the greedy optimal.'
+type: content
+---

@@ -1,0 +1,360 @@
+---
+id: same-sum-subsets
+title: "Same Sum Subsets"
+type: content
+difficulty: hard
+order: 394
+tags:
+  - pigeonhole-principle
+  - meet-in-the-middle
+  - ntt
+  - constructive
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — pigeonhole guarantees a pair, meet-in-the-middle finds it
+
+      We must choose **two disjoint subsets with equal sum**. The tight constraint `Σ x_i ≤ 2^n − 2` is there
+      on purpose: it forces the answer to exist.
+
+      - There are `2^n − 1` **non-empty** subsets, each with a sum in `[1, Σx_i] ⊆ [1, 2^n − 2]` — at most
+        `2^n − 2` distinct sums. Since `2^n − 1 > 2^n − 2`, the **pigeonhole principle** says two distinct subsets
+        `A ≠ B` share a sum.
+      - **Cancel the intersection:** if `A` and `B` both sum to `S`, remove their common elements. What is left
+        (`A\B` and `B\A`) is a pair of non-empty **disjoint** subsets with equal (same) sum.
+
+      So it suffices to *find any two distinct subsets with equal sum*, then cancel. Doing that for `n = 40`
+      (up to `2^40` subsets) needs **meet-in-the-middle**, and because the sums themselves can be huge, we detect
+      a collision by residue classes and a **polynomial (NTT) convolution**.
+
+      :::tip
+      **Interview tip:** Recognize when a "guaranteed to exist" construction arrives via pigeonhole with a bound
+      baked into the input — the problem then becomes an *efficient search for the guaranteed object*. The
+      meet-in-the-middle + convolution pattern ("how many subsets land in each residue class") also powers
+      counting/collision problems well beyond this one.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      :::note
+      **Concrete formulation.** This is the CSES problem *Same Sum Subsets* (Additional Problems II).
+      :::
+
+      Given a set of `n` positive integers, choose **two disjoint subsets** of the elements that have the
+      **same sum**.
+
+      **Input.** The first line has an integer `n`. The second line has `n` integers `x_1, x_2, …, x_n`.
+
+      **Output.** For both subsets, first print the size of the subset and then its contents. You may print **any
+      valid solution**. If no solution exists, print `IMPOSSIBLE`.
+
+      **Constraints.**
+      - `3 ≤ n ≤ 40`
+      - `Σ_{i=1}^{n} x_i ≤ 2^n − 2`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      6
+      1 2 3 5 7 8
+      ```
+
+      **Output:**
+      ```
+      2
+      2 3
+      1
+      5
+      ```
+
+      *Explanation:* one valid answer is `{2,3}` and `{5}` (both sum to 5); any disjoint equal-sum pair is accepted.
+
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2ⁿ).** Enumerate every subset, group them by sum in a hash map, and the first time a
+      sum repeats, cancel the intersection of the two colliding subsets. Exhaustive works only for `n ≤ ~24`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ull=unsigned long long;
+      int main(){
+          int n; cin>>n; vector<ull>a(n); for(auto&x:a)cin>>x;
+          unordered_map<ull,int> seen;
+          for(int mask=1;mask<(1<<n);mask++){
+              ull s=0; for(int i=0;i<n;i++) if(mask>>i&1) s+=a[i];
+              if(seen.count(s)){
+                  int A=seen[s], B=mask;
+                  auto out=[&](int M){ vector<ull> v; for(int i=0;i<n;i++) if(M>>i&1)v.push_back(a[i]);
+                                       cout<<v.size()<<"\n"; for(auto x:v)cout<<x<<" "; cout<<"\n"; };
+                  int both=A&B; out(A^both); out(B^both); return 0;
+              }
+              seen[s]=mask;
+          }
+          cout<<"IMPOSSIBLE\n";
+      }
+      ```
+      *Complexity: O(2ⁿ) time — infeasible for `n = 40` (`2^40 ≈ 10^12` subsets).*
+
+      **② Optimization — meet in the middle + pigeonhole + NTT, O(2^{n/2} + k log k) (the solution).**
+      Split into two halves of size `≤ 20`. Enumerate all `2^{n/2}` subset sums per half. The number of full
+      subsets whose total sum is `≡ r (mod k)` is a **cyclic convolution** of the two per-half residue-count
+      arrays, computed with an NTT. By pigeonhole some residue class `r*` is "crowded" (holds more subsets than
+      there are distinct exact sums in it), so *two* of them share an exact sum. A directed re-enumeration over
+      that class then recovers two colliding subsets, and cancelling their intersection yields the disjoint pair.
+
+            ```cpp
+      #pragma GCC optimize("O3")
+      #pragma GCC optimize("unroll-loops")
+      #pragma GCC target("avx2,bmi,bmi2,lzcnt,popcnt")
+      #include <bits/stdc++.h>
+      using namespace std;
+      #define endl '\n'
+      using ull = uint64_t;
+      ull bin_pow(ull a, ull b, ull m) {
+          a %= m;
+          ull res = 1;
+          while (b > 0) {
+              if (b & 1)
+              res = (__uint128_t)res * a % m;
+              a = (__uint128_t)a * a % m;
+              b >>= 1;
+          }
+          return res;
+      }
+      struct montgomery {
+          ull n, nr;
+          constexpr montgomery(ull n) : n(n), nr(1) {
+              for (int i = 0; i < 6; i++)
+                  nr *= 2 - n * nr;
+          }
+          ull reduce(__uint128_t x) const {
+              ull q = __uint128_t(x) * nr;
+              ull m = ((__uint128_t) q * n) >> 64;
+              ull res = (x >> 64) + n - m;
+              if (res >= n)
+                  res -= n;
+              return res;
+          }
+          ull multiply(ull x, ull y) const {
+              return reduce((__uint128_t) x * y);
+          }
+          ull transform(ull x) const {
+              return (__uint128_t(x) << 64) % n;
+          }
+      };
+      template<ull mod, ull gen>
+      struct fast_ntt {
+          fast_ntt() {};
+          vector<int> bit_sort(int n) {
+              int h = -1;
+              vector<int> rev(n, 0);
+              int skip = __lg(n) - 1;
+              for (int i = 1; i < n; ++i) {
+                  if (!(i & (i - 1)))
+                      ++h;
+                  rev[i] = rev[i ^ (1 << h)] | (1 << (skip - h));
+              }
+              return rev;
+          }
+          void ntt(vector<ull>& a, vector<int>& rev, montgomery& red, ull inv_n, ull root, ull inv_root, bool invert) {
+              int n = (int)a.size();
+              for (int i = 0; i < n; ++i)
+                  if (i < rev[i])
+                      swap(a[i], a[rev[i]]);
+              ull w = invert ? inv_root : root;
+              vector<ull> W(n >> 1, red.transform(1));
+              for (int i = 1; i < (n >> 1); ++i)
+                  W[i] = red.multiply(W[i-1], w);
+              int lim = __lg(n);
+              for (int i = 0; i < lim; ++i)
+                  for (int j = 0; j < n; ++j)
+                      if (!(j & (1 << i))) {
+                          ull t = red.multiply(a[j ^ (1 << i)], W[(j & ((1 << i) - 1)) * (n >> (i + 1))]);
+                          a[j ^ (1 << i)] = a[j] >= t ? a[j] - t : a[j] + mod - t;
+                          a[j] = a[j] + t < mod ? a[j] + t : a[j] + t - mod;
+                      }
+              if (invert)
+                  for (int i = 0; i < n; i++)
+                      a[i] = red.multiply(a[i], inv_n);
+          }
+          vector<ull> conv(vector<ull> a, vector<ull> b) {
+              montgomery red(mod);
+              for (auto& x : a)
+                  x = red.transform(x);
+              for (auto& x : b)
+                  x = red.transform(x);
+              int n = 1;
+              while (n < a.size() || n < b.size())
+                  n <<= 1;
+              n <<= 1;
+              a.resize(n);
+              b.resize(n);
+              ull inv_n = red.transform(bin_pow(n, mod-2, mod));
+              ull root = red.transform(bin_pow(gen, (mod-1)/n, mod));
+              ull inv_root = red.transform(bin_pow(red.reduce(root), mod-2, mod));
+              auto rev = bit_sort(n);
+              ntt(a, rev, red, inv_n, root, inv_root, false);
+              ntt(b, rev, red, inv_n, root, inv_root, false);
+              for (int i = 0; i < n; i++)
+                  a[i] = red.multiply(a[i], b[i]);
+              ntt(a, rev, red, inv_n, root, inv_root, true);
+              for (auto& x : a)
+                  x = red.reduce(x);
+              return a;
+          }
+      };
+      vector<ull> get_subset(const vector<ull>& arr) {
+          int n = arr.size();
+          ull total = 1<<n;
+          vector<ull> res(total);
+          for (int mask = 0; mask < total; ++mask) {
+              ull sum = 0;
+              for (int j = 0, m = mask; m; ++j, m >>= 1)
+                  if (m&1) sum += arr[j];
+              res[mask] = sum;
+          }
+          return res;
+      }
+      void print(int m11, int m12, int m21, int m22,vector<ull> & v1, vector<ull> & v2){
+          int n1 = v1.size(), n2 = v2.size();
+          vector<ull> a1, a2;
+          assert((m11&m12) == 0);
+          assert((m21&m22) == 0);
+          for (int i = 0; i < n1; i++){
+              if (m11&(1<<i)) a1.push_back(v1[i]);
+              if (m12&(1<<i)) a2.push_back(v1[i]);
+          }
+          for (int i = 0; i < n2; i++){
+              if (m21&(1<<i)) a1.push_back(v2[i]);
+              if (m22&(1<<i)) a2.push_back(v2[i]);
+          }
+          cout << a1.size() << endl;
+          for (auto c : a1)
+              cout << c << " ";
+          cout << endl;
+          cout << a2.size() << endl;
+          for (auto c : a2)
+              cout << c << " ";
+          cout << endl;
+      }
+      const ull mod = 9223372036737335297, pr = 3;
+      const ull mxn = 2e5+100;
+      signed main(){
+          ios_base::sync_with_stdio(0);
+          cin.tie(0), cout.tie(0);
+          int n;
+          cin >> n;
+          vector<ull> arr(n);
+          ull sum = 0;
+          for (int i = 0; i < n; i++)
+              cin >> arr[i], sum += arr[i];
+          int n1 = n/2; 
+          vector<ull> p1(arr.begin(),arr.begin()+n1), p2(arr.begin()+n1,arr.end());
+          vector<ull> v1 = get_subset(p1), v2 = get_subset(p2);
+          fast_ntt<mod,pr> st;
+          vector<ull> q1(mxn,0),q2(mxn,0);
+          int sz1 = v1.size(), sz2 = v2.size();
+          for (int i = 0; i < sz1; i++)
+              q1[v1[i]%mxn]++;
+          for (int i = 0; i < sz2; i++)
+              q2[v2[i]%mxn]++;
+          vector<ull> box = st.conv(q1,q2);
+          int gz = box.size();
+          ull obj = 0;
+          for (ull i = 0; i < mxn; i++){
+              ull s1 = ((i+mxn < gz)?box[i]+box[i+mxn]:box[i]);
+              ull umbral = (sum+1)/mxn;
+              if (i <= sum%mxn) umbral++;
+              if (s1 > umbral) {
+                  obj = i;
+                  break;
+              }
+          }
+       
+          vector<vector<pair<ull,int>>> bucket(mxn);
+          for (int i = 0; i < sz1; i++)
+              bucket[v1[i]%mxn].push_back({v1[i],i});
+       
+          //using namespace chrono;
+          //auto start = steady_clock::now();
+          int ht = (sum/mxn)+1;
+          vector<pair<int,int>> mp(ht,{-1,-1});
+          for (int i = 0; i < sz2; i++){
+              ull k2 = v2[i]%mxn;
+              ull o1 = ((k2 <= obj)?obj-k2:obj+mxn-k2);
+              for (auto [s1,m1] : bucket[o1]){
+                  int h1 = (s1+v2[i])/mxn;
+                  if (mp[h1] != make_pair(-1,-1)){
+                      auto [m21,m22] = mp[h1];
+                      int i1 = m21&m1, i2 = i&m22;
+                      print(m1^i1,m21^i1,i^i2,m22^i2,p1,p2);
+                      //auto finish = steady_clock::now();
+                      //double elapsed = duration<double>(finish-start).count();
+                      //cout << elapsed << endl;
+                      return 0;
+                  } else {
+                      mp[h1] = {m1,i};
+                  }
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *Complexity: O(2^{n/2} + M log M) time (NTT size M ≈ 2·10⁵), O(2^{n/2} + M) memory — fine for `n = 40`.*
+
+      **③ Note.** Because sums can be up to `~2^40`, no sum-array DP works; the residue-class/convolution view is
+      what makes the guaranteed pair reachable. There is no simpler correct approach for the full `n = 40` range —
+      the pigeonhole + MITM structure above is both the existence proof and the search.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      Key lines of tier ②:
+      1. **`v1`, `v2`** — all `2^{n/2}` subset sums (+ bit-masks) of each half.
+      2. **`q1`, `q2`** count how many subsets of each half land in each residue class `mod mxn`; **`st.conv`**
+         convolves them so `box[r]` = number of *full* subsets with total `≡ r (mod mxn)`.
+      3. **Pick `obj`** = a residue class where `cnt > (sum+1)/mxn (+1)` — by pigeonhole two of its subsets share
+         the same *exact* sum.
+      4. **Recovery loop:** for each right-half subset, inspect left-half subsets in the complementary residue
+         (`o1`), keyed by `h1 = (s1+v2[i])/mxn` (which "copy" of the class). The first repeat of `h1` is the
+         collision.
+      5. **`print`** removes the shared elements via symmetric difference, outputting two disjoint equal-sum
+         subsets.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 6`, `x = 1 2 3 5 7 8`. Halves `p1 = {1,2,3}`, `p2 = {5,7,8}`; each half has 8 subsets.
+
+      The residue/convolution step picks a crowded class; the recovery step collides e.g. the subset `{3}` of `p1`
+      (sum 3) with the subset `{1,2}` of `p1` (sum 3). Their intersection is empty, so the printed pair is:
+
+      ```
+      1
+      3
+      2
+      1 2
+      ```
+
+      Both subsets sum to 3 and are disjoint — a valid answer for the sample (the judge accepts any disjoint
+      equal-sum pair; the sample's `{2,3}|{5}` is another equally correct output).
+
+  - type: mcq
+    prompt: "Why is a solution guaranteed to exist whenever Σx_i ≤ 2^n − 2?"
+    options:
+      - "There are 2^n − 1 non-empty subsets sharing at most 2^n − 2 distinct sums, so two subsets must have the same sum by pigeonhole."
+      - "The array always contains two equal numbers."
+      - "n is even, so the array can always be split exactly in half."
+      - "The largest element always equals the sum of all the others."
+    answer: 0
+    explanation: "The 2^n − 1 non-empty subsets map into the sum range [1, 2^n − 2], which has only 2^n − 2 values — pigeonhole forces a repeated sum. Cancelling any common elements of the two colliding subsets yields two non-empty disjoint subsets with equal sum, so a solution always exists, and any valid pair is accepted."
+---

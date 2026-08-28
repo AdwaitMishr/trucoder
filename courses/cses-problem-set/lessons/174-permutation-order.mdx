@@ -1,0 +1,324 @@
+---
+id: permutation-order
+title: Permutation Order
+difficulty: hard
+order: 174
+tags:
+  - combinatorics
+  - factorial-number-system
+  - lehmer-code
+  - order-statistics
+  - mathematics
+blocks:
+  - type: markdown
+    content: |
+      # Permutation Order
+
+      **The technique: the factorial number system + Lehmer codes.** Let `p(n,k)`
+      denote the `k`-th permutation of `1..n` in lexicographic order. To jump
+      directly to the `k`-th permutation you *unrank* it; to recover which rank a
+      given permutation has you *rank* it. Both use the same idea: at position
+      `i`, the remaining `(n-i-1)!` unused numbers form equal-sized "blocks".
+
+      The **factorial number system** represents any integer as
+      `d0·(n-1)! + d1·(n-2)! + … + d_{n-1}·0!` with `0 ≤ dᵢ ≤ n-1-i`. These
+      digits `dᵢ` are exactly the **Lehmer code**: `dᵢ` says "pick the
+      `dᵢ`-th smallest unused number for position `i` (0-indexed)". Because each
+      position horizontally partitions the lexicographic ordering into blocks of
+      size `(n-1-i)!`, stripping one digit at a time walks `k` down to a unique
+      permutation.
+
+      **Why it works.** All `n!` permutations are in lex order. Fix the first
+      digit: the `n` choices each head a contiguous block of `(n-1)!`
+      permutations. So `floor(k' / (n-1)!)` (with `k'` 0-indexed) picks the first
+      digit; `k' mod (n-1)!` positions us inside that block, where we recurse.
+      This is precisely division + remainder, one per position.
+
+      For the **reverse** (rank a permutation), count, for each position `i`,
+      how many *unused* numbers are **smaller** than `p[i]`; that count is the
+      Lehmer digit `dᵢ`, and the rank is
+      `1 + Σᵢ dᵢ · (n-1-i)!` (the +1 converts 0-based to 1-based).
+
+      **When you reach for it.** Any "k-th permutation / give the rank of a
+      permutation" problem, including LeetCode `60. Permutation Sequence`. The
+      Lehmer-code view is also how you generate all permutations in O(1)
+      amortized and how to size-count arrangements column by column.
+
+      **Time.** With a boolean `used[]` and a linear scan, each position costs
+      O(n) → **O(n²)** per test. With a Fenwick order-statistics tree it drops
+      to **O(n log n)**.
+
+      :::tip
+      **Interview tip:** "Return the k-th permutation" is a textbook question.
+      The essential memory: `k--` (make it 0-based) *before* dividing — the
+      off-by-one that sinks most candidates. Walk from the left, block size
+      `(n-1-i)!`, pick the `idx`-th unused number, then `k %= block`. For
+      n ≤ 20 the `n!` values fit in `long long` (20! ≈ 2.4·10^18), so no
+      big-integer library is needed here.
+      :::
+  - type: markdown
+    content: |
+      # Question — Permutation Order (CSES 3397)
+
+      Let `p(n,k)` denote the `k`-th permutation (in lexicographical order) of
+      `1..n`. For example, `p(4,1) = [1,2,3,4]` and `p(4,2) = [1,2,4,3]`.
+
+      Your task is to process **two types of tests**:
+      1. Given `n` and `k`, find `p(n,k)`.
+      2. Given `n` and `p(n,k)`, find `k`.
+
+      **Input:** the first line has an integer `t`: the number of tests. Each
+      test is either `"1 n k"` or `"2 n p(n,k)"` (the permutation listed as `n`
+      space-separated integers).
+
+      **Output:** for each test, print the answer according to the example —
+      a permutation on one line for type 1, a single integer for type 2.
+
+      **Constraints:**
+      - `1 ≤ t ≤ 1000`
+      - `1 ≤ n ≤ 20`
+      - `1 ≤ k ≤ n!`
+
+      Sample input:
+
+      ```
+      6
+      1 4 1
+      1 4 2
+      2 4 1 2 3 4
+      2 4 1 2 4 3
+      1 5 42
+      2 5 2 4 5 3 1
+      ```
+
+      Sample output:
+
+      ```
+      1 2 3 4
+      1 2 4 3
+      1
+      2
+      2 4 5 3 1
+      42
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — generate all permutations, O(n!·n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      int main() {
+          int t; cin >> t;
+          while (t--) {
+              int type, n; cin >> type;
+              if (type == 1) {
+                  ll k; cin >> n >> k;
+                  vector<int> a(n); iota(a.begin(), a.end(), 1);
+                  ll idx = 0;
+                  do {
+                      if (++idx == k) { for (int x : a) cout << x << ' '; cout << '\n'; break; }
+                  } while (next_permutation(a.begin(), a.end()));
+              } else {
+                  cin >> n; vector<int> p(n); for (int i = 0; i < n; i++) cin >> p[i];
+                  vector<int> a(n); iota(a.begin(), a.end(), 1);
+                  ll idx = 1;
+                  do { if (a == p) { cout << idx << '\n'; break; } idx++; } while (next_permutation(a.begin(), a.end()));
+              }
+          }
+      }
+      ```
+      For `n = 20`, `20! ≈ 2.4·10^18` permutations — never finishes. Correct
+      only for `n ≤ ~9`.
+
+      **② Optimization — factorial number system (unrank & rank), O(n²)**
+        (the chosen solution)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int t; cin >> t;
+          while (t--) {
+              int type; cin >> type;
+              if (type == 1) {
+                  int n; ll k; cin >> n >> k;
+                  --k;                                        // 1-based -> 0-based
+                  vector<ll> fact(n + 1, 1);
+                  for (int i = 1; i <= n; i++) fact[i] = fact[i - 1] * i;
+                  vector<int> used(n + 1, 0);
+                  for (int i = 0; i < n; i++) {
+                      ll block = fact[n - 1 - i];
+                      int idx = (int)(k / block);             // which unused digit
+                      k %= block;
+                      int pos = 0;
+                      for (int v = 1; v <= n; v++) {
+                          if (used[v]) continue;
+                          if (pos == idx) { cout << v << ' '; used[v] = 1; break; }
+                          pos++;
+                      }
+                  }
+                  cout << '\n';
+              } else {
+                  int n; cin >> n;
+                  vector<int> p(n); for (int i = 0; i < n; i++) cin >> p[i];
+                  vector<ll> fact(n + 1, 1);
+                  for (int i = 1; i <= n; i++) fact[i] = fact[i - 1] * i;
+                  vector<int> used(n + 1, 0);
+                  ll k = 0;
+                  for (int i = 0; i < n; i++) {
+                      int cnt = 0;
+                      for (int v = 1; v < p[i]; v++) if (!used[v]) cnt++;  // unused smaller
+                      k += (ll)cnt * fact[n - 1 - i];
+                      used[p[i]] = 1;
+                  }
+                  cout << k + 1 << '\n';                       // back to 1-based
+              }
+          }
+          return 0;
+      }
+      ```
+      O(n²) per test: the factorial table is O(n), and each position's leaky
+      digit scan is O(n). With `t ≤ 1000` and `n ≤ 20` this is trivially fast.
+
+      **③ Further optimization — Fenwick order-statistics, O(n log n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      struct BIT { int n; vector<int> t;
+          BIT(int n): n(n), t(n + 1, 0) {}
+          void add(int i, int v) { for (; i <= n; i += i & -i) t[i] += v; }
+          int sum(int i) { int s = 0; for (; i > 0; i -= i & -i) s += t[i]; return s; }
+          int kth(int k) {                 // smallest index with prefix sum >= k
+              int lo = 0, hi = n;
+              while (lo < hi) { int mid = (lo + hi) / 2;
+                  if (sum(mid) >= k) hi = mid; else lo = mid + 1; }
+              return lo;
+          }
+      };
+      int main() {
+          int t; cin >> t;
+          while (t--) {
+              int type; cin >> type;
+              if (type == 1) {
+                  int n; ll k; cin >> n >> k; --k;
+                  vector<ll> fact(n + 1, 1); for (int i = 1; i <= n; i++) fact[i] = fact[i - 1] * i;
+                  BIT bit(n); for (int i = 1; i <= n; i++) bit.add(i, 1);
+                  for (int i = 0; i < n; i++) {
+                      ll block = fact[n - 1 - i];
+                      int rank = (int)(k / block) + 1; k %= block;
+                      int v = bit.kth(rank);
+                      cout << v << ' ';
+                      bit.add(v, -1);
+                  }
+                  cout << '\n';
+              } else {
+                  int n; cin >> n; vector<int> p(n); for (int i = 0; i < n; i++) cin >> p[i];
+                  vector<ll> fact(n + 1, 1); for (int i = 1; i <= n; i++) fact[i] = fact[i - 1] * i;
+                  BIT bit(n); for (int i = 1; i <= n; i++) bit.add(i, 1);
+                  ll k = 0;
+                  for (int i = 0; i < n; i++) {
+                      k += (ll)bit.sum(p[i] - 1) * fact[n - 1 - i];
+                      bit.add(p[i], -1);
+                  }
+                  cout << k + 1 << '\n';
+              }
+          }
+      }
+      ```
+      The Fenwick tree's `kth` (smallest index with prefix-sum ≥ k) finds the
+      next unused digit in O(log n), and `sum(p[i]-1)` counts the smaller-owned
+      unused digits in O(log n). O(n log n) per test — overkill here since
+      `n ≤ 20`, but it scales to `n` up to ~10^5 and is a great order-statistics
+      refresher.
+
+      **④ Alternative — none distinct**
+      Unranking and ranking are the *same* Lehmer-code algorithm read in the two
+      directions; there is no third fundamentally different method worth showing
+      (a balanced binary-search-tree order-statistic tree is just the Fenwick
+      idea with a different container). Skip.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② the factorial number system**, one half per test
+      type.
+
+      - **Type 1 (unrank):** set `k--` (0-based). For each position `i`, the
+        block size is `fact[n-1-i] = (n-1-i)!`. `idx = k / block` selects the
+        `idx`-th smallest unused number; `k %= block` moves inside that block.
+        The `used[]` scan walks `1..n` skipping taken numbers to find the
+        `idx`-th survivor.
+      - **Type 2 (rank):** for position `i`, `cnt` counts the unused numbers
+        smaller than `p[i]` — that is the Lehmer digit. Accumulate
+        `k += cnt · (n-1-i)!`, then mark `p[i]` used, so the *next* position
+        counts only among still-unused numbers.
+      - Output `k + 1` for type 2 because ranks are reported 1-based.
+
+      Both directions use the same `fact` table. Since `n ≤ 20`, all `n!` factors
+      stay within `long long` (`20! ≈ 2.43·10^18 < 9.2·10^18`).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Sample test `1 5 42`** → expect `2 4 5 3 1`.
+
+      `k = 42` becomes `k' = 41` (0-based). `fact = [1,1,2,6,24,120]`, `used = {}`.
+
+      | pos i | block (n-1-i)! | idx = k'/block | pick (idx-th unused) | k' %= block |
+      |-------|---------------|----------------|----------------------|-------------|
+      | 0 | 4! = 24 | 41/24 = 1 | 2 | 41 − 24 = 17 |
+      | 1 | 3! = 6  | 17/6  = 2 | 4 (unused {1,3,4,5}) | 17 − 12 = 5  |
+      | 2 | 2! = 2  | 5/2   = 2 | 5 (unused {1,3,5})  | 5 − 4 = 1    |
+      | 3 | 1! = 1  | 1/1   = 1 | 3 (unused {1,3})    | 0            |
+      | 4 | 0! = 1  | 0/1   = 0 | 1                   | 0            |
+
+      Result: `2 4 5 3 1`. ✓
+
+      **Reverse, test `2 5 2 4 5 3 1`** → expect `42`.
+
+      | pos i | p[i] | unused smaller than p[i] | cnt | contribution cnt·(4-i)! |
+      |-------|------|--------------------------|-----|--------------------------|
+      | 0 | 2 | {1} | 1 | 1·24 = 24 |
+      | 1 | 4 | {1,3} | 2 | 2·6 = 12 |
+      | 2 | 5 | {1,3} | 2 | 2·2 = 4 |
+      | 3 | 3 | {1} | 1 | 1·1 = 1 |
+      | 4 | 1 | {} | 0 | 0 |
+
+      `k = 24+12+4+1+0 = 41`, print `41 + 1 = 42`. ✓ The brute-force tier (walk
+      `next_permutation` until rank 42) and the Fenwick tier both reproduce
+      `2 4 5 3 1` / `42` on this sample — all tiers agree.
+  - type: flowchart
+    title: "Unrank: k-th permutation by factorial number system"
+    nodes:
+      - "Read n, k"
+      - "k = k - 1 (0-based)"
+      - "block = (n-1-i)! "
+      - "idx = k / block"
+      - "take idx-th unused number"
+      - "k = k % block"
+      - "Position i done"
+    edges:
+      - {from: 0, to: 1, label: "decrement"}
+      - {from: 1, to: 2, label: "start i=0"}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6, label: "i++; node 2 repeats for each i"}
+  - type: mcq
+    prompt: 'When unranking the k-th permutation, why do we decrement k before the first division?'
+    options:
+      - To convert the 1-based rank into a 0-based offset, so the first quotient k/(n-1)! lands in the same block-0..block-(n-1) indexing as the unused-digit list, avoiding an off-by-one
+      - To make k fit in a smaller integer
+      - To account for the permutation of 0's implicit in every block
+      - Because factorials are defined to start at 0!
+    answer: 0
+    explanation: Ranks are reported 1-based (the identity permutation is rank 1). The unranking math treats the permutations as positions 0..n!-1, so k must be shifted down by one first; then floor(k/(n-1)!) indexes the unused-digit choice cleanly from 0. Skipping the decrement gives the wrong, shifted permutation — the classic off-by-one for this problem.
+type: content
+---

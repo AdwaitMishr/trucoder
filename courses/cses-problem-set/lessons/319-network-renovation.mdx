@@ -1,0 +1,239 @@
+---
+id: network-renovation
+title: "Network Renovation"
+type: content
+difficulty: easy
+order: 319
+tags:
+  - graph-algorithms
+  - trees
+  - bridges
+  - leaf-pairing
+blocks:
+  - type: markdown
+    content: |
+      # Network Renovation — make a tree survive any single broken connection
+
+      The network is a **tree** on `n` computers (`n - 1` connections). We must
+      add the fewest *new* connections so that even if **any one** connection
+      breaks, the network stays connected.
+
+      A graph that stays connected when any single edge is deleted is called
+      **2-edge-connected**; an edge whose removal disconnects the graph is a
+      **bridge**. So the goal is: add the minimum number of edges so that the
+      graph has **no bridges**. For a tree every edge is a bridge, so we must
+      kill all of them.
+
+      The central fact is clean:
+
+      > A connected graph with `L` leaves (degree-`1` vertices) needs exactly
+      > `ceil(L/2)` added edges to become bridge-free.
+
+      - **Why at least `ceil(L/2)`?** Each added edge has two endpoints; each can
+        "save" at most... the tight argument: every leaf must receive an added
+        edge or the single edge touching it stays a bridge (for `L >= 2`). One
+        new edge covers two leaves, so `ceil(L/2)` is a hard lower bound.
+      - **Why is it achievable?** Pair up the leaves in a *DFS-cyclic* way so
+        that no new edge is a bridge and every old edge is covered by a cycle.
+
+      **Construction:** list the leaves in DFS pre-order `l_0, l_1, ..., l_{L-1}`.
+      Add edges `l_i -- l_{i + L/2}` for `i = 0..L/2 - 1`; if `L` is odd add one
+      more edge `l_{L-1} -- l_{L/2}`. Total `ceil(L/2)` edges.
+
+      **Time:** `O(n)` (one DFS + degree scan). **Space:** `O(n)`.
+
+      :::tip
+      **Interview tip:** "Minimum edges to make a graph 2-edge-connected /
+      bridgeless" is the classic leaf-pairing problem. Compute leaves, answer
+      `ceil(L/2)`, then pair them in DFS order (i with i + L/2) so the added
+      edges cross the tree instead of staying inside one branch. Knowing the
+      exact lower bound and the cyclic-pairing trick scores the whole question.
+      :::
+  - type: markdown
+    content: |
+      # Question
+
+      Syrjälä's network consists of `n` computers and `n-1` connections between
+      them. It is possible to send data between any two computers. However, if
+      any connection breaks down, it will no longer be possible to send data
+      between some computers. Your task is to add the minimum number of new
+      connections in such a way that you can still send data between any two
+      computers even if any single connection breaks down.
+
+      **Input**
+
+      The first input line has an integer `n`: the number of computers. The
+      computers are numbered `1, 2, ..., n`. After this, there are `n-1` lines
+      describing the connections. Each line has two integers `a` and `b`: there
+      is a connection between computers `a` and `b`.
+
+      **Output**
+
+      First print an integer `k`: the minimum number of new connections. After
+      this, print `k` lines describing the connections. You can print any valid
+      solution.
+
+      **Constraints**
+
+      - `3 <= n <= 10^5`
+      - `1 <= a, b <= n`
+
+      **Example**
+
+      Input:
+      ```
+      5
+      1 2
+      2 3
+      3 4
+      3 5
+      ```
+      Output:
+      ```
+      2
+      2 4
+      4 5
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — try every small set of new edges, exponential**
+
+      For `k = 0, 1, 2, ...` enumerate every way to add `k` new edges, and test
+      with a bridge-finding DFS whether the result is bridge-free. Correct but
+      enumerates exponentially many combinations.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n; vector<vector<int>> adj;
+      vector<int> tin, low; int timer; set<pair<int,int>> bridges;
+      void dfs(int u, int p){ tin[u]=low[u]=timer++;
+          for (int v : adj[u]){ if (v == p) continue;
+              if (tin[v]==-1){ dfs(v,u); low[u]=min(low[u],low[v]);
+                  if (low[v] > tin[u]) bridges.insert({min(u,v),max(u,v)}); }
+              else low[u]=min(low[u], tin[v]); } }
+      bool bridgeless(){
+          tin.assign(n,-1); low.assign(n,0); timer=0; bridges.clear();
+          for (int i=0;i<n;i++) if (tin[i]==-1) dfs(i,-1);
+          return bridges.empty();
+      }
+      int main(){
+          cin>>n; adj.assign(n,{});
+          set<pair<int,int>> have;
+          for (int i=0;i<n-1;i++){int a,b;cin>>a>>b;--a;--b;adj[a].push_back(b);adj[b].push_back(a);have.insert({min(a,b),max(a,b)});}
+          vector<pair<int,int>> cand;
+          for (int a=0;a<n;a++) for (int b=a+1;b<n;b++) if (!have.count({a,b})) cand.push_back({a,b});
+          for (int k=0;k<=n;k++){
+              vector<int> cb; function<void(int,int)> gen=[&](int st,int left){
+                  if (left==0){ vector<vector<int>> a2=adj;
+                      for (int i:cb){ int x=cand[i].first,y=cand[i].second; a2[x].push_back(y); a2[y].push_back(x);}
+                      swap(adj,a2); bool ok=bridgeless(); swap(adj,a2);
+                      if (ok){ cout<<k<<"\n"; for (int i:cb) cout<<cand[i].first+1<<' '<<cand[i].second+1<<"\n"; exit(0); } return; }
+                  for (int i=st;i<= (int)cand.size()-left;i++){ cb.push_back(i); gen(i+1,left-1); cb.pop_back(); } };
+              gen(0,k);
+          }
+      }
+      ```
+      *Exponential time — only usable on tiny trees.*
+
+      **② Optimization — count leaves and pair them, O(n)**
+
+      Leaves are the degree-`1` nodes. Answer `k = ceil(L/2)`. Put the leaves in
+      DFS pre-order, then connect `leaf[i]` with `leaf[i + L/2]` (cyclic), which
+      guarantees every edge is covered by a cycle.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin>>n;
+          vector<vector<int>> adj(n+1);
+          for (int i=0;i<n-1;i++){int a,b;cin>>a>>b;adj[a].push_back(b);adj[b].push_back(a);}
+          vector<int> order; vector<char> vis(n+1,0);
+          function<void(int)> dfs=[&](int u){ vis[u]=1;
+              if (adj[u].size()==1) order.push_back(u);      // a leaf, in DFS order
+              for (int v:adj[u]) if (!vis[v]) dfs(v); };
+          dfs(1);
+          int L = order.size(); int k = (L+1)/2;
+          cout<<k<<"\n";
+          int half = L/2;
+          for (int i=0;i<half;i++) cout<<order[i]<<' '<<order[i+half]<<"\n";
+          if (L % 2 == 1) cout<<order[L-1]<<' '<<order[half]<<"\n";
+      }
+      ```
+      *O(n) time, O(n) space — the intended solution.*
+
+      **③ Why the pairing removes every bridge**
+
+      In a tree, deleting any edge splits the tree into two components; a leaf on
+      each side. An edge stays a bridge exactly when no added edge joins its two
+      sides. Pairing leaves in DFS order with offset `L/2` guarantees that for
+      every tree edge, the added edges "cross" it (connect its two sides), so
+      every old edge lies on some cycle and stops being a bridge. The new edges
+      themselves lie on the very cycles they create, so they are not bridges
+      either.
+
+      **④ Further optimization** — none; `O(n)` is optimal since we must read all
+      `n-1` edges.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Find leaves.** A leaf is any node with exactly one neighbor — in a
+        tree, `adj[u].size() == 1`.
+      - **DFS pre-order of leaves.** We collect leaves in the order a DFS visits
+        them. Critically, leaves in the same branch appear consecutively; pairing
+        across the DFS order (offset `L/2`) matches a leaf with one from a
+        *different* part of the tree, which is what "crosses" edges.
+      - **`k = (L+1)/2` = `ceil(L/2)`.** Matches the theorem.
+      - **Emit edges** `leaf[i] -- leaf[i + L/2]`, plus the single extra edge for
+        the odd-leaves case.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Sample:** `n = 5`, tree `1-2, 2-3, 3-4, 3-5`.
+
+      Degrees: `deg(1)=1, deg(2)=2, deg(3)=3, deg(4)=1, deg(5)=1`. Leaves are
+      `{1,4,5}`, so `L = 3`, answer `k = ceil(3/2) = 2`.
+
+      DFS from node `1`: visits `1` (leaf) first, then `2`, then `5` (leaf), then
+      `3`, then `4` (leaf) — leaf order `[1, 5, 4]`.
+
+      Pair with offset `half = L/2 = 1`:
+      - `order[0] -- order[1]` = `1 -- 5`
+      - since `L` is odd, extra edge `order[L-1] -- order[half]` = `4 -- 5`.
+
+      Output:
+      ```
+      2
+      1 5
+      4 5
+      ```
+      (The sample prints `2 4 / 4 5` — any valid bridge-free set is accepted.
+      Verify: all five original edges now lie on a cycle, e.g. edge `1-2` is
+      covered by `1 -[new]- 5 -[tree]- 3 - 2`, and edges `2-3`, `3-4` are covered
+      via `4 -[new]- 5 -[tree]- 3`.)
+
+      Expected `k = 2`; actual `k = 2` with a valid construction. ✔
+  - type: flowchart
+    title: "Bridgeless via leaf pairing"
+    nodes: ["find degree-1 leaves", "L leaves", "k = ceil(L/2)", "DFS order the leaves", "pair leaf[i] with leaf[i + L/2]", "print k and the edges"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "answer"}
+      - {from: 1, to: 3, label: "order"}
+      - {from: 3, to: 4, label: "cyclic"}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "Why is the minimum number of added edges exactly ceil(L/2), where L is the number of leaves?"
+    options:
+      - "Because every leaf must be incident to an added edge (or its own edge stays a bridge) and one edge can only serve two leaves, so ceil(L/2) is a lower bound that the pairing construction actually reaches."
+      - "Because each added edge reduces the number of bridges by exactly two, so we need every edge of the tree covered."
+      - "Because leaves are always paired two-by-two with no extra edge ever needed."
+      - "Because the answer equals the number of edges in the tree divided by two."
+    answer: 0
+    explanation: "If a leaf had no added edge, the single tree edge touching it would still be a bridge. So each added edge must be incident to leaves, and it can be incident to at most two leaves, giving ceil(L/2) as a lower bound. The DFS cyclic-pairing construction adds exactly ceil(L/2) edges and removes all bridges, so the bound is tight — hence 'exactly'."

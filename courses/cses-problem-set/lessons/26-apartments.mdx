@@ -1,0 +1,277 @@
+---
+id: apartments
+title: Apartments
+difficulty: easy
+order: 26
+tags:
+  - sorting-and-searching
+  - two-pointers
+  - greedy
+blocks:
+  - type: markdown
+    content: |
+      # Apartments
+
+      **The technique: sort + two pointers (greedy matching).** We have `n`
+      applicants (each with a desired size) and `m` apartments (each with a
+      size). An applicant with desired size `x` accepts any apartment whose size
+      is within `[x - k, x + k]`. Each applicant gets at most one apartment and
+      each apartment goes to at most one applicant. We want to maximize the
+      number of matched pairs.
+
+      **When you reach for it:** pairing / assignment problems where both lists
+      can be sorted and a match depends on a numeric window. Sorting both
+      arrays turns the "who fits whom" question into a linear merge.
+
+      **Why it works.** Sort the desired sizes and the apartment sizes. Walk
+      everyone with two pointers `i` (applicants) and `j` (apartments). If the
+      current apartment is *smaller* than what the applicant can accept
+      (`size[j] < want[i] - k`), that apartment is too small for this and every
+      later applicant, so advance `j`. If the apartment is *larger* than the
+      applicant's ceiling (`size[j] > want[i] + k`), this applicant cannot use
+      this or any larger apartment, so advance `i` (the applicant is skipped —
+      it loses out to a smaller applicant who fits). Otherwise the apartment
+      works: match them and advance both.
+
+      This never wastes a usable apartment and never blocks a smaller applicant
+      for a larger one, so it is **optimal** (a greedy that is provably correct).
+
+      **Worked mini-example.** `k = 5`, wants `[60, 45, 80, 60]`, sizes
+      `[30, 60, 75]`. Sorted: wants `[45, 60, 60, 80]`, sizes `[30, 60, 75]`.
+      - `want 45` accepts `[40, 50]`. Size `30` too small; size `60` too big →
+        skip applicant 45.
+      - `want 60` accepts `[55, 65]`. Size `60` fits → match (1).
+      - `want 60` again `[55, 65]`. Size `75` too big → skip.
+      - `want 80` accepts `[75, 85]`. Size `75` fits → match (2).
+      Result: **2** matched applicants.
+
+      **Complexity.** Sorting is **O(n log n + m log m)**; the merge is a
+      single O(n + m) pass. Total **O(n log n + m log m)** time, O(1) extra
+      space.
+
+      :::tip
+      **Interview tip:** sort + two-pointer matching is a bread-and-butter
+      pattern (it also shows up as "assign cookies to children", "match
+      students to seats"). The key rule to articulate: when the apartment is
+      too small for the current applicant, advance the apartment pointer;
+      when it is too big, advance the applicant pointer; otherwise match.
+      Interviews check that you skip gracefully when an applicant cannot fit
+      (advance `i` without consuming an apartment). The greedy is optimal
+      because sorting lets every small apartment be considered by the
+      applicants that can actually use it.
+      :::
+  - type: markdown
+    content: |
+      # Question — Apartments
+
+      There are `n` applicants and `m` free apartments. Your task is to
+      distribute the apartments so that as many applicants as possible will
+      get an apartment.
+
+      Each applicant has a desired apartment size, and they will accept any
+      apartment whose size is close enough to the desired size.
+
+      **Constraints:** `1 ≤ n, m ≤ 2·10^5`, `0 ≤ k ≤ 10^9`,
+      `1 ≤ a_i, b_i ≤ 10^9`.
+
+      **Input:** The first input line has three integers `n`, `m` and `k`: the
+      number of applicants, the number of apartments, and the maximum allowed
+      difference. The next line contains `n` integers `a_1, ..., a_n`: the
+      desired apartment size of each applicant. If the desired size of an
+      applicant is `x`, they will accept any apartment whose size is between
+      `x - k` and `x + k`. The last line contains `m` integers `b_1, ..., b_m`:
+      the size of each apartment.
+
+      **Output:** Print one integer: the number of applicants who will get an
+      apartment.
+
+      Sample input:
+
+      ```
+      4 3 5
+      60 45 80 60
+      30 60 75
+      ```
+
+      Sample output:
+
+      ```
+      2
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·m)**
+
+      For each applicant (in increasing desired size), scan all apartments and
+      take the first *unused* one that fits. Correct, but tries every pair.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(vector<long long> want, vector<long long> size, long long k) {
+          sort(want.begin(), want.end());
+          sort(size.begin(), size.end());
+          int m = (int)size.size();
+          vector<bool> used(m, false);
+          long long cnt = 0;
+          for (long long a : want) {
+              for (int j = 0; j < m; ++j) {
+                  if (!used[j] && llabs(a - size[j]) <= k) {
+                      used[j] = true; cnt++;
+                      break;
+                  }
+              }
+          }
+          return cnt;
+      }
+      ```
+
+      **O(n·m)** time — with both up to `2·10^5`, that is ~4·10^10 checks,
+      far too slow. Correct but not AC.
+
+      **② Sort + two pointers — O(n log n + m log m) (the solution)**
+
+      Sort both arrays, then merge with two pointers, matching greedily.
+
+      ```cpp
+      long long solve(vector<long long> want, vector<long long> size, long long k) {
+          sort(want.begin(), want.end());
+          sort(size.begin(), size.end());
+          long long cnt = 0;
+          int i = 0, j = 0, n = (int)want.size(), m = (int)size.size();
+          while (i < n && j < m) {
+              if (want[i] - k > size[j]) {      // apartment too small
+                  j++;
+              } else if (want[i] + k < size[j]) { // apartment too big for this applicant
+                  i++;                            // skip this applicant (smaller ones fit)
+              } else {                            // size in [want[i]-k, want[i]+k]
+                  cnt++; i++; j++;                // match
+              }
+          }
+          return cnt;
+      }
+      ```
+
+      **O(n log n + m log m)** time, O(1) extra space. This is the CSES
+      submission.
+
+      **③ Further optimization — none (the merge is already linear)**
+
+      After sorting, the two-pointer merge is O(n + m), which is optimal — you
+      must at least read the input. No better asymptotic time exists. Skip.
+
+      **④ Alternative algorithm — greedy via searchable container (same order)**
+
+      An equivalent formulation processes apartments in increasing size and
+      assigns each to the applicant with the *largest* desired size that
+      still fits, using a balanced container. It matches the same optimal count
+      but needs O(n) auxiliary space and is more complex, so in practice the
+      two-pointer merge is preferred. Skip the code; the two-pointer tier is
+      the one to submit.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The two-pointer phase is the heart of the solution.
+
+      - **Setup.** Sort both `want` and `size` so the merge is monotonic: once
+        we pass an apartment, every later apartment is at least as large, and
+        once we pass an applicant, every later applicant wants at least as
+        much.
+      - **The `while (i < n && j < m)` merge.** Three cases per step:
+        - `want[i] - k > size[j]`: the smallest acceptable size for applicant
+          `i` is still above the current apartment. The apartment is too small
+          for *this and all remaining applicants*, so it can never be used →
+          `j++` (discard the apartment).
+        - `want[i] + k < size[j]`: the apartment exceeds applicant `i`'s
+          ceiling. A bigger applicant would want even more, so no later
+          applicant fits this apartment *either*? No — the apartment is too
+          big for *this applicant*, and since applicants are sorted, later
+          applicants want more and also cannot use it. So advance `i` to move
+          to a smaller-or-same applicant (we effectively skip `i`).
+        - otherwise: the apartment fits the applicant → count it, consume both.
+      - **Why it is optimal.** Sorted order guarantees we never assign a big
+        apartment to a wrong applicant: small apartments are offered first to
+        the applicants that can take them, and an applicant is only skipped
+        when the remaining apartments are all too large. Hence the maximum
+        number of matches.
+
+      `llabs` keeps the difference non-negative for large values up to `10^9`
+      in the brute tier.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+
+      ```
+      4 3 5
+      60 45 80 60
+      30 60 75
+      ```
+
+      Expected output: `2`.
+
+      Sorted wants `[45, 60, 60, 80]` (i → 0..3), sorted sizes `[30, 60, 75]`
+      (j → 0..2), `k = 5`.
+
+      | step | want[i] | window for i | size[j] | decision | count |
+      |------|---------|--------------|---------|----------|-------|
+      | 1 | 45 | [40, 50] | 30 | `30 < 40` → `j=1` | 0 |
+      | 2 | 45 | [40, 50] | 60 | `60 > 50` → `i=1` (skip 45) | 0 |
+      | 3 | 60 | [55, 65] | 60 | fits → match | 1 |
+      | 4 | 60 | [55, 65] | 75 | i=2, `75 > 65` → `i=3` | 1 |
+      | 5 | 80 | [75, 85] | 75 | fits → match | 2 |
+
+      `j == m` (index 3) → loop ends. Total matches = **2**, matching expected. ✓
+
+      The applicant `45` is skipped because apartment `30` is too small and
+      `60` is too big; apartments `60` and `75` go to two of the `60/80`
+      applicants.
+  - type: flowchart
+    title: Apartments two-pointer merge
+    nodes:
+      - Sort wants and sizes
+      - While i < n and j < m
+      - size[j] < want[i] - k ?
+      - size[j] > want[i] + k ?
+      - Match j to i; count++; i++; j++
+      - Output count
+    edges:
+      - from: 0
+        to: 1
+      - from: 1
+        to: 2
+        label: check j
+      - from: 1
+        to: 5
+        label: loop done
+      - from: 2
+        to: 1
+        label: yes -> j++
+      - from: 2
+        to: 3
+        label: no
+      - from: 3
+        to: 1
+        label: yes -> i++
+      - from: 3
+        to: 4
+        label: no -> fits
+      - from: 4
+        to: 1
+        label: advance both
+  - type: mcq
+    prompt: In the two-pointer matching loop, when the current apartment is larger than the current applicant's ceiling (want[i] + k < size[j]), why is it correct to advance the applicant pointer rather than the apartment pointer?
+    options:
+      - Because the apartment is too small for everyone and must be discarded.
+      - Because applicants are sorted by desired size, so every later applicant wants at least as much as applicant i; if the apartment is too large for i, it is too large for all remaining applicants too, so this applicant can never use it and we move on to the next applicant.
+      - Because the apartment should always be matched to the largest applicant regardless of size.
+      - Because advancing the apartment pointer would skip a usable apartment.
+    answer: 1
+    explanation: Sorted order is the whole trick. Since want is non-decreasing, any later applicant j > i asks for a size >= want[i]. An apartment already above want[i]+k is above their ceilings as well, so no later applicant fits it either; but the current applicant can still potentially fit a larger future apartment, so we skip the applicant (i++) and keep the apartment (j stationary). This never discards an apartment that could have been used.
+type: content
+---

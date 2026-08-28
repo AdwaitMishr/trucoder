@@ -1,0 +1,311 @@
+---
+id: tower-of-hanoi
+title: Tower of Hanoi
+difficulty: medium
+order: 14
+tags:
+  - intro
+  - recursion
+blocks:
+  - type: markdown
+    content: |
+      # Tower of Hanoi
+
+      You have three pegs and `n` disks of distinct sizes stacked on peg 1,
+      largest at the bottom. In one move you may take the **top** disk of a peg
+      and place it on another peg, provided it goes on a **larger** disk (or on
+      the empty peg). Goal: move the whole tower to peg 3. Find the minimum
+      number of moves and print them.
+
+      ## The recursive decomposition
+
+      To move `k` disks from peg `from` to peg `to` using the spare peg `aux`:
+
+      1. move the top `k-1` disks `from → aux`
+      2. move the bottom (largest) disk `from → to`
+      3. move the `k-1` disks `aux → to`
+
+      This works because the largest disk never blocks the smaller ones once
+      the top `k-1` are out of the way, and it is **optimal**: to expose and
+      move the bottom disk you must first relocate all `k-1` smaller ones, which
+      already forces at least this many moves.
+
+      The move count satisfies `M(1)=1` and `M(k)=2·M(k-1)+1`, giving
+      `M(n)=2^n - 1`. For `n` disks the recursion visits each move exactly once,
+      so generating the full sequence is **O(2^n)** time — unavoidable since
+      the output itself has `2^n - 1` lines.
+
+      :::tip
+      **Interview tip:** Tower of Hanoi is the canonical recursion question.
+      Interviewers use it to test whether you can (a) write a clean
+      `hanoi(k, from, to, aux)` with a clear base case and (b) reason about
+      why each move is valid. An iterative variant (moving the smallest disk
+      on odd turns) exists, but recursion is the expected answer for
+      "print the moves."
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Rotating drum / classic Tower of Hanoi: given the number of disks `n`, your
+      task is to move the whole stack from peg 1 to peg 3 and print the moves.
+
+      ## Input
+
+      The only input line contains an integer `n`: the number of disks.
+
+      **Constraints:** `1 <= n <= 16`
+
+      ## Output
+
+      First print an integer `k`: the minimum number of moves. Then print `k`
+      lines, one per move, of the form `a b` meaning "move the top disk of peg
+      `a` to peg `b`" (`1 <= a, b <= 3`).
+
+      ## Sample
+
+      **Input:**
+      ```
+      2
+      ```
+      **Output:**
+      ```
+      3
+      1 2
+      1 3
+      2 3
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — four tiers
+
+      Every tier below produces a **minimal** (length `2^n - 1`) move sequence;
+      they differ in how the next move is discovered.
+
+      **① Brute force — O(3^n · n) time, O(3^n) space (BFS over states).** Treat
+      the whole puzzle as a graph: a state is the peg of every disk, and a move
+      is an edge between states. Number the disks `0..n-1` by increasing size
+      (0 = smallest). Disk `d` is moveable when it is the smallest disk currently
+      on its peg, and it may land on peg `p` when no disk smaller than `d` is
+      on `p`. A breadth-first search then finds the true minimum number of moves.
+      Unambiguously *correct*, but it explores the whole state graph and returns
+      only the count — far too heavy (and awkward) to actually print the
+      `2^n - 1` moves.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      bool isTop(const std::vector<int>& pg, int d) {     // smallest on its peg?
+          for (int e = 0; e < d; e++) if (pg[e] == pg[d]) return false;
+          return true;
+      }
+      bool canPlace(const std::vector<int>& pg, int d, int p) {
+          for (int e = 0; e < d; e++) if (pg[e] == p) return false; // nothing smaller there
+          return true;
+      }
+
+      int solve_bfs(int n) {
+          std::vector<int> start(n, 0), goal(n, 2);      // all disks on peg 0 -> peg 2
+          auto enc = [&](const std::vector<int>& v){
+              long long c = 0; for (int d = 0; d < n; d++) c = c * 3 + v[d];
+              return c;
+          };
+          std::map<long long, int> dist;
+          std::queue<std::vector<int>> q;
+          dist[enc(start)] = 0; q.push(start);
+          while (!q.empty()) {
+              auto u = q.front(); q.pop();
+              if (u == goal) return dist[enc(u)];
+              for (int d = 0; d < n; d++) {
+                  if (!isTop(u, d)) continue;
+                  for (int p = 0; p < 3; p++) {
+                      if (p == u[d] || !canPlace(u, d, p)) continue;
+                      auto v = u; v[d] = p;
+                      long long e = enc(v);
+                      if (!dist.count(e)) { dist[e] = dist[enc(u)] + 1; q.push(v); }
+                  }
+              }
+          }
+          return -1;
+      }
+      ```
+      Complexity: O(3^n · n) time, O(3^n) space. Use only as a correctness
+      oracle on tiny `n` — not the solver you ship.
+
+      **② Optimization — O(2ⁿ) (textbook recursion).** The classic recursive
+      formulation: to move `k` disks, move the top `k-1` to the spare, move the
+      bottom disk to the target, then move the `k-1` from the spare on top. This
+      is the exact decomposition from the theory block.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      std::string solve(int n) {
+          std::ostringstream out;
+          out << ((1LL << n) - 1) << "\n";          // move count
+
+          std::function<void(int,int,int,int)> hanoi =
+              [&](int k, int from, int to, int aux) {
+                  if (k == 0) return;
+                  hanoi(k - 1, from, aux, to);      // smaller disks out of the way
+                  out << from << " " << to << "\n"; // move the bottom disk
+                  hanoi(k - 1, aux, to, from);      // smaller disks on top
+              };
+          hanoi(n, 1, 3, 2);
+
+          std::string s = out.str();
+          if (!s.empty() && s.back() == '\n') s.pop_back();
+          return s;
+      }
+      ```
+      Complexity: O(2^n) time, O(n) stack space. Optimal — the answer itself has
+      `2^n - 1` lines.
+
+      **③ Optimization (flat) — O(2ⁿ) (iterative, non-recursive).** The
+      recursion can be unrolled into an explicit stack so the same `2^n - 1`
+      moves are produced without function recursion. Same complexity, useful
+      when you must avoid deep recursion, though for `n ≤ 16` the recursive
+      version is preferred for clarity.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      std::string solve(int n) {
+          struct Task { int k, from, to, aux; bool emit; };
+          std::ostringstream out;
+          out << ((1LL << n) - 1) << "\n";
+          std::vector<Task> st = {{n, 1, 3, 2, false}}; // explicit call stack
+          while (!st.empty()) {
+              Task t = st.back(); st.pop_back();
+              if (t.emit) { out << t.from << " " << t.to << "\n"; continue; }
+              if (t.k == 0) continue;
+              // push so they pop in the recursive order: step1, move, step3
+              st.push_back({t.k - 1, t.aux, t.to, t.from, false}); // step3 (last)
+              st.push_back({t.k,     t.from, t.to, t.aux,  true}); // emit move
+              st.push_back({t.k - 1, t.from, t.aux, t.to,  false}); // step1 (first)
+          }
+          std::string s = out.str();
+          if (!s.empty() && s.back() == '\n') s.pop_back();
+          return s;
+      }
+      ```
+      Complexity: O(2^n) time, O(n) space.
+
+      **④ Alternative algorithm — O(2ⁿ) (deterministic move rule / smallest-disk
+      pattern).** A completely different, non-recursive construction: with an
+      even total number of disks, the sequence follows the cycle — the smallest
+      disk moves every other turn along one fixed direction, and on the other
+      turns only one legal move between the two largest-exposed disks exists.
+      Adding a target-direction hint (`target = (n % 2 == 0) ? 2 : 1` as the
+      first peg the smallest disk leaves) makes it print a valid minimal sequence.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      std::string solve(int n) {
+          std::vector<std::vector<int>> peg(4);
+          for (int d = n; d >= 1; d--) peg[1].push_back(d);   // disks n..1 on peg 1
+
+          int pegs[3] = {1, 2, 3};
+          int smallest = 1, total = (1 << n) - 1;
+          // forward direction for the smallest disk
+          int dir = (n % 2 == 0) ? +1 : -1;                    // 1->3->2->1 cycle
+          std::function<int(int)> inc = [&](int x) {
+              int idx = 0; while (pegs[idx] != x) idx++;
+              return pegs[(idx + (dir == 1 ? 1 : 2)) % 3];
+          };
+
+          std::ostringstream out;
+          out << total << "\n";
+          for (int m = 1; m <= total; m++) {
+              int from, to;
+              if (m % 2 == 1) {                               // smallest disk moves
+                  from = smallest;
+                  to = inc(smallest);
+              } else {                                        // only legal other move
+                  // find the one move, among pegs != smallest, that is legal
+                  int a[2], k = 0;
+                  for (int p = 1; p <= 3; p++) if (p != smallest) a[k++] = p;
+                  int src, dst;
+                  if (peg[a[0]].empty() && !peg[a[1]].empty()) { src = a[1]; dst = a[0]; }
+                  else if (peg[a[1]].empty() && !peg[a[0]].empty()) { src = a[0]; dst = a[1]; }
+                  else if (!peg[a[0]].empty() && !peg[a[1]].empty()) {
+                      src = (peg[a[0]].back() < peg[a[1]].back()) ? a[0] : a[1];
+                      dst = (src == a[0]) ? a[1] : a[0];
+                  } else { src = a[0]; dst = a[1]; }
+                  from = src; to = dst;
+              }
+              peg[to].push_back(peg[from].back());            // perform the move
+              peg[from].pop_back();
+              // smallest disk (value 1) is always on top of its peg
+              for (int p = 1; p <= 3; p++)
+                  if (!peg[p].empty() && peg[p].back() == 1) smallest = p;
+              out << from << " " << to << "\n";
+          }
+          std::string s = out.str();
+          if (!s.empty() && s.back() == '\n') s.pop_back();
+          return s;
+      }
+      ```
+      Complexity: O(2^n) time, O(n) space. This shows there is more than one way
+      to *derive* the optimal sequence — useful mental model, though for
+      correctness-by-inspection the recursion in ② is what you'd ship.
+
+      Now walk through the chosen tier (②) in the next block — then trace it on
+      the sample input.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The reference `solve` first emits the move count `(1LL << n) - 1` (the
+      `1LL` keeps the shift in `long long` so `n=16` → 65535 is exact). Then it
+      runs the recursive `hanoi(k, from, to, aux)`:
+
+      - **Base case:** `k == 0` does nothing — moving zero disks needs no moves.
+      - **Step 1:** `hanoi(k-1, from, aux, to)` relocates the `k-1` smaller
+        disks onto the spare peg.
+      - **Step 2:** print `from to` — the largest disk moves directly to the
+        destination, now safe because everything smaller is elsewhere.
+      - **Step 3:** `hanoi(k-1, aux, to, from)` stacks the smaller disks on top.
+
+      The recursion unwinds exactly `2^n - 1` print statements, each a valid
+      single-disk move. Because the judge needs the count first and then moves
+      line by line, we accumulate everything into a `std::ostringstream` and
+      return it as one string with `\n` separators (trailing newline removed so
+      the JSON comparison is exact).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(2)`, which starts `hanoi(2, 1, 3, 2)`:
+
+      | call                    | emits         |
+      |-------------------------|---------------|
+      | hanoi(2,1,3,2)          | —             |
+      | └ hanoi(1,1,2,3)        | —             |
+      |   └ hanoi(0,1,3,2)      | (nothing)     |
+      |   → move bottom:        | `1 2`         |
+      |   └ hanoi(0,3,2,1)      | (nothing)     |
+      | → move bottom (disk 2): | `1 3`         |
+      | └ hanoi(1,2,3,1)        | —             |
+      |   └ hanoi(0,2,1,3)      | (nothing)     |
+      |   → move bottom:        | `2 3`         |
+      |   └ hanoi(0,1,3,2)      | (nothing)     |
+
+      Prefixed by the count line `3`, the returned string is:
+
+      ```
+      3
+      1 2
+      1 3
+      2 3
+      ```
+
+      Expected (sample) — `3`, then `1 2`, `1 3`, `2 3`. Actual — identical.
+      Every move obeys the rule: the top disk of a peg is always moved onto a
+      larger disk or an empty peg.
+type: content

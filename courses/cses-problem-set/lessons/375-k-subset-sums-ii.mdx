@@ -1,0 +1,247 @@
+---
+id: k-subset-sums-ii
+title: K Subset Sums II
+difficulty: hard
+order: 375
+tags:
+  - additional
+  - sorting
+  - heap
+  - combinatorial-generation
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — generating the k smallest subset sums on the fly
+
+      With `n` up to `2·10^5` and `m` in `1..n-1`, there are `C(n, m)` subsets of
+      size `m` — far too many to enumerate. Yet we only need the **`k` smallest**
+      sums (`k ≤ 2·10^5`). The trick is to *generate* subset sums in increasing
+      order with a priority queue, never materialising all `C(n,m)` of them.
+
+      **Sort first.** After sorting ascending, moving any chosen index to the
+      *right* (towards a value `≥` the old one) can only keep the sum the same
+      or raise it. So the smallest sum is always achieved by the first `m`
+      positions, and every larger subset is reachable by repeatedly nudging a
+      chosen position rightward. This gives a clean **generation tree**:
+
+      - **Root** = positions `(0, 1, …, m-1)` — the minimum `m`-subset.
+      - From a node `(p₀ < p₁ < … < p_(m-1))` we push **at most two children**:
+        1. **advance the tail:** replace `p_(m-1)` by `p_(m-1)+1`;
+        2. **advance the rightmost movable gap and pack:** take the largest
+           `j < m-1` with `p_j + 1 < p_(j+1)` (a real gap), move `p_j` to
+           `p_j+1`, and pack the trailing positions as
+           `p_j+2, p_j+3, …, p_j+(m-j)`.
+
+      Running these two moves from every popped node and feeding fresh nodes
+      back into a **min-heap** yields the subset sums in non-decreasing order.
+      Each `m`-subset has a fixed sum regardless of how it is reached, so a
+      *visited* set of position-vectors (dedup) makes the generator a correct
+      best-first search: the first `k` popped values are exactly the `k`
+      smallest subset sums.
+
+      :::tip
+      **Interview tip:** "k smallest / k best combinations" is a recurring
+      theme (k smallest subset sums, k sums of pairs, top-k cheapest
+      combinations, kth-smallest with two heaps). The playbook: **sort**, find
+      the single smallest state, then define a *small* set of local moves that
+      grows it into every other state with non-decreasing cost, and best-first
+      search with a min-heap + visited set. The number of heap operations equals
+      roughly `k` (not `C(n,m)`), which is the whole point.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given an array of `n` integers. Consider the sums of all
+      `C(n, m)` subsets of the array that contain exactly `m` elements. Find the
+      `k` smallest of these subset sums.
+
+      **Input.** The first line has three integers `n`, `m` and `k`. The next
+      line has `n` integers `x_1, x_2, …, x_n`: the contents of the array.
+
+      **Output.** Print `k` integers: the `k` smallest subset sums in increasing
+      order.
+
+      **Constraints**
+      - `1 ≤ m < n ≤ 2·10^5`
+      - `1 ≤ k ≤ min(C(n, m), 2·10^5)`
+      - `-10^9 ≤ x_i ≤ 10^9`
+
+      **Sample**
+
+      Input:
+      ```
+      5 3 9
+      -3 1 5 2 0
+      ```
+
+      Output:
+      ```
+      -2 -1 0 2 3 3 4 6 7
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(C(n,m) log C(n,m)).** Backtrack to enumerate **all**
+      `m`-subsets, collect every sum, sort the list, and print the first `k`.
+      Exact but `C(n,m)` explodes (e.g. `C(2·10^5, 10^5)` is astronomical),
+      so this only runs for tiny `n`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int n,m,k; vector<ll> x;
+      void rec(int idx,int left,ll sum,vector<ll>& out){
+          if(left==0){ out.push_back(sum); return; }
+          for(int i=idx;i+left<=n;i++) rec(i+1,left-1,sum+x[i],out);
+      }
+      int main(){
+          cin>>n>>m>>k; x.resize(n);
+          for(auto&v:x) cin>>v;
+          vector<ll> all; rec(0,m,0,all);
+          sort(all.begin(), all.end());
+          for(int i=0;i<k;i++) cout<<all[i]<<(i+1==k?'\n':' ');
+      }
+      ```
+      *Complexity: O(C(n,m) log C(n,m)) space and time — hopeless for the real
+      constraints.*
+
+      **② Optimization — O(n log n + k log k) best-first generation.** Sort
+      ascending, seed the heap with `(0,1,…,m-1)`, and repeatedly pop the
+      smallest `(sum, positions)`; from it push the two children described in
+      the theory. The visited set prevents duplicate position-vectors.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,m,k; cin>>n>>m>>k;
+          vector<ll> x(n);
+          for(auto&v:x) cin>>v;
+          sort(x.begin(), x.end());
+          auto cmp=[](const pair<ll,vector<int>>&a,
+                      const pair<ll,vector<int>>&b){return a.first>b.first;};
+          priority_queue<pair<ll,vector<int>>,
+                         vector<pair<ll,vector<int>>>, decltype(cmp)> pq(cmp);
+          set<vector<int>> seen;
+          vector<int> root(m); ll rs=0;
+          for(int i=0;i<m;i++){ root[i]=i; rs+=x[i]; }
+          pq.push({rs,root}); seen.insert(root);
+          vector<ll> ans;
+          while((int)ans.size()<k){
+              auto pr=pq.top(); pq.pop();
+              ll s=pr.first; vector<int> p=pr.second;
+              ans.push_back(s);
+              // child A: advance the tail position
+              if(p[m-1]+1<n){
+                  auto q=p; q[m-1]+=1;
+                  ll ns=s - x[p[m-1]] + x[q[m-1]];
+                  if(!seen.count(q)){ seen.insert(q); pq.push({ns,q}); }
+              }
+              // child B: largest j with a gap; advance p[j], pack the tail
+              for(int j=m-2;j>=0;j--){
+                  if(p[j]+1<p[j+1]){
+                      if(p[j]+(m-j)<=n-1){
+                          auto q=p; ll ns=s;
+                          for(int t=j;t<m;t++) ns-=x[q[t]];
+                          q.resize(j);
+                          for(int t=j;t<m;t++){ q.push_back(p[j]+1+(t-j)); ns+=x[q[t]]; }
+                          if(!seen.count(q)){ seen.insert(q); pq.push({ns,q}); }
+                      }
+                      break;
+                  }
+              }
+          }
+          for(ll v:ans) cout<<v<<" ";
+          cout<<"\n";
+      }
+      ```
+      *Complexity: O(n log n) to sort + O(k log k) heap work with O(k·m) memory
+      for stored position vectors (m can be large; a compressed encoding keeps
+      it tight). Easily passes `n,k ≤ 2·10^5`.*
+
+      **④ Alternative / note.** The two-move generator is the canonical
+      solution; there is no asymptotically faster exact method because outputting
+      `k` sums already costs `Ω(k)`. A meet-in-the-middle approach would be
+      exponential in `n/2` and is not viable at `n = 2·10^5`.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n log n + k log k). Key lines:
+
+      1. **Sort** `x` ascending so every rightward move of a chosen index is
+         non-decreasing in sum.
+      2. **Root seed.** The `m` smallest values `(0,1,…,m-1)` give the global
+         minimum sum; push it.
+      3. **Child A (tail bump).** Increment the last chosen index; the new sum
+         is the old sum minus the removed value plus the added value.
+      4. **Child B (gap + pack).** Find the *largest* index `j < m-1` with a
+         real gap `p_j+1 < p_(j+1)`, move `p_j` right, and set the trailing
+         positions to the tight run `p_j+2, …, p_j+(m-j)`; recompute the sum by
+         subtracting the old tail and adding the new tight tail.
+      5. **Best-first + dedup.** `seen` holds position-vectors already pushed so
+         a state is expanded at most once; popping `k` values yields the `k`
+         smallest sums in order.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5, m = 3, k = 9`, `x = -3 1 5 2 0` → sorted `-3 0 1 2 5`.
+
+      `m` positions shown 0-indexed; sums are the actual subset sums.
+
+      | popped (emit) | node (0-indexed positions) | children pushed |
+      |---------------|----------------------------|-----------------|
+      | `-2`          | `(0,1,2)` (root)           | tail→`(0,1,3)`   |
+      | `-1`          | `(0,1,3)`                  | tail→`(0,1,4)`; pack `(0,2,3)` |
+      | `0`           | `(0,2,3)`                  | tail→`(0,2,4)`; pack `(1,2,3)` |
+      | `2`           | `(0,1,4)`                  | pack→`(0,2,3)` (already seen) |
+      | `3`           | `(0,2,4)`                  | pack `(0,3,4)`   |
+      | `3`           | `(1,2,3)`                  | tail→`(1,2,4)`   |
+      | `4`           | `(0,3,4)`                  | —                |
+      | `6`           | `(1,2,4)`                  | pack `(1,3,4)`   |
+      | `7`           | `(1,3,4)`                  | —                |
+
+      Emitted order `-2 -1 0 2 3 3 4 6 7` matches the sample exactly. The heap
+      never holds all `C(5,3) = 10` subsets — it grows only near the frontier of
+      the k-smallest, which is the entire reason this scales to `k ≤ 2·10^5`.
+
+  - type: flowchart
+    title: "k smallest m-subset sums (best-first generation)"
+    nodes:
+      - Sort the array ascending
+      - Seed heap with smallest m positions
+      - Pop the minimum (sum, positions)
+      - Push child A: bump the tail index
+      - Push child B: advance rightmost gap and pack tail
+      - Skip states already in the visited set
+      - Stop after k pops, print in order
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: "min-heap"}
+      - {from: 2, to: 3, label: ""}
+      - {from: 2, to: 4, label: ""}
+      - {from: 3, to: 5, label: "dedup"}
+      - {from: 4, to: 5, label: "dedup"}
+      - {from: 5, to: 2, label: "push new"}
+      - {from: 2, to: 6, label: "k pops done"}
+
+  - type: mcq
+    prompt: "Why does the best-first generator only ever expand around O(k) subset states instead of all C(n,m) of them?"
+    options:
+      - "Because sorting the array makes every rightward move of a chosen index non-decreasing in sum, so the k smallest sums all lie near the root of one generation tree, and the heap only touches the frontier of the best-first search."
+      - "Because the heap is a min-heap so it never stores more than k elements regardless of the tree size."
+      - "Because meet-in-the-middle cuts the search to 2^(n/2) which is smaller than C(n,m)."
+      - "Because only subsets formed from the m smallest elements can ever be in the top-k."
+    answer: 0
+    explanation: "After sorting, any valid m-subset is obtained from the root (0,1,...,m-1) by repeatedly nudging chosen indices right, each nudges being sum-non-decreasing. That makes the generation tree a 'sorted frontier' structure: the k smallest sums are the k nearest nodes reachable from the root, and best-first with a min-heap + a dedup set visits only those greedy frontiers — O(k) pops, not O(C(n,m)). The other options misstate the mechanism."
+type: content
+---

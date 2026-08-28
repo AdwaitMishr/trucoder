@@ -1,0 +1,410 @@
+---
+id: mail-delivery
+title: Mail Delivery
+difficulty: medium
+order: 110
+tags:
+  - graph
+  - euler
+  - euler-circuit
+  - hierholzer
+  - undirected
+blocks:
+  - type: markdown
+    content: |
+      # Mail Delivery — Euler circuit in an undirected graph
+
+      A mail carrier starts and ends at the **post office (crossing 1)** and
+      must pass through **every street exactly once** before returning. This is
+      the classic **Euler circuit** problem on an undirected graph: visit every
+      *edge* exactly once and return to the start.
+
+      **The technique: Euler-circuit existence + Hierholzer.** Two distinct
+      claims:
+
+      1. **Existence.** An undirected connected graph has an Euler circuit iff
+         **every vertex has even degree**. (Reason: whenever you enter a vertex
+         you must be able to leave it, pairing each visit with a departure; an
+         odd-degree vertex would force a dead end or a missed edge.) Also every
+         edge must lie in the same connected component you start in.
+      2. **Construction (Hierholzer).** From the start vertex, keep walking
+         along *unused* edges; when you return to the start you have a "sub-
+         cycle". Any vertex with leftover unused edges becomes the seed of
+         another embedded cycle, which is spliced in. Doing this implicitly via
+         DFS gives an **O(n + m)** construction.
+
+      **Intuition for why it's a good idea:** "cover every edge exactly once" is
+      often phrased as route / de-icing / one-way-street problems, and the
+      answer is usually just "is the degree condition met, then walk it out".
+      Euler circuits are the backbone of the next two lessons (the de Bruijn
+      sequence *is* an Euler circuit on a clever graph).
+
+      **Complexity.** Degree check + Hierholzer walk → **O(n + m)** time,
+      **O(n + m)** space.
+
+      :::tip
+      **Interview tip:** "Draw this figure without lifting the pen and without
+      retracing a line" is the Euler path/circuit problem in disguise — the
+      answer is: count even/odd degrees. For a *circuit* every degree must be
+      even; for an open *path* exactly two vertices may be odd (they become the
+      ends). Interviewers often start with existence (the degree test) and then
+      ask to print the route; Hierholzer's DFS-based construction is the
+      standard O(n+m) way to produce it.
+      :::
+  - type: markdown
+    content: |
+      # Question — Mail Delivery
+
+      You want to deliver mail in a city with `n` crossings and `m` two-way
+      streets. Find a route whose **starting and ending point are the post
+      office (crossing 1)** and that goes through **every street exactly once**.
+
+      **Constraints**
+
+      - `2 ≤ n ≤ 10^5`, `1 ≤ m ≤ 2·10^5`
+      - `1 ≤ a, b ≤ n`; every street is between two different crossings; at most
+        one street between two crossings
+
+      **Input.** Line 1: `n m`. Then `m` lines, each `a b` — a street between
+      crossings `a` and `b`.
+
+      **Output.** Print all crossings on the route in the order you visit them
+      (m + 1 numbers). Any valid solution is accepted. If no such route exists,
+      print `IMPOSSIBLE`.
+
+      Sample input:
+
+      ```
+      6 8
+      1 2
+      1 3
+      2 3
+      2 4
+      2 6
+      3 5
+      3 6
+      4 5
+      ```
+
+      Sample output:
+
+      ```
+      1 2 6 3 2 4 5 3 1
+      ```
+
+      (Every city's degree is even, so a circuit exists; one valid route is
+      shown.)
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — try every ordering of edges, O(m! · m)**
+
+      Enumerate all permutations of the `m` edges; check if any ordering forms a
+      single continuous walk starting and ending at crossing 1.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<pair<int,int>> e(m);
+          for (int i = 0; i < m; ++i) cin >> e[i].first >> e[i].second;
+          vector<int> p(m);
+          iota(p.begin(), p.end(), 0);
+          do {
+              // does e[p[0]].. form a continuous walk from 1 back to 1?
+              if (e[p[0]].first != 1 && e[p[0]].second != 1) continue;
+              int cur = e[p[0]].first == 1 ? e[p[0]].second : e[p[0]].first;
+              bool ok = true;
+              for (int i = 1; i < m && ok; ++i) {
+                  auto [a, b] = e[p[i]];
+                  if (a == cur) cur = b;
+                  else if (b == cur) cur = a;
+                  else ok = false;
+              }
+              if (ok && cur == 1) {          // found a valid circuit
+                  cout << 1;
+                  for (int i = 0; i < m; ++i) cout << " " << e[p[i]].first << " " << e[p[i]].second;
+                  cout << "\n"; return 0;
+              }
+          } while (next_permutation(p.begin(), p.end()));
+          cout << "IMPOSSIBLE\n";
+          return 0;
+      }
+      ```
+
+      **O(m! · m)** — `m!` edge orderings is absurd at `m = 2·10^5`. A correctness
+      baseline only.
+
+      **② Optimization — Hierholzer, O(n + m) (submission)**
+
+      Check all degrees are even, then walk the graph with a stack, consuming
+      each edge once; the stack's pop sequence (reversed) is the circuit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<pair<int,int>>> g(n + 1);   // (neighbour, edge id)
+          vector<int> deg(n + 1, 0);
+          for (int i = 0; i < m; ++i) {
+              int a, b; cin >> a >> b;
+              g[a].push_back({b, i});
+              g[b].push_back({a, i});
+              ++deg[a]; ++deg[b];
+          }
+          // Euler circuit exists iff every degree is even
+          for (int i = 1; i <= n; ++i)
+              if (deg[i] & 1) { cout << "IMPOSSIBLE\n"; return 0; }
+
+          // Hierholzer from the post office (crossing 1)
+          vector<int> it(n + 1, 0);
+          vector<char> used(m, 0);
+          vector<int> path, st(1, 1);
+          while (!st.empty()) {
+              int u = st.back();
+              if (it[u] < (int)g[u].size()) {
+                  auto [v, eid] = g[u][it[u]++];
+                  if (used[eid]) continue;
+                  used[eid] = 1;
+                  st.push_back(v);               // walk along the unused edge
+              } else {
+                  path.push_back(u);             // no unused edges left: seal vertex
+                  st.pop_back();
+              }
+          }
+          if ((int)path.size() != m + 1) { cout << "IMPOSSIBLE\n"; return 0; }
+          reverse(path.begin(), path.end());     // path was sealed in reverse
+          for (int i = 0; i < (int)path.size(); ++i) {
+              if (i) cout << " ";
+              cout << path[i];
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n + m)** time, **O(n + m)** space. This is the submission tier.
+
+      **③ Further optimization — recursive Hierholzer (shorter)**
+
+      The same walk as a clean recursive post-order DFS: visit neighbours, and
+      push the vertex onto the path when it has no unused edges left. Then
+      reverse. Simpler to read; the recursion depth is the circuit length.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<pair<int,int>>> g(n + 1);
+          vector<int> deg(n + 1, 0);
+          for (int i = 0; i < m; ++i) {
+              int a, b; cin >> a >> b;
+              g[a].push_back({b, i}); g[b].push_back({a, i});
+              ++deg[a]; ++deg[b];
+          }
+          for (int i = 1; i <= n; ++i)
+              if (deg[i] & 1) { cout << "IMPOSSIBLE\n"; return 0; }
+
+          vector<int> it(n + 1, 0);
+          vector<char> used(m, 0);
+          vector<int> path;
+          function<void(int)> hier = [&](int u) {
+              while (it[u] < (int)g[u].size()) {
+                  auto [v, eid] = g[u][it[u]++];
+                  if (used[eid]) continue;
+                  used[eid] = 1;
+                  hier(v);                      // follow the edge, then recurse
+              }
+              path.push_back(u);                // nothing unused left: record u
+          };
+          hier(1);
+          if ((int)path.size() != m + 1) { cout << "IMPOSSIBLE\n"; return 0; }
+          reverse(path.begin(), path.end());
+          for (int i = 0; i < (int)path.size(); ++i) {
+              if (i) cout << " ";
+              cout << path[i];
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n + m)** time and space — identical complexity, simpler to write, but
+      recursion depth equals the circuit length (fine for typical `m`; use tier
+      ② if you fear deep recursion on huge graphs).
+
+      **④ Alternative — Fleury's algorithm, O(m²)**
+
+      Greedily walk but **never take a bridge while an unused non-bridge edge
+      remains**. A bridge, taken early, disconnects the leftover edges so the
+      walk cannot finish. Correct but quadratic, because each step can require a
+      BFS bridge-check.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<set<int>> g(n + 1);        // adjacency as sets for O(log) erase
+          vector<int> deg(n + 1, 0);
+          for (int i = 0; i < m; ++i) {
+              int a, b; cin >> a >> b;
+              g[a].insert(b); g[b].insert(a);
+              ++deg[a]; ++deg[b];
+          }
+          for (int i = 1; i <= n; ++i)
+              if (deg[i] & 1) { cout << "IMPOSSIBLE\n"; return 0; }
+
+          // is (a,b) a bridge?  i.e. does a reach b without that edge?
+          auto isBridge = [&](int a, int b) -> bool {
+              g[a].erase(b); g[b].erase(a);       // temporarily remove
+              vector<char> vis(n + 1, 0);
+              queue<int> q; q.push(a); vis[a] = 1;
+              bool reached = false;
+              while (!q.empty()) {
+                  int u = q.front(); q.pop();
+                  if (u == b) { reached = true; break; }
+                  for (int v : g[u]) if (!vis[v]) { vis[v] = 1; q.push(v); }
+              }
+              g[a].insert(b); g[b].insert(a);     // restore
+              return !reached;
+          };
+
+          vector<int> path{1};
+          int cur = 1;
+          long long usedEdges = 0;
+          while (usedEdges < m) {
+              int nxt = -1, firstBridge = -1;
+              vector<int> nbrs(g[cur].begin(), g[cur].end());
+              for (int v : nbrs) {
+                  if (!isBridge(cur, v)) { nxt = v; break; }   // prefer non-bridge
+                  if (firstBridge == -1) firstBridge = v;
+              }
+              if (nxt == -1) nxt = firstBridge;                // forced to take a bridge
+              if (nxt == -1) { cout << "IMPOSSIBLE\n"; return 0; }  // got stuck: not a single circuit
+              g[cur].erase(nxt); g[nxt].erase(cur);
+              ++usedEdges;
+              cur = nxt;
+              path.push_back(cur);
+          }
+          if (path.front() != 1 || path.back() != 1) { cout << "IMPOSSIBLE\n"; return 0; }
+          for (int i = 0; i < (int)path.size(); ++i) { if (i) cout << " "; cout << path[i]; }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **O(m²)** (a BFS per edge, worst case) — correct but slower than
+      Hierholzer because the bridge test re-runs connectivity from scratch each
+      step. Hierholzer's implicit edge-splicing achieves the same **O(n + m)**
+      with no per-edge connectivity scans, which is why tiers ② and ③ are the
+      ones to submit.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The optimal tier is a degree check plus the stack-based Hierholzer walk.
+
+      - **Even-degree gate.** If any `deg[i] & 1`, print `IMPOSSIBLE` — an
+        undirected circuit needs every vertex to be entered and exited the same
+        number of times.
+      - **Edge bookkeeping.** Each street appears in both endpoints' lists as
+        `(neighbour, edge id)`. The `used[eid]` flag is the single source of
+        truth for "already travelled", so `g` is never mutated and each of the
+        `2m` adjacency entries is scanned at most once.
+      - **The walk.** `st` holds the current path. When the top vertex still has
+        an unused edge we take it and push the other endpoint; otherwise the
+        vertex has no way out, so it is sealed onto `path` and popped. This
+        "seal when stuck" is Hierholzer's embedded-cycle splicing, done
+        implicitly.
+      - **Reversal.** Sealing happens deepest-first, so `path` is the circuit in
+        reverse; `reverse()` produces the correct traversal. The sample's
+        expected route is one valid circuit — the code may emit a different but
+        equally valid one, which the problem accepts.
+      - **Completion.** If fewer than `m + 1` crossings were sealed, the graph
+        has edges not reachable from crossing 1 (disconnected pieces) — treat as
+        `IMPOSSIBLE`, exactly like the CSES constraint wording permits.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):**
+
+      ```
+      6 8
+      1 2  1 3  2 3  2 4  2 6  3 5  3 6  4 5
+      ```
+
+      **Degrees:** `deg(1)=2, deg(2)=4, deg(3)=4, deg(4)=2, deg(5)=2, deg(6)=2` —
+      all even, so a circuit exists.
+
+      **Walk (one possible run of tier ②).** Start `st=[1]`.
+
+      | current | takes edge | st (sealed → path) |
+      |---------|------------|---------------------|
+      | 1 | 1–3 | [1,3] |
+      | 3 | 3–6 | [1,3,6] |
+      | 6 | 6–2 | [1,3,6,2] |
+      | 2 | 2–4 | [1,3,6,2,4] |
+      | 4 | 4–5 | [1,3,6,2,4,5] |
+      | 5 | 5–3 | [1,3,6,2,4,5,3] |
+      | 3 | 3–2 | [1,3,6,2,4,5,3,2] |
+      | 2 | 2–1 | [1,3,6,2,4,5,3,2,1] |
+
+      Sealing order (`path`, then reversed): sealed bottom-up `1 2 3 5 4 2 6 3 1`
+      → reversed **`1 3 6 2 4 5 3 2 1`**.
+
+      Verify: `1–3, 3–6, 6–2, 2–4, 4–5, 5–3, 3–2, 2–1` — exactly the eight
+      sample streets, each once, starting and ending at 1. **Valid circuit.**
+      (The CSES sample printed `1 2 6 3 2 4 5 3 1` — a different but equally
+      valid route; both satisfy the requirement.)
+
+      **An impossible case:** any graph with an odd-degree crossing → the
+      even-degree gate prints `IMPOSSIBLE`; e.g. a single edge `1–2`
+      (`deg(1)=deg(2)=1`) has no circuit returning to the post office.
+  - type: flowchart
+    title: Hierholzer — Euler circuit
+    nodes:
+      - "Build adjacency + degrees"
+      - "Any odd degree?"
+      - "Print IMPOSSIBLE"
+      - "Start st=[1]; walk on"
+      - "Top vertex has unused edge?"
+      - "Take it, push other endpoint"
+      - "Seal vertex, pop it"
+      - "Stack empty & path length m+1?"
+      - "Reverse path, print route"
+    edges:
+      - {from: 0, to: 1, label: "read graph"}
+      - {from: 1, to: 2, label: "yes"}
+      - {from: 1, to: 3, label: "no"}
+      - {from: 3, to: 4, label: "loop"}
+      - {from: 4, to: 5, label: "yes"}
+      - {from: 5, to: 3, label: "continues"}
+      - {from: 4, to: 6, label: "no"}
+      - {from: 6, to: 7, label: "next"}
+      - {from: 7, to: 4, label: "no"}
+      - {from: 7, to: 8, label: "yes"}
+  - type: mcq
+    prompt: 'For an undirected graph to have an Euler circuit, which condition on degrees is necessary and sufficient (assuming the graph is connected)?'
+    options:
+      - Exactly two vertices have odd degree
+      - Every vertex has even degree
+      - Every vertex has degree at least 2
+      - The average degree equals two
+    answer: 1
+    explanation: A circuit returns to each vertex the same number of times it leaves, so every visit pairs an entry with an exit — hence every vertex must have even degree. Exactly two odd vertices gives an Euler *path* (open trail), not a circuit. Degree ≥ 2 is neither necessary nor sufficient (a triangle of 1-2-3-2 would satisfy ≥2 yet have odd degrees at vertices 1 and 3). Hierholzer constructs the walk in O(n+m) once this even-degree test passes.
+type: content
+---

@@ -1,0 +1,248 @@
+---
+id: exponentiation-ii
+title: "Exponentiation II"
+type: content
+difficulty: medium
+order: 162
+tags:
+  - modular-arithmetic
+  - fermat
+  - exponent-reduction
+  - fast-pow
+blocks:
+  - type: markdown
+    content: |
+      # Exponentiation II — reducing the exponent with Fermat's little theorem
+
+      Now the exponent is itself a power: compute `a^(b^c) mod 10^9+7`, where
+      `a`, `b`, `c` can each be up to `10^9`. The number `b^c` is astronomically
+      large — far too big to compute, let alone to use as a loop count.
+
+      The problem is set modulo a **prime** `P = 10^9+7`. Fermat's little
+      theorem tells us that for any base `x` not divisible by `P`,
+
+      ```
+      x^(P-1) ≡ 1  (mod P)
+      ```
+
+      so the powers of `a` repeat with **period `P-1`** in the exponent.
+      Dividing the true exponent `b^c` by `P-1`, only the *remainder* matters
+      if `a` is coprime to `P`:
+
+      ```
+      a^(b^c) mod P  =  a^( (b^c) mod (P-1) )  mod P
+      ```
+
+      So we compute `e = b^c mod (P-1)` with a fast power (Lesson
+      **161 Exponentiation**), then `a^e mod P` with another fast power. The
+      huge exponent never needs to exist.
+
+      **Time:** `O(log c + log b)` per query (two fast powers). **Space:**
+      `O(1)`.
+
+      :::tip
+      **Interview tip:** whenever you see `a^X mod p` where `X` is gigantic,
+      ask *"is p prime?"*. If yes, Fermat gives you `X mod (p-1)` and the
+      problem collapses to two small fast powers. Know both the theorem and
+      its one caveat — it needs `gcd(a, p) = 1`. When `p` is prime but `a` is
+      a multiple of `p`, handle that case explicitly (see tier ④).
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to efficiently calculate values `a^(b^c)` modulo `10^9+7`.
+
+      Note that in this task we assume that `0^0=1`.
+
+      # Input
+
+      The first input line has an integer `n`: the number of calculations.
+
+      After this, there are `n` lines, each containing three integers `a`, `b`
+      and `c`.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `0 <= a,b,c <= 10^9`
+
+      ## Output
+
+      Print each value `a^(b^c)` modulo `10^9+7`.
+
+      ## Example
+
+      Input:
+
+      ```
+      3
+      3 7 1
+      15 2 2
+      3 4 5
+      ```
+
+      Output:
+
+      ```
+      2187
+      50625
+      763327764
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — compute the exponent directly, impossible**
+
+      Computing `b^c` in a 64-bit integer overflows for even modest values
+      (`b,c <= 10^9`), and iterating `a` an astronomically large number of
+      times is inconceivable. There is no way to materialize the exponent.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll P = 1000000007;
+      int main(){ // reference ONLY — cannot even build the loop bound b^c
+          int n; cin>>n;
+          while(n--){ ll a,b,c; cin>>a>>b>>c;
+              // b^c overflows ll and the loop would run b^c times
+          }
+      }
+      ```
+
+      *Infeasible: `b^c` can reach `10^9^(10^9)`.*
+
+      **② Optimization — Fermat exponent reduction, O(log c + log b) per query**
+
+      Since `P` is prime, reduce the exponent `b^c` modulo `P-1` first, then do
+      one more fast power. This is the optimal tier.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll P = 1000000007;
+
+      ll mPow(ll a, ll b, ll m){          // a^b mod m by squaring
+          ll r = 1 % m; a %= m;
+          while(b){ if(b&1) r = r*a % m; a = a*a % m; b >>= 1; }
+          return r;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          while(n--){
+              ll a,b,c; cin>>a>>b>>c;
+              ll e = mPow(b, c, P - 1);      // exponent reduced mod p-1
+              cout << mPow(a, e, P) << "\n";
+          }
+      }
+      ```
+
+      *`O(log c + log b)` per query — two fast powers, ~60 iterations total.*
+
+      **③ Further optimization — already optimal**
+
+      Two fast powers is the ceiling of simplicity; `O(log c + log b)` is
+      essentially free for `10^5` queries. No faster asymptotic approach
+      exists for a single `a^(b^c)` value.
+
+      **④ Alternative algorithm — handle the `a ≡ 0 (mod p)` corner**
+
+      Fermat's theorem requires `gcd(a, P) = 1`. Since `a < P` here, the only
+      non-coprime case is `a = 0`. Guard it explicitly: for a positive reduced
+      exponent `0^(something) = 0`, and the period argument otherwise matches
+      tier ②.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      const ll P = 1000000007;
+      ll mPow(ll a, ll b, ll m){ ll r = 1 % m; a %= m;
+          while(b){ if(b&1) r = r*a % m; a = a*a % m; b >>= 1; } return r; }
+      int main(){ ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          while(n--){
+              ll a,b,c; cin>>a>>b>>c;
+              if(a == 0){                       // 0^(positive) = 0
+                  cout << ((b == 0 && c == 0) ? 1%P : 0) << "\n";
+                  continue;
+              }
+              ll e = mPow(b, c, P - 1);
+              cout << mPow(a, e, P) << "\n";
+          }
+      }
+      ```
+
+      *`O(log c + log b)` per query — same complexity, explicit edge handling
+      for the only non-coprime base.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on **②**:
+
+      - **`mPow(b, c, P-1)`.** A fast power with modulus `P-1` computes the
+        reduced exponent `e = b^c mod (P-1)`. This is valid because powers of
+        a coprime base repeat with period `P-1`.
+
+      - **`mPow(a, e, P)`.** A second fast power computes `a^e mod P`, which by
+        Fermat equals `a^(b^c) mod P`. The astronomical exponent never exists
+        as a number.
+
+      - **Why `P-1`.** Fermat: `a^(P-1) ≡ 1`, so `a^(x + P-1) ≡ a^x`. Two
+        exponents that differ by a multiple of `P-1` behave identically, so
+        only `exponent mod (P-1)` matters.
+
+      - **Two different moduli.** The *outer* computation is `mod P`; the
+        *inner* exponent reduction is `mod P-1`. Swapping them — reducing the
+        base `a` mod `P-1`, say — would be a classic off-by-chapter bug.
+
+      For the sample `(15, 2, 2)`: `b^c = 2^2 = 4`, reduced exponent `e = 4`,
+      then `15^4 = 50625`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace **②** on the third sample, `(a, b, c) = (3, 4, 5)` (expect
+      `3^(4^5) mod 10^9+7 = 763327764`):
+
+      1. `e = mPow(4, 5, P-1)`. Since `4^5 = 1024 < P-1 = 1000000006`, the
+         reduced exponent is just `e = 1024`.
+      2. `mPow(3, 1024, P)` folds the set bits of `1024 = 0b10000000000`
+         (bit 10) into `result` after ten squarings, giving
+         `3^(2^10) = 3^1024 mod P = 763327764`.
+
+      Full sample:
+
+      | (a,b,c) | reduced exponent e | value | result |
+      |---------|--------------------|-------|--------|
+      | (3,7,1) | `7^1 mod p-1 = 7` | `3^7` | `2187` |
+      | (15,2,2) | `2^2 = 4` | `15^4` | `50625` |
+      | (3,4,5) | `4^5 = 1024` | `3^1024` | `763327764` |
+
+      Expected (sample) — `2187 50625 763327764`. Actual —
+      `2187 50625 763327764`. Match.
+  - type: flowchart
+    title: "Compute a^(b^c) mod P"
+    nodes: ["read a, b, c", "e = fastpow(b, c, P-1)", "a == 0? (edge)", "ans = fastpow(a, e, P)", "special-case 0^0", "print ans"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 4, label: "yes"}
+      - {from: 2, to: 3, label: "no"}
+      - {from: 4, to: 5}
+      - {from: 3, to: 5}
+  - type: mcq
+    prompt: "What makes it valid to replace the exponent b^c by (b^c) mod (P-1)?"
+    options:
+      - "Because P is a power of two, so exponents cycle with period 2."
+      - "Because a is always divisible by P in this problem."
+      - "Because P = 10^9+7 is prime, Fermat gives a^(P-1) ≡ 1 (mod P) when gcd(a,P)=1, so powers of a repeat with period P-1 and only the exponent modulo P-1 matters."
+      - "Because b^c < P-1 for all inputs."
+    answer: 2
+    explanation: "Fermat's little theorem: for a prime P and a coprime base a, a^(P-1) ≡ 1 (mod P). Hence a^x depends only on x mod (P-1). The caveat is gcd(a,P)=1 — leveraged by reducing modulo P-1 (never modulo P), which is why the inner modulus differs from the outer one."
+---

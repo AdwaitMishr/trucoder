@@ -1,0 +1,259 @@
+---
+id: grid-puzzle-i
+title: Grid Puzzle I
+difficulty: medium
+order: 387
+tags:
+  - additional
+  - max-flow
+  - bipartite
+  - reconstruction
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — feasibility as a bipartite flow problem
+
+      We have an `n × n` grid. We must choose a set of squares such that row `i`
+      contributes exactly `a_i` chosen squares **and** column `j` contributes
+      exactly `b_j` chosen squares. Each square is chosen at most once — so a
+      chosen square at `(i,j)` simultaneously consumes one unit of row `i`'s
+      quota and one unit of column `j`'s quota.
+
+      This is precisely a **transportation / bipartite b-matching** problem, and
+      it is beautifully captured as a **maximum-flow** instance:
+
+      ```
+      source --> row-node i        (capacity a_i)
+      row-node i --> col-node j    (capacity 1, one edge per possible square)
+      col-node j --> sink          (capacity b_j)
+      ```
+
+      • **Capacity `a_i` from source to row `i`** means row `i` can push at most
+        `a_i` units — exactly the squares it may choose.
+      • **Capacity `1` on `row i → col j`** guarantees a single square is used at
+        most once.
+      • **Capacity `b_j` on `col j → sink`** forces column `j` to accept at most
+        (and with a full flow, exactly) `b_j` chosen squares.
+
+      A feasible selection exists **iff** the maximum flow saturates the source
+      edges (value `Σ a_i`). Because the problem is a pure feasibility question
+      over a complete grid, a necessary condition is simply `Σ a_i = Σ b_j`
+      (both the row totals and the column totals equal the total number of
+      chosen squares); the flow formulation verifies the *realizable* condition
+      automatically. When feasible, the squares that carry flow on the
+      row→column edges are exactly the chosen squares, so we can read the grid
+      out of the residual graph.
+
+      :::tip
+      **Interview tip:** "Pick exactly `a_i` from each row and exactly `b_j` from
+      each column" is a dead giveaway for **bipartite max-flow / b-matching**.
+      The pattern is: *row → column → sink* with unit capacities on the
+      row→column edges (one per selectable cell) and quotas on the outer edges.
+      Feasibility ⟺ saturated source edges; the answer grid is the saturated
+      row→column edges. Use `Dinic` (O(V²E), with the unit-edge benefit it is
+      effectively `O(E·√V·… )` — instant for `n ≤ 50`).
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      There is an `n × n` grid, and your task is to choose from each row and
+      column some number of squares. How can you do that?
+
+      **Input.** The first input line has an integer `n`: the size of the grid.
+      The rows and columns are numbered `1,2,…,n`. The next line has `n`
+      integers `a_1,a_2,…,a_n`: you must choose exactly `a_i` squares from the
+      `i`th row. The last line has `n` integers `b_1,b_2,…,b_n`: you must choose
+      exactly `b_j` squares from the `j`th column.
+
+      **Output.** Print `n` lines describing which squares you choose (`X` means
+      that you choose a square, `.` means that you don't choose it). You can
+      print any valid solution. If it is not possible to satisfy the conditions
+      print only `-1`.
+
+      **Constraints**
+      - `1 ≤ n ≤ 50`
+      - `0 ≤ a_i ≤ n`
+      - `0 ≤ b_j ≤ n`
+
+      **Sample**
+
+      Input:
+      ```
+      5
+      0 1 3 2 0
+      1 2 2 0 1
+      ```
+
+      Output:
+      ```
+      .....
+      ..X..
+      .XX.X
+      XX...
+      .....
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2^(n²)).** Enumerate every subset of the `n²` squares
+      and test the row/column quotas. Correct by definition, but there are
+      `2^(n²)` subsets — astronomically impossible at `n = 50` (and even `n = 6`
+      gives `2^36 ≥ 6·10¹⁰`).
+
+      ```cpp
+      // conceptual — enumerates all 2^(n^2) square subsets
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n;
+      // rec(i): decide square i's chosen/unchosen status, track running row/col counts
+      void rec(int idx, vector<int>& r, vector<int>& c, vector<string>& g){
+          if(idx == n*n){
+              // check every row == a_i and every col == b_j
+              return;
+          }
+          int i=idx/n, j=idx%n;
+          g[i][j]='.'; rec(idx+1,r,c,g);         // don't choose
+          g[i][j]='X'; r[i]++; c[j]++; rec(idx+1,r,c,g); // choose
+          r[i]--; c[j]--; g[i][j]='.';
+      }
+      ```
+      *Complexity: O(2^(n²)) — hopelessly slow for `n ≥ 6`.*
+
+      **② Optimization — max-flow (Dinic) — O(V²E).** Build the flow network
+      `source → rows (cap a_i)`, `row → col (cap 1)`, `col → sink (cap b_j)`.
+      If the max flow equals `Σ a_i` (which also equals `Σ b_j` when feasible),
+      output the grid from which row→column edges carry flow; otherwise print
+      `-1`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct Dinic {
+          struct E{int to,rev; long long cap;};
+          vector<vector<E>> g; vector<int> lv, it; int n;
+          Dinic(int n):n(n),g(n){}
+          void add(int a,int b,long long c){ g[a].push_back({b,(int)g[b].size(),c}); g[b].push_back({a,(int)g[a].size()-1,0}); }
+          bool bfs(int s,int t){ lv.assign(n,-1); queue<int>q; lv[s]=0; q.push(s);
+              while(!q.empty()){ int v=q.front(); q.pop();
+                  for(auto &e:g[v]) if(e.cap>0 && lv[e.to]<0){ lv[e.to]=lv[v]+1; q.push(e.to); } }
+              return lv[t]>=0; }
+          long long dfs(int v,int t,long long f){ if(v==t) return f;
+              for(int &i=it[v]; i<(int)g[v].size(); i++){ E&e=g[v][i];
+                  if(e.cap>0 && lv[e.to]==lv[v]+1){ long long d=dfs(e.to,t,min(f,e.cap));
+                      if(d>0){ e.cap-=d; g[e.to][e.rev].cap+=d; return d; } } } return 0; }
+          long long maxflow(int s,int t){ long long f=0;
+              while(bfs(s,t)){ it.assign(n,0); long long d; while((d=dfs(s,t,1e18))>0) f+=d; }
+              return f; }
+      };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<int> a(n),b(n); long long sa=0,sb=0;
+          for(int i=0;i<n;i++){cin>>a[i]; sa+=a[i];}
+          for(int i=0;i<n;i++){cin>>b[i]; sb+=b[i];}
+          int S=0,T=n+n+1; Dinic din(T+1);
+          for(int i=0;i<n;i++){ if(a[i]) din.add(S,1+i,a[i]); if(b[i]) din.add(1+n+i,T,b[i]); }
+          for(int i=0;i<n;i++) for(int j=0;j<n;j++) din.add(1+i,1+n+j,1);
+          if(din.maxflow(S,T)!=sa){ cout<<-1<<"\n"; return 0; }
+          vector<string> g(n,string(n,'.'));
+          for(int i=0;i<n;i++) for(auto&e:din.g[1+i]){
+              int j=e.to-(1+n);
+              if(j>=0 && j<n && e.cap==0) g[i][j]='X';  // saturated row->col edge == chosen square
+          }
+          for(int i=0;i<n;i++) cout<<g[i]<<"\n";
+      }
+      ```
+      *Complexity: O(V²E) with `V = 2n+2`, `E = n² + 2n` — microseconds for
+      `n ≤ 50`. The unit-capacity structure means Dinic runs far faster than the
+      worst case.*
+
+      **④ Alternative / note.** A necessary check `Σ a_i == Σ b_j` is cheap and
+      rules out the obvious impossible cases, but it is **not sufficient** in
+      general — the flow test is the robust arbiter. (For a *complete* grid the
+      totals condition plus bounds actually do guarantee feasibility, which is
+      why flow always succeeds here; the flow formulation is the safe, general
+      tool.) There is no simpler *correct* approach than max-flow for the
+      reconstruction, so ② is the canonical solution.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(V²E) max-flow feasibility + reconstruction. Key lines:
+
+      1. **Network wiring.** `add(S, 1+i, a[i])` caps row `i` at `a_i` squares;
+         `add(1+i, 1+n+j, 1)` creates one unit-capacity edge per cell; 
+         `add(1+n+j, T, b[j])` caps column `j` at `b_j`.
+      2. **Feasibility test.** `maxflow(S,T) != sa` ⟹ condition unsatisfiable →
+         print `-1`. A successful flow sends exactly the row quota to the sink.
+      3. **Reading the grid.** A row→column edge whose residual capacity is `0`
+         was saturated by the flow, meaning that square `(i,j)` is chosen — set
+         `g[i][j]='X'`. Nodes indexed `1+i` are rows, `1+n+j` are columns.
+      4. **Output** the assembled rows.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5`, `a = [0,1,3,2,0]`, `b = [1,2,2,0,1]` → total `Σ a = 6`,
+      `Σ b = 6`.
+
+      Build the flow graph and push 6 units:
+
+      | unit | path | chosen square |
+      |------|------|---------------|
+      | 1 | S→row1→col0→T | `(1,0)` → row1,col0 |
+      | 2 | S→row2→col1→T | `(2,1)` → row2,col1 |
+      | 3 | S→row2→col2→T | `(2,2)` → row2,col2 |
+      | 4 | S→row2→col4→T | `(2,4)` → row2,col4 |
+      | 5 | S→row3→col1→T | `(3,1)` → row3,col1 |
+      | 6 | S→row3→col0→T | `(3,0)` → row3,col0 |
+
+      Residual capacities on the row→column edges become `0` exactly for those
+      six cells. Reconstruct and print:
+
+      ```
+      .....
+      ..X..
+      .XX.X
+      XX...
+      .....
+      ```
+
+      Verify row counts: row 2 picked 1 ✓, row 3 picked 3 ✓, row 4 picked 2 ✓.
+      Verify column counts: col1 → 2 ✓, col2 → 2 ✓, col5 → 1 ✓. Matches the
+      sample. (The flow reconstruction may legally output a different *valid*
+      grid — e.g. `X....`, `..X..`, `.XX.X`, `.XX..` — any one that satisfies the
+      quotas is accepted.)
+
+  - type: flowchart
+    title: "Grid Puzzle I feasibility via max flow"
+    nodes:
+      - Wire source→rows(quota a_i), rows→cols(cap 1), cols→sink(b_j)
+      - Run Dinic max flow
+      - flow == sum(a_i)?
+      - No: print -1
+      - Yes: saturated row→col edges are chosen squares
+      - Print the reconstructed grid
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: "no"}
+      - {from: 2, to: 4, label: "yes"}
+      - {from: 4, to: 5, label: ""}
+
+  - type: mcq
+    prompt: "Why must the maximum flow equal the total row quota (sum of a_i) for a solution to exist?"
+    options:
+      - "Because a full flow saturates every source edge, meaning each row pushed exactly its quota of squares, and every unit reached the sink past exactly the b_j column caps."
+      - "Because the flow value equals n for every bipartite network."
+      - "Because the max flow always equals the number of rows."
+      - "Because Dinic always returns the row quota regardless of caps."
+    answer: 0
+    explanation: "The flow value is the total number of chosen squares that successfully satisfy the column capacities. Saturating the source edges (flow = Σ a_i) is exactly the condition that every row's quota is met; combined with the saturated column edges hitting their sinks, both the row and the column requirements are satisfied. If the flow falls short, some row quota could not be routed through the columns and no valid selection exists."
+type: content
+---

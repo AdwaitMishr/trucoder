@@ -1,0 +1,251 @@
+---
+id: coin-grid
+title: Coin Grid
+difficulty: medium
+order: 381
+tags:
+  - additional
+  - bipartite-matching
+  - minimum-vertex-cover
+  - graphs
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — minimum vertex cover in a bipartite graph
+
+      The grid is `n×n`, each cell empty (`.`) or holding a coin (`o`). A move
+      deletes **all** coins in one row or one column, and we want the fewest
+      moves so every coin is gone. Rephrase it as a graph problem.
+
+      Make a bipartite graph: the `n` rows are the left side, the `n` columns
+      are the right side, and **a coin in cell (r,c) is an edge between row `r`
+      and column `c`.** Deleting all coins in row `r` "covers" every edge
+      touching `r`; deleting column `c` covers every edge touching `c`. So the
+      job is: pick the fewest vertices (rows + columns) that together touch
+      every edge. That is exactly the **minimum vertex cover**.
+
+      The key theorem is **Kőnig's theorem**: in a bipartite graph,
+
+      ```
+      size of minimum vertex cover  =  size of maximum matching
+      ```
+
+      and, crucially for this problem, the cover itself can be **reconstructed**
+      from a maximum matching. So the plan is:
+
+      1. Build the bipartite row–column graph.
+      2. Find a maximum matching (Kuhn's augmenting-path algorithm).
+      3. Extract a minimum vertex cover from it (one standard construction
+         below), and print its rows and columns.
+
+      **Reconstructing the cover (Kőnig).** Let `L` = rows, `R` = columns.
+      Run a search (DFS/BFS) starting from *every unmatched left vertex*,
+      moving along **alternating** paths: from a visited row go to a column via
+      an **unmatched** edge, and from a column go to its matched row. Let `Z`
+      be the set of vertices reached. Then a minimum vertex cover is
+
+      ```
+      (rows not in Z)  union  (columns in Z)
+      ```
+
+      Its size equals the matching size, and every coin edge is covered.
+
+      :::tip
+      **Interview tip:** "Fewest rows/columns to hit a set of cells" (and its
+      many disguises — hit a set of segments, cover chess-board squares with
+      rooks, attacking squares) is a classic bipartite **minimum vertex cover**.
+      The reflex is to build the bipartite graph and invoke max-flow / max
+      matching, then use Kőnig to extract the actual cover. It also shows up on
+      grid/geometry problems where "a move clears a line".
+      :::
+
+  - type: markdown
+    content: |-
+      ## The Problem
+
+      There is an `n×n` grid whose each square is empty or has a coin. On each
+      move, you can remove all coins in a row or column. What is the minimum
+      number of moves after which the grid is empty?
+
+      **Input.** The first input line has an integer `n`: the size of the grid.
+      The rows and columns are numbered `1,2,…,n`. After this, there are `n`
+      lines describing the grid. Each line has `n` characters: each character
+      is either `.` (empty) or `o` (coin).
+
+      **Output.** First print an integer `k`: the minimum number of moves.
+      After this, print `k` lines describing the moves. On each line, first
+      print `1` (row) or `2` (column), and then the number of a row or column.
+      You can print any valid solution.
+
+      **Constraints**
+      - `1 ≤ n ≤ 100`
+
+      **Sample**
+
+      Input:
+      ```
+      3
+      ..o
+      o.o
+      ...
+      ```
+
+      Output:
+      ```
+      2
+      1 2
+      2 3
+      ```
+
+      *Explanation:* choose row 2 (covers coins in `(2,1)` and `(2,3)`) and the
+      third column (covers `(1,3)`), clearing all three coins in 2 moves.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2ⁿ·n).** Enumerate every subset of rows by a bitmask
+      over `0..2ⁿ−1`. For a given row subset, every coin that lies in a
+      *non-chosen* row must be cleared by choosing its column; the needed
+      columns are the distinct column indices holding such a coin. The move
+      count is `(#chosen rows) + (#needed columns)`, and we take the minimum
+      over all masks. Correct, but `2¹⁰⁰` is far beyond reach.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<string> g(n);
+          for(auto &s:g) cin>>s;
+          int best=n*n;
+          for(int mask=0; mask<(1<<n); ++mask){
+              int rows=__builtin_popcount(mask);
+              vector<char> needCol(n,0); int cols=0;
+              for(int r=0;r<n;r++) if(!(mask>>r&1))
+                  for(int c=0;c<n;c++) if(g[r][c]=='o' && !needCol[c])
+                      { needCol[c]=1; cols++; }
+              best=min(best, rows+cols);
+          }
+          cout<<best<<"\n";
+      }
+      ```
+      *Complexity: O(2ⁿ·n) — hopeless for `n ≤ 100`.*
+
+      **② Optimization — O(n³), Kuhn + Kőnig.** Model as a bipartite graph
+      (rows vs columns, coin ⇒ edge) and solve minimum vertex cover = maximum
+      matching, then reconstruct the cover. This is the intended algorithm.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<string> g(n);
+          for(auto &s:g) cin>>s;
+          vector<vector<int>> adj(n);          // row -> columns with a coin
+          for(int r=0;r<n;r++)for(int c=0;c<n;c++)if(g[r][c]=='o') adj[r].push_back(c);
+          vector<int> matchR(n,-1), matchL(n,-1);      // matched right/left vertex
+          vector<char> vis(n);
+          function<bool(int)> aug=[&](int u){           // Kuhn augmenting path
+              for(int c: adj[u]){
+                  if(vis[c]) continue; vis[c]=1;
+                  if(matchR[c]==-1 || aug(matchR[c])){
+                      matchR[c]=u; matchL[u]=c; return true;
+                  }
+              }
+              return false;
+          };
+          for(int u=0;u<n;u++){ vis.assign(n,0); aug(u); }
+          // Koenig: reachable set Z from every unmatched left vertex (alternating)
+          vector<char> visL(n,0), visR(n,0);
+          function<void(int)> explore=[&](int u){
+              visL[u]=1;
+              for(int c: adj[u]){                       // only unmatched edges L->R
+                  if(visR[c]) continue; visR[c]=1;
+                  if(matchR[c]!=-1) explore(matchR[c]); // matched edge R->L
+              }
+          };
+          for(int u=0;u<n;u++) if(matchL[u]==-1) explore(u);
+          vector<pair<int,int>> moves;
+          for(int r=0;r<n;r++) if(!visL[r]) moves.push_back({1,r});  // row r
+          for(int c=0;c<n;c++) if(visR[c])  moves.push_back({2,c});  // column c
+          cout<<moves.size()<<"\n";
+          for(auto &p:moves) cout<<p.first<<" "<<p.second+1<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: Kuhn matching is O(V·E)=O(n³) worst case, fine for `n≤100`;
+      the Koenig pass is O(E).*
+
+      **③ Further optimization — O(E√V).** For larger grids, replace Kuhn with
+      **Hopcroft–Karp** (BFS layering + DFS blocking-flows) for O(E√V) matching.
+      The Koenig cover extraction is unchanged. Not needed here but is the
+      standard upgrade.
+
+      **④ Alternative — max-flow / min-cut.** Bipartite matching is also
+      solvable as a max-flow on a network (source → rows (cap 1) → columns
+      (cap 1) → sink); the min vertex cover comes from the min-cut via the
+      reachability-from-source construction. This is the same answer, phrased
+      as flow. For `n≤100` Kuhn is simplest.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n³) min vertex cover. Key lines:
+
+      1. **Graph build.** For each coin cell `(r,c)` push `c` into `adj[r]`:
+         an edge between row-vertex `r` and column-vertex `c`.
+      2. **Kuhn matching.** `aug(u)` greedily re-routes previous matches to fit
+         a new row; after all rows, `matchL[u]=c` (or −1) is the matching.
+      3. **Kőnig reachability.** From each *unmatched* row `u` we DFS: row →
+         its adjacent columns (unmatched edges), column → its matched row. This
+         marks exactly the set `Z`.
+      4. **Cover output.** Print rows `r` with `visL[r]==false` and columns `c`
+         with `visR[c]==true`. The count printed is `|moves|`, which, by
+         Kőnig, equals the maximum matching size and is the true minimum.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n=3`, grid
+      ```
+      ..o
+      o.o
+      ...
+      ```
+      Edges (coins): `(row0, col2)`, `(row1, col0)`, `(row1, col2)`.
+
+      Matching: rows `0,1` can both be matched — e.g. `row0→col2`, `row1→col0`
+      (size 2; no size-3 matching exists since only two rows hold coins), so the
+      min vertex cover size is **2**.
+
+      | stage | result |
+      |-------|--------|
+      | unmatched left | `row2` (row index 2 has no coin) |
+      | DFS from `row2` | column set stays empty (no edges), `Z={row2}` |
+      | cover rows | `!visL`: rows 0,1 → print rows 1,2 |
+      | cover cols | `visR`: none |
+      | output | `2` then `1 1`, `1 2` (rows 1 and 2) |
+
+      Check: rows 1 and 2 together cover all three coins ✓. This differs from
+      the printed sample (`1 2` / `2 3`) but is equally valid — the problem
+      accepts any optimal solution. The printed *expected* sample (`k=2`) also
+      holds for our output.
+
+  - type: mcq
+    prompt: "Why is the minimum number of row/column moves equal to a maximum matching size in Coin Grid?"
+    options:
+      - "Because the row/column deletion problem is a minimum vertex cover on a bipartite graph, and Kőnig's theorem equates min vertex cover with max matching."
+      - "Because each move can always remove exactly one coin."
+      - "Because the grid is n rows by n columns so a matching always has size n."
+      - "Because a maximum matching is a set of rows and columns that covers every coin."
+    answer: 0
+    explanation: "Each coin (r,c) becomes an edge row–column. Deleting rows/columns so every coin is gone is choosing vertices that touch all edges = minimum vertex cover. Kőnig's theorem states min vertex cover = max bipartite matching, and the standard alternating-path construction recovers the actual rows/columns of the cover."
+
+type: content
+---

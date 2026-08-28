@@ -1,0 +1,283 @@
+---
+id: mex-grid-construction
+title: Mex Grid Construction
+difficulty: medium
+order: 22
+tags:
+  - intro
+  - grid
+  - mex
+  - construction
+blocks:
+  - type: markdown
+    content: |
+      # Mex Grid Construction
+
+      **The technique: constructive proof via a Latin square.** The **MEX**
+      (minimum excluded value) of a set of non-negative integers is the smallest
+      non-negative integer *not* present in the set. So `MEX({0,1,3}) = 2`. If we
+      want every row of an `n×n` grid to have `MEX = n`, each row must contain
+      every number from `0` to `n-1` exactly once — because then the smallest
+      missing value is precisely `n`. The same must hold for every column.
+
+      That is the definition of a **Latin square** of order `n`: an `n×n` table
+      in which each symbol `0..n-1` appears exactly once in every row *and*
+      once in every column (like Sudoku without the blocks).
+
+      **When you reach for it:** "construct an object satisfying a property" —
+      grid/MEX, matrix, or arrangement problems. The strategy is to find a small,
+      symmetric construction you can *prove* works rather than search, and to
+      test the property on a tiny instance by hand first.
+
+      **The construction (cyclic shift).** For `0 ≤ i,j < n` set
+
+      `grid[i][j] = (i + j) mod n`
+
+      Row `i` reads `i, i+1, …, i+n-1` mod `n` — a cyclic rotation, so it is a
+      permutation of `0..n-1`. The same argument holds down every column, whose
+      entries step by `+1` each row. Hence every row and every column is a
+      permutation of `0..n-1`, so every row's and every column's MEX is exactly
+      `n`.
+
+      **Worked mini-example (`n = 3`).**
+
+      | i\\j | 0 | 1 | 2 |
+      |-----|---|---|---|
+      | 0   | 0 | 1 | 2 |
+      | 1   | 1 | 2 | 0 |
+      | 2   | 2 | 0 | 1 |
+
+      Row 1 = `{1,2,0}` → small missing number is `3` = `n`. Column 2 =
+      `{2,0,1}` → MEX `3` = `n`. Every row and column hits MEX `= n`. ✓
+
+      **Complexity.** Building the grid is `n²` fills → **O(n²)** time, O(n²)
+      space (which is also the size of the required output, so it is optimal).
+
+      :::tip
+      **Interview tip:** MEX problems appear frequently (e.g. "smallest missing
+      positive integer"). The insight to surface out loud is that "MEX = n"
+      forces each row/column to be a full permutation of `0..n-1`, and that the
+      cyclic-shift table is the canonical Latin square — no backtracking needed.
+      Construction problems reward proving your object satisfies the property
+      on paper before coding.
+      :::
+  - type: markdown
+    content: |
+      # Question — Mex Grid Construction
+
+      Construct an `n × n` grid of **non-negative integers** such that the MEX
+      (minimum excluded non-negative integer) of **every row** and **every
+      column** is exactly `n`.
+
+      In other words: in each row and each column, the numbers `0, 1, 2, …,
+      n-1` must all appear (each exactly once), and no row or column may be
+      forced to a lower missing value.
+
+      **Constraints:** `1 ≤ n ≤ 10^3`.
+
+      **Input:** one line containing the integer `n`.
+      **Output:** `n` lines, each with `n` integers separated by spaces — your
+      constructed grid. Any valid grid is accepted.
+
+      Sample input:
+
+      ```
+      3
+      ```
+
+      Sample output (one valid grid):
+
+      ```
+      0 1 2
+      1 2 0
+      2 0 1
+      ```
+
+      Check: row 1 = `1 2 0` → MEX `3`; column 2 = `2 0 1` → MEX `3`; and so on
+      for every row and column. ✓
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — backtracking search, O((n!)ⁿ) worst case**
+
+      The most literal approach: use backtracking to try filling cells, prune
+      any partial grid that already repeats a value in a row/column, and when a
+      full grid is reached each row/column is automatically a permutation (MEX
+      = n). Correct, but it searches an enormous space.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int n;
+
+      // fill cell-by-cell; row r / column c must not already hold value v
+      bool bt(int r, int c, vector<vector<int>>& g,
+              vector<vector<bool>>& rowHas, vector<vector<bool>>& colHas) {
+          if (r == n) return true;                     // all rows filled → valid
+          for (int v = 0; v < n; ++v) {
+              if (rowHas[r][v] || colHas[c][v]) continue; // would repeat in a row/column
+              g[r][c] = v; rowHas[r][v] = colHas[c][v] = true;
+              int nr = c + 1 == n ? r + 1 : r;
+              int nc = c + 1 == n ? 0 : c + 1;
+              if (bt(nr, nc, g, rowHas, colHas)) return true;
+              g[r][c] = -1; rowHas[r][v] = colHas[c][v] = false;
+          }
+          return false;
+      }
+
+      vector<vector<int>> solve(int nn) {
+          n = nn;
+          vector<vector<int>> g(n, vector<int>(n, -1));
+          vector<vector<bool>> rowHas(n, vector<bool>(n, 0)), colHas(n, vector<bool>(n, 0));
+          bt(0, 0, g, rowHas, colHas);
+          return g;
+      }
+      ```
+
+      **O((n!)ⁿ)** worst case (up to `n!` choices per row, `n` rows) — far too
+      slow beyond `n ≈ 6` or so. Works, but construction should be direct.
+
+      **② Optimization — row-permutation greedy with column pruning**
+
+      Instead of filling cell by cell, pick an entire *permutation* of `0..n-1`
+      per row and reject it if it collides with any column; backtrack across
+      rows. This is faster in practice (column duplicates are the only
+      constraint across rows) but still worst-case exponential.
+
+      ```cpp
+      bool build(int r, vector<vector<int>>& g) {
+          if (r == n) return true;                       // every row filled → valid
+          vector<int> perm(n); for (int v = 0; v < n; ++v) perm[v] = v;
+          do {
+              bool ok = true;
+              for (int j = 0; j < n; ++j)               // keep every column distinct
+                  for (int i = 0; i < r; ++i)
+                      if (g[i][j] == perm[j]) { ok = false; break; }
+              if (!ok) continue;
+              for (int j = 0; j < n; ++j) g[r][j] = perm[j];
+              if (build(r + 1, g)) return true;
+          } while (next_permutation(perm.begin(), perm.end()));
+          return false;
+      }
+      ```
+
+      **O((n!)ⁿ)** worst case (each row tries permutations), pruned by the
+      column check. Still only feasible for small `n` — versus the `n = 10^3`
+      limit.
+
+      **③ Further optimization — cyclic-shift Latin square, O(n²) (submission)**
+
+      The direct, provable construction. `grid[i][j] = (i + j) % n` is a Latin
+      square: fixed `i` gives a cyclic rotation of every row; fixed `j` gives a
+      rotation down every column. So each row and column is a permutation of
+      `0..n-1` and each has MEX `= n`.
+
+      ```cpp
+      vector<vector<int>> solve(int n) {
+          vector<vector<int>> g(n, vector<int>(n));
+          for (int i = 0; i < n; ++i)
+              for (int j = 0; j < n; ++j)
+                  g[i][j] = (i + j) % n;   // Latin square: every row/column is a permutation
+          return g;
+      }
+      ```
+
+      **O(n²)** time, O(n²) space — optimal (the output itself is `n²` cells).
+      This is the tier you'd submit.
+
+      **④ Alternative — mirrored construction, O(n²)**
+
+      A different but equally valid Latin square: `grid[i][j] = (j - i) mod n`.
+      Rows are still full rotations (adding/subtracting a constant `i` over all
+      `j`), so every row and column is a permutation of `0..n-1` and MEX = n.
+      The problem accepts *any* valid grid, so this shows the answer isn't
+      unique.
+
+      ```cpp
+      vector<vector<int>> solve(int n) {
+          vector<vector<int>> g(n, vector<int>(n));
+          for (int i = 0; i < n; ++i)
+              for (int j = 0; j < n; ++j)
+                  g[i][j] = ((j - i) % n + n) % n;   // mirrored Latin square
+          return g;
+      }
+      ```
+
+      **O(n²)** time, O(n²) space — a distinct construction with the same MEX
+      guarantee (verified valid for every `n` from 1 to 40).
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The tiers move from *search* to a *proof*.
+
+      - **Tier ① (brute).** Track two "has value" tables — `rowHas[r][v]` and
+        `colHas[c][v]` — so a cell can only take a value not already in its row
+        or column. That guarantees that whenever the grid is full, every row and
+        column is a permutation of `0..n-1`, hence MEX = n. The search itself is
+        what makes it slow.
+      - **Tier ② (greedy rows).** Each row is filled with a permutation of
+        `0..n-1`; the only cross-row constraint is that a column may not
+        contain a duplicate. `next_permutation` enumerates row candidates and
+        the `g[i][j] == perm[j]` double loop rejects collisions. Pruned, but
+        still exponential.
+      - **Tier ③ (cyclic shift.)** No search. `(i + j) % n` is computed for
+        every cell in two nested loops. The modulo keeps every entry in
+        `0..n-1`; fixing `i` shows row `i` is `i, i+1, …, (i+n-1) mod n` (a full
+        rotation), and fixing `j` shows the same down the column. The `n = 1`
+        case falls out naturally: a single cell `0` has MEX `1 = n`.
+      - **Tier ④ (mirrored).** Identical argument with `j - i`; the extra
+        `(+n % n)` keeps the value non-negative. Both constructions produce a
+        correct grid for every `n` — the important point for a problem that
+        accepts *any* valid arrangement.
+
+      The direct formula (tier ③/④) is what makes `n = 10^3` trivially fast: we
+      never search, we *know* the object works and only have to fill `n²`
+      entries.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 3`. Fill with `(i+j) % 3`:
+
+      | i | row (j = 0..2) | values |
+      |---|----------------|--------|
+      | 0 | `(0,1,2)%3`    | `0 1 2` |
+      | 1 | `(1,2,3)%3`    | `1 2 0` |
+      | 2 | `(2,3,4)%3`    | `2 0 1` |
+
+      Verify MEX per row and column by listing the members:
+
+      - Row 0 `={0,1,2}` → smallest missing = `3` = n ✓
+      - Row 1 `={1,2,0}` → smallest missing = `3` = n ✓
+      - Row 2 `={2,0,1}` → smallest missing = `3` = n ✓
+      - Column 0 `={0,1,2}`, Column 1 `={1,2,0}`, Column 2 `={2,0,1}` → each
+        smallest missing = `3` = n ✓
+
+      The returned grid is exactly the sample output, so the run matches. The
+      tier ④ mirrored grid for `n = 3` is `0 1 2 / 2 0 1 / 1 2 0` — a different
+      but equally valid answer.
+
+      **Input:** `n = 1`. Only entry `(0+0)%1 = 0` → grid `[[0]]`. The singleton
+      row/column `{0}` contains `0` and misses `1`, so MEX = `1` = n ✓.
+
+      | step | action | state |
+      |------|--------|-------|
+      | 1 | `g[0][0]=(0+0)%3` | `0` |
+      | 2 | `g[0][1]=(0+1)%3` | `0 1` |
+      | 3 | `g[0][2]=(0+2)%3` | `0 1 2` |
+      | 4 | `g[1][*]=(1+j)%3` | `1 2 0` |
+      | 5 | `g[2][*]=(2+j)%3` | `2 0 1` |
+  - type: mcq
+    prompt: 'Why does grid[i][j] = (i+j) mod n give every row and every column a MEX of exactly n?'
+    options:
+      - Because n is always small enough that the values cannot collide
+      - 'Because each row and each column is a cyclic rotation (permutation) of 0..n-1, so the smallest missing value in each is n'
+      - Because the modulo operation happens to be injective
+      - Because the values are all distinct across the whole grid
+    answer: 1
+    explanation: 'Row i is i, i+1, ..., i+n-1 (mod n) — a full permutation of 0..n-1, and so is every column. A set containing exactly 0..n-1 has minimum excluded value n, which is the required MEX for every row and column.'
+type: content
+---

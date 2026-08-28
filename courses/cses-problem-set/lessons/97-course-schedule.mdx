@@ -1,0 +1,223 @@
+---
+id: course-schedule
+title: "Course Schedule"
+difficulty: medium
+order: 97
+tags:
+  - graph-algorithms
+  - topological-sort
+  - dag
+  - cycle-detection
+blocks:
+  - type: markdown
+    content: |
+      # Course Schedule — topological sort (and cycle detection)
+
+      We have `n` courses and `m` prerequisites of the form "course `a` must be
+      completed before course `b`". We must output an order to take all courses
+      respecting every constraint — or report that it is impossible.
+
+      This is exactly the **topological sort** problem: order the vertices of a
+      directed graph so that every edge `a -> b` has `a` before `b`. Such an
+      order exists **if and only if the graph is a DAG** (has no directed cycle);
+      if there is a cycle, no schedule can satisfy "a before b" all the way
+      around the cycle.
+
+      ## Kahn's algorithm (indegree BFS)
+
+      A vertex is "ready" once all of its prerequisites are placed. So:
+
+      1. Count the **indegree** of every vertex (number of incoming edges).
+      2. Put every vertex with indegree 0 into a queue — these have no
+         prerequisites, so they can go first.
+      3. Repeatedly pop a vertex `u`, append it to the order, and for each
+         neighbour `v` of `u`, delete the edge `u -> v` (decrement `indeg[v]`);
+         if `indeg[v]` reaches 0, `v` becomes ready and is queued.
+
+      When the queue empties, we have put `n` vertices in order iff the graph is
+      a DAG. If we only placed fewer than `n`, the remaining vertices still have
+      prerequisites — that is, they are part of a cycle → no valid order → print
+      `IMPOSSIBLE`.
+
+      **Time:** O(n + m) — each edge is processed once when its tail is removed.
+      **Space:** O(n + m) (adjacency + indegree).
+
+      :::tip
+      **Interview tip:** Kahn's algorithm and its impossibility check are a
+      favourite interview staple (scheduling, build/dependency ordering, course
+      prerequisites). The key sentence: *"If I cannot place all `n` vertices by
+      the time the indegree-0 queue empties, a cycle exists."* Tie-breaking in
+      the queue (e.g. lexicographically smallest order) is a common follow-up
+      that still runs in O(n log n) if you swap the queue for a min-heap.
+      :::
+  - type: markdown
+    content: |
+      # Question — Course Schedule
+
+      You have to complete `n` courses. There are `m` requirements of the form
+      "course `a` has to be completed before course `b`". Your task is to find an
+      order in which you can complete the courses.
+
+      **Input**
+
+      The first input line has two integers `n` and `m`: the number of courses
+      and requirements. The courses are numbered `1, 2, ..., n`.
+
+      After this, there are `m` lines describing the requirements. Each line has
+      two integers `a` and `b`: course `a` has to be completed before course `b`.
+
+      **Output**
+
+      Print an order in which you can complete the courses. You can print **any
+      valid order** that includes all the courses.
+
+      If there are no solutions, print `IMPOSSIBLE`.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `1 <= m <= 2*10^5`
+      - `1 <= a, b <= n`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 3
+      1 2
+      3 1
+      4 5
+      ```
+
+      Output:
+
+      ```
+      3 4 1 5 2
+      ```
+
+      (Requirements: `3` before `1`, `1` before `2`, `4` before `5`.)
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — repeatedly pick an available course, O(n·(n + m)) time**
+
+      Repeatedly scan for a course whose prerequisites are all already placed in
+      the output; place it and mark its successors' unmet-prerequisite count down.
+      If at some point no course is available but some are unplaced, the graph is
+      cyclic. This is correct but each pass scans many edges — O(n²) in the
+      worst case — and with `n` up to `10^5` it is far too slow.
+
+      ```cpp
+      // Illustration of the naive idea only — O(n·(n+m)), too slow.
+      // Repeat n times: scan for a course with all prerequisites placed.
+      // Each scan revisits many already-settled edges.
+      ```
+
+      **② Optimization — Kahn's algorithm (indegree BFS), O(n + m) time, O(n + m) space**
+
+      Use a queue of indegree-0 vertices and decrement counts as edges are
+      removed.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<int>> g(n + 1);
+          vector<int> indeg(n + 1, 0);
+          for (int i = 0; i < m; ++i) {
+              int a, b; cin >> a >> b;
+              g[a].push_back(b);
+              indeg[b]++;
+          }
+          queue<int> q;
+          for (int i = 1; i <= n; ++i) if (indeg[i] == 0) q.push(i);
+          vector<int> order;
+          while (!q.empty()) {
+              int u = q.front(); q.pop();
+              order.push_back(u);
+              for (int v : g[u])
+                  if (--indeg[v] == 0) q.push(v);   // v's last prerequisite placed
+          }
+          if ((int)order.size() != n) { cout << "IMPOSSIBLE\n"; return 0; }
+          for (int x : order) cout << x << " ";
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **③ Further optimization** — not needed: O(n + m) is optimal; the graph
+      must be traversed, and a DAG must have every edge processed once.
+
+      **④ Alternative — DFS-based topological sort (white/grey/black)**
+
+      Run a DFS that pushes vertices onto a stack as they finish (turn black);
+      the topological order is the **reverse** of the finish order. A grey
+      (on-stack) target during DFS indicates a cycle → `IMPOSSIBLE`. This is the
+      same O(n + m), just a different traversal flavour, and it doubles as
+      directed-cycle detection (see the Round Trip II lesson).
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O(n + m) Kahn solution in **②**:
+
+      - `indeg[v]` counts prerequisites of `v` not yet placed. Each `a -> b`
+        edge adds one to `indeg[b]`.
+      - All indegree-0 courses are immediately ready — no prerequisites — so
+        they seed the queue.
+      - Popping `u` and decrementing each `indeg[v]` "removes" the edge `u -> v`:
+        one of `v`'s satisfied prerequisites. When `indeg[v]` hits 0, every
+        prerequisite of `v` is already in the order, so `v` may be queued now.
+      - The order stays valid because a vertex enters the output only after all
+        of its in-edges are removed, i.e. after all its prerequisites are output.
+      - After the queue empties, if fewer than `n` vertices were placed, at least
+        one cycle blocks the rest — print `IMPOSSIBLE`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, edges `1->2`, `3->1`, `4->5`.
+
+      Indegrees: `indeg[1] = 1` (from 3), `indeg[2] = 1` (from 1),
+      `indeg[3] = 0`, `indeg[4] = 0`, `indeg[5] = 1` (from 4).
+
+      | queue after pop | order | edges removed |
+      |-----------------|-------|---------------|
+      | [3, 4] (init)   | —     | — |
+      | pop 3 → [4, 1]  | 3     | 3->1: indeg[1] ½->0, enqueue 1 |
+      | pop 4 → [1, 5]  | 3 4   | 4->5: indeg[5] ½->0, enqueue 5 |
+      | pop 1 → [5, 2]  | 3 4 1 | 1->2: indeg[2] ½->0, enqueue 2 |
+      | pop 5 → [2]     | 3 4 1 5 | — |
+      | pop 2 → []      | 3 4 1 5 2 | — |
+
+      All 5 courses placed → valid order `3 4 1 5 2`, matching the sample. Check
+      each constraint: `3` before `1` ✓, `1` before `2` ✓, `4` before `5` ✓.
+  - type: flowchart
+    title: "Kahn's topological sort"
+    nodes: ["compute indegrees", "enqueue all indegree-0", "queue empty?",
+            "all n placed? yes → print order", "pop u, append to order",
+            "decrement indeg of each successor; enqueue if 0",
+            "no → cycle: IMPOSSIBLE"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: "yes"}
+      - {from: 2, to: 4, label: "no"}
+      - {from: 4, to: 5, label: "process edges"}
+      - {from: 5, to: 2, label: "loop"}
+      - {from: 3, to: 6, label: "placed < n"}
+  - type: mcq
+    prompt: "After Kahn's algorithm finishes, the queue is empty but fewer than n vertices were placed into the order. What does this prove?"
+    options:
+      - "The graph has too many edges"
+      - "The graph contains a directed cycle involving the unplaced vertices, so no valid order exists — print IMPOSSIBLE"
+      - "The graph is disconnected"
+      - "The queue should have been a min-heap"
+    answer: 1
+    explanation: "An unplaced vertex still has an unresolved prerequisite chain. Because no vertex among the remaining set has indegree 0 while they are unprocessed, they must be mutually dependent, which is exactly a directed cycle. Only a DAG allows all n vertices to be ordered topologically."
+type: content
+---

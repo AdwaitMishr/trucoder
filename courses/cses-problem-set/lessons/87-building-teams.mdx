@@ -1,0 +1,273 @@
+---
+id: building-teams
+title: Building Teams
+type: content
+difficulty: easy
+order: 87
+tags:
+  - graph-algorithms
+  - bipartite
+  - bfs
+blocks:
+  - type: markdown
+    content: |
+      # Building Teams — bipartite graphs and 2-colouring
+
+      `n` pupils are friends in pairs. You want to split them into **two teams**
+      so that no team contains two friends (every friendship spans the two
+      teams). The question is *when is that possible*, and the answer is a
+      beautiful graph fact:
+
+      > Dividing into two teams is possible ⟺ the friendship graph is
+      > **bipartite** ⟺ it contains **no odd cycle**.
+
+      A graph is *bipartite* if its vertices split into two independent sets
+      (`A`, `B`) with every edge crossing between them. Deciding bipartiteness
+      is done with **2-colouring**: assign team 1 or 2 to every vertex so that
+      adjacent vertices always differ.
+
+      ## The colouring algorithm (BFS)
+
+      - Give an uncoloured vertex colour 1, push it, and BFS through its
+        component.
+      - For every edge `(u, v)`, colour 2-colouring demands `colour[v] ==
+        3 − colour[u]` (the "other" team).
+      - If some neighbour already has the *same* colour as its edge partner, a
+        contradiction — the component is not bipartite.
+
+      Because the graph may be disconnected, repeat for each component (each new
+      component resets colours with team 1).
+
+      ## Why DFS/colour-parity reasoning is enough
+
+      Any valid 2-colouring of a component's first vertex forces the colour of
+      every other vertex (by parity of path length). An odd cycle makes a vertex
+      forced to two colours at once, which is exactly the conflict we detect. So
+      the presence of *any* odd cycle ⟹ impossible; otherwise the greedy BFS
+      colouring succeeds.
+
+      ## Complexity
+
+      Each vertex and edge processed once per its component: `O(n + m)` time,
+      `O(n + m)` space.
+
+      :::tip
+      **Interview tip:** Bipartite / two-colouring questions appear constantly —
+      "can you split X into two groups so no two related items are together",
+      scheduling with conflicts, and matching problems. Recognize the pattern and
+      reach for BFS 2-colouring (`colour[v] = 3 - colour[u]`). The conflict
+      check (neighbour already same colour) is the single line everyone should
+      memorize.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` pupils in a school, and `m` friendships between the pairs.
+      Your task is to divide the pupils into two teams in such a way that no two
+      pupils in a team are friends. You can freely choose the sizes of the teams.
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the number of pupils
+      and friendships. The pupils are numbered `1, 2, ..., n`.
+
+      Then, there are `m` lines describing the friendships. Each line has two
+      integers `a` and `b`: pupils `a` and `b` are friends.
+
+      **Constraints:** `1 ≤ n ≤ 10^5`, `1 ≤ m ≤ 2·10^5`
+
+      ## Output
+
+      Print an example of how to build the teams. For each pupil, print `1` or
+      `2` depending on to which team the pupil is assigned. You can print any
+      valid solution.
+
+      If there are no solutions, print `IMPOSSIBLE`.
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      5 3
+      1 2
+      1 3
+      4 5
+      ```
+
+      **Output:**
+
+      ```
+      1 2 2 1 2
+      ```
+
+      Explanation: friends `1–2` and `1–3` make `1` team 1, `2` and `3` team 2;
+      friends `4–5` give `4` team 1, `5` team 2.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — exhaustive team assignments, O(2ⁿ · m)**
+
+      Try every way to assign each pupil team 1 or 2 (there are `2ⁿ`), and
+      return the first assignment where no friendship lies within one team.
+      Correct by definition, but exponential — hopeless for `n = 10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n, m;
+      vector<pair<int,int>> ed;
+      bool ok(const vector<int>& t) { for (auto& [a, b] : ed) if (t[a] == t[b]) return false; return true; }
+      bool rec(int i, vector<int>& t) {
+          if (i > n) return ok(t);
+          for (int c = 1; c <= 2; c++) { t[i] = c; if (rec(i + 1, t)) return true; }
+          t[i] = 0; return false;
+      }
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n >> m;
+          for (int i = 0; i < m; i++) { int a, b; cin >> a >> b; ed.push_back({a, b}); }
+          vector<int> t(n + 1, 0);
+          if (!rec(1, t)) { cout << "IMPOSSIBLE\n"; return 0; }
+          for (int i = 1; i <= n; i++) cout << t[i] << (i == n ? '\n' : ' ');
+          return 0;
+      }
+      ```
+
+      *O(2ⁿ · m) time — correct but unusable for real `n`.*
+
+      **② Optimization — BFS 2-colouring, O(n + m)**
+
+      Greedily colour each component by BFS; on any edge to an already-coloured
+      vertex whose colour matches its partner's, report IMPOSSIBLE. Otherwise
+      the colouring is a valid team split.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<vector<int>> adj(n + 1);
+          for (int i = 0; i < m; i++) {
+              int a, b; cin >> a >> b;
+              adj[a].push_back(b);
+              adj[b].push_back(a);
+          }
+          vector<int> team(n + 1, -1);
+          auto bip = [&](int s) -> bool {          // BFS colouring of one component
+              team[s] = 1;
+              queue<int> q; q.push(s);
+              while (!q.empty()) {
+                  int u = q.front(); q.pop();
+                  for (int v : adj[u]) {
+                      if (team[v] == -1) { team[v] = 3 - team[u]; q.push(v); }
+                      else if (team[v] == team[u]) return false;   // conflict
+                  }
+              }
+              return true;
+          };
+          for (int i = 1; i <= n; i++)
+              if (team[i] == -1 && !bip(i)) { cout << "IMPOSSIBLE\n"; return 0; }
+          for (int i = 1; i <= n; i++) cout << team[i] << (i == n ? '\n' : ' ');
+          return 0;
+      }
+      ```
+
+      *O(n + m) time, O(n + m) space — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      One pass over all vertices and edges is necessary to detect an odd cycle,
+      so `O(n + m)` is optimal.
+
+      **④ Alternative — DSU with parity, O((n + m) · α)**
+
+      A *weighted* disjoint-set that stores, for each member, its team relative
+      to its component root. Each edge attempts to impose `team[a] xor team[b] =
+      1`; a violation means an odd cycle. Elegant for incremental friend
+      additions, where BFS would have to restart.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Key lines of the BFS 2-colouring solution:
+
+      - **`team[v] = 3 - team[u]`.** If `u` is in team 1, its neighbours go to
+        team 2 and vice versa — `3 − team[u]` flips the team. Each friendship
+        edge must cross teams.
+      - **`team[v] == -1` branch.** Newly seen vertices get the flipped colour
+        and are queued; the check runs on *every* edge, not just discovery.
+      - **Conflict line.** `else if (team[v] == team[u]) return false;` — an
+        edge whose two endpoints already share a colour is a contradiction. On
+        an odd cycle this must eventually happen, because closing the cycle
+        forces a vertex to both colours.
+      - **Component loop.** `for i … if (team[i] == -1 && !bip(i))`. A fresh
+        component root always starts in team 1; the colouring is component-wise
+        independent, so this covers disconnected graphs.
+      - **The 3 - colour trick** guarantees the two-team invariant: any vertex
+        not yet fixed is coloured opposite its only just-coloured neighbour.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample:
+
+      ```
+      5 3
+      1 2
+      1 3
+      4 5
+      ```
+
+      Edges: `1–2`, `1–3`, `4–5`.
+
+      | step | BFS action | team array (1..5) |
+      |------|------------|-------------------|
+      | seed | start component at 1 → team[1]=1, push 1 | 1, -, -, -, - |
+      | pop 1 | neighbours 2,3 uncoloured → team[2]=2, team[3]=2, push | 1, 2, 2, -, - |
+      | pop 2 | neighbour 1 already team 1 ≠ 2, fine | 1, 2, 2, -, - |
+      | pop 3 | neighbour 1 fine | 1, 2, 2, -, - |
+      | seed | i=4 uncoloured → team[4]=1, push 4 | 1, 2, 2, 1, - |
+      | pop 4 | neighbour 5 uncoloured → team[5]=2 | 1, 2, 2, 1, 2 |
+      | pop 5 | neighbour 4 ≠ 5, fine | 1, 2, 2, 1, 2 |
+
+      No conflict anywhere → output the team array:
+      ```
+      1 2 2 1 2
+      ```
+
+      Expected (sample) — `1 2 2 1 2`. Actual — identical. Match.
+  - type: flowchart
+    title: "2-colour the graph (bipartite check)"
+    nodes:
+      - "for each vertex i (component seed)"
+      - "i already coloured?"
+      - "set team[i]=1, BFS push i"
+      - "pop u; for each neighbour v"
+      - "v uncoloured? set team[v] = 3-team[u], push"
+      - "team[v] == team[u]?"
+      - "print IMPOSSIBLE"
+      - "print colouring (valid 2-colouring)"
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2, label: "no, new component"}
+      - {from: 1, to: 6, label: "yes, all components done"}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5, label: "yes"}
+      - {from: 4, to: 3, label: "no, continue neighbours"}
+      - {from: 5, to: 6, label: "true -> IMPOSSIBLE"}
+      - {from: 3, to: 0, label: "component exhausted"}
+  - type: mcq
+    prompt: "What does finding a friendship edge whose two endpoints receive the same team colour prove?"
+    options:
+      - "That the graph has a connected component of even size."
+      - "That the graph contains an odd cycle, so a valid two-team split is impossible."
+      - "That the component is a tree and needs only one team."
+      - "That the two endpoints are actually not friends."
+    answer: 1
+    explanation: "A 2-colouring propagates deterministically from any seed: each vertex's team is forced by the parity of the path that reached it. If an edge ever connects two same-coloured vertices, that edge closes a path of odd length, i.e. an odd cycle — for which no valid split exists."
+---

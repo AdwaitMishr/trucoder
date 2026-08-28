@@ -1,0 +1,258 @@
+---
+id: robot-path
+title: "Robot Path — simulate a repeated edge walk and normalize the offset"
+type: content
+difficulty: medium
+order: 233
+tags:
+  - geometry
+  - simulation
+  - periodicity
+  - normalize
+  - adhoc
+blocks:
+  - type: markdown
+    content: |
+      # Robot Path — simulating a repeated edge walk
+
+      A robot walks on a grid, one unit **edge** per step in one of the four
+      cardinal directions. It is given a sequence of `n` moves (`U`/`D`/`L`/`R`)
+      and then repeats that same sequence **`K` times** in a row. You must find
+      the robot's final cell `(x, y)`.
+
+      The trap: `K` can be enormous. If you literally simulate every step you do
+      `n·K` edge traversals, which is impossible for `K ≈ 10^18`.
+
+      ## Detect the per-cycle offset, then normalize
+
+      Simulating the full thing is overkill because the walk is *periodic*: each
+      complete run of the `n` moves has a fixed net displacement
+      `(dx, dy) = (right - left, up - down)`. Making `K` full copies is the same
+      as standing still and translating by `(dx, dy)` exactly `K` times:
+
+      ```
+      final_x = dx * K
+      final_y = dy * K
+      ```
+
+      This is the **"detect and normalize"** move: detect the cycle's net
+      offset (`dx`, `dy`) with a single `O(n)` pass, then *normalize* the whole
+      repeated walk down to one multiplication. A special case worth detecting
+      explicitly: if `dx == 0 && dy == 0`, the path is a **closed loop** that
+      returns to its start every cycle — so no matter how large `K` is, the
+      robot ends where it began.
+
+      **Time:** `O(n)`. **Space:** `O(1)`.
+
+      :::tip
+      **Interview tip:** whenever an instruction *"repeat the same block T
+      times"* appears, ask *"does one copy have a fixed effect I can compute
+      once?"*. That per-copy *delta* is the heart of normalizing repetition — it
+      upgrades a `O(n·T)` simulation into `O(n)` in one line. Look for zero-delta
+      (closed loop) as the always-asked edge case. Variants: a robot revisiting
+      cells, a light toggling, a pointer circling an array — the same cycle-delta
+      trick applies wherever the state after one pass is deterministic.
+      :::
+  - type: markdown
+    content: |
+      # Question — Robot Path
+
+      A robot starts at cell `(0, 0)` on an infinite grid. It is given a string
+      `S` of `n` moves (`U` = up, `D` = down, `L` = left, `R` = right) which it
+      executes repeatedly, exactly `K` times in a row. Determine the robot's
+      final cell.
+
+      **Input**
+
+      The first line contains two integers `n` and `K`. The second line contains
+      the string `S` of length `n`.
+
+      **Output**
+
+      Print the final coordinates `x` and `y` (space-separated).
+
+      **Constraints**
+
+      - `1 <= n <= 2 * 10^5`
+      - `1 <= K <= 10^18`
+      - each character of `S` is one of `U D L R`
+
+      **Example**
+
+      Input:
+      ```
+      4 3
+      URUR
+      ```
+
+      Output:
+      ```
+      6 6
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — simulate every edge, O(n·K) time, O(1) space**
+
+      Walk the loop `K` times literally, moving one edge per step. Exactly
+      correct, but with `n = 2·10^5` and `K = 10^18` that is up to `2·10^23`
+      steps — astronomically too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; ll K; string s; cin >> n >> K >> s;
+          ll x = 0, y = 0;
+          for (ll rep = 0; rep < K; ++rep)          // O(n·K) — impossible for large K
+              for (char c : s){
+                  if (c == 'U') ++y; else if (c == 'D') --y;
+                  else if (c == 'R') ++x; else --x;
+              }
+          cout << x << " " << y << "\n";
+          return 0;
+      }
+      ```
+
+      **② Optimization — per-cycle offset, O(n) time, O(1) space**
+
+      Compute the net displacement `(dx, dy)` of one full copy of `S`, then
+      multiply by `K`. This "normalizes" `K` identical translations into one
+      scaled vector.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; ll K; string s; cin >> n >> K >> s;
+          ll dx = 0, dy = 0;
+          for (char c : s){
+              if (c == 'U') ++dy; else if (c == 'D') --dy;
+              else if (c == 'R') ++dx; else --dx;
+          }
+          cout << dx * K << " " << dy * K << "\n";  // final = K copies of the offset
+          return 0;
+      }
+      ```
+
+      **③ Further optimization — detect a closed loop + safe big multiply**
+
+      While computing `(dx, dy)` we detect the degenerate case: if
+      `dx == 0 && dy == 0`, the loop is closed and the robot returns to `(0,0)`
+      after every cycle, so the answer is `0 0` for any `K`. Separately, the
+      product `dx * K` can be enormous (`K` up to `10^18`, `dx` up to `n ≤
+      2·10^5`), so we do the multiply in `__int128` and cast back — no overflow
+      is possible:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; ll K; string s; cin >> n >> K >> s;
+          ll dx = 0, dy = 0;
+          for (char c : s){
+              if (c == 'U') ++dy; else if (c == 'D') --dy;
+              else if (c == 'R') ++dx; else --dx;
+          }
+          // normalize: answer is K translations of the per-cycle offset
+          __int128 ansX = (__int128)dx * K;
+          __int128 ansY = (__int128)dy * K;
+          cout << (ll)ansX << " " << (ll)ansY << "\n";
+          return 0;
+      }
+      ```
+
+      The closed-loop detect is conceptually part of "③"; the `__int128` multiply
+      removes any overflow worry, so ③ is strictly safer than ②.
+
+      **④ Alternative — treat the two axes independently, O(n) time, O(1) space**
+
+      A different way to see the same answer: the `x` coordinate depends only on
+      `L` and `R` moves, the `y` coordinate only on `U` and `D`. Count how many
+      of each character there is in one copy, multiply each net difference by
+      `K`. Conceptually cleaner (no position tracking), identical complexity:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; ll K; string s; cin >> n >> K >> s;
+          ll cntU = 0, cntD = 0, cntL = 0, cntR = 0;
+          for (char c : s){
+              cntU += (c == 'U'); cntD += (c == 'D');
+              cntL += (c == 'L'); cntR += (c == 'R');
+          }
+          __int128 dx = (__int128)(cntR - cntL) * K;   // independent x-axis delta
+          __int128 dy = (__int128)(cntU - cntD) * K;   // independent y-axis delta
+          cout << (ll)dx << " " << (ll)dy << "\n";
+          return 0;
+      }
+      ```
+
+      All four are correct; ②/③ are the textbook "detect + normalize" pattern.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on **②** and **③**:
+
+      - One pass over `S` accumulates the per-cycle displacement: `R` adds to
+        `dx`, `L` subtracts, `U` adds to `dy`, `D` subtracts.
+      - The key identity: executing `K` full copies shifts by `(dx, dy)` exactly
+        `K` times, so the final cell is `(dx·K, dy·K)`. We never have to "walk"
+        the loop more than once.
+      - **Normalization:** the whole repetitive walk collapses into a single
+        scaled vector — that is the "detect the offset, then normalize" step.
+      - **Detect closed loop:** if `dx == 0 && dy == 0`, one copy returns the
+        robot to its start, so all `K` copies are identical closed loops and the
+        answer is `0 0`.
+      - Use `__int128` for the multiply so the product for huge `K` can never
+        overflow.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trains the sample: `n = 4`, `K = 3`, `S = "URUR"`.
+
+      Single pass over `S`:
+
+      | move | dx | dy |
+      |------|----|----|
+      | U    | 0  | 1  |
+      | R    | 1  | 1  |
+      | U    | 1  | 2  |
+      | R    | 2  | 2  |
+
+      So the per-cycle offset is `(dx, dy) = (2, 2)` and
+      `final = (2·3, 2·3) = (6, 6)` — matching the sample output. The brute
+      walk confirms it step by step: after the first `URUR` the robot is at
+      `(2,2)`, after the second at `(4,4)`, after the third at `(6,6)`.
+  - type: flowchart
+    title: "Simulate a repeated walk"
+    nodes: ["Read n, K, S", "Pass 1: compute dx, dy", "Normalize: final = (dx·K, dy·K)",
+            "Detect: dx==0 && dy==0 → 0 0", "Print final cell"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: "not closed"}
+      - {from: 3, to: 4, label: "closed → 0 0"}
+  - type: mcq
+    prompt: "Why can the entire K-fold walk be reduced from O(n·K) simulation to one O(n) pass plus a multiplication, and what special case is detected?"
+    options:
+      - "Each full copy has a fixed net displacement (dx,dy); K copies equate to scaling that vector by K, so we compute the offset once and multiply. If dx==0 && dy==0 the loop is closed and the final cell is (0,0) for any K"
+      - "The robot can only move on a cycle of bounded cells, so simulating one step always completes the path"
+      - "Translating K times always cancels to the starting cell regardless of the offset"
+      - "We cache every visited cell in a dictionary, which is what makes large K tractable"
+    answer: 0
+    explanation: "The repeating block has a per-cycle vector (dx,dy); concatenating it K times is multiplication by K in coordinate space, not K sequential walks. Since the answer is deterministic per copy, an O(n) pass for the offset plus one multiply replaces the full simulation. When the offset is (0,0) the walk is a closed loop returning to start each copy, so the answer is (0,0) for all K."
+---

@@ -1,0 +1,274 @@
+---
+id: creating-strings
+title: Creating Strings
+difficulty: easy
+order: 15
+tags:
+  - intro
+  - string
+  - backtracking
+blocks:
+  - type: markdown
+    content: |
+      # Creating Strings — enumerating permutations
+
+      Given a string `s` (length up to 8), we must generate **all distinct**
+      strings we can form by permuting its characters, sort them alphabetically,
+      and list them. The catch is **duplicate characters**: `"aab"` does not have
+      6 permutations — it has 3 (`aab, aba, baa`), because swapping the two `a`s
+      yields the same string.
+
+      ## The trick: sort + next_permutation
+
+      `<algorithm>` provides `std::next_permutation`, which rewrites an ordered
+      range into its next lexicographic permutation, or returns `false` when it
+      reaches the last one. The elegant property of `next_permutation` is that
+      it **skips repeated values by construction** — it produces each distinct
+      arrangement exactly once, in sorted order.
+
+      The complete strategy:
+
+      1. `sort(s.begin(), s.end())` — start at the alphabetically smallest
+         arrangement (`"aab"`).
+      2. Save the current string, then call `next_permutation` in a loop until
+         it returns `false`. Each saved string is the next distinct permutation.
+      3. Print the count, then every saved string on its own line.
+
+      Because we start sorted and walk in lexicographic order, the output is
+      automatically alphabetical.
+
+      **Complexity:** there are at most `n!` distinct permutations ("abc" → 6),
+      each generated in O(n) by `next_permutation`. For `n <= 8` that is at most
+      40320 strings × 8 characters — trivially fast. Total O(n! · n) time.
+
+      :::tip
+      **Interview tip:** Interviewers love `next_permutation` ("all permutations
+      of a string" / "next lexicographic permutation" is a LeetCode classic).
+      Being able to say "sort, then repeatedly apply next_permutation" is the
+      intended solution for these; also know how to hand-write it: find the
+      rightmost ascent, then the smallest larger element to its right, swap and
+      reverse.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given a string, your task is to generate all different strings that can be
+      created using its characters.
+
+      ## Input
+
+      The only input line contains a string of length `n` (`1 <= n <= 8`), all of
+      whose characters are **lowercase letters**.
+
+      ## Output
+
+      First print an integer `k`: the number of distinct strings. Then print `k`
+      lines: the strings sorted in alphabetical order.
+
+      ## Sample
+
+      **Input:**
+      ```
+      aab
+      ```
+      **Output:**
+      ```
+      3
+      aab
+      aba
+      baa
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — four tiers
+
+      All four approaches produce exactly the same sorted set of distinct
+      strings. They differ in how duplicates are handled and how fast they run.
+
+      **① Brute force — O(n! · n log(n!)).** Generate **every** arrangement,
+      duplicates included, drop them into a `std::set` (which quietly eliminates
+      repeats and keeps the strings sorted). Correct, but for `"aab"` it explores
+      `6` candidates and for an `n`-char string it tries all `n!` permutations —
+      up to 40320 for `n = 8`, even when most are identical. The `set` then sorts
+      `n!` entries.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      std::string solve(std::string s) {
+          std::sort(s.begin(), s.end());
+          std::set<std::string> perms;
+          do {
+              perms.insert(s);                 // dedupe + sort by the set
+          } while (std::next_permutation(s.begin(), s.end()));
+
+          std::ostringstream out;
+          out << perms.size() << "\n";
+          for (const std::string& p : perms) out << p << "\n";
+          std::string r = out.str();
+          if (!r.empty() && r.back() == '\n') r.pop_back();
+          return r;
+      }
+      ```
+      Complexity: O(n! · n log(n!)) — explores every duplicate-heavy
+      permutation and pays a log factor. Too slow for strings with many repeats.
+
+      **② Optimization — O(n! · n) (sort + next_permutation, no dedupe).**
+      `std::next_permutation` already skips identical arrangements by
+      construction, so we never generate a duplicate at all and need no set —
+      just push each distinct outcome onto a plain vector. This is the classic,
+      and it is optimal up to the mandatory output size.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      std::string solve(std::string s) {
+          std::sort(s.begin(), s.end());
+          std::vector<std::string> perms;
+          do {
+              perms.push_back(s);
+          } while (std::next_permutation(s.begin(), s.end()));
+
+          std::ostringstream out;
+          out << perms.size() << "\n";
+          for (const std::string& p : perms) out << p << "\n";
+          std::string r = out.str();
+          if (!r.empty() && r.back() == '\n') r.pop_back();
+          return r;
+      }
+      ```
+      Complexity: O(n! · n) time, O(n! · n) space for the output. The output has
+      `n!` strings at most, so this is asymptotically optimal.
+
+      **③ Further optimization — O(n! · n) (backtracking, no sorted pass).**
+      Build strings position by position with a recursive DFS that never places
+      the **same character twice in the same position** — the standard trick for
+      dedup without touching a set or relying on the STL. Each valid string is
+      produced directly in alphabetical order. (No asymptotic gain — the output
+      itself is the `n!`-sized lower bound — but it shows the alternative
+      recursive construction.)
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      std::vector<std::string> perms;
+
+      void gen(std::string& s, std::string cur, int usedMask) {
+          if ((int)cur.size() == (int)s.size()) { perms.push_back(cur); return; }
+          char last = 0;
+          for (int i = 0; i < (int)s.size(); i++) {
+              if (usedMask & (1 << i)) continue;
+              if (s[i] == last) continue;      // same char at same slot already tried
+              last = s[i];
+              usedMask |= 1 << i;
+              gen(s, cur + s[i], usedMask);
+              usedMask &= ~(1 << i);
+          }
+      }
+
+      std::string solve(std::string s) {
+          std::sort(s.begin(), s.end());
+          perms.clear();
+          gen(s, "", 0);
+
+          std::ostringstream out;
+          out << perms.size() << "\n";
+          for (const std::string& p : perms) out << p << "\n";
+          std::string r = out.str();
+          if (!r.empty() && r.back() == '\n') r.pop_back();
+          return r;
+      }
+      ```
+      Complexity: O(n! · n) time, O(n) recursion depth — a set-free, STL-light
+      route to the same answer.
+
+      **④ Alternative algorithm — O(n! · n) (hand-written next_permutation).**
+      A genuinely different way to *obtain* each next sequence without the STL:
+      find the rightmost position `i` where `s[i] < s[i+1]`; find the smallest
+      char to the right that is larger than `s[i]`; swap them and reverse the
+      tail. Iterate that until the string is fully descending. Same result and
+      complexity, but it's the manual algorithm interviewers may ask you to
+      reproduce on a whiteboard.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      bool nextPerm(std::string& s) {
+          int i = (int)s.size() - 2;
+          while (i >= 0 && s[i] >= s[i + 1]) i--;      // rightmost ascent
+          if (i < 0) return false;                     // already last
+          int j = (int)s.size() - 1;
+          while (s[j] <= s[i]) j--;                    // smallest larger to the right
+          std::swap(s[i], s[j]);
+          std::reverse(s.begin() + i + 1, s.end());    // tail descending -> ascending
+          return true;
+      }
+
+      std::string solve(std::string s) {
+          std::sort(s.begin(), s.end());
+          std::vector<std::string> perms;
+          do {
+              perms.push_back(s);
+          } while (nextPerm(s));
+
+          std::ostringstream out;
+          out << perms.size() << "\n";
+          for (const std::string& p : perms) out << p << "\n";
+          std::string r = out.str();
+          if (!r.empty() && r.back() == '\n') r.pop_back();
+          return r;
+      }
+      ```
+      Complexity: O(n! · n) time — each step is O(n), and there are `n!`
+      distinct permutations. Like the STL version it skips duplicates by
+      construction (equal chars never cross in a repeated-value run).
+
+      Now walk through the chosen tier (②) in the next block — then trace it on
+      the sample input.
+  - type: markdown
+    content: |
+      # Code logic
+
+      This is the textbook "sort + `next_permutation`" pattern:
+
+      1. `sort(s.begin(), s.end())` puts the string at its alphabetically
+         smallest arrangement (`"aab"`).
+      2. The `do {…} while (std::next_permutation(...))` loop records the current
+         string and moves to the next permutation, stopping after the last one.
+         Because `next_permutation` returns `false` once the range is
+         reverse-sorted, every distinct arrangement is visited **exactly once** —
+         duplicate characters are not over-counted, so `"aaa"` yields just the
+         single string `"aaa"`.
+      3. The `std::ostringstream` writes the count (`perms.size()`) on the first
+         line and one string per line after it; the trailing newline is popped
+         so the JSON comparison matches the `expected` exactly.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve("aab")`. After `sort`, `s = "aab"`.
+
+      | iteration | s (before) | next_permutation returns | saved |
+      |-----------|------------|--------------------------|-------|
+      | 1         | `aab`      | true (`aba`)             | `aab` |
+      | 2         | `aba`      | true (`baa`)             | `aba` |
+      | 3         | `baa`      | false (last)             | `baa` |
+
+      `perms = ["aab", "aba", "baa"]`, so the output is:
+
+      ```
+      3
+      aab
+      aba
+      baa
+      ```
+
+      Expected (sample) — `3`, then `aab`, `aba`, `baa`. Actual — identical.
+      The 3 lines are sorted alphabetically and note that the two identical `a`
+      characters produced no duplicate strings.
+type: content

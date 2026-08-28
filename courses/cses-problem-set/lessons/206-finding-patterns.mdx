@@ -1,0 +1,261 @@
+---
+id: finding-patterns
+title: "Finding Patterns"
+type: content
+difficulty: medium
+order: 206
+tags:
+  - string-algorithms
+  - aho-corasick
+  - trie
+  - pattern-matching
+blocks:
+  - type: markdown
+    content: |
+      # Finding Patterns — Aho–Corasick
+
+      Given a text and up to tens of thousands of *patterns*, answer for each one
+      whether it **appears** in the text (YES/NO). With `n ≤ 10^5` text length,
+      `k ≤ 5·10^5` patterns, and total pattern length `≤ 5·10^5`, checking each
+      pattern separately is far too slow — you need to search for **all** patterns
+      in one pass over the text.
+
+      ## When you reach for it
+
+      Aho–Corasick is the "one text, many patterns" automaton. It is KMP ideas
+      taken from one pattern to a whole **trie** of patterns:
+
+      1. **Build a trie** of all the patterns.
+      2. Add **failure links** (like KMP's border links, but between trie nodes)
+         so that when a match fails you jump to the longest proper suffix that is
+         still a prefix of some pattern.
+      3. **Scan the text once**, walking the automaton; every time you pass a node
+         whose failure-chain contains a pattern's end, that pattern occurred.
+
+      Because the trie shares common prefixes and the failure links reuse work,
+      the whole search is **`O(n + total(pattern length))`** — one linear pass.
+
+      :::tip
+      **Interview tip:** Aho–Corasick is the textbook answer to "given one
+      string and many patterns". Interviewers usually let you build the trie and
+      ask you to *extend* it to count/find occurrences — the key step is
+      understanding failure links and how to propagate match counts up the
+      failure tree so a pattern reported once even though its node was hit only
+      as a suffix of other matched text.
+      :::
+
+      **Complexities:** build `O(total pattern length · alphabet)` (with complete
+      child tables), search `O(n)`, memory `O(total nodes · 26)`.
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given a string and patterns, check for each pattern if it appears in the
+      string.
+
+      ## Input
+
+      The first input line has a string of length `n`.
+
+      The next input line has an integer `k`: the number of patterns.
+
+      Finally, there are `k` lines that describe the patterns.
+
+      The string and the patterns consist of characters `a–z`.
+
+      ## Output
+
+      For each pattern, print `YES` if it appears in the string and `NO`
+      otherwise.
+
+      **Constraints:**
+
+      - `1 ≤ n ≤ 10^5`
+      - `1 ≤ k ≤ 5·10^5`
+      - the total length of the patterns is at most `5·10^5`
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      aybabtu
+      3
+      bab
+      abc
+      ayba
+      ```
+
+      **Output:**
+
+      ```
+      YES
+      NO
+      YES
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(k·n)**
+
+      For each pattern, run a substring search over the text (`std::string::find`
+      or a fresh KMP per pattern). With `k ≤ 5·10^5` and `n ≤ 10^5` that's up to
+      `5·10^10` character steps — far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          string text; cin >> text;
+          int k; cin >> k;
+          while (k--) { string p; cin >> p; cout << (text.find(p) != string::npos ? "YES" : "NO") << "\n"; }
+          return 0;
+      }
+      ```
+
+      *Correct — `O(k·n)` worst case, unusable at the limits.*
+
+      **② Aho–Corasick — O(n + totalLen), the optimal tier**
+
+      Build the trie of all patterns (node 1 = root), compute failure links and
+      *compressed* child pointers in a BFS, scan the text once accumulating
+      visit counts, then propagate those counts up the failure tree. A pattern is
+      found iff its terminal node's accumulated count is positive. Compiled and
+      run against the sample, it prints `YES / NO / YES`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      struct Node { int child[26]; int fail; vector<int> out; };
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          string text; cin >> text;
+          int k; cin >> k;
+          vector<Node> trie(2);              // index 1 = root (child 0 = empty)
+          auto addnode = [&](){ trie.push_back({}); return (int)trie.size() - 1; };
+          // insert patterns
+          for (int idx = 0; idx < k; idx++) {
+              string p; cin >> p;
+              int v = 1;
+              for (char cc : p) {
+                  int c = cc - 'a';
+                  if (!trie[v].child[c]) trie[v].child[c] = addnode();
+                  v = trie[v].child[c];
+              }
+              trie[v].out.push_back(idx);    // this node ends pattern idx
+          }
+          // failure links (BFS)
+          queue<int> q;
+          for (int c = 0; c < 26; c++) {
+              if (trie[1].child[c]) { trie[trie[1].child[c]].fail = 1; q.push(trie[1].child[c]); }
+              else trie[1].child[c] = 1;     // missing root child -> root
+          }
+          vector<int> bfs;
+          while (!q.empty()) {
+              int v = q.front(); q.pop(); bfs.push_back(v);
+              for (int c = 0; c < 26; c++) {
+                  if (trie[v].child[c]) { trie[trie[v].child[c]].fail = trie[trie[v].fail].child[c]; q.push(trie[v].child[c]); }
+                  else trie[v].child[c] = trie[trie[v].fail].child[c];   // compressed transition
+              }
+          }
+          // scan the text once
+          vector<int> cnt(trie.size(), 0);
+          int st = 1;
+          for (char ch : text) { st = trie[st].child[ch - 'a']; cnt[st]++; }
+          // propagate counts up the failure tree
+          for (int i = (int)bfs.size() - 1; i >= 0; i--) cnt[trie[bfs[i]].fail] += cnt[bfs[i]];
+          // report each pattern
+          vector<char> ans(k, 0);
+          for (int v = 1; v < (int)trie.size(); v++)
+              if (cnt[v] > 0)
+                  for (int idx : trie[v].out) ans[idx] = 1;
+          for (int i = 0; i < k; i++) cout << (ans[i] ? "YES" : "NO") << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n + totalLen)` time, `O(totalLen · 26)` memory — meets the limits.*
+
+      **③ Alternative — KMP per pattern and suffix arrays**
+
+      Running KMP **per pattern** costs `O(k·(n + m))` and, since pattern matches
+      don't share work, is the wrong tool at `k = 5·10^5`. A **suffix array** of
+      the text with binary search over the sorted suffixes also answers each
+      pattern in `O(m·log n)` — a legitimate different approach (`O(n log n)`
+      build) but heavier to implement; Aho–Corasick's linear one-pass scan is the
+      cleanest fit here. A *bare trie* (no failure links) is NOT enough — it can't
+      skip ahead when a pattern prefix stops matching mid-text.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Trie + terminal lists.** `insert` adds each pattern's characters as
+        nodes; a node keeps `out`, the list of pattern ids that *end* there (two
+        patterns can end at the same node).
+      - **Failure links (`Node::fail`).** BFS sets, for each existing child `c`
+        of `v`, `fail = child on the fail-chain of v`. Missing children are
+        compressed to `trie[v].fail`'s child — this is what makes the scan `O(1)`
+        per character (no trailing along failure links during search).
+      - **One scan.** `st` follows `child` for each text character and increments
+        `cnt[st]`. Every pattern that is a substring of what we've read is a
+        failure-ancestor of some visited state, so counting the failure-tree
+        subtree of the pattern's node is exactly its occurrence count.
+      - **Propagation.** `bfs` is the BFS order; iterating it **backwards**
+        accumulates each node's count into its `fail` parent (parents always have
+        strictly smaller depth, so reverse BFS = children before parents). Then
+        any terminal node with `cnt > 0` means its pattern appeared.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `text = "aybabtu"`, patterns `bab`, `abc`, `ayba` (`k = 3`).
+
+      **Input into the trie** (root = 1):
+      - `bab` → nodes `b`, `ba`, `bab`; `bab` carries pattern 0.
+      - `abc` → nodes `a`, `ab`, `abc`; `abc` carries pattern 1.
+      - `ayba` → nodes `a` (shared), `ay`, `ayb`, `ayba`; `ayba` carries pattern 2.
+
+      **Scan** `a y b a b t u` — after `a`, the automaton sits at node `a`; then
+      `y` → `ay`; `b` → `ayb`; `a` → `ayba` (+1); `b` → backs to `bab`-suffix node
+      (+1); `t` → falls to root; `u` → root. Visited states include `ayba` and
+      `bab`.
+
+      **Propagate up failure links.** Since `bab` was visited with count 1 and
+      `ayba` with count 1, the terminal nodes of patterns 0 and 2 have positive
+      totals, while `abc`'s node was never visited nor reached via any
+      failure-chain.
+
+      ```
+      pattern  bab  -> YES   (occurs in "aybabtu")
+      pattern  abc  -> NO    (not present)
+      pattern  ayba -> YES   (positions 1..4)
+      ```
+
+      ```
+      Expected (sample):  YES, NO, YES
+      Actual (Aho-…):     YES, NO, YES    ← match
+      ```
+  - type: flowchart
+    title: "Aho-Corasick search"
+    nodes: ["insert all patterns into a trie", "BFS: compute failure links + compressed child pointers", "scan text once, st = child, cnt[st]++", "propagate cnt up failure tree (reverse BFS)", "for each terminal node v with cnt>0, mark its patterns found", "print YES/NO for each pattern"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "In Aho-Corasick, a pattern counts as appearing in the text if…"
+    options:
+      - "…the text is longer than the pattern."
+      - "…the terminal node of the pattern has a positive accumulated count after the text scan and failure-tree propagation."
+      - "…the pattern's first character appears anywhere in the text."
+      - "…the pattern shares a prefix with any other pattern."
+    answer: 1
+    explanation: "After scanning, each visited automaton state contributed +1; propagating those counts up the failure tree gives, at a pattern's terminal node, the number of scanned positions whose failure-chain reaches it — exactly whether (and how over the right counting variant, how often) that pattern occurs. A positive total at the terminal node means the pattern did appear."
+---

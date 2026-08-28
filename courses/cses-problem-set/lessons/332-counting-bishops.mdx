@@ -1,0 +1,288 @@
+---
+id: counting-bishops
+title: Counting Bishops
+type: content
+difficulty: hard
+order: 332
+tags:
+  - combinatorics
+  - dynamic-programming
+  - counting
+  - chessboard
+blocks:
+  - type: markdown
+    content: |
+      # Counting Bishops — non-attacking bishops on a chessboard
+
+      We want to place `k` bishops on an `n × n` chessboard so that **no two
+      attack each other** — i.e. no two share a diagonal. Count the placements
+      modulo `10^9 + 7`.
+
+      The crucial structural observation is that a bishop only moves along
+      diagonals, and *diagonals decompose the board into two independent
+      colour classes*.
+
+      ## Diagonal independence (the key idea)
+
+      Colour the board like a chessboard (`(row + col)` even = black, odd =
+      white). A bishop moves only *along* diagonals and **never changes the
+      colour square it sits on** — moving along a diagonal preserves the parity
+      of `row + col`. Therefore:
+
+      - a bishop on a **black** square can never attack one on a **white**
+        square, and vice-versa;
+      - so we may **place bishops on black squares and white squares
+        independently**, then combine the two counts.
+
+      Within a single colour, bishops attack only along that colour's diagonals,
+      and no two may share a diagonal. Two bishops share a diagonal iff they
+      share a `row + col` diagonal (one direction) **or** a `row − col`
+      diagonal (the other). Among same-colour squares these two diagonal
+      families are independent in the DP because a placed bishop occupies one
+      square in exactly one diagonal of each family.
+
+      ## The diagonal DP
+
+      For one colour, list the sizes of its diagonals (the number of squares on
+      each diagonal of that colour belonging to the `row+col` family — these
+      are the "columns" a bishop can sit on). Sort them ascending. Process
+      diagonals one at a time. When we decide to place the `j`-th bishop on a
+      diagonal of `size` squares, the previous `j-1` bishops (each sitting on a
+      distinct earlier diagonal) each share one of the *other* diagonal family,
+      thereby blocking `j-1` squares on this diagonal. So:
+
+      ```
+      dp[j] += dp[j-1] * (size - (j-1))
+      dp[j] += dp[j]                     // skip this diagonal
+      ```
+
+      Repeat for black and white independently to get `black[j]` and `white[j]`
+      (ways to place `j` bishops on that colour). Then the total for exactly `k`
+      bishops is the **convolution**:
+
+      ```
+      answer = Σ_{i=0..k} black[i] * white[k-i]
+      ```
+
+      **Complexity:** `O(n²)` total (at most `2n−1` diagonals per colour, each
+      filled up to `k` bishops). Memory `O(n)`.
+
+      :::tip
+      **Interview tip:** placing non-attacking chess pieces that move on a fixed
+      set of "attack lines" is a recurring theme. Bishops attack along
+      diagonals, so the winning move is **bipartition by colour** (bishops never
+      switch colour → the two colours are fully independent) followed by a
+      **diagonal-by-diagonal DP** that counts how many squares the already
+      placed pieces block. The same "previous pieces block squares" trick is the
+      engine behind counting non-attacking kings, and the "independent colour
+      classes multiplied then convolved" pattern reappears in matrix/rooks
+      counting too. Naming the parity invariant (`row+col` preserves parity) is
+      the single most important sentence.
+      :::
+
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to count the number of ways `k` bishops can be placed on an
+      `n × n` chessboard so that no two bishops attack each other.
+
+      Two bishops attack each other if they are on the same diagonal.
+
+      ## Input
+
+      The only input line has two integers `n` and `k`: the board size and the
+      number of bishops.
+
+      ## Output
+
+      Print one integer: the number of ways modulo `10^9 + 7`.
+
+      ## Constraints
+
+      - `1 ≤ n ≤ 500`
+      - `1 ≤ k ≤ n²`
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 4
+      ```
+
+      **Output:**
+      ```
+      2728
+      ```
+
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      **① Brute force — backtracking over all squares, O(C(n²,k)) (too slow)**
+
+      Try placing bishops square by square, checking the "no shared diagonal"
+      constraint against every already-placed bishop. Correct for tiny `n`, but
+      the number of ways to choose `k` of `n²` squares explodes.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int n,k,cnt;
+      int br[505],bc[505];
+      void dfs(int placed,int start){
+          if(placed==k){ cnt++; return; }
+          for(int cell=start; cell<n*n; cell++){
+              int r=cell/n, c=cell%n;
+              bool ok=true;
+              for(int p=0;p<placed;p++)
+                  if(abs(r-br[p])==abs(c-bc[p])){ ok=false; break; }
+              if(ok){ br[placed]=r; bc[placed]=c; dfs(placed+1,cell+1); }
+          }
+      }
+      int main(){ cin>>n>>k; dfs(0,0); cout<<cnt<<"\n"; return 0; }
+      ```
+
+      *`O(C(n²,k))` — combinatorial explosion, unusable for `n = 500`.*
+
+      **② Optimization — colour bipartition + diagonal DP, O(n²) (optimal)**
+
+      Split into black and white squares. For each colour, run the diagonal
+      "previous pieces block squares" DP to get `black[j]` and `white[j]`, then
+      convolve for exactly `k`. This is the tier we compile and run (matches
+      the sample `5 4 → 2728`, and verified against full brute force for
+      `5 2 → 240`, `3 2 → 26`).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+
+      // count placements on one colour given its diagonal square-counts (ascending)
+      vector<ll> count_placements(vector<int> sizes){
+          vector<ll> dp(sizes.size()+1,0);
+          dp[0]=1;
+          int placed=0;
+          for(int sz : sizes){
+              placed++;
+              for(int j=placed;j>=1;j--){
+                  ll avail = sz - (j-1);          // squares this diag not blocked
+                  if(avail<=0) continue;
+                  dp[j]=(dp[j]+dp[j-1]*avail)%MOD;
+              }
+          }
+          return dp;
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<int> black,white;
+          for(int d=0; d<2*n-1; d++){             // diagonals have const row+col
+              int sz = min(d+1, 2*n-1-d);
+              sz = min(sz, n);
+              if(d%2==0) black.push_back(sz); else white.push_back(sz);
+          }
+          sort(black.begin(),black.end());
+          sort(white.begin(),white.end());
+          vector<ll> B = count_placements(black);
+          vector<ll> W = count_placements(white);
+          ll ans=0;
+          for(int i=0;i<=k;i++){
+              if(i<(int)B.size() && (k-i)<(int)W.size())
+                  ans=(ans + B[i]*W[k-i])%MOD;    // convolution
+          }
+          cout<<ans<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n²)` time, `O(n)` space — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      `n ≤ 500` keeps the two diagonal DPs well under `10^5` fills; one diagonal
+      family has `n` diagonals and the other `n−1`, each processed to `k ≤ n²`
+      only up to the achievable `≤ n` per colour. No asymptotic improvement
+      exists for exact counting.
+
+      **④ Alternative — closed-form square formula**
+
+      The classic cp-algorithms treatment assigns an index to each diagonal in
+      non-decreasing order of its square count and derives a closed-form number
+      of squares per diagonal: `squares(i) = i/4·2+1` for odd `i` (black) and
+      `(i-1)/4·2+2` for even `i` (white), then runs the same `D[i][j]` DP across
+      two colour streams and sums `D[2n-1][i]·D[2n-2][k-i]`. It is algebraically
+      equivalent to the sorted-size DP above; the sorted approach avoids deriving
+      the closed form and is less error-prone.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Per-colour DP `count_placements(sizes)`:** `dp[j]` = ways to place `j`
+        bishops using the diagonals seen so far. Ordering diagonals ascending by
+        size guarantees that when we place on a diagonal, the previously `j-1`
+        bishops each occupy a *distinct* other diagonal and together block
+        exactly `j-1` squares of the current one.
+      - **Transition detail:** for each diagonal of `sz` squares, either skip it
+        (`dp[j]` carries over) or place one more bishop: `dp[j] += dp[j-1] *
+        (sz - (j-1))`. The reverse `j` loop avoids reusing the just-updated
+        `dp[j-1]` within the same diagonal.
+      - **Diagonal sizes** come from `d = row + col`, `d = 0..2n-2`, with size
+        `min(d+1, 2n-1-d, n)`; `d` even → a "black" diagonal, `d` odd → "white".
+      - **Combining:** `Σ black[i]·white[k-i]` over all splits of `k` into black
+        and white counts. Bounds checks prevent out-of-range reads.
+      - **Complexity is dominated** by the two `count_placements` calls — `O(n²)`.
+
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5, k = 4`. Boards split by colour; `row+col` parity.
+
+      - **Diagonal sizes by `d = row+col`, `d = 0..8`:**
+        `sz = min(d+1, 9-d, 5)` → `1,2,3,4,5,4,3,2,1`.
+      - **Black** (`d` even: `0,2,4,6,8`) → `[1,3,5,3,1]`, sorted `[1,1,3,3,5]`.
+      - **White** (`d` odd: `1,3,5,7`) → `[2,4,4,2]`, sorted `[2,2,4,4]`.
+      - **Black DP** (needs `black[0..4]`): running the "place or skip"
+        recurrence over `[1,1,3,3,5]` yields the number of ways to place
+        `0,1,2,3,4` bishops on black squares, e.g. placing 2 bishops: first on a
+        size-1 diagonal (1 way), then a second on size-3 with `3-1=2` free
+        squares, etc., giving `black[2]`.
+      - **White DP** over `[2,2,4,4]` similarly gives `white[2]`.
+      - **Convolution for `k = 4`:**
+        `Σ_{i=0}^{4} black[i]·white[4-i]`. The dominant term is the 2-and-2
+        split: `black[2]·white[2]`, plus `black[1]·white[3]` and
+        `black[3]·white[1]`, `black[0]·white[4]`, `black[4]·white[0]`. Summing
+        every split gives exactly `2728`.
+
+      The value `2728` is produced by the compiled optimal tier on the exact
+      sample input — **match**. It also matches full brute-force enumeration for
+      small boards (`5 2 → 240`, `3 2 → 26`), confirming the convolution is right.
+
+      Output:
+      ```
+      2728
+      ```
+  - type: flowchart
+    title: "Counting Bishops — colour split + diagonal DP + convolution"
+    nodes: ["read n, k", "collect diagonal sizes for black (d even) and white (d odd)", "sort each colour's sizes ascending", "black[j] = diagonal DP over black sizes", "white[j] = diagonal DP over white sizes", "ans = sum_i black[i]*white[k-i]", "print ans"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 2, to: 4}
+      - {from: 3, to: 5}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6}
+  - type: mcq
+    prompt: "Why can the total be written as the convolution Σ_i black[i]·white[k-i] rather than a single DP over all squares?"
+    options:
+      - "Because a bishop never changes the parity of row+col, so bishops on black squares never attack bishops on white squares; the two colours are therefore independent, and choosing i of the k bishops for black and k-i for white enumerates every placement exactly once."
+      - "Because bishops can only ever be placed on black squares."
+      - "Because the convolution is the only way to make the answer fit in a 64-bit register."
+      - "Because n is always odd, forcing equal black and white square counts."
+    answer: 0
+    explanation: "Moving along a diagonal preserves row+col modulo 2, so a bishop stays on its starting colour and two bishops of different colours can never share a diagonal. Placement is then a choice of how many of the k bishops go on black (i) and how many on white (k-i); the independent colour counts multiply per split and sum over all splits = convolution. This decomposition is the essence of the problem."
+---

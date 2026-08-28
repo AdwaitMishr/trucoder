@@ -1,0 +1,228 @@
+---
+id: sliding-window-inversions
+title: "Sliding Window Inversions"
+type: content
+difficulty: medium
+order: 268
+tags:
+  - sliding-window
+  - inversion-count
+  - fenwick-tree
+  - coordinate-compression
+blocks:
+  - type: markdown
+    content: |
+      # Sliding Window Inversions — count inversions in every window
+
+      An **inversion** is a pair of positions `(i, j)` with `i < j` and
+      `a_i > a_j`. We slide a window of length `k` across the array and report,
+      for each of the `n - k + 1` windows, the number of inversions **inside**
+      that window.
+
+      Recomputing inversions from scratch per window would be too slow. The
+      reusable trick is to keep the window's elements in a **Fenwick tree
+      (BIT) of value-counts**, which lets us answer "how many elements currently
+      present are greater/smaller than x?" in `O(log V)` and update it as the
+      window slides.
+
+      ## Counting inversions while inserting, element by element
+
+      If we insert the elements of a window from left to right, then when we
+      insert element `a[j]`, every element `a[i]` already present with `i < j`
+      and `a[i] > a[j]` forms a new inversion with it. So:
+
+      ```
+      total inversions in window = sum over j of (# elements present, all < j, that are > a[j])
+      ```
+
+      With a BIT over value ranks, "count of present values `> a[j]`" is a
+      single range query `sumGreater(a[j]) = totalPresent - prefixSum(a[j])`.
+
+      ## Sliding the window
+
+      Maintain the running inversion count `inv`.
+
+      - **Add** `a[r]` (new rightmost): `inv += (# present values > a[r])`,
+        then add its count to the BIT.
+      - **Remove** `a[l]` (leftmost leaving): `inv -= (# present values < a[l])`
+        (these are exactly the inversions `(l, j)` with `a[l] > a[j]` still in
+        the window), then remove its count from the BIT.
+
+      Values can be huge (`<= 10^9`), so we **coordinate-compress** them first,
+      mapping the `<= n` distinct values to ranks `0..m-1`.
+
+      :::tip
+      **Interview tip:** count of pairs "ordered by value but reversed in
+      position" (inversions, `a[i] > a[j]` for `i < j`) is the canonical Fenwick
+      use case. The sliding-window variant only adds a symmetric
+      add/remove invalidation — keep the invariant "`inv` reflects the window"
+      and adjust it incrementally as the two endpoints move.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given an array of `n` integers and a window length `k`. For each
+      of the `n - k + 1` windows of length `k`, how many **inversions** does
+      the window contain? An inversion is a pair `(i, j)` of positions inside
+      the window with `i < j` and `a_i > a_j`.
+
+      ## Input
+
+      The first input line has two integers `n` and `k`. The next line has `n`
+      integers `a_1, a_2, …, a_n`.
+
+      **Constraints:** `1 <= k <= n <= 2*10^5`, `-10^9 <= a_i <= 10^9`
+
+      ## Output
+
+      Print `n - k + 1` integers separated by spaces: the number of inversions
+      in each window in order.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 3
+      5 3 2 1 4
+      ```
+      **Output:**
+      ```
+      3 3 1
+      ```
+      Windows: `[5,3,2]` has `(5,3),(5,2),(3,2)` = `3`; `[3,2,1]` has
+      `(3,2),(3,1),(2,1)` = `3`; `[2,1,4]` has `(2,1)` = `1`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·k²)**
+
+      For each window, compare every ordered pair inside it.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k; vector<long long> a(n); for(auto&x:a) cin>>x;
+          for(int l=0; l<n-k+1; l++){
+              long long c=0;
+              for(int i=l;i<l+k;i++) for(int j=i+1;j<l+k;j++) if(a[i]>a[j]) c++;
+              cout<<(l?" ":"")<<c;
+          }
+          cout<<"\n"; return 0;
+      }
+      ```
+
+      *`O(n·k²)` — hopeless for `n = 2*10^5`.*
+
+      **② Optimization — Fenwick tree, O(n log n) (optimal)**
+
+      Coordinate-compress, keep running `inv`, and adjust it as each element
+      enters (`+= # present > a[r]`) and leaves (`-= # present < a[l]`). This
+      is the tier we compile and verify (handles negative values through
+      compression).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct BIT{ int n; vector<int> t; BIT(int n_):n(n_),t(n_+1){}
+          void add(int i,int d){for(++i;i<=n;i+=i&-i)t[i]+=d;}
+          int sum(int i){int s=0;for(++i;i>0;i-=i&-i)s+=t[i];return s;}
+          int rng(int l,int r){if(l>r)return 0;return sum(r)-(l?sum(l-1):0);} };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<long long> a(n); for(auto&x:a) cin>>x;
+          vector<long long> comp=a; sort(comp.begin(),comp.end()); comp.erase(unique(comp.begin(),comp.end()),comp.end());
+          auto id=[&](long long v){return lower_bound(comp.begin(),comp.end(),v)-comp.begin();};
+          int M=comp.size(); BIT bit(M);
+          long long inv=0;
+          for(int i=0;i<k;i++){ int c=id(a[i]); inv += bit.rng(c+1,M-1); bit.add(c,1); }
+          vector<long long> out; out.push_back(inv);
+          for(int r=k;r<n;r++){
+              int l=r-k;
+              int cl=id(a[l]); inv -= bit.rng(0,cl-1); bit.add(cl,-1);   // drop (l,*) inversions
+              int cr=id(a[r]); inv += bit.rng(cr+1,M-1); bit.add(cr,1);  // add (*,r) inversions
+              out.push_back(inv);
+          }
+          for(int i=0;i<(int)out.size();i++) cout<<(i?" ":"")<<out[i];
+          cout<<"\n"; return 0;
+      }
+      ```
+
+      *`O(n log n)` time, `O(n)` space.*
+
+      **③ Alternative — order-statistic tree / segment tree, O(n log n)**
+
+      Any structure supporting "insert one, delete one, query how many values
+      are `>` x" works identically: `__gnu_pbds::tree` order statistics, or a
+      segment tree over the compressed value counts with the same range-sum
+      queries as the BIT. Same complexity; the BIT is the most compact. A
+      fourth tier is unnecessary — the BIT sliding-window pattern is the
+      canonical approach here.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Compression neutralises big (and negative) values.** `id(v)` maps
+        every distinct value `v` to a rank `0..m-1` via binary search on the
+        sorted unique list, so the BIT stores counts by **rank**, and "`>`",
+        "`<`" comparisons survive intact on ranks. Negatives need no special
+        handling.
+      - **`inv += bit.rng(c+1, M-1)` on add.** `a[r]` is the new rightmost
+        element, so every already-present element that is *greater* than it
+        forms a fresh inversion — exactly the rank range strictly above `c`.
+      - **`inv -= bit.rng(0, cl-1)` on remove.** `a[l]` is the leftmost element;
+        the only inversions it participates in as the *left* index are with
+        later, *smaller* elements — the rank range strictly below `cl`. Those
+        are still in the window, so we subtract them before removing `a[l]`.
+      - **Order of ops on slide.** We first dump `a[l]` (and its inversions),
+        then load `a[r]` — keeping `inv` in sync with the window `[l+1, r]` at
+        every instant. `bit.add(cl,-1)` before computing `cr` ensures `a[r]` is
+        not compared against the departing element.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5, k = 3`, `a = [5, 3, 2, 1, 4]`. Distinct `{1,2,3,4,5}` →
+      ranks `5→4, 3→2, 2→1, 1→0, 4→3`.
+
+      **Build window [5,3,2]:**
+      - add `5` (r4): `# present > 4` = 0 → `inv=0`.
+      - add `3` (r2): `# present > 2` = {5} = 1 → `inv=1`.
+      - add `2` (r1): `# present > 1` = {5,3} = 2 → `inv=3`.
+      **Output 3.**
+
+      **Slide → [3,2,1]** (remove `5`, add `1`):
+      - remove `5` (r4): `rng(0,3)` = present ranks < 4 = {3,2} = 2 → `inv=3-2=1`.
+      - add `1` (r0): `# present > 0` = {3,2} = 2 → `inv=3`.
+      **Output 3.**
+
+      **Slide → [2,1,4]** (remove `3`, add `4`):
+      - remove `3` (r2): `rng(0,1)` = present ranks < 2 = {2,1} = 2 → `inv=3-2=1`.
+      - add `4` (r3): `# present > 3` = {} = 0 → `inv=1`.
+      **Output 1.**
+
+      Final: `3 3 1` — matches the sample.
+  - type: flowchart
+    title: "Count inversions in each sliding window"
+    nodes: ["coordinate-compress values to ranks", "build first window: for each element add # present greater than it", "inv = total inversions of window", "remove left element: inv -= # present smaller than it", "add right element: inv += # present greater than it", "output inv, slide on"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 3}
+  - type: mcq
+    prompt: "When sliding the window, after removing the departing element a[l], why do we subtract bit.range(0, cl-1) (the count of present elements smaller than a[l])?"
+    options:
+      - "It reverses the 'greater' checks that originally counted a[l] as the right index."
+      - "It removes exactly the inversions (l, j) whose left index was a[l] and whose a[j] < a[l], which a[l] formed when it was added as the rightmost element."
+      - "It clears the whole BIT before re-adding the window."
+      - "It accounts only for pairs where both values are negative."
+    answer: 1
+    explanation: "a[l] is the leftmost element, so the only inversions it belongs to are those with a later, smaller element a[j] < a[l] — its rank below cl. Those pairs are exactly # present values smaller than a[l]. Subtracting that count (before removing a[l] from the BIT) keeps inv equal to the inversion count of the new window [l+1, r]."
+---

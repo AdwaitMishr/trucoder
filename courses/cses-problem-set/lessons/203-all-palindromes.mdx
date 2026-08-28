@@ -1,0 +1,301 @@
+---
+id: all-palindromes
+title: "All Palindromes"
+type: content
+difficulty: hard
+order: 203
+tags:
+  - string-algorithms
+  - manacher
+  - eertree
+  - palindrome
+  - palindromic-tree
+blocks:
+  - type: markdown
+    content: |
+      # All Palindromes — count distinct palindromic substrings
+
+      Given a string, count how many **distinct** palindromic substrings it has.
+      Distinct means by *value*: `"ababa"` contains the palindromes `a`, `b`,
+      `aba`, `bab`, `ababa` — `5` distinct ones, even though `a` and `aba`
+      appear several times.
+
+      ## When you reach for it
+
+      This is the count-everything cousin of "longest palindrome" (lesson 202).
+      Manacher's `d1`/`d2` already encode *all* palindromic substrings
+      (centered palindromes, nested). The extra difficulty is **deduplication**:
+      the same string can occur at many centers, so you cannot just sum the
+      radii.
+
+      A crucial fact that makes the problem tractable:
+
+      > A string of length `n` has **at most `n` distinct palindromic substrings**.
+
+      So the answer is `O(n)` — we just need a linear-time way to *deduplicate*.
+
+      ## Why the palindromic tree (eertree) works
+
+      A naive set of actual substrings is correct but pays `O(len)` per string,
+      `O(n²)` in total. The **Palindromic Tree (eertree)** represents every
+      distinct palindrome as a single node and builds the whole structure in
+      `O(n)`:
+
+      - Two roots: an **odd root** (length `-1`) and an **even root** (length `0`).
+      - Each other node = one distinct palindrome, with a `len`, a **suffix link**
+        to its longest proper palindromic suffix, and `26` children indexed by
+        the character that *grows* the palindrome on both ends.
+      - **A suffix link** lets you find, for a new character, the longest
+        palindromic suffix of the *new* prefix in amortized `O(1)`.
+      - The answer is simply the number of nodes minus the two roots.
+
+      :::tip
+      **Interview tip:** "At most `n` distinct palindromic substrings" is a
+      famous fact interviewers like to probe. The eertree is the standard
+      `O(n)` structure for *counting and listing* distinct palindromes; Manacher
+      gives you all *occurrences* but not distinctness. Roughly: Manacher for
+      "longest / counts incl. occurrences", eertree for "how many distinct".
+      :::
+
+      **Complexities:** time `O(n)`, space `O(n)`.
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given a string of lowercase letters, count the number of **distinct**
+      palindromic substrings — substrings that read the same forwards and
+      backwards, each distinct value counted once.
+
+      ## Input
+
+      A single line containing a string `s` of length `n`.
+
+      ## Output
+
+      One integer: the number of distinct palindromic substrings of `s`.
+
+      **Constraints:** `1 ≤ n ≤ 10^6`
+
+      ## Sample
+
+      **Input:**
+
+      ```
+      ababa
+      ```
+
+      **Output:**
+
+      ```
+      5
+      ```
+
+      Explanation: the distinct palindromic substrings are
+      `a`, `b`, `aba`, `bab`, `ababa`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n³)**
+
+      Enumerate every substring, test it for palindromicity, and insert the
+      survivors into a `set<string>`. Appearances collapse into distinct values.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin >> s;
+          int n = (int)s.size();
+          set<string> distinct;
+          for (int i = 0; i < n; i++)
+              for (int j = i; j < n; j++) {
+                  bool ok = true;
+                  for (int a = i, b = j; a < b; a++, b--)
+                      if (s[a] != s[b]) { ok = false; break; }
+                  if (ok) distinct.insert(s.substr(i, j - i + 1));
+              }
+          cout << (int)distinct.size() << "\n";
+          return 0;
+      }
+      ```
+
+      *Correct — `O(n³)` with big constant (substring copies). Useless for
+      `10^6`.*
+
+      **② Optimization — Manacher + hash set, O(n²) worst**
+
+      Manacher's `d1[i]`/`d2[i]` enumerate every palindromic substring directly:
+      around center `i` the windows `[i-k, i+k]` (odd) and `[i-k, i+k-1]` (even)
+      for each `k < d` are palindromes. Insert each one into a hash set of
+      substrings. This removes the `O(n)` palindrome *check*, but building each
+      substring still costs `O(len)`, so worst case stays `O(n²)` — better
+      constant, still not safe for the true limits on a hostile input.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin >> s;
+          int n = (int)s.size();
+          // Manacher radii
+          vector<int> d1(n), d2(n);
+          for (int i = 0, l = 0, r = -1; i < n; i++) {
+              int k = (i > r) ? 1 : min(d1[l + r - i], r - i + 1);
+              while (0 <= i - k && i + k < n && s[i - k] == s[i + k]) k++;
+              d1[i] = k--;
+              if (i + k > r) { l = i - k; r = i + k; }
+          }
+          for (int i = 0, l = 0, r = -1; i < n; i++) {
+              int k = (i > r) ? 0 : min(d2[l + r - i + 1], r - i + 1);
+              while (0 <= i - k - 1 && i + k < n && s[i - k - 1] == s[i + k]) k++;
+              d2[i] = k--;
+              if (i + k > r) { l = i - k - 1; r = i + k; }
+          }
+          unordered_set<string> seen;
+          for (int i = 0; i < n; i++) {
+              for (int k = 0; k < d1[i]; k++) seen.insert(s.substr(i - k, 2 * k + 1));
+              for (int k = 0; k < d2[i]; k++) seen.insert(s.substr(i - k, 2 * k));
+          }
+          cout << seen.size() << "\n";
+          return 0;
+      }
+      ```
+
+      *Correct — for short inputs this is what you'd actually write. But total
+      work is `O(n²)` in the worst case, so it can't be the final answer at
+      `10^6`.*
+
+      **③ Palindromic Tree (eertree) — O(n), the optimal tier**
+
+      Each distinct palindrome becomes one node; suffix links make building and
+      finding take linear total time. The count of distinct palindromes equals
+      the number of nodes minus the two roots.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      struct Node { int len, link, next[26]; };
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin >> s;
+          vector<Node> t;
+          t.push_back(Node{-1, 0});           // node 0 = odd root (length -1)
+          t.push_back(Node{ 0, 0});           // node 1 = even root (length 0)
+          int last = 1;                        // longest palindromic suffix of prefix read
+          for (int i = 0; i < (int)s.size(); i++) {
+              int c = s[i] - 'a';
+              int cur = last;
+              while (true) {                   // walk suffix links until s[i] extends a palindrome
+                  int len = t[cur].len;
+                  if (i - 1 - len >= 0 && s[i - 1 - len] == s[i]) break;
+                  cur = t[cur].link;
+              }
+              if (t[cur].next[c]) { last = t[cur].next[c]; continue; }   // palindrome already exists
+              int now = (int)t.size();
+              t.push_back(Node{t[cur].len + 2, 0});  // new distinct palindrome
+              t[cur].next[c] = now;
+              if (t[now].len == 1) t[now].link = 1;         // single char -> even root
+              else {
+                  int b = t[cur].link;
+                  while (true) {
+                      int len = t[b].len;
+                      if (i - 1 - len >= 0 && s[i - 1 - len] == s[i]) break;
+                      b = t[b].link;
+                  }
+                  t[now].link = t[b].next[c];              // longest proper palindromic suffix
+              }
+              last = now;
+          }
+          cout << (int)t.size() - 2 << "\n";               // distinct palindromic substrings
+          return 0;
+      }
+      ```
+
+      *`O(n)` time, `O(n)` space. Compiled and run on `ababa`, it prints `5`.*
+
+      **④ Note on alternatives**
+
+      Because distinct palindromes are `≤ n`, hashing every distinct value into
+      a set is *asymptotically fine for the count* — but you'd need `O(n)` time
+      to enumerate without duplicates, which essentially requires the eertree
+      (or a clever Manacher + suffix-LCP construction). Manacher alone gives
+      occurrences, not distinctness, so the eertree is the natural single answer.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Two roots.** Node 0 has length `-1` (odd root) so that a single
+        character `c` extends `c` into the palindrome `c c`-centred; node 1 has
+        length `0` (even root). Suffix links of both point to node 0, a safe
+        sentinel that always matches.
+      - **Extending at position `i`.** `last` is the longest palindromic suffix
+        of `s[0..i-1]`. To attach `s[i]`, we climb `cur = last, cur.link, …`
+        until the palindrome at `cur` can be flanked by the new char, i.e.
+        `s[i-1-len] == s[i]`. This is amortized `O(1)` across all steps.
+      - **Fresh palindrome vs existing.** If `t[cur].next[c]` is already set the
+        palindrome exists — just move `last` there and skip creation. Otherwise a
+        *new node* (a new distinct palindrome) is created and the suffix link is
+        found by the same climbing procedure from `cur.link`. Each distinct
+        palindrome is created exactly once, hence `nodes − 2` is the answer.
+      - **`struct Node`** stores `len`, `link`, and a fixed `26`-sized `next`
+        array. (Compress with `map` if you want `O(n log n)` and the alphabet is
+        large.)
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `s = "ababa"`. The eertree grows as each character is read:
+
+      | prefix | new distinct palindrome(s) created | total nodes (incl. 2 roots) | answer |
+      |--------|-------------------------------------|------------------------------|--------|
+      | `a` | `a` | 3 | 1 |
+      | `b` | `b` | 4 | 2 |
+      | `a` | `aba` | 5 | 3 |
+      | `b` | `bab` | 6 | 4 |
+      | `a` | `ababa` | 7 | 5 |
+
+      Reading `s[2] = 'a'`: `last` at that point is the palindrome `b`; its flank
+      check fails, we walk to the even root (len 0) where `s[1-1-0] = s[0]='a'`
+      equals `'a'`, creating the palindrome `a`+`a`+`a` = `aba` (new). Then
+      `s[3]='b'` creates `bab`; `s[4]='a'` extends `bab`? No — it creates
+      `ababa` by flanking `bab` with two `a`s? `bab` flanked by `a` gives
+      `ababa` — a new distinct palindrome, created once even though `aba` already
+      existed as a value.
+
+      ```
+      Expected (sample):  5
+      Actual (eertree):   5      ← match (nodes 7 − 2 roots = 5)
+      ```
+
+      Note `a` and `aba` each appeared multiple times as *occurrences* but are
+      counted once as distinct values — the suffix-link/climb structure is what
+      guarantees each value is created exactly once.
+  - type: flowchart
+    title: "Palindromic tree build"
+    nodes: ["start with odd root (-1) and even root (0), last = even root", "read next char s[i]", "climb suffix links from last to flanks s[i]", "child next[c] exists?", "create new node (new palindrome), set suffix link", "last = that child; next char", "after scan: answer = node count - 2"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 5, label: "yes"}
+      - {from: 3, to: 4, label: "no"}
+      - {from: 4, to: 5}
+      - {from: 5, to: 1, label: "more chars"}
+      - {from: 5, to: 6, label: "done"}
+  - type: mcq
+    prompt: "A string of length n has at most how many distinct palindromic substrings?"
+    options:
+      - "n"
+      - "n² / 2"
+      - "2ⁿ"
+      - "n · log n"
+    answer: 0
+    explanation: "Every distinct palindromic substring can be charged to the position where it first ends among leftmost occurrence centers, and that gives at most n distinct palindromes. That's why a linear structure (eertree) can enumerate the answer in O(n) — the distinct set is only O(n), not O(n²)."
+---

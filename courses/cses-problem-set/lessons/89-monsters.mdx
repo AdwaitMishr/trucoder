@@ -1,0 +1,319 @@
+---
+id: monsters
+title: Monsters
+type: content
+difficulty: medium
+order: 89
+tags:
+  - graph-algorithms
+  - bfs
+  - multi-source-bfs
+  - grid
+blocks:
+  - type: markdown
+    content: |
+      # Monsters — multi-source BFS and racing to the exit
+
+      You start in a grid labyrinth on cell `A`; several monsters start on other
+      cells (`M`). Every second you may move to an adjacent floor square, and **every
+      monster may move the same way at the same time**. You win if you reach any cell
+      on the outer *boundary* of the grid before any monster gets there.
+
+      The subtlety is that there is not one opponent but a **whole set of monsters**,
+      each spreading outward through the grid every tick. Instead of simulating any
+      monster's *specific* choices, compute how fast the *nearest* monster can reach
+      every cell — that single number decides everything you can safely do.
+
+      ## Multi-source BFS
+
+      A BFS started from **one** source computes every cell's distance to that source.
+      A **multi-source BFS** starts from *all* monster cells at once — push every `M`
+      into the queue with distance `0`, then expand. Because BFS explores cells in
+      order of distance, whichever monster reaches a cell first claims it; so the
+      distance stored is the minimum over all monsters. One pass gives
+      `monsterDist[c]` = distance from cell `c` to the *nearest* monster.
+
+      A second, ordinary BFS from your start `A` gives `playerDist[c]` = distance from
+      `A` to `c`. Since both you and the monsters move one cell per step, you may stand
+      on cell `c` at time `t` only if
+
+      ```
+      playerDist[c]  <  monsterDist[c]
+      ```
+
+      you arrive **strictly before** the earliest monster (if `==`, the monster arrives
+      the same second and you share the square — you lose). You escape by making the
+      outermost cell of some path satisfy that inequality.
+
+      **Complexity.** Two BFS passes, each `O(n·m)` time and `O(n·m)` memory.
+
+      :::tip
+      **Interview tip:** "When do I reach a cell before a growing threat (flood, fire,
+      spreading walls) reaches it?" is the *escape-before-arrival* pattern. The recipe
+      is almost always two BFS passes — one multi-source BFS from each threat, one BFS
+      from the start — then compare at the destination. It generalizes to Dijkstra
+      (weighted) when the threat spreads on a cost rather than a step count.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You and some monsters are in a labyrinth. When you take a step in some
+      direction, each monster may simultaneously take one step as well. Your goal is
+      to reach one of the **boundary squares** without ever sharing a square with a
+      monster. Find out if your goal is possible, and if it is, print a path you can
+      follow. Your plan has to work in any situation — even if the monsters know your
+      path beforehand.
+
+      ## Input
+
+      The first input line has two integers `n` and `m`: the height and width of the
+      map.
+
+      After this there are `n` lines of `m` characters describing the map. Each
+      character is `.` (floor), `#` (wall), `A` (start), or `M` (monster). There is
+      exactly one `A`.
+
+      **Constraints:** `1 <= n,m <= 1000`
+
+      ## Output
+
+      First print `YES` if your goal is possible, and `NO` otherwise. If your goal is
+      possible, print an example of a valid path: the length of the path and its
+      description using the characters `D`, `U`, `L`, `R`. You can print any valid
+      path as long as its length is **at most `n * m`** steps.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 8
+      ########
+      #M..A..#
+      #.#.M#.#
+      #M#..#..
+      #.######
+      ```
+      **Output:**
+      ```
+      YES
+      5
+      RRDDR
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — one BFS per monster per candidate, O(k·(n·m)²)**
+
+      The naive way to be safe on a cell `(r,c)` at time `t` is to re-run an
+      individual BFS from *every* monster to `(r,c)` and confirm each arrives after
+      `t`. Repeating that for every cell the player's BFS visits costs roughly
+      `k` (monsters) × `n·m` (per BFS) × `n·m` (cells on the path) — far too slow for a
+      `1000 × 1000` grid.
+
+      ```cpp
+      // sketch: still correct, but recomputes monster distances over and over
+      for (boundary cell b reached from A) {
+          int t = playerDist[b];
+          bool safe = true;
+          for (each monster mo)                 // k separate BFS/Dijkstra runs
+              if (distFrom(mo, b) <= t) safe = false;   // O(n·m) each
+          if (safe) { /* escape via b */ }
+      }
+      ```
+      *O(k·(n·m)²) — correct but useless at scale.*
+
+      **② Optimization — multi-source BFS, O(n·m)**
+
+      Compute `monsterDist` for the **whole grid in one pass** by seeding the BFS
+      queue with every monster cell at distance `0`. Then run the player's BFS from
+      `A`, remembering the move that entered each cell. Walk the player BFS backwards
+      from the best safe boundary cell:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          int n, m;
+          cin >> n >> m;
+          vector<string> g(n);
+          for (int i = 0; i < n; i++) cin >> g[i];
+
+          int si = -1, sj = -1;
+          vector<pair<int,int>> monsters;
+          for (int i = 0; i < n; i++)
+              for (int j = 0; j < m; j++) {
+                  if (g[i][j] == 'A') si = i, sj = j;
+                  else if (g[i][j] == 'M') monsters.push_back({i, j});
+              }
+
+          const int dr[4] = {1, -1, 0, 0}, dc[4] = {0, 0, 1, -1};
+          const char dirname[4] = {'D', 'U', 'R', 'L'};
+          auto inb = [&](int r, int c) { return r >= 0 && r < n && c >= 0 && c < m; };
+
+          // distance to the nearest monster — single multi-source BFS
+          vector<vector<int>> mono(n, vector<int>(m, -1));
+          queue<pair<int,int>> q;
+          for (auto& p : monsters) { mono[p.first][p.second] = 0; q.push(p); }
+          while (!q.empty()) {
+              auto [r, c] = q.front(); q.pop();
+              for (int d = 0; d < 4; d++) {
+                  int nr = r + dr[d], nc = c + dc[d];
+                  if (inb(nr, nc) && g[nr][nc] != '#' && mono[nr][nc] == -1) {
+                      mono[nr][nc] = mono[r][c] + 1;
+                      q.push({nr, nc});
+                  }
+              }
+          }
+
+          // player BFS: distance + the move that entered each cell
+          vector<vector<int>> pd(n, vector<int>(m, -1));
+          vector<vector<int>> pmove(n, vector<int>(m, -1));
+          queue<pair<int,int>> pq;
+          pd[si][sj] = 0; pq.push({si, sj});
+          while (!pq.empty()) {
+              auto [r, c] = pq.front(); pq.pop();
+              for (int d = 0; d < 4; d++) {
+                  int nr = r + dr[d], nc = c + dc[d];
+                  if (inb(nr, nc) && g[nr][nc] != '#' && pd[nr][nc] == -1) {
+                      pd[nr][nc] = pd[r][c] + 1;
+                      pmove[nr][nc] = d;
+                      pq.push({nr, nc});
+                  }
+              }
+          }
+
+          // best escape: boundary cell reached strictly before the nearest monster
+          int br = -1, bc = -1, best = -1;
+          auto consider = [&](int r, int c) {
+              if (pd[r][c] == -1) return;
+              if (mono[r][c] != -1 && pd[r][c] >= mono[r][c]) return; // too late
+              if (best == -1 || pd[r][c] < best) { best = pd[r][c]; br = r; bc = c; }
+          };
+          for (int i = 0; i < n; i++) { consider(i, 0); consider(i, m - 1); }
+          for (int j = 0; j < m; j++) { consider(0, j); consider(n - 1, j); }
+
+          if (br == -1) { cout << "NO\n"; return 0; }
+
+          // rebuild the path by walking parents from the exit back to the start
+          string path;
+          int r = br, c = bc;
+          while (!(r == si && c == sj)) {
+              int d = pmove[r][c];
+              path.push_back(dirname[d]);
+              r -= dr[d]; c -= dc[d];
+          }
+          reverse(path.begin(), path.end());
+
+          cout << "YES\n" << path.size() << "\n" << path << "\n";
+          return 0;
+      }
+      ```
+
+      *O(n·m) time, O(n·m) memory — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      The work is already linear in the grid size; you cannot do better than reading
+      the whole map. The only micro-optimization is reusing one visited matrix, which
+      does not change the bound.
+
+      **④ Alternative — Dijkstra on arrival time (same idea)**
+
+      If movement were *weighted* (e.g. step costs differ by terrain), replace the two
+      BFS passes with two Dijkstra runs and keep the identical `player < monster`
+      comparison. For unweighted grids BFS is faster, so it is not needed here.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the `②` multi-source BFS solution:
+
+      - **Multi-source seeding.** Every monster cell gets `mono = 0` in the queue
+        before the loop runs. BFS then expands the combined frontier; the first cell
+        to reach any square fixes its `mono` distance — that is automatically the
+        distance to the *closest* monster.
+      - **The strict comparison.** `consider()` rejects a boundary cell unless
+        `playerDist < monsterDist`. The `mono[r][c] != -1` guard treats cells no
+        monster can ever reach (`-1`) as infinitely safe, which is correct.
+      - **Why `playerDist` first.** The player BFS is independent of the monsters — it
+        just measures shortest path length from `A`. Comparing two shortest-distance
+        maps (one from all monsters, one from `A`) is what turns a timed chase into a
+        pair of offline BFS runs.
+      - **Reconstructing the path.** `pmove[r][c]` stores the direction that *entered*
+        cell `(r,c)`. Starting at the chosen exit and undoing that move at each step
+        walks back to `A`; reversing the collected letters yields the forward path.
+      - **`best` selection.** Among all safe boundary cells we keep the one with the
+        smallest `playerDist` — any safe one works, so shortest is a clean choice and
+        obeys the "at most `n·m` steps" bound automatically.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Run the sample grid. `A` is at row `1`, col `4`; monsters at `(1,1)`, `(2,3)`,
+      `(3,1)` (0-indexed rows/cols). Only the right column is a live escape corridor.
+
+      **Player BFS** from `A` (shortest steps to each reachable cell). The key corridor
+      runs through the top: `(1,4)`→`(1,5)`→`(1,6)`→`(2,6)`→`(3,6)`→`(3,7)`.
+
+      | cell | playerDist |
+      |------|-----------|
+      | `(1,4)` `A` | 0 |
+      | `(1,5)` | 1 |
+      | `(1,6)` | 2 |
+      | `(2,6)` | 3 |
+      | `(3,6)` | 4 |
+      | `(3,7)` (boundary) | 5 |
+
+      **Multi-source monster BFS** — the nearest monster to each of those cells. The
+      only monster that can approach the right column is `(2,3)`, and `(3,5)` is a
+      wall, so it is forced around the long way through the top corridor:
+
+      | cell | monsterDist (nearest monster) |
+      |------|------------------------------|
+      | `(2,3)` (monster) | 0 |
+      | `(1,3)` | 1 |
+      | `(1,4)` | 2 |
+      | `(1,5)` | 3 |
+      | `(1,6)` | 4 |
+      | `(2,6)` | 5 |
+      | `(3,6)` | 6 |
+      | `(3,7)` (boundary) | 7 |
+
+      Now compare the two maps cell by cell along the corridor:
+
+      | cell | playerDist | monsterDist | safe? |
+      |------|-----------|-------------|-------|
+      | `(1,5)` | 1 | 3 | yes |
+      | `(1,6)` | 2 | 4 | yes |
+      | `(2,6)` | 3 | 5 | yes |
+      | `(3,6)` | 4 | 6 | yes |
+      | `(3,7)` boundary | 5 | 7 | **yes** |
+
+      The player arrives everywhere a step or more ahead of the nearest monster. The
+      boundary cell `(3,7)` is `playerDist 5 < monsterDist 7`, so it is a safe exit.
+      Walking its parent chain back to `A` yields the moves `R R D D R` = `RRDDR`.
+
+      Expected (sample) — `YES 5 RRDDR`. Actual — `YES 5 RRDDR`. Match.
+  - type: flowchart
+    title: "Escape before the monster arrives"
+    nodes: ["seed BFS queue with every monster at dist 0", "expand multi-source BFS -> monsterDist grid", "player BFS from A -> playerDist + parent move", "for each boundary cell: playerDist < monsterDist?", "pick nearest safe boundary cell", "walk parent moves back to A, reverse", "print YES + path (or NO)"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "any safe"}
+      - {from: 3, to: 6, label: "none"}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6}
+  - type: mcq
+    prompt: "Why can you stand on a cell c at time t only when playerDist[c] < monsterDist[c] (and not <=)?"
+    options:
+      - "Because BFS only visits each cell once, so the equality case is never recorded."
+      - "Because you and the nearest monster move at the same speed, so if a monster needs t steps to reach c you must be there before it — at exactly t the square is shared and you lose."
+      - "Because monsters only move after the player has finished all of their steps."
+      - "Because tiles are only dangerous when two monsters are adjacent to them."
+    answer: 1
+    explanation: "Both you and a monster step once per second. If the nearest monster can reach c in exactly t steps and you arrive on step t, you and it occupy the same square at the same time — which is losing. You must arrive on an earlier step, i.e. playerDist strictly less than monsterDist. Equality is a collision."

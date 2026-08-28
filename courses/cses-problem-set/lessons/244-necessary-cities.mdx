@@ -1,0 +1,282 @@
+---
+id: necessary-cities
+title: Necessary Cities
+difficulty: medium
+order: 244
+tags:
+  - articulation-points
+  - tarjan
+  - lowlink
+  - graph
+blocks:
+  - type: markdown
+    content: |
+      # Necessary Cities — finding the articulation points of a connected graph
+
+      This is the vertex twin of the previous lesson. Given a **connected**
+      undirected graph of `n` cities and `m` roads, a city is **necessary** if
+      removing it (and all roads incident to it) disconnects some other pair of
+      cities. We must list every necessary city.
+
+      Such a vertex is called an **articulation point** (or a *cut vertex*), and
+      the job is: **find all articulation points in `O(n + m)`** using the same
+      Tarjan lowlink DFS as bridges — but this time the machinery runs on
+      *vertices*.
+
+      **The core idea.** During a DFS, maintain `tin[v]` (discovery time) and
+      `low[v]` (smallest `tin` reachable from `v`'s subtree via tree edges plus
+      one back edge). There are two rules that decide whether `v` is an
+      articulation point:
+
+      1. **Non-root vertex `v`:** if some DFS child `to` of `v` cannot reach
+         above `v` after the recursion — i.e. **`low[to] ≥ tin[v]`** — then `v`
+         is an articulation point. Removing `v` detaches `to`'s whole subtree
+         from the ancestors.
+      2. **DFS root `r`:** `r` is an articulation point if it has **at least two
+         DFS-tree children**. With one child the rest of the tree is one piece;
+         the root's removal leaves exactly one component.
+
+      Notice the subtle but crucial difference from the bridge test:
+      bridges use the strict `low[to] > tin[v]`, articulation points use the
+      non-strict **`low[to] ≥ tin[v]`**. The reason: a bridge is removed *with its
+      edge*, and equality still leaves `v` connected to the subtree via `v`
+      itself; but removing *the vertex* `v` destroys the connection even when the
+      subtree reaches exactly back to `v`.
+
+      **Complexity.** A single DFS visits every vertex and edge:
+      **O(n + m)** time and **O(n + m)** space.
+
+      :::tip
+      **Interview tip:** articulation points and bridges are the same lowlink
+      algorithm with two flipped signs — `>` for bridges, `≥` for cut vertices,
+      plus the root-with-two-children special case. If you can derive both from
+      the same recursion, you have a strong signal of real graph competence.
+      Map "necessary city" = articulation point, "necessary road" = bridge, and
+      the whole problem is a definition lookup.
+      :::
+  - type: markdown
+    content: |
+      # Question — Necessary Cities
+
+      There are `n` cities and `m` roads between them. There is a route between
+      any two cities. A city is called *necessary* if there is no route between
+      some other two cities after removing that city (and adjacent roads). Your
+      task is to find all necessary cities.
+
+      **Constraints**
+
+      - `2 ≤ n ≤ 10^5`
+      - `1 ≤ m ≤ 2·10^5`
+      - `1 ≤ a, b ≤ n`
+
+      **Input.** The first input line has two integers `n` and `m`: the number
+      of cities and roads. The cities are numbered `1,2,…,n`. After this, there
+      are `m` lines that describe the roads. Each line has two integers `a` and
+      `b`: there is a road between cities `a` and `b`. There is at most one road
+      between two cities, and every road connects two distinct cities.
+
+      **Output.** First print an integer `k`: the number of necessary cities.
+      After that, print a list of `k` cities. You may print the cities in any
+      order.
+
+      Sample input:
+
+      ```
+      5 5
+      1 2
+      1 4
+      2 4
+      3 5
+      4 5
+      ```
+
+      Sample output:
+
+      ```
+      2
+      4 5
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — remove each city and check connectivity, O(n·(n+m))**
+
+      For every city, delete it and its incident roads, run one BFS from any
+      other city, and test whether all remaining cities are still reachable. If
+      not, the city is necessary. `n` traversals at `O(n + m)` each:
+      `n·(n+m)` ≈ `10^5 · 3·10^5 = 3·10^10`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main(){ // too slow: O(n * (n + m))
+          int n, m; cin >> n >> m;
+          vector<vector<int>> g(n);
+          for (int i = 0; i < m; ++i){ int a, b; cin >> a >> b; --a; --b;
+              g[a].push_back(b); g[b].push_back(a);
+          }
+          vector<int> ans;
+          for (int rm = 0; rm < n; ++rm){
+              int start = (rm == 0 ? 1 : 0);
+              vector<bool> seen(n); seen[start] = true;
+              queue<int> q; q.push(start); int cnt = 1;
+              while (!q.empty()){
+                  int x = q.front(); q.pop();
+                  for (int w : g[x]) if (!seen[w] && w != rm)
+                      { seen[w] = true; q.push(w); ++cnt; }
+              }
+              if (cnt < n - 1) ans.push_back(rm + 1);
+          }
+          cout << ans.size() << "\n";
+          for (int a : ans) cout << a << " ";
+          cout << "\n";
+      }
+      ```
+
+      **O(n·(n+m))** — correct, unusable at the real limits.
+
+      **② Optimization — Tarjan articulation points, O(n + m) (submission)**
+
+      One DFS sets `tin`, `low`, and flags cut vertices by rule 1 (`low[to] ≥
+      tin[v]` for a non-root `v`) and rule 2 (root with `≥ 2` children):
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int n, m, timer;
+      vector<vector<int>> adj;
+      vector<int> tin, low;
+      vector<bool> isArt;
+
+      void dfs(int v, int pe){
+          tin[v] = low[v] = timer++;
+          int children = 0;
+          for (int to : adj[v]){
+              if (to == pe) continue;                    // skip the tree edge we descended
+              if (tin[to] != -1){                        // back edge to an ancestor
+                  low[v] = min(low[v], tin[to]);
+              } else {                                   // tree edge to a child
+                  dfs(to, v);
+                  low[v] = min(low[v], low[to]);
+                  if (pe != -1 && low[to] >= tin[v]) isArt[v] = true;   // cut vertex (rule 1)
+                  ++children;
+              }
+          }
+          if (pe == -1 && children > 1) isArt[v] = true; // root with >=2 subtrees (rule 2)
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n >> m;
+          adj.assign(n, {});
+          for (int i = 0; i < m; ++i){
+              int a, b; cin >> a >> b; --a; --b;
+              adj[a].push_back(b);
+              adj[b].push_back(a);
+          }
+          tin.assign(n, -1); low.assign(n, -1); isArt.assign(n, false);
+          timer = 0;
+          for (int i = 0; i < n; ++i) if (tin[i] == -1) dfs(i, -1);
+          vector<int> ans;
+          for (int i = 0; i < n; ++i) if (isArt[i]) ans.push_back(i + 1);
+          cout << ans.size() << "\n";
+          for (int a : ans) cout << a << " ";
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n + m)** time and **O(n + m)** space. This is the submission tier.
+
+      **③ Alternative — block-cut tree viewpoint**
+
+      There is no meaningfully faster algorithm (reading the graph already costs
+      `O(n + m)`). A useful *framing* for checking your work: the **block-cut
+      tree** contracts every 2-edge/2-vertex-connected block into a node and
+      connects articulation points to them; the articulation points are exactly
+      the vertices that appear in more than one block. It does not change the
+      `O(n + m)` bound — it is a structural way to *visualise* why the cut
+      vertices are the ones the DFS flags.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **`low[to] ≥ tin[v]` vs `>`.**
+        For a non-root `v` and child `to`: if `low[to] ≥ tin[v]`, the subtree of
+        `to` ties back only to `v` or below, so deleting `v` strands it. Strict
+        equality is *included* here (unlike bridges) because removing the vertex
+        `v` itself removes the very edge that ties the subtree back to `v`.
+      - **The root case.** A root is a cut vertex only when the DFS trace from it
+        spawned `≥ 2` tree children, because with one child the root's removal
+        leaves a single connected remainder. The `pe == -1` check isolates the
+        root, and `children` counts its DFS children.
+      - **Back-edge handling.** `low[v] = min(low[v], tin[to])` for an already
+        visited neighbour `to` (excluding its own parent) is what lets subtrees
+        "climb" above a candidate cut vertex and clear it.
+      - **Output format.** `k` on the first line, then the `k` cities space
+        separated; any order is accepted, so we print in increasing vertex id.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 5`, roads `1-2, 1-4, 2-4, 3-5, 4-5` (same graph
+      as Necessary Roads).
+
+      Run Tarjan's DFS from city `1`, scanning adjacency in input order
+      (`1` visits `4` first):
+
+      | action | tin | low |
+      |--------|-----|-----|
+      | dfs(1) | 0 | 0 |
+      | dfs(4) via `1-4` | 1 | 1 |
+      | dfs(2) via `4-2` | 2 | 2 |
+      | `2` sees `1` (visited) | back edge → low[2]=min(2, 0)=0 |
+      | dfs(5) via `4-5` | 3 | 3 |
+      | dfs(3) via `5-3` | 4 | 4 |
+      | `3` sees `5` | skip parent |
+      | backtrack to `5` | low[5]=min(3, low[3]=4)=3; rule 1 on `5`: low[3]=4 ≥ tin[5]=3 → **isArt[5]** (city 5) |
+      | backtrack to `4` | low[4]=min(1, low[5]=3)=1; rule 1 on `4`: low[5]=3 ≥ tin[4]=1 → **isArt[4]** (city 4) |
+      | `4` sees `1` | skip parent |
+      | backtrack to `1` | low[1]=min(0, low[4]=1)=0; rule 1 is guarded by `pe != -1`, so it is skipped for the root |
+      | `1` sees `2` (visited) | back edge — no further change |
+
+      Flags set by rule 1 (non-root): `4` (city 4), `5` (city 5). The root
+      `1` has only **one** tree child (`4`), so rule 2 (`children > 1`) does not
+      flag it either. City `1` is therefore **not** an articulation point:
+      removing it still leaves `{2, 3, 4, 5}` connected (via `4-5` and `5-3`).
+
+      Sanity-check the two winners with the simple definition. **City 4**:
+      deleting it removes the roads `1-4`, `4-2`, `4-5`, leaving only `1-2` and
+      `3-5`. `{1,2}` and `{3,5}` become two separate components — disconnected —
+      so city `4` is necessary. **City 5**: deleting it removes `4-5` and `5-3`,
+      leaving `{1,2,4}` connected while city `3` is stranded alone — necessary.
+
+      City `1`: deleting it leaves `{2,3,4,5}` all connected via `2-4`, `4-5`,
+      `3-5` — not necessary. City `2`: deleting it leaves `{1,3,4,5}` connected —
+      not necessary. City `3`: deleting it leaves `{1,2,4,5}` connected — not
+      necessary.
+
+      | city | necessary? | why |
+      |------|-----------|-----|
+      | 1 | no | root with 1 child; remainder fully connected |
+      | 2 | no | deletion leaves `{1,3,4,5}` connected |
+      | 3 | no | deletion leaves `{1,2,4,5}` connected |
+      | 4 | **yes** | deletion separates `{1,2}` from `{3,5}` |
+      | 5 | **yes** | deletion cuts `3` off from the rest |
+
+      **Output:** `2`, then `4 5` — matching the sample exactly (the program
+      prints city ids in increasing order, so `4 5`).
+  - type: mcq
+    prompt: 'Why does the articulation-point test use low[to] >= tin[v] (non-strict) while the bridge test uses low[to] > tin[v]?'
+    options:
+      - Because removing a vertex v also removes the edge that lets a subtree tie back exactly to v, so equality still separates the subtree
+      - Because vertices are cheaper to remove than edges
+      - Because bridges never exist in the same graph as articulation points
+      - Because low arrays are only defined at even depths
+    answer: 0
+    explanation: For a bridge we only lose the single edge, so a subtree with low[to] == tin[v] still reaches v itself and stays connected. Removing the vertex v destroys that exact connection too, so equality low[to] == tin[v] also separates the subtree — hence >= instead of >.
+type: content
+---

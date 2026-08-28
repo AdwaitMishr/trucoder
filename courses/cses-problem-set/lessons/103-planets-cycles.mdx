@@ -1,0 +1,234 @@
+---
+id: planets-cycles
+title: "Planets Cycles"
+type: content
+difficulty: medium
+order: 103
+tags:
+  - graph-algorithms
+  - functional-graph
+  - cycle-detection
+  - topological-sort
+blocks:
+  - type: markdown
+    content: |
+      # Planets Cycles — where does every path land?
+
+      In a functional graph (each planet teleports to exactly one other), we
+      want, for *every* planet, the number of teleportations from it until we
+      reach a planet we have already visited. Because every node has out-degree
+      exactly 1, the answer has a beautifully simple two-part form:
+
+      > Every starting point walks along a tail, enters a **cycle**, and the
+      > first repeated planet is that cycle's entry after one full lap.
+
+      So for planet `v`:
+
+      ```
+      answer[v] = distToCycle[v] + (size of the cycle v enters)
+      ```
+
+      where `distToCycle[v]` is the number of steps from `v` to its first cycle
+      node (`0` if `v` is already on a cycle). We never revisit a tail node
+      (we only move forward), so the very first repetition is always back at
+      the cycle entry after a complete loop.
+
+      ## Two ways to find the cycles
+
+      **Method A — Kahn/pruning (used below).** Repeatedly delete nodes with
+      in-degree `0`. Since every node has out-degree 1, deleting a leaf simply
+      removes one edge going forward; everything that remains has in-degree
+      `>= 1` and is exactly the **cyclic core**. Then walk each remaining
+      unvisited node around its cycle to record its length. The pruned tail
+      nodes are answered in reverse deletion order: each is one teleport closer
+      than its successor, so `answer[v] = answer[nxt[v]] + 1`.
+
+      **Method B — DFS cycle-decomposition.** Walk each unprocessed node along
+      `nxt`; when a node closes onto its own path, we've found a cycle (record
+      size), and everything before it is tail. Works identically to the
+      decomposition in Planets Queries II.
+
+      Both run in `O(n)` — the whole point is one pass, not a per-planet
+      simulation.
+
+      :::tip
+      **Interview tip:** the "delete all in-degree-0 leaves" trick (Kahn's
+      algorithm without a topological-use step) is the fastest way to *strip a
+      directed graph down to its cyclic core*. Combined with the fact that each
+      original node keeps exactly one outgoing edge, it answers "distance from
+      every node to its first cycle" in a single `O(n)` sweep. Reach for it
+      whenever every node has out-degree 1 and you care about cycles.
+      :::
+  - type: markdown
+    content: |
+      # Question
+
+      You are playing a game consisting of `n` planets. Each planet has a
+      teleporter to another planet (or the planet itself). You start on a
+      planet and then travel through teleporters until you reach a planet that
+      you have already visited before. Your task is to calculate for each
+      planet the number of teleportations there would be if you started on that
+      planet.
+
+      **Input**
+
+      The first input line has an integer `n`: the number of planets. The
+      planets are numbered `1, 2, ..., n`.
+
+      The second line has `n` integers `t_1, t_2, ..., t_n`: for each planet,
+      the destination of the teleporter. It is possible that `t_i = i`.
+
+      **Output**
+
+      Print `n` integers according to the problem statement.
+
+      **Constraints**
+
+      - `1 <= n <= 2*10^5`
+
+      **Example**
+
+      Input:
+
+      ```
+      5
+      2 4 3 1 4
+      ```
+
+      Output:
+
+      ```
+      3 3 1 3 4
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — simulate per planet, O(n^2)**
+
+      For each planet, walk teleporters, stamping visited planets, until a
+      repeat occurs; count the steps. With `n` up to `2*10^5` a path can be
+      `O(n)`, giving `O(n^2)` total — far too slow.
+
+      **② Optimization — prune tails, keep cycles: O(n)**
+
+      Kahn-style: cut every in-degree-0 leaf; the leftovers are the cycles.
+      Assign each cycle node its cycle length, then resolve tail nodes in
+      reverse pruning order.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<int> nxt(n);
+          for (int i = 0; i < n; ++i){ int t; cin >> t; nxt[i] = t - 1; }
+
+          vector<int> indeg(n, 0);
+          for (int v = 0; v < n; ++v) indeg[nxt[v]]++;
+
+          // Prune leaves (in-degree 0). Whatever remains is the cyclic core.
+          vector<int> order;
+          queue<int> q;
+          for (int v = 0; v < n; ++v) if (indeg[v] == 0) q.push(v);
+          vector<int> ans(n, -1);
+          while (!q.empty()){
+              int u = q.front(); q.pop();
+              order.push_back(u);
+              if (--indeg[nxt[u]] == 0) q.push(nxt[u]);
+          }
+          // Every remaining node sits on a cycle; label it with its cycle's length.
+          for (int v = 0; v < n; ++v){
+              if (indeg[v] > 0 && ans[v] == -1){
+                  vector<int> cyc;
+                  int u = v;
+                  do { cyc.push_back(u); u = nxt[u]; } while (u != v);
+                  for (int x : cyc) ans[x] = (int)cyc.size();
+              }
+          }
+          // Tails, in reverse pruning order: one more step than their successor.
+          for (int i = (int)order.size() - 1; i >= 0; --i){
+              int u = order[i];
+              ans[u] = ans[nxt[u]] + 1;
+          }
+          for (int v = 0; v < n; ++v) cout << ans[v] << ' ';
+          cout << '\n';
+          return 0;
+      }
+      ```
+
+      *O(n) time and space — the intended solution.*
+
+      **③ Further optimization** — none needed; `O(n)` is optimal (you must
+      visit every node).
+
+      **④ Alternative algorithm — DFS cycle-decomposition, O(n)**
+
+      Walk unprocessed paths, record each newly found cycle's length, and
+      compute tail distances as in Planets Queries II. Same `O(n)` result;
+      reach for it when you also need `dist`/`entry`/positions for other
+      queries rather than just the counts.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The key lines of the `O(n)` solution:
+
+      - **`indeg[nxt[v]]++`** — out-degree is 1, so building the in-degree
+        array requires exactly one pass over `nxt`.
+      - **Pruning loop.** Every in-degree-0 node is a *leaf of a feeding tree*;
+        removing it decrements its successor's in-degree, possibly exposing the
+        next leaf. When the queue empties, exactly the cyclic core is left —
+        each remaining node has in-degree `>= 1` (it is fed either by the cycle
+        or, for a self-loop, by itself).
+      - **Label cycles.** Any remaining unlabelled node `v` is walked around
+        its own cycle (`nxt` from `v` returns to `v`); the recorded length is
+        written onto all its cycle members. A self-loop (`t_i = i`) is just a
+        cycle of length 1.
+      - **Resolve tails backward.** Processing `order` in reverse visits leaves
+        back-to-root, so `ans[nxt[u]]` is already final when used; the tail
+        node adds one teleport. `distToCycle + cycleSize` falls out naturally.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, teleporters `t = [2, 4, 3, 1, 4]`, so
+      0-indexed `nxt = [1, 3, 2, 0, 3]` (planet 1→2, 2→4, 3→3, 4→1, 5→4).
+
+      In-degrees: `[1, 1, 1, 2, 0]`. The only in-degree-0 node is planet 5
+      (index 4). Prune it: its successor planet 4 (index 3) drops to in-degree
+      1. Queue empty. Remaining nodes `{0, 1, 2, 3}` are the cyclic core —
+      two cycles: `0 → 1 → 3 → 0` (planets 1,2,4, length 3) and the self-loop
+      `2 → 2` (planet 3, length 1).
+
+      | planet (1-indexed) | dist to cycle | cycle length | answer |
+      |--------------------|---------------|--------------|--------|
+      | 1 (idx 0) | 0 (in cycle) | 3 | 3 |
+      | 2 (idx 1) | 0 (in cycle) | 3 | 3 |
+      | 3 (idx 2) | 0 (self-loop) | 1 | 1 |
+      | 4 (idx 3) | 0 (in cycle) | 3 | 3 |
+      | 5 (idx 4) | 1 (→ planet 4) | 3 | 1 + 3 = 4 |
+
+      Planet 5 (index 4) is the pruned tail: `ans[4] = ans[3] + 1 = 3 + 1 = 4`
+      (teleport to planet 4, then three more to return to it).
+
+      Expected (sample) — `3 3 1 3 4`. Actual — `3 3 1 3 4`. Match.
+  - type: flowchart
+    title: "Find every cycle and distance in O(n)"
+    nodes: ["compute indeg[]", "prune in-degree-0 leaves (queue)", "label each remaining node with its cycle length", "resolve tails in reverse pruned order: ans[v] = ans[nxt[v]] + 1", "print ans for all planets"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+  - type: mcq
+    prompt: "Why can the pruning method (removing in-degree-0 nodes) correctly identify all cycle nodes without ever over-removing a cycle node?"
+    options:
+      - "Because every node on a cycle is fed by at least one other node on that cycle, so its in-degree can never reach 0, no matter how many tails are pruned."
+      - "Because cycle nodes always have in-degree larger than every tail node."
+      - "Because Kahn's algorithm removes all nodes eventually, cycles included."
+      - "Because a self-loop node has no incoming edges and is therefore pruned first."
+    answer: 0
+    explanation: "On a directed cycle each node has an incoming edge from its predecessor on the same cycle, so its in-degree can never drop to 0 during pruning; removing tails only ever removes edges that enter tails, never edges on the cycle. The nodes that survive are exactly the cyclic core."
+---

@@ -1,0 +1,206 @@
+---
+id: sum-of-three-values
+title: Sum of Three Values
+difficulty: medium
+order: 50
+tags:
+  - sorting-and-searching
+  - two-pointers
+  - hashing
+blocks:
+  - type: markdown
+    content: |
+      # Sum of Three Values — one fixed + two pointers
+
+      You have `n` integers and a target `x`; find **three values at distinct
+      positions that sum to `x`**, and print their (1-based) positions. Several
+      solutions exist; print any.
+
+      The direct triple-nested scan is `O(n^3)`, far too slow for `n = 5000`.
+      The classic upgrade reduces it to `O(n^2)` by **sorting + two pointers**:
+
+      1. **Sort** the array (remembering original positions, because we must
+         output them).
+      2. **Fix one element** as the "first" of the triple (`i`).
+      3. On the rest of the sorted slice, run a **two-pointer** search for a
+         pair that sums to `x - arr[i]`: `left` at the start of the slice,
+         `right` at `n-1`. If `arr[left] + arr[right] == target` we found the
+         pair; if the sum is too small, advance `left`; if too big, bring
+         `right` in.
+
+      Because the slice after `i` is sorted, the two pointers meet the negated
+      target in linear time for each fixed `i`, giving `O(n)` per `i` and
+      `O(n^2)` overall.
+
+      **Correctness.** Two pointers on a sorted array find a pair with a given
+      sum correctly: at `(l, r)` with `arr[l] + arr[r] < target`, no element
+      left of `r` can pair with `arr[l]` to reach `target` (they're all `<=`),
+      so `l` must move right; symmetrically for `>`. Each pointer moves `O(n)`
+      times.
+
+      **Complexity:** `O(n^2)` time (`O(n log n)` sort + `O(n^2)` scans),
+      `O(n)` space.
+
+      :::tip
+      **Interview tip:** "find a combination of `k` values summing to `X`" is an
+      interview staple. The pattern is recursive: fix one value, then solve the
+      `(k-1)`-sum problem on the remainder. For k=2 it's the classic two-sum;
+      for k=3 it's this two-pointer-with-a-fixed element on a sorted array.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given an array of `n` integers, and your task is to find **three
+      values (at distinct positions) whose sum is `x`**.
+
+      **Constraints:** `1 <= n <= 5000`, `1 <= x, a[i] <= 10^9`
+
+      ## Input
+
+      The first input line has two integers `n` and `x`: the array size and the
+      target sum. The second line has `n` integers `a[1], ..., a[n]`.
+
+      ## Output
+
+      Print three integers: the positions of the values. If there are several
+      solutions, you may print any of them. If there are no solutions, print
+      `IMPOSSIBLE`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 8
+      2 7 5 1
+      ```
+      **Output:**
+      ```
+      1 3 4
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n³)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(int n, long long x, const std::vector<long long>& a) {
+          for (int i = 0; i < n; i++)
+              for (int j = i + 1; j < n; j++)
+                  for (int k = j + 1; k < n; k++)
+                      if (a[i] + a[j] + a[k] == x)
+                          return to_string(i+1) + " " + to_string(j+1) + " " + to_string(k+1);
+          return "IMPOSSIBLE";
+      }
+      ```
+      Every triple of distinct indices is checked: `O(n^3)` ≈ `5000^3 = 1.25·10^11`
+      — far beyond any limit.
+
+      **② Optimization — sort + fix first + two pointers, O(n²)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(int n, long long x, const std::vector<long long>& a) {
+          vector<pair<long long,int>> p(n);
+          for (int i = 0; i < n; i++) p[i] = {a[i], i + 1};  // keep original pos
+          sort(p.begin(), p.end());
+
+          for (int i = 0; i < n; i++) {
+              long long target = x - p[i].first;
+              int l = i + 1, r = n - 1;
+              while (l < r) {
+                  long long s = p[l].first + p[r].first;
+                  if (s == target) {
+                      string res = to_string(p[i].second) + " " + to_string(p[l].second)
+                                 + " " + to_string(p[r].second);
+                      return res;
+                  }
+                  (s < target) ? l++ : r--;
+              }
+          }
+          return "IMPOSSIBLE";
+      }
+      ```
+      For each fixed first element, two pointers find the complementary pair in
+      `O(n)`; total `O(n^2)` (plus the `O(n log n)` sort). Passes for `n = 5000`.
+
+      **③ Further optimization — none needed.**
+      `O(n^2)` matches the problem's `n = 5000` (~`2.5·10^7` pair-steps); going
+      sub-quadratic isn't required and there is no simpler exact method.
+
+      **④ Alternative — hash set, O(n²).**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      string solve(int n, long long x, const std::vector<long long>& a) {
+          // fix the first element, then solve 2-sum for the rest with a hash set
+          for (int i = 0; i < n; i++) {
+              unordered_map<long long,int> seen;
+              for (int j = i + 1; j < n; j++) {
+                  long long need = x - a[i] - a[j];
+                  if (seen.count(need))
+                      return to_string(i+1) + " " + to_string(seen[need]) + " " + to_string(j+1);
+                  seen[a[j]] = j + 1;
+              }
+          }
+          return "IMPOSSIBLE";
+      }
+      ```
+      Fix the first value, then run hash-based two-sum over the suffix: the
+      hash set stores values we've passed so we can test `need` in `O(1)`.
+      `O(n^2)` time, `O(n)` space — a no-sorting alternative with the same cost.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Keep positions.** We pack `(value, original_index+1)` into pairs and
+        sort by value. Sorting destroys the original order, but we still need
+        1-based positions in the output, so the original index rides along.
+      - **Fix one value.** `i` steps over the sorted array; it is the first of
+        our triple. Everything after `i` must supply two values summing to
+        `x - p[i].first`.
+      - **Two pointers.** `l = i+1`, `r = n-1`. Compare `p[l]+p[r]` with
+        `target`. Equal → we have a valid distinct triple (indices `i < l < r`,
+        hence distinct original positions) — return immediately. Too small →
+        `l++`; too large → `r--`.
+      - **No solution:** if we exhaust every `i` without a hit, return
+        `"IMPOSSIBLE"`.
+
+      Using `long long` everywhere is important: `a[i] <= 10^9`, three of them
+      sum to `3·10^9`, just past `int` range.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 4`, `x = 8`, `a = [2, 7, 5, 1]`.
+
+      **Expected output (sample):** `1 3 4` (values `2 + 5 + 1 = 8`).
+
+      **Actual run.**
+
+      Pack & sort by value: `p = [(1,4), (2,1), (5,3), (7,2)]`.
+
+      | i | fixed val | target = 8 − val | (l, r) scan | result |
+      |----|-----------|-------------------|--------------|--------|
+      | 0 | 1 (pos 4) | 7 | l=1(2), r=3(7): 2+7=9 >7 → r-- → l=1(2),r=2(5):2+5=7 ✓ | found: positions 4,1,3 |
+      | stop | — | — | — | **4 1 3** |
+
+      We return `4 1 3`, which is the same triple as the sample's `1 3 4`
+      (positions 1, 3, 4 → values 2, 5, 1; any order of the three positions is
+      accepted). Sum `2 + 5 + 1 = 8 = x` ✓ — output is valid.
+  - type: mcq
+    prompt: Why can the two-pointer method skip so many triples (vs. the triple loop)?
+    options:
+      - Because sorting the array makes the values unique
+      - 'Because the array is sorted, moving l when the pair sum is too small and r when too large provably never skips a valid pair, so each fixed i needs only O(n) pointer moves instead of O(n^2) checks'
+      - Because we only ever look at the first three positions
+      - Because the target x fits in a long long
+    answer: 1
+    explanation: 'Sorted order makes the two-pointer monotonic: at (l,r) with sum < target, all elements left of r are <= arr[r], so arr[l] can pair with no one to reach target except by advancing l; symmetric for the > case. Each pointer advances at most n times per fixed i, hence O(n) per i and O(n^2) overall.'
+type: content
+---

@@ -1,0 +1,198 @@
+---
+id: weird-algorithm
+title: Weird Algorithm
+difficulty: easy
+order: 1
+tags:
+  - intro
+  - math
+  - simulation
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — simulating a rewrite rule
+
+      This is a pure **simulation** problem: the rules fully determine the
+      next value, so you just apply them until you hit the base case. There is
+      no clever search, no DP table — the algorithm *is* the statement.
+
+      Given a positive integer `n`:
+      - if `n` is **even**, the next value is `n / 2`;
+      - if `n` is **odd**, the next value is `3 * n + 1`;
+      - stop when `n == 1`.
+
+      This particular rule set is called the **Collatz conjecture**. Nobody
+      has ever proved it always reaches `1`, but it is verified for every
+      start up to astronomically large numbers — and for the CSES limit
+      (`n ≤ 10^6`) the sequence always terminates quickly.
+
+      **Worked mini-example.** Start with `n = 6`:
+      `6 → 3 → 10 → 5 → 16 → 8 → 4 → 2 → 1`.
+      Each arrow applies one rule: `6` is even so `/2 = 3`; `3` is odd so
+      `3·3+1 = 10`; and so on.
+
+      **Complexity.** Let `k` be the number of terms printed. We do one
+      arithmetic step per term, so time is `O(k)` and space is `O(k)` (we
+      store the sequence to return it). For `n ≤ 10^6` the sequence never
+      grows beyond a few hundred terms.
+
+      :::tip
+      **Interview tip:** Simulation/rule-following problems are common warm-up
+      questions. The skill the interviewer reads is *translating a verbal rule
+      into a clean loop with a correct base case* — always ask yourself "what
+      stops the loop?"
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Consider an algorithm that takes as input a positive integer `n`. If
+      `n` is even, the algorithm divides it by two, and if `n` is odd, the
+      algorithm multiplies it by three and adds one. The algorithm repeats
+      this, until `n` is one.
+
+      For example, the sequence for `n = 3` is as follows:
+      `3 → 10 → 5 → 16 → 8 → 4 → 2 → 1`.
+
+      **Input:** The only input line contains an integer `n`.
+
+      **Output:** Print a line that contains all values of `n` during the
+      algorithm.
+
+      **Constraints:** `1 ≤ n ≤ 10^6`
+
+      ### Sample
+
+      Input:
+      ```text
+      3
+      ```
+
+      Output:
+      ```text
+      3 10 5 16 8 4 2 1
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(k) time, O(k) space (recursive simulation).**
+
+      ```cpp
+      void collatz(long long n, vector<long long>& seq);
+      vector<long long> solve(long long n) {
+          vector<long long> seq;
+          collatz(n, seq);
+          return seq;
+      }
+      void collatz(long long n, vector<long long>& seq) {
+          seq.push_back(n);
+          if (n == 1) return;
+          if (n % 2 == 0) collatz(n / 2, seq);
+          else collatz(3 * n + 1, seq);
+      }
+      ```
+
+      The sequence is *forced* — every next value is fully determined by the rules — so
+      the simplest correct simulation is really the only algorithm there is. This
+      recursive form is the plainest "do exactly what the statement says" version:
+      append the current value, then recurse on the next. It is correct, but for a long
+      trajectory it recurses once per term and so uses `O(k)` extra stack space (still
+      `O(k)` time). For the CSES limit the sequence stays short, but the iterative loop
+      below removes the recursion depth concern entirely.
+
+      **② Optimization — O(k) time, O(k) space (iterative).**
+
+      ```cpp
+      vector<long long> solve(long long n) {
+          vector<long long> seq;
+          while (n > 1) {
+              seq.push_back(n);
+              if (n % 2 == 0) n /= 2;
+              else n = 3 * n + 1;
+          }
+          seq.push_back(1);
+          return seq;
+      }
+      ```
+
+      Same `O(k)` time and `O(k)` space (the returned vector). The iterative `while` loop
+      replaces each recursive step with one plain loop turn, so besides the single
+      returned vector it uses constant extra space. There is no further or alternative
+      algorithm: the Collatz rule set fully determines the next value, so every correct
+      solver is this same forced simulation.
+
+      Reason through the code above with the next block — then trace it on the sample input below.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` returns the whole trajectory as a `vector<long long>`. We use
+      `long long` (not `int`) because `3 * n + 1` can temporarily exceed
+      `n`'s starting magnitude, and staying wide is free.
+
+      The loop mirrors the problem's rules exactly: while `n > 1`, record the
+      current value, then branch on parity — `even → /2`, `odd → 3n+1`.
+      When `n` drops to `1`, we `push_back(1)` and return. The `while (n > 1)`
+      guard plus the trailing `push_back(1)` guarantees `1` is always the last
+      element and appears exactly once.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 3` (the CSES sample).
+
+      **Expected output:** `3 10 5 16 8 4 2 1`.
+
+      **Actual run:**
+
+      | step | `n` | parity | action | seq so far |
+      |------|-----|--------|--------|------------|
+      | 1 | 3 | odd | `3*3+1 = 10` | `[3]` |
+      | 2 | 10 | even | `/2 = 5` | `[3, 10]` |
+      | 3 | 5 | odd | `3*5+1 = 16` | `[3, 10, 5]` |
+      | 4 | 16 | even | `/2 = 8` | `[3, 10, 5, 16]` |
+      | 5 | 8 | even | `/2 = 4` | `[3, 10, 5, 16, 8]` |
+      | 6 | 4 | even | `/2 = 2` | `[3, 10, 5, 16, 8, 4]` |
+      | 7 | 2 | even | `/2 = 1` → exit loop | `[3, 10, 5, 16, 8, 4, 2]` |
+      | 8 | — | — | `push_back(1)` | `[3, 10, 5, 16, 8, 4, 2, 1]` |
+
+      Returned vector matches the expected output exactly.
+  - type: flowchart
+    title: Collatz iteration
+    nodes:
+      - 'Start: n'
+      - n > 1?
+      - n even?
+      - n = n / 2
+      - n = 3n + 1
+      - Record n
+      - Append 1 and return
+    edges:
+      - from: 0
+        to: 1
+        label: ''
+      - from: 1
+        to: 2
+        label: yes
+      - from: 1
+        to: 6
+        label: no
+      - from: 2
+        to: 3
+        label: yes
+      - from: 2
+        to: 4
+        label: no
+      - from: 3
+        to: 5
+        label: ''
+      - from: 4
+        to: 5
+        label: ''
+      - from: 5
+        to: 1
+        label: loop
+type: content
+---
+

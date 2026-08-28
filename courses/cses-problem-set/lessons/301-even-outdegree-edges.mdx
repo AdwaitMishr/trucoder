@@ -1,0 +1,281 @@
+---
+id: even-outdegree-edges
+title: Even Outdegree Edges
+difficulty: hard
+order: 301
+tags:
+  - advanced-graph
+  - orientation
+  - parity
+  - eulerian
+  - spanning-tree
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — orienting edges so every outdegree is even
+
+      We have an undirected graph and must pick a direction for every edge so that, in the
+      resulting directed graph, **each node's outdegree is even**. The outdegree of a node is
+      the number of edges leaving it.
+
+      **The one parity invariant that decides feasibility.** In any *connected component* with
+      `k` edges, the sum of all outdegrees equals exactly `k`: every edge contributes exactly one
+      unit of outdegree — to whichever endpoint is its tail. If every outdegree is even, that sum
+      is even, so `k` must be even.
+
+      > **A component is satisfiable ⟺ it contains an even number of edges.**
+
+      The hard half is that this condition is also **sufficient**. The clean weapon is a
+      **spanning tree plus a bottom-up parity fix**:
+
+      1. Build a spanning tree (e.g. with DFS). Every non-tree edge can be oriented **arbitrarily**
+         (say from ancestor to descendant in the DFS). These orientations are fixed and free.
+      2. Now the tree edges are still undecided, and each vertex has **exactly one** undecided tree
+         edge — the one to its parent in the spanning tree.
+      3. Process tree edges **bottom-up** (deepest vertices first). Before fixing vertex `v`, all
+         edges *below* it are already oriented, so `v`'s partial outdegree parity is known. If it is
+         **odd**, orient `v → parent` (this adds one outgoing edge at `v`, making it even). If it is
+         **even**, orient `parent → v` (leaving `v` even). Either way `v` finishes even, and the
+         only "cost" is that the parent's parity may flip.
+      4. The root has no parent edge. Because the component's edge count is even and every other
+         vertex is even, the root's outdegree = `k − (sum of the others)` is even automatically.
+
+      **Why "odd component" is truly impossible:** one component with an odd number of edges forces
+      the sum of its outdegrees to be odd, so at least one vertex in it has an odd outdegree no
+      matter how we orient.
+
+      **Complexity.** One DFS to build the spanning forest plus one bottom-up pass:
+      **O(n + m)** time and **O(n + m)** space for the adjacency list.
+
+      :::tip
+      **Interview tip:** "orient edges so every vertex has even outdegree" (or even indegree, or
+      odd — all the same trick) is a classic **parity + spanning-tree fixing** question. The two
+      moves interviewers look for are (a) the invariant that each *component* needs an even number
+      of edges, and (b) "give every non-root vertex a free edge to its parent, then fix parities
+      bottom-up." The same *tree-edge parity fixing* pattern reappears in problems about assigning
+      values so every vertex's local sum has a prescribed parity.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an undirected graph, choose a direction for each edge so that in the resulting
+      directed graph each node has an even outdegree (the number of edges coming out of that node).
+
+      **Input.** The first input line has two integers `n` and `m`: the number of nodes and edges.
+      The nodes are numbered `1, 2, …, n`. After this, there are `m` lines describing the edges,
+      each with two integers `a` and `b`: there is an edge between nodes `a` and `b`. The graph is
+      simple — at most one edge between any two nodes, and no self-loops.
+
+      **Output.** Print `m` lines describing the directions of the edges. Each line has two integers
+      `a` and `b`: there is an edge from node `a` to node `b`. Any valid solution is accepted. If no
+      solution exists, print only `IMPOSSIBLE`.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 10^5`
+      - `1 ≤ m ≤ 2·10^5`
+      - `1 ≤ a, b ≤ n`
+
+      ### Sample
+
+      **Input:**
+      ```
+      4 4
+      1 2
+      2 3
+      3 4
+      1 4
+      ```
+
+      **Output:**
+      ```
+      1 2
+      3 2
+      3 4
+      1 4
+      ```
+
+      (Here `1 → 2`, `3 → 2`, `3 → 4`, `1 → 4` gives outdegrees `2, 0, 2, 0` — all even.) There is a
+      single component with `4` edges (even), so a solution exists.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate all 2^m orientations, O(2^m · (m + n)).** Try every way of
+      orienting the `m` edges with a bitmask; for each, count outgoing edges per node and accept
+      the first orientation where every outdegree is even. Trivially correct but exponential —
+      hopeless for `m ≈ 2·10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n, m; cin >> n >> m;
+          vector<pair<int,int>> e(m);
+          for(int i=0;i<m;i++){ cin>>e[i].first>>e[i].second; --e[i].first; --e[i].second; }
+          for(int mask=0; mask < (1<<m); ++mask){
+              vector<int> out(n, 0);
+              for(int i=0;i<m;i++){
+                  if(mask>>i & 1) out[e[i].second]++;   // orient b -> a
+                  else            out[e[i].first]++;    // orient a -> b
+              }
+              bool ok=true;
+              for(int d: out) if(d & 1){ ok=false; break; }
+              if(!ok) continue;
+              for(int i=0;i<m;i++){
+                  if(mask>>i & 1) cout<<e[i].second+1<<" "<<e[i].first+1<<"\n";
+                  else            cout<<e[i].first+1 <<" "<<e[i].second+1<<"\n";
+              }
+              return 0;
+          }
+          cout << "IMPOSSIBLE\n";
+      }
+      ```
+      **O(2^m · (m + n))** — correct but unusable beyond ~25 edges.
+
+      **② Optimization — parity feasibility + spanning-tree fixing, O(n + m) (submission).**
+      Decide feasibility by the component parity: if any connected component has an odd number of
+      edges, print `IMPOSSIBLE`. Otherwise orient non-tree edges arbitrarily, then fix tree edges
+      bottom-up so every non-root vertex becomes even (the root is then automatically even).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      struct DSU {
+          vector<int> p, sz;
+          DSU(int n): p(n), sz(n,1){ iota(p.begin(),p.end(),0); }
+          int f(int x){ return p[x]==x ? x : p[x]=f(p[x]); }
+          void u(int a,int b){ a=f(a); b=f(b); if(a==b) return; if(sz[a]<sz[b]) swap(a,b); p[b]=a; sz[a]+=sz[b]; }
+      };
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<pair<int,int>> edge(m);
+          vector<vector<pair<int,int>>> adj(n);
+          DSU d(n);
+          for(int i=0;i<m;i++){
+              int a,b; cin>>a>>b; --a; --b;
+              edge[i]={a,b}; adj[a].push_back({b,i}); adj[b].push_back({a,i}); d.u(a,b);
+          }
+          // 1) feasibility: every component must hold an even number of edges
+          vector<int> cnt(n,0);
+          for(auto&[a,b]: edge) cnt[d.f(a)]++;
+          for(int i=0;i<n;i++) if(cnt[d.f(i)] & 1) { cout << "IMPOSSIBLE\n"; return 0; }
+
+          // 2) spanning forest + post-order (children before parents)
+          vector<char> vis(n,0), inTree(m,0);
+          vector<int> parEdge(n,-1), post;
+          function<void(int)> dfs=[&](int u){
+              vis[u]=1;
+              for(auto&[v,i]: adj[u]) if(!vis[v]){ inTree[i]=1; parEdge[v]=i; dfs(v); }
+              post.push_back(u);
+          };
+          for(int s=0;s<n;s++) if(!vis[s]) dfs(s);
+
+          // 3) orient non-tree edges arbitrarily as a->b (as stored)
+          vector<int> dir(m,-1);          // 0 => stored a->b ; 1 => reversed b->a
+          vector<char> out(n,0);          // outdegree parity
+          for(int i=0;i<m;i++) if(!inTree[i]){ dir[i]=0; out[edge[i].first]^=1; }
+
+          // 4) fix tree edges bottom-up: each vertex owns the edge to its parent
+          for(int u: post){
+              int pe = parEdge[u]; if(pe==-1) continue;
+              int a = edge[pe].first, b = edge[pe].second;
+              if(out[u] & 1){                       // need one more outgoing edge from u  -> u -> parent
+                  if(a==u) dir[pe]=0, out[a]^=1;
+                  else     dir[pe]=1, out[b]^=1;
+              } else {                              // keep u even -> parent -> u
+                  if(a==u) dir[pe]=1, out[b]^=1;
+                  else     dir[pe]=0, out[a]^=1;
+              }
+          }
+          for(int i=0;i<m;i++){
+              int a=edge[i].first,b=edge[i].second;
+              if(dir[i]==0) cout<<a+1<<" "<<b+1<<"\n";
+              else          cout<<b+1<<" "<<a+1<<"\n";
+          }
+          return 0;
+      }
+      ```
+      **O(n + m)** time and **O(n + m)** space — the submission tier.
+
+      **④ Alternative viewpoint — Eulerian-cycle decomposition.** If every component has an even
+      number of edges, orient a spanning tree and fix parities as in tier ② — that is the cleanest
+      constructive route. A fancier way to *see* sufficiency: an even-edge component admits an
+      Eulerian *tour* of its edges; orienting the tour's edges along the traversal makes every
+      node's outdegree odd, not even, so this needs the extra tree-fixing step rather than replacing
+      it. Because tier ② is already linear and fully general, we ship it and treat the parity
+      theorem as the conceptual ④ note.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` runs in four phases:
+
+      1. **Feasibility.** The DSU unions all `m` edges, then `cnt[root]` counts edges per component.
+         `cnt[root] & 1` odd for any root → `IMPOSSIBLE`. This is the single necessary-and-sufficient
+         parity test.
+      2. **Spanning forest.** DFS marks the tree edges (`inTree`), records each vertex's parent edge
+         (`parEdge[v]`), and pushes vertices in **post-order** so children come before parents — the
+         exact order the bottom-up fix needs.
+      3. **Free orientations.** Every non-tree edge is oriented as `a → b` as read in and toggles the
+         outdegree parity of `a`. These edges are already "decided" before the fix runs.
+      4. **The fix.** Iterating post-order, each non-root vertex `u` looks at its outdegree parity and
+         orients its single undecided edge (to its parent) accordingly: odd → point it away from `u`;
+         even → point it toward `u`. Toggling `out[u]` is enough because the chosen direction either
+         adds one to `u`'s parity or leaves it unchanged; the parent absorbs the change later.
+
+      The root is never explicitly fixed: it works out because the component's edge parity is even,
+      so the sum of all the even non-root outdegrees leaves an even root outdegree.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 4`, `m = 4`, edges in input order `1-2, 2-3, 3-4, 1-4`. One component,
+      `4` edges (even) → feasible.
+
+      **Spanning tree (DFS from node 1):** visit `1 → 2 → 3 → 4`. Tree edges `{1-2, 2-3, 3-4}`; the
+      only non-tree edge is `1-4`. Orient it arbitrarily as `1 → 4`; `out[1]` flips to **odd**.
+
+      **Bottom-up fix (post-order `4, 3, 2`, skipping root `1`):**
+      - `u = 4`: `out[4] = 0` (even). Orient its parent edge `3-4` as `3 → 4` (parent → child); this
+        flips `out[3]` to **odd**.
+      - `u = 3`: `out[3]` is now odd → orient parent edge `2-3` as `3 → 2` (child → parent), making
+        `out[3]` even again.
+      - `u = 2`: `out[2] = 0` (even). Orient parent edge `1-2` as `1 → 2`; this flips `out[1]` to even.
+      - Root `1`: skipped — it is already even (component edge count even).
+
+      **Resulting orientation (in input order):** `1 → 2`, `3 → 2`, `3 → 4`, `1 → 4`, printed as:
+
+      ```
+      1 2
+      3 2
+      3 4
+      1 4
+      ```
+
+      **Outdegrees:** node 1 leaves `1 → 2, 1 → 4` → `2`; node 2 is only *entered* (`1 → 2`, `3 → 2`)
+      → `0`; node 3 leaves `3 → 2, 3 → 4` → `2`; node 4 is only entered → `0`. All even.
+
+      **Actual vs expected:** this is exactly the CSES sample output, so it is accepted verbatim. Had we
+      produced any other valid orientation it would still pass, since CSES accepts any solution. For an
+      odd-edge component — e.g. a single edge `1-2` — the program prints `IMPOSSIBLE`, because one of
+      its two nodes is forced to have outdegree `1`.
+
+  - type: mcq
+    prompt: "Why can a connected component with an odd number of edges never be oriented with all even outdegrees?"
+    options:
+      - "Because the sum of all outdegrees in the component equals its edge count, and an odd sum cannot be made of only even degrees."
+      - "Because odd-edge components have an odd number of nodes, and each node needs an even number of neighbors."
+      - "Because a component must always be a cycle, and cycles only come in even length."
+      - "Because vertices in odd-edge components all become leaves."
+    answer: 0
+    explanation: "Every directed edge contributes exactly 1 to the outdegree sum, so the sum of all outdegrees in a component equals the number of its edges. If all were even the sum would be even, contradiction. The spanning-tree fix exploits sufficiency: give every non-root vertex the free edge to its parent, fix parities bottom-up, and the parity of the root then matches the component's edge count."
+type: content
+---

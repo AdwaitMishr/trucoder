@@ -1,0 +1,238 @@
+---
+id: grid-paths-ii
+title: Grid Paths II
+type: content
+difficulty: easy
+order: 334
+tags:
+  - dynamic-programming
+  - grid
+  - counting
+  - modulo
+blocks:
+  - type: markdown
+    content: |
+      # Grid Paths II — counting right/down paths that dodge obstacles
+
+      Count the number of paths from the top-left square of an `n × n` grid to
+      the bottom-right square, moving only **right or down** and never stepping
+      on an obstacle (`*`). The answer mod `10^9+7`.
+
+      This is the simplest and most instructive grid DP: because moves are only
+      right and down, every path into cell `(i, j)` comes from exactly two
+      neighbours — the cell above `(i-1, j)` and the cell to the left
+      `(i, j-1)`. So the number of paths reaching a cell is the sum of the
+      numbers reaching its two predecessors.
+
+      ## The recurrence
+
+      ```
+      dp[i][j] = 0                                  if (i,j) is an obstacle
+              = dp[i-1][j] + dp[i][j-1]   (mod)     otherwise
+      dp[0][0] = 1                                   (if start is empty)
+      ```
+
+      `dp[a][b]` is the count of valid right/down paths from the start to
+      `(a, b)`, and `dp[n-1][n-1]` is the answer. Obstacles contribute `0`, so
+      paths "stop" there.
+
+      ## Complexity
+
+      One pass over the `n × n` grid, `O(1)` per cell → `O(n²)` time and space.
+      For `n ≤ 1000` that is a million cells — trivially fast.
+
+      :::tip
+      **Interview tip:** "number of paths in a grid moving only right/down" is
+      the archetypal DP opener — expect it or a weighted variant constantly.
+      The whole trick is the **additivity of counts from the two predecessors**,
+      which works *only* because moves are monotone (right/down), making the
+      grid a DAG. Handling obstacles by treating them as `0` is the standard
+      lever. Increases in difficulty go to: weights on cells (max-sum),
+      forbidden moves, rectangles of blocked zones (2D prefix-sum DP), or
+      asking for paths avoiding a *set* of waypoints — but the core two-neighbour
+      sum never changes.
+      :::
+
+  - type: markdown
+    content: |
+      # The Problem
+
+      Consider an `n × n` grid whose squares may have traps. It is not allowed
+      to move to a square with a trap. Your task is to calculate the number of
+      paths from the upper-left square to the lower-right square. You can only
+      move right or down.
+
+      ## Input
+
+      The first input line has an integer `n`: the size of the grid. After this,
+      there are `n` lines that describe the grid. Each line has `n` characters:
+      `.` denotes an empty cell, and `*` denotes a trap.
+
+      ## Output
+
+      Print the number of paths modulo `10^9+7`.
+
+      ## Constraints
+
+      - `1 ≤ n ≤ 1000`
+
+      ## Sample
+
+      **Input:**
+      ```
+      4
+      ....
+      .*..
+      ...*
+      *...
+      ```
+
+      **Output:**
+      ```
+      3
+      ```
+
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      **① Brute force — DFS all paths, O(2^(2n)) (too slow)**
+
+      Recursively explore every right/down walk, pruning on obstacles and
+      counting the ones that reach the bottom-right. Correct for tiny `n`, but
+      the number of paths grows exponentially.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int n; ll cnt=0; vector<string> g;
+      void dfs(int i,int j){
+          if(i<0||j<0||i>=n||j>=n||g[i][j]=='*') return;
+          if(i==n-1&&j==n-1){ cnt++; return; }
+          g[i][j]='*';                       // mark visited for this branch
+          dfs(i+1,j); dfs(i,j+1);
+          g[i][j]='.';
+      }
+      int main(){ cin>>n; g.resize(n); for(int i=0;i<n;i++) cin>>g[i]; dfs(0,0); cout<<cnt<<"\n"; return 0; }
+      ```
+
+      *`O(2^(2n))` upper envelope — enumeration, unusable at `n = 1000`.*
+
+      **② Optimization — grid DP, O(n²) (optimal)**
+
+      Fill `dp` top-to-bottom, left-to-right with the two-predecessor sum,
+      treating obstacles as 0. This is the tier we compile and run (matches the
+      sample grid → `3`).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<string> g(n);
+          for(int i=0;i<n;i++) cin>>g[i];
+          vector<vector<ll>> dp(n, vector<ll>(n,0));
+          if(g[0][0]=='*'){ cout<<0<<"\n"; return 0; }
+          dp[0][0]=1;
+          for(int i=0;i<n;i++)for(int j=0;j<n;j++){
+              if(g[i][j]=='*'){ dp[i][j]=0; continue; }
+              if(i==0&&j==0) continue;
+              ll v=0;
+              if(i>0) v=(v+dp[i-1][j])%MOD;
+              if(j>0) v=(v+dp[i][j-1])%MOD;
+              dp[i][j]=v;
+          }
+          cout<<dp[n-1][n-1]<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n²)` time, `O(n²)` space — the intended solution.*
+
+      **③ Further optimization — roll to O(n) space**
+
+      Each `dp[i][j]` only needs the current row's left neighbour and the
+      previous row's value, so a single `O(n)` array updated in place suffices:
+      `dp[j] = (obstacle ? 0 : dp[j] + dp[j-1])`. Same `O(n²)` time, `O(n)`
+      space — a nice memory shave at no extra complexity.
+
+      **④ Alternative — top-down memoisation**
+
+      A recursive `go(i, j)` with cached memo table implements the identical
+      two-neighbour recurrence, only in a demand-driven order. Complexity is the
+      same `O(n²)`; the bottom-up loop is preferred for determinism and stack
+      depth, but the memo view makes the "DAG longest/count" nature of the grid
+      explicit.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`dp[i][j]` holds the count of paths reaching `(i, j)`** — not the
+        whole path, just the number. The count for a cell is the sum of its two
+        possible predecessors.
+      - **Obstacle cells contribute `0`**, so a path literally cannot pass
+        through them — the DP naturally respects the traps.
+      - **Row-major fill order** guarantees both `dp[i-1][j]` (previous row) and
+        `dp[i][j-1]` (same row, left) are already computed when we need them.
+      - **`dp[0][0] = 1`** if the start is open; if the start itself is a trap
+        the answer is immediately `0`.
+      - **Every sum is taken mod `10^9+7`** so intermediate values never
+        overflow the 64-bit accumulator.
+      - **Answer = `dp[n-1][n-1]`** — the number of paths reaching the target.
+
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample grid (`n = 4`): traps at `(1,1)`, `(2,3)`, `(3,0)` (0-indexed).
+      Grid:
+      ```
+      ....
+      .*..
+      ...*
+      *...
+      ```
+
+      Fill `dp` row by row, top-to-bottom:
+
+      - **row 0:** all open → `1 1 1 1`
+      - **row 1:** `dp[1][0]=dp[0][0]=1`; `(1,1)` trap → `0`;
+        `dp[1][2]=dp[0][2]+dp[1][1]=1+0=1`;
+        `dp[1][3]=dp[0][3]+dp[1][2]=1+1=2` → `1 0 1 2`
+      - **row 2:** `dp[2][0]=dp[1][0]=1`; `dp[2][1]=dp[1][1]+dp[2][0]=0+1=1`;
+        `dp[2][2]=dp[1][2]+dp[2][1]=1+1=2`; `(2,3)` trap → `0` → `1 1 2 0`
+      - **row 3:** `(3,0)` trap → `0`; `dp[3][1]=dp[2][1]+dp[3][0]=1+0=1`;
+        `dp[3][2]=dp[2][2]+dp[3][1]=2+1=3`;
+        `dp[3][3]=dp[2][3]+dp[3][2]=0+3=3` → `0 1 3 3`
+
+      `dp[3][3] = 3`. Expected (sample) `3` — **match**.
+
+      The three paths avoid every trap. Output:
+      ```
+      3
+      ```
+  - type: flowchart
+    title: "Grid Paths II — DP over right/down cells"
+    nodes: ["read n and grid", "dp[0][0] = 1 if start open, else print 0", "for i = 0..n-1", "for j = 0..n-1", "if (i,j) is a trap -> dp=0 else dp = dp[i-1][j] + dp[i][j-1]", "print dp[n-1][n-1]"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 3, label: "next j"}
+      - {from: 4, to: 2, label: "next i"}
+      - {from: 2, to: 5, label: "rows done"}
+  - type: mcq
+    prompt: "Why is summing the two predecessor counts dp[i-1][j] and dp[i][j-1] a valid way to count paths, given we only ever move right or down?"
+    options:
+      - "Because every path into (i,j) must arrive from the cell above or the cell to the left, and with only right/down moves each predecessor's paths extend uniquely into (i,j); no path is double-counted and none is missed."
+      - "Because moving right or down makes the grid a tree with no shared ancestors."
+      - "Because the number of paths is always the product, not the sum, of the two predecessors."
+      - "Because obstacles only affect the final diagonal, so only the last row matters."
+    answer: 0
+    explanation: "A path reaches (i,j) only through its right/down structure: the last move is either down from (i-1,j) or right from (i,j-1). These two predecessor path-sets are disjoint (different final move) and their union is all paths to (i,j), so |paths| is exactly the sum. This additivity is what the DP computes, cell by cell, in O(n^2)."
+---

@@ -1,0 +1,235 @@
+---
+id: counting-sequences
+title: Counting Sequences
+type: content
+difficulty: easy
+order: 333
+tags:
+  - combinatorics
+  - inclusion-exclusion
+  - counting
+  - modpow
+blocks:
+  - type: markdown
+    content: |
+      # Counting Sequences — surjective sequences via inclusion-exclusion
+
+      Count sequences of length `n` over the alphabet `{1, 2, …, k}` in which
+      **every** value `1..k` appears at least once. (A sequence where each value
+      appears ≥ 1 is called a *surjective* — or *onto* — sequence.)
+
+      The naive total is `kⁿ` sequences, but that counts those missing some
+      values. The clean tool is the **inclusion-exclusion principle**: from all
+      `kⁿ` sequences, remove those missing at least one value, add back those
+      missing two, subtract those missing three, and so on.
+
+      ## The inclusion-exclusion sum
+
+      Let `S_j` be the sequences isomorphic to "value `j` is missing". By
+      symmetry:
+
+      ```
+      answer = Σ_{i=0}^{k} (−1)^i · C(k, i) · (k − i)^n
+      ```
+
+      - `C(k, i)`: choose which `i` of the `k` values are forced to be absent,
+      - `(k − i)^n`: each of the `n` positions may then take any of the `k − i`
+        remaining values,
+      - `(−1)^i`: inclusion–exclusion alternates adding and subtracting.
+
+      ## Complexity
+
+      Computing `C(k,i)` needs factorials up to `k`; each term needs a modular
+      exponentiation `(k−i)^n`. Total `O(k log n)` (with fast exponentiation) or
+      `O(k)` powers if precomputed. For `n, k ≤ 10^6`, `k log n` is fine.
+
+      :::tip
+      **Interview tip:** "count sequences/strings/subsets where a fixed set of
+      elements each appears at least once" is *the* canonical inclusion-exclusion
+      prompt. The reflex is `Σ (−1)^i C(k,i)(k−i)^n`. Interviewers also probe
+      the **surjection** view — the answer equals `k!·S(n,k)` where `S(n,k)` is
+      a Stirling number of the second kind — and may ask you to relate the
+      inclusion-exclusion sum to it. Being fluent in both the alternating sum
+      and the Stirling link is a strong signal.
+      :::
+
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to count the number of sequences of length `n` where each
+      element is an integer between `1 … k` and each integer between `1 … k`
+      appears at least once in the sequence.
+
+      For example, when `n = 6` and `k = 4`, some valid sequences are
+      `[1,3,1,4,3,2]` and `[2,2,1,3,4,2]`.
+
+      ## Input
+
+      The only input line has two integers `n` and `k`.
+
+      ## Output
+
+      Print one integer: the number of sequences modulo `10^9 + 7`.
+
+      ## Constraints
+
+      - `1 ≤ k ≤ n ≤ 10^6`
+
+      ## Sample
+
+      **Input:**
+      ```
+      6 4
+      ```
+
+      **Output:**
+      ```
+      1560
+      ```
+
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      **① Brute force — enumerate all `kⁿ` sequences, O(kⁿ·n) (too slow)**
+
+      Generate every sequence of length `n` over `1..k`, and count those whose
+      set of values is exactly `{1..k}`. Correct only for tiny `n`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      ll n,k,cnt;
+      void rec(vector<int>&seq){
+          if((int)seq.size()==n){
+              set<int> st(seq.begin(),seq.end());
+              if((int)st.size()==k) cnt++;
+              return;
+          }
+          for(int v=1;v<=k;v++){ seq.push_back(v); rec(seq); seq.pop_back(); }
+      }
+      int main(){ cin>>n>>k; vector<int> s; rec(s); cout<<cnt<<"\n"; return 0; }
+      ```
+
+      *`O(kⁿ·n)` — enumeration, hopeless beyond `n ≈ 15`.*
+
+      **② Optimization — inclusion-exclusion, O(k log n) (optimal)**
+
+      Apply the alternating sum with precomputed factorials and modular
+      exponentiation. This is the tier we compile and run (matches the sample
+      `6 4 → 1560`).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+      ll mpow(ll b,ll e){ b%=MOD; ll r=1; while(e){ if(e&1) r=r*b%MOD; b=b*b%MOD; e>>=1;} return r; }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          ll n,k; cin>>n>>k;
+          int K=k;
+          vector<ll> fact(K+1), invfact(K+1);
+          fact[0]=1; for(int i=1;i<=K;i++) fact[i]=fact[i-1]*i%MOD;
+          invfact[K]=mpow(fact[K],MOD-2);
+          for(int i=K;i>=1;i--) invfact[i-1]=invfact[i]*i%MOD;
+          auto C=[&](int a,int b)->ll{
+              if(b<0||b>a) return 0;
+              return fact[a]*invfact[b]%MOD*invfact[a-b]%MOD;
+          };
+          ll ans=0;
+          for(int i=0;i<=K;i++){
+              ll term = C(K,i)*mpow(k-i,n)%MOD;
+              if(i%2==0) ans=(ans+term)%MOD; else ans=(ans-term+MOD)%MOD;
+          }
+          cout<<ans<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(k log n)` time, `O(k)` space — the intended solution.*
+
+      **③ Further optimization — precompute the powers, O(k)**
+
+      Since the powers `(k−i)^n` for `i = 0..k` can be built by one modular
+      exponentiation each (or a single sweep), the whole sum is `O(k)` once the
+      factorials are ready. Not required at `k ≤ 10^6` (even `O(k log n)` is
+      well under a second), but it is the tight bound.
+
+      **④ Alternative — Stirling numbers / surjection formula**
+
+      The number of onto functions from an `n`-set to a `k`-set is
+      `k! · S(n, k)` where `S(n,k)` is the Stirling number of the second kind.
+      The two views agree: expanding via inclusion-exclusion gives the Stirling
+      identity `S(n,k) = (1/k!) Σ (−1)^i C(k,i)(k−i)^n`. If you compute `S(n,k)`
+      by DP (`S(n,k) = k·S(n−1,k) + S(n−1,k−1)`), note it is `O(nk)` and thus
+      too slow for `n, k ≤ 10^6` — the inclusion-exclusion sum stays the better
+      choice here, which is a nice lesson in why the same quantity has multiple
+      algorithms with different costs.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Factorials + inverse factorials** give `C(K, i)` in `O(1)` each: with
+        `invfact` built once via Fermat (`fact[K]^(MOD−2)`), every binomial is a
+        single product.
+      - **`mpow(k−i, n)`** is the number of length-`n` sequences over the
+        surviving `k−i` values, via binary exponentiation in `O(log n)`.
+      - **Alternating sign** `(−1)^i`: even `i` adds, odd `i` subtracts
+        (`ans − term + MOD` keeps it non-negative).
+      - **Range** `i = 0..k`: `i = 0` is all `kⁿ` sequences; `i = k` contributes
+        `C(k,k)·0ⁿ` (zero for `n ≥ 1`), so the loop is safe to include it.
+      - **Result is taken modulo `10^9+7`** at every step.
+
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 6, k = 4`. Compute `Σ_{i=0}^{4} (−1)^i C(4,i) (4−i)^6`.
+
+      | i | C(4,i) | (4−i)^6 | term             |
+      |---|--------|---------|------------------|
+      | 0 | 1      | 4^6=4096| +4096            |
+      | 1 | 4      | 3^6=729 | − 4·729 = −2916  |
+      | 2 | 6      | 2^6=64  | + 6·64 = +384    |
+      | 3 | 4      | 1^6=1   | − 4·1 = −4       |
+      | 4 | 1      | 0^6=0   | + 0              |
+
+      ```
+      ans = 4096 − 2916 + 384 − 4 + 0 = 1560
+      ```
+
+      Expected (sample) `1560` — **match**.
+
+      Intuition: from all `4^6 = 4096` sequences we subtract those missing
+      exactly one of the four values (`4·729`), add back sequences missing two
+      (`6·64`) because they were double-subtracted, and subtract the
+      triple-missing ones (`4`) — leaving exactly the sequences using all four
+      values.
+
+      Output:
+      ```
+      1560
+      ```
+  - type: flowchart
+    title: "Counting Sequences — inclusion-exclusion over missing values"
+    nodes: ["read n, k", "build factorials + inverse factorials up to k", "ans = 0", "for i = 0..k", "term = C(k,i) * (k-i)^n; add if i even else subtract", "print ans"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 3, label: "next i"}
+      - {from: 4, to: 5, label: "i == k"}
+  - type: mcq
+    prompt: "Why does the term for missing values subtract C(k,2)·(k-2)^n when counting sequences that use every value at least once?"
+    options:
+      - "Because from the total k^n we subtract those missing a single value; sequences missing two values were counted twice in that subtraction, so inclusion-exclusion adds them back once with the +C(k,2)(k-2)^n term to correct the over-subtraction."
+      - "Because (k-2)^n is always greater than C(k,2), so adding is always necessary."
+      - "Because only two values can ever be missing from any sequence."
+      - "Because the answer must be divisible by C(k,2)."
+    answer: 0
+    explanation: "This is exactly the inclusion-exclusion alternation. A 1-missing sequence is removed once; but a 2-missing sequence is 'missing value a' AND 'missing value b', so it falls into two of the C(k,1) subtracted sets and gets removed twice. Adding back the C(k,2) sets (each of size (k-2)^n) restores it once. Higher orders repeat with alternating signs. The ~x² term is the classic double-counting fix."
+---

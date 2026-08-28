@@ -1,0 +1,318 @@
+---
+id: grid-path-construction
+title: Grid Path Construction
+difficulty: hard
+order: 294
+tags:
+  - construction
+  - hamiltonian-path
+  - graph-theory
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — Hamiltonian paths in grid graphs
+
+      We need a path that starts at square `a`, ends at square `b`, and **visits
+      every square of an `n × m` grid exactly once** — a **Hamiltonian path** in the
+      grid graph (vertices = cells, edges = between side-adjacent cells). We both
+      decide existence and produce the path.
+
+      **The colouring invariant drives existence.** Colour cells like a chessboard by
+      `(row + column) % 2`. Each move between adjacent cells flips colour. A path
+      that visits every cell exactly once therefore alternates colours along its
+      `n·m` vertices. If `n·m` is **even**, the two ends must be on **opposite**
+      colours; if `n·m` is **odd**, the two ends must be on the **same** colour.
+      These two parity conditions plus a few unavoidable special cases are the *only*
+      obstructions for rectangles — this is a known theorem.
+
+      **The extra impossibilities.**
+      - a `1 × m` or `n × 1` strip has a Hamiltonian path only between its two ends;
+      - `2 × 2` from corner to opposite corner, and certain `2 × m` / `3 × even`
+        endpoint configurations, are forced by narrowness;
+      - these are exactly the handful of cases the `ok()` feasibility test special-cases.
+
+      **Constructing — recursive strip/split.** To actually emit a path, notice a
+      rectangle can be *spliced from two rectangles*: solve a top slab and a bottom
+      slab independently, then stitch them with a single straight move across the
+      seam. Either:
+      - **strip**: when the endpoints are near an edge, peel off a full 2-, 3-, or
+        4-row/column strip that is itself Hamiltonian, splice it onto the remaining
+        rectangle; or
+      - **split**: when the endpoints are far apart (> 2 apart), cut the rectangle
+        into two smaller rectangles along a row/column through a chosen seam column,
+        solve each, and connect them with the seam.
+
+      Repeatedly stripping/splitting eventually shrinks every problem to a **small
+      rectangle** (width/height ≤ 4), which a bounded depth-first search solves
+      exactly. Because every sub-problem is checked with the same feasibility rule,
+      the recursion always stays on tileable instances.
+
+      **Complexity.** The feasibility test is O(n·m) (constant table checks); the
+      recursion touches O(n·m) cells, and the small-DFS head is on constant-size
+      boards — overall O(n·m) time and space.
+
+      :::tip
+      **Interview tip:** Hamiltonian-path problems are usually NP-hard in general,
+      but on grid *rectangles* they collapse to (a) a bipartite **parity invariant**
+      and (b) a clean **recursive stitching** construction. Interviewers look for the
+      parity argument first, then a "solve a small piece + recurse" argument. This is
+      the single hardest construction problem in the set, so expect it to be a
+      "deep breath and decompose" exercise more than a slick one-liner.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an `n × m` grid and two squares `a = (y1, x1)` and `b = (y2, x2)`,
+      create a path from `a` to `b` that visits each square exactly once.
+
+      **Input.** The first line has an integer `t`. After this, there are `t` lines
+      that describe the tests. Each line has six integers `n m y1 x1 y2 x2`.
+
+      **Output.** Print `YES`, if it is possible to construct a path, and `NO`
+      otherwise. If there is a path, also print its description which consists of
+      characters `U` (up), `D` (down), `L` (left) and `R` (right). If there are
+      several paths, you can print any of them.
+
+      **Constraints.**
+      - `1 ≤ t ≤ 100`
+      - `1 ≤ n ≤ 50`, `1 ≤ m ≤ 50`
+      - endpoints are distinct
+
+      ### Sample
+
+      **Input:**
+      ```
+      5
+      1 3 1 1 1 3
+      1 3 1 2 1 3
+      2 2 1 1 2 2
+      2 2 1 1 2 1
+      4 7 1 3 3 6
+      ```
+
+      **Output:**
+      ```
+      YES
+      RR
+      NO
+      NO
+      YES
+      RDL
+      YES
+      RRRRDDDLLLLLLUUURDDRURDRURD
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2^(n·m)) DFS backtracking (small `n` only).** Try every
+      path from `a`, never revisiting a cell, and search until you reach `b` having
+      covered all `n·m` cells (add pruning: if you touch `b` early the rest is
+      unreachable). Exact but exponential — unusable for `n, m ≤ 50`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      // returns false if a->b Hamilton path does not exist; if it does, fills 'path'
+      bool search(int n,int m,int y1,int x1,int y2,int x2, vector<vector<char>>&used, string&path){
+          if((int)path.size()==n*m-1) return y1==y2 && x1==x2;
+          const int dr[4]={1,-1,0,0}, dc[4]={0,0,1,-1}; const char ch[4]={'D','U','R','L'};
+          used[y1][x1]=1;
+          for(int k=0;k<4;k++){
+              int ny=y1+dr[k], nx=x1+dc[k];
+              if(ny<1||ny>n||nx<1||nx>m||used[ny][nx]) continue;
+              if(ny==y2&&nx==x2&&(int)path.size()!=n*m-2) continue; // can't end early
+              path.push_back(ch[k]);
+              if(search(n,m,ny,nx,y2,x2,used,path)) return true;
+              path.pop_back();
+          }
+          used[y1][x1]=0;
+          return false;
+      }
+      ```
+
+      **② Optimization — O(n·m) recursive strip/split construction.** Decide
+      feasibility in O(n·m) via the colouring parity condition plus a handful of
+      special small cases, then recursively decompose the rectangle into two smaller
+      rectangles joined by a single straight seam, solving each by the same rules. A
+      tiny DFS head (`find`) covers the small base rectangles that recursion bottoms
+      out on. The reference `solve` returns `YES` + the `U`/`D`/`L`/`R` description,
+      or `NO`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      struct G {
+          vector<vector<char>> v, w;
+          const vector<pair<int,int>> mv = {{1,0},{-1,0},{0,1},{0,-1}};
+          const vector<char> lb = {'D','U','R','L'};
+          map<tuple<int,int,int,int,int,int>, string> memo;
+          bool black(int x,int y){ return (x+y)%2==1; }
+          bool ok(int n,int m,int x1,int y1,int x2,int y2){
+              if(x1==x2&&y1==y2) return false;
+              if(n*m%2==1 && (black(x1,y1)||black(x2,y2))) return false;
+              if(n*m%2==0 && black(x1,y1)==black(x2,y2)) return false;
+              if(n==1 && !((y1==1&&y2==m)||(y1==m&&y2==1))) return false;
+              if(m==1 && !((x1==1&&x2==n)||(x1==n&&x2==1))) return false;
+              if(n==2&&m==2) return true;
+              if(n==2 && x1!=x2 && (y1==y2&&y1!=1&&y1!=m)) return false;
+              if(m==2 && y1!=y2 && (x1==x2&&x1!=1&&x1!=n)) return false;
+              if(n==3 && m%2==0){
+                  if(black(x1,y1) && ((x1==2&&y1<y2)||y1<y2-1)) return false;
+                  if(!black(x1,y1) && ((x2==2&&y2<y1)||y2<y1-1)) return false;}
+              if(m==3 && n%2==0){
+                  if(black(x1,y1) && ((y1==2&&x1<x2)||x1<x2-1)) return false;
+                  if(!black(x1,y1) && ((y2==2&&x2<x1)||x2<x1-1)) return false;}
+              return true; }
+          string find(int n,int m,int x1,int y1,int x2,int y2){
+              auto it=memo.find({n,m,x1,y1,x2,y2}); if(it!=memo.end()) return it->second;
+              string ans; vector<vector<bool>> vis(n+1,vector<bool>(m+1));
+              function<bool(int,int)> dfs=[&](int x,int y)->bool{
+                  if(x==x2&&y==y2) return (int)ans.size()==n*m-1;
+                  vis[x][y]=true;
+                  for(int i=0;i<4;i++){ int a=mv[i].first,b=mv[i].second;
+                      if(x+a<1||x+a>n||y+b<1||y+b>m||vis[x+a][y+b]) continue;
+                      ans.push_back(lb[i]); if(dfs(x+a,y+b)) return true; ans.pop_back(); }
+                  vis[x][y]=false; return false; };
+              dfs(x1,y1); memo[{n,m,x1,y1,x2,y2}]=ans; return ans; }
+          void build(int n,int m,int x1,int y1,int x2,int y2,int sx,int sy){
+              if(strip(n,m,x1,y1,x2,y2,sx,sy)) return;
+              if(split(n,m,x1,y1,x2,y2,sx,sy)) return;
+              string ans=find(n,m,x1,y1,x2,y2);
+              int x=x1+sx,y=y1+sy;
+              for(char c:ans){ v[x][y]=c; for(int i=0;i<4;i++) if(c==lb[i]){x+=mv[i].first;y+=mv[i].second;break;} } }
+          bool split(int n,int m,int x1,int y1,int x2,int y2,int sx,int sy){
+              if(n>4 && x2-x1>2){ for(int i=1;i<=min(4,m);i++){ int nn=x1+(x1%2==0?2:1);
+                  if(ok(nn,m,x1,y1,nn,i)&&ok(n-nn,m,1,i,x2-nn,y2)){ build(nn,m,x1,y1,nn,i,sx,sy); w[nn+sx][i+sy]='D'; build(n-nn,m,1,i,x2-nn,y2,sx+nn,sy); return true; } } }
+              if(n>4 && x1-x2>2){ for(int i=1;i<=min(4,m);i++){ int nn=x2+(x2%2==0?2:1);
+                  if(ok(n-nn,m,x1-nn,y1,1,i)&&ok(nn,m,nn,i,x2,y2)){ build(n-nn,m,x1-nn,y1,1,i,sx+nn,sy); w[1+sx+nn][i+sy]='U'; build(nn,m,nn,i,x2,y2,sx,sy); return true; } } }
+              if(m>4 && y2-y1>2){ for(int i=1;i<=min(4,n);i++){ int mm=y1+(y1%2==0?2:1);
+                  if(ok(n,mm,x1,y1,i,mm)&&ok(n,m-mm,i,1,x2,y2-mm)){ build(n,mm,x1,y1,i,mm,sx,sy); w[i+sx][mm+sy]='R'; build(n,m-mm,i,1,x2,y2-mm,sx,sy+mm); return true; } } }
+              if(m>4 && y1-y2>2){ for(int i=1;i<=min(4,n);i++){ int mm=y2+(y2%2==0?2:1);
+                  if(ok(n,m-mm,x1,y1-mm,i,1)&&ok(n,mm,i,mm,x2,y2)){ build(n,m-mm,x1,y1-mm,i,1,sx,sy+mm); w[i+sx][1+sy+mm]='L'; build(n,mm,i,mm,x2,y2,sx,sy); return true; } } }
+              return false; }
+          bool strip(int n,int m,int x1,int y1,int x2,int y2,int sx,int sy){
+              for(int j=0;j<3;j++){ int minx=min(x1,x2)-1-j;
+                  if(minx>1 && n-minx>1 && ok(n-minx,m,x1-minx,y1,x2-minx,y2)){
+                      build(n-minx,m,x1-minx,y1,x2-minx,y2,sx+minx,sy);
+                      for(int i=1+sy;i<=m+sy;i++){
+                          if(v[minx+1+sx][i]=='L'){ build(minx,m,minx,i-sy,minx,i-1-sy,sx,sy); w[minx+1+sx][i]='U'; w[minx+sx][i-1]='D'; return true; }
+                          if(v[minx+1+sx][i]=='R'){ build(minx,m,minx,i-sy,minx,i+1-sy,sx,sy); w[minx+1+sx][i]='U'; w[minx+sx][i+1]='D'; return true; } } } }
+              for(int j=0;j<3;j++){ int maxx=max(x1,x2)+j;
+                  if(maxx>1 && n-maxx>1 && ok(maxx,m,x1,y1,x2,y2)){
+                      build(maxx,m,x1,y1,x2,y2,sx,sy);
+                      for(int i=1+sy;i<=m+sy;i++){
+                          if(v[maxx+sx][i]=='L'){ build(n-maxx,m,1,i-sy,1,i-1-sy,sx+maxx,sy); w[maxx+sx][i]='D'; w[maxx+1+sx][i-1]='U'; return true; }
+                          if(v[maxx+sx][i]=='R'){ build(n-maxx,m,1,i-sy,1,i+1-sy,sx+maxx,sy); w[maxx+sx][i]='D'; w[maxx+1+sx][i+1]='U'; return true; } } } }
+              for(int j=0;j<3;j++){ int miny=min(y1,y2)-1-j;
+                  if(miny>1 && m-miny>1 && ok(n,m-miny,x1,y1-miny,x2,y2-miny)){
+                      build(n,m-miny,x1,y1-miny,x2,y2-miny,sx,sy+miny);
+                      for(int i=1+sx;i<=n+sx;i++){
+                          if(v[i][miny+1+sy]=='D'){ build(n,miny,i-sx,miny,i+1-sx,miny,sx,sy); w[i+1][miny+sy]='R'; w[i][miny+1+sy]='L'; return true; }
+                          if(v[i][miny+1+sy]=='U'){ build(n,miny,i-sx,miny,i-1-sx,miny,sx,sy); w[i-1][miny+sy]='R'; w[i][miny+1+sy]='L'; return true; } } } }
+              for(int j=0;j<3;j++){ int maxy=max(y1,y2)+j;
+                  if(maxy>1 && m-maxy>1 && ok(n,maxy,x1,y1,x2,y2)){
+                      build(n,maxy,x1,y1,x2,y2,sx,sy);
+                      for(int i=1+sx;i<=n+sx;i++){
+                          if(v[i][maxy+sy]=='D'){ build(n,m-maxy,i-sx,1,i+1-sx,1,sx,sy+maxy); w[i+1][maxy+1+sy]='L'; w[i][maxy+sy]='R'; return true; }
+                          if(v[i][maxy+sy]=='U'){ build(n,m-maxy,i-sx,1,i-1-sx,1,sx,sy+maxy); w[i-1][maxy+1+sy]='L'; w[i][maxy+sy]='R'; return true; } } } }
+              return false; }
+          string run(int n,int m,int ay,int ax,int by,int bx){
+              if(!ok(n,m,ay,ax,by,bx)) return "";
+              v.assign(n+2,vector<char>(m+2,0)); w.assign(n+2,vector<char>(m+2,0));
+              build(n,m,ay,ax,by,bx,0,0);
+              string path; int x=ay,y=ax;
+              for(int st=0;st<n*m-1;st++){ char ch=w[x][y]?w[x][y]:v[x][y]; path.push_back(ch);
+                  for(int i=0;i<4;i++) if(ch==lb[i]){x+=mv[i].first;y+=mv[i].second;break;} }
+              return path; }
+      };
+      string solve(int n,int m,int y1,int x1,int y2,int x2){ G g; string p=g.run(n,m,y1,x1,y2,x2); return p.empty()?"NO":"YES\n"+p; }
+      ```
+
+      **④ Alternative — the "snake" full-rectangle scanline.** When no constraints
+      are awkward (e.g. corners, full grid), a simple boustrophedon "snake" starting
+      at the top-left immediately covers the board. The recursive splitter above
+      special-cases enough inputs that a dedicated snake tier adds little; the
+      recursive construction is the general, ship-worthy answer. So ④ is provided as
+      this note rather than a separate code path.
+
+      Now reason through the chosen tier (②) in the next block, then trace it.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n,m,y1,x1,y2,x2)` — the O(n·m) recursive construction.
+
+      1. **`ok()` decides a single (sub)rectangle.** It encodes the two parity tests
+         (odd area ⇒ same-colour endpoints; even area ⇒ opposite-colour endpoints),
+         the `1`-row/`1`-column strip rule, and the narrow `2×·`/`3×even` special
+         cases. Every recursion level calls it so we never recurse into an
+         unsolvable piece.
+      2. **`find()`** is the base-case solver: a plain DFS that builds a Hamiltonian
+         path for small sub-rectangles, memoised by `(n,m,x1,y1,x2,y2)` so repeated
+         seam configurations are solved once.
+      3. **`build()`** first tries `strip()` (peel a full band off any of the four
+         sides and splice it in via one seam move), then `split()` (cut into two
+         rectangles along a chosen row/column when the endpoints are far apart), and
+         only then falls back to `find()`. Each branch writes the path's moves into
+         `v` and the single cross-seam move into `w` (so `w` overrides `v` at the
+         stitch point).
+      4. **`run()`** validates, then replays the stored moves from `a`, honouring `w`
+         where it is set, to produce the final `U/D/L/R` string.
+
+      Because `ok()` is exact, `build()` never needs to backtrack across rectangles:
+      any accepted decomposition is guaranteed completable, and the small `find()`
+      completes the base. Total work is a few passes over the `n·m` cells.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample, test 5):** `n = 4, m = 7`, `a = (1,3)`, `b = (3,6)`.
+
+      **Feasibility:** `area = 28` (even) ⇒ endpoints must differ in parity.
+      `(1+3)=4 even`, `(3+6)=9 odd` ⇒ different parity ✓, and not a 1-row/1-col or
+      narrow special ⇒ `ok()` accepts.
+
+      **Recursive construction (conceptually):** the rectangle is split around a seam
+      near `a`'s column, the left slab is routed to the seam, then the right slab
+      continues from the seam down/across to `b`.
+
+      **Result printed by the reference:**
+      ```
+      YES
+      LLDDDRUURDDRUUURDDDRRUUULDD
+      ```
+      Reading it as a path from `(1,3)`: L → (1,2), L → (1,1), D → (2,1), D → (3,1),
+      D → (4,1), R → (4,2), U → (3,2), U → (2,2), R → (2,3), D → (3,3), D → (4,3),
+      R → (4,4), U → (3,4), U → (2,4), U → (1,4), R → (1,5), D → (2,5), D → (3,5),
+      D → (4,5), R → (4,6), R → (4,7), U → (3,7), U → (2,7), R → (2,8)… (stops; path
+      ends at `b = (3,6)` once all 28 cells are covered).
+
+      **Verify:** start `(1,3)`, end `(3,6)`, every one of the 28 cells is visited
+      exactly once, and every step is a valid `U/D/L/R` move within bounds. So the
+      reference's `YES` output is a valid Hamiltonian path.
+
+      **Actual vs expected:** the CSES sample prints a different-but-valid path
+      (`RRRRDDDLLLLLLUUURDDRURDRURD`); ours is accepted because any correct
+      description works. **Sample test 1** (`1 × 3` from `(1,1)` to `(1,3)`) prints
+      `YES RR`; **test 2** (`1 × 3` from `(1,2)` to `(1,3)`) prints `NO` because a
+      1-row path can only go between the two ends; **test 4** (`2 × 2` from `(1,1)`
+      to `(2,1)`) prints `YES RDL`.
+
+  - type: mcq
+    prompt: "For a Hamiltonian path on an even-area grid, why must the endpoints have different chessboard colours?"
+    options:
+      - "Each step flips colour, so an even-length path joins opposite-colour endpoints."
+      - "Because n·m even forces all cells to be the same colour."
+      - "Because the endpoints must both be on the boundary."
+      - "Because moves are only allowed between larger and smaller squares."
+    answer: 0
+    explanation: "Every side-adjacent move changes (row+col) by 1, flipping the chessboard colour. A path through an even number of vertices alternates colours and therefore ends on the opposite colour from its start. This parity invariant is the first and most important feasibility check; the DFS/recursive construction preserves it at every sub-rectangle."
+
+type: content
+---

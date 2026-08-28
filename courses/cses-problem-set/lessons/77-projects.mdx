@@ -1,0 +1,262 @@
+---
+id: projects
+title: "Projects"
+difficulty: hard
+order: 77
+tags:
+  - dynamic-programming
+  - weighted-interval-scheduling
+  - binary-search
+  - sorting
+blocks:
+  - type: markdown
+    content: |
+      # Projects — pick non-overlapping, reward-maximising jobs
+
+      You have `n` projects, each with a start day, an end day, and a reward. You
+      may only start a new project **after** the previous one has finished, and
+      the reward is paid out at the very end. You want the maximum total reward
+      from a subset of **non-overlapping** projects. This is the classic
+      **weighted interval scheduling** problem (interval jobs × weights), and the
+      textbook fix is sort-by-end + binary search + DP.
+
+      ## The recurrence
+
+      Sort projects by **end day**. Number them `1..n` in that order, and define
+
+      ```
+      dp[i] = maximum reward using only projects among the first i
+              (i.e. choosing a compatible subset of projects 1..i)
+      ```
+
+      Project `i` either is *not* taken (best stays `dp[i-1]`) or it *is* taken —
+      then every earlier project must end **strictly before** `start_i`, so we can
+      only combine it with the best solution among those. Let
+
+      ```
+      j = last project index with end_j < start_i   (j < i)
+      ```
+
+      Then:
+
+      ```
+      dp[i] = max( dp[i-1],   reward_i + dp[j] )
+      ```
+
+      The answer is `dp[n]`. $j$ is found by a **binary search** over the sorted
+      `end` values (`lower_bound(start_i) - 1`, i.e. the first project ending at
+      or after `start_i` maps to count `j` of projects strictly ending before it).
+
+      **Why a strict `<` on the finish check:** the statement says you may start
+      a new project only after the previous one has been *completed*, so
+      `start_new > end_prev` (a project that ends the same day as another starts
+      conflicts). Use `end < start`, never `end <= start`.
+
+      **Time:** O(n log n) — sorting O(n log n) + one binary search per project.
+      **Space:** O(n). Rewards sum to at most `2·10^5 · 10^9 = 2·10^14`, so
+      `long long` everywhere.
+
+      :::tip
+      **Interview tip:** weighted interval scheduling is a must-know DP. The
+      "sort by end + define dp over first i + binary search the last compatible
+      predecessor + max(skip, take)" template recurs in job-scheduling, meeting
+      room, and deadline-reward questions. Interviewers specifically probe the
+      **strict** `< b_j < a_i` overlap rule and the requirement to sort by *end*
+      (not start) so the binary-search predecessor is well-defined.
+      :::
+  - type: markdown
+    content: |
+      # Question — Projects
+
+      There are `n` projects you can attend. For each project you know its start
+      and end days and the reward you get when finishing. You can attend a project
+      only if you are finished with any previous project — you may start a new
+      project only after the previous one has been **completed**. What is the
+      maximum reward you can obtain by choosing a subset of the projects?
+
+      **Input**
+
+      The first input line has an integer `n`.
+
+      Then there are `n` lines; each line has three integers `a_i`, `b_i`,
+      `r_i`: the start day, the end day, and the reward.
+
+      **Output**
+
+      Print one integer: the maximum reward.
+
+      **Constraints**
+
+      - `1 <= n <= 2*10^5`
+      - `1 <= a_i <= b_i <= 10^9`
+      - `1 <= r_i <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      4
+      2 4 4
+      3 6 6
+      6 8 2
+      5 7 3
+      ```
+
+      Output:
+
+      ```
+      7
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — pairwise DP without sorting, O(n²) time, O(n) space**
+
+      `dp[i]` = best reward among subsets using only the first `i` projects
+      (in the given order), where taking `i` requires scanning all earlier
+      compatible projects for the best `dp[j] + r_i`. That inner scan over every
+      earlier project is O(n) per `i`, giving O(n²) — at `n = 2·10^5` that is
+      ~4·10^10 steps, too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          int n;
+          cin >> n;
+          struct P { long long a, b, r; };
+          vector<P> p(n);
+          for (auto &e : p) cin >> e.a >> e.b >> e.r;
+          vector<long long> dp(n + 1, 0);
+          for (int i = 0; i < n; ++i) {
+              dp[i + 1] = dp[i];          // skip project i
+              for (int j = 0; j < i; ++j)
+                  if (p[j].b < p[i].a)     // compatible predecessor
+                      dp[i + 1] = max(dp[i + 1], dp[j + 1] + p[i].r);
+              dp[i + 1] = max(dp[i + 1], p[i].r);   // take it alone
+          }
+          cout << dp[n] << "\n";
+      }
+      ```
+
+      **② Optimisation — sort by end + binary search + dp, O(n log n) time, O(n) space**
+
+      Sort by end day so the compatible predecessors of `i` form a contiguous
+      prefix (those ending before `a_i`), found by one `lower_bound`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n;
+          cin >> n;
+          struct P { long long a, b, r; };
+          vector<P> p(n);
+          for (auto &e : p) cin >> e.a >> e.b >> e.r;
+          sort(p.begin(), p.end(), [](const P& u, const P& v){ return u.b < v.b; });
+
+          vector<long long> ends(n);
+          for (int i = 0; i < n; ++i) ends[i] = p[i].b;
+
+          vector<long long> dp(n + 1, 0);
+          for (int i = 0; i < n; ++i) {
+              // j = number of projects (0..i) with end < p[i].a
+              long long j = lower_bound(ends.begin(), ends.end(), p[i].a) - ends.begin();
+              dp[i + 1] = max(dp[i], dp[j] + p[i].r);
+          }
+          cout << dp[n] << "\n";
+      }
+      ```
+
+      **③ Alternative — Fenwick tree over compressed days, O(n log n)**
+
+      Map every start and end day to a rank and maintain a Fenwick tree that
+      stores, at rank `d`, the best reward obtainable by finishing on or before
+      day `d`. Process projects in any order; for each, query the max reward
+      strictly before its start day, update its end day with that + reward.
+      Equivalent complexity and output; the sort + binary search version above is
+      simpler and intended.
+
+      **④ Further optimisation** — O(n log n) is optimal: the array must be read
+      (Ω(n)) and the DP needs a strictly-smaller-key predecessor query, for which
+      O(log n) per item (binary search or Fenwick) is the standard bound. No
+      O(n) approach is known for weighted interval scheduling.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O(n log n) solution in **②**:
+
+      - Sort projects by **end day** `b`. After sorting, for project `i`, every
+        project *before* it also ends no later — and any of them ending **before**
+        `a_i` is a legal predecessor, forming a contiguous prefix.
+      - `ends[i]` is the sorted end-day array. `lower_bound(ends, a_i)` returns the
+        iterator to the first project whose end `>= a_i`; its position `j` is
+        exactly the count of projects finishing strictly before `a_i`.
+      - `dp[0] = 0`. For each `i` (0-based → dp index `i+1`):
+        `dp[i+1] = max(dp[i], dp[j] + p[i].r)`. The first term *skips* project `i`;
+        the second *takes* it and adds the best compatible solution `dp[j]`.
+      - The strict `<` is crucial: `lower_bound(ends, a_i)` counts only ends that
+        are `< a_i` (finishes strictly before the start), honouring the "start
+        after completion" rule. Using `upper_bound` (ends `<= a_i`) would wrongly
+        allow same-day handoff.
+      - The answer is `dp[n]`, the best subset among all projects.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the O(n log n) solution on the sample:
+
+      ```
+      2 4 4
+      3 6 6
+      6 8 2
+      5 7 3
+      ```
+
+      Sorted by end: `(2,4,4)`, `(3,6,6)`, `(5,7,3)`, `(6,8,2)`. `ends = [4,6,7,8]`.
+
+      | i | (a,b,r) | j = #(end < a) | dp[i+1] = max(dp[i], dp[j] + r) | dp |
+      |---|---------|----------------|--------------------------------|----|
+      | 0 | (2,4,4)  | 0 (none < 2)    | max(0, 0+4) = 4                  | dp1=4 |
+      | 1 | (3,6,6)  | 0 (none < 3)    | max(4, 0+6) = 6                  | dp2=6 |
+      | 2 | (5,7,3)  | 1 (end 4 < 5)   | max(6, dp1+3 = 4+3 = 7) = 7      | dp3=7 |
+      | 3 | (6,8,2)  | 1 (end 4 < 6; 6<6 false) | max(7, dp1+2 = 4+2 = 6) = 7 | dp4=7 |
+
+      `dp[4] = 7`, matching the sample output (take projects 1 and 3:
+      `[2,4]` reward 4 then `[5,7]` reward 3 = 7). Note project 2 (`[3,6]`,
+      reward 6) — the biggest single reward — is skipped because it overlaps both
+      `[2,4]` and `[5,7]`; the DP correctly reports that the *pair* of smaller jobs
+      sums to more.
+  - type: flowchart
+    title: "Weighted interval scheduling"
+    nodes:
+      - "Sort projects by end day"
+      - "Build ends[] (sorted)"
+      - "For each project i"
+      - "j = count(ends < a_i) via binary search"
+      - "dp[i+1] = max(skip dp[i], take dp[j]+r_i)"
+      - "answer = dp[n]"
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: "after all i"}
+  - type: mcq
+    prompt: 'Why must projects be sorted by end day (not start day) for the binary-search predecessor dp[j] to be correct?'
+    options:
+      - 'Sorting by end makes the set of compatible predecessors form a contiguous prefix (projects ending before a_i), so a single lower_bound finds j and dp[j] is the best compatible solution'
+      - 'Sorting by start is what enables skipping each project'
+      - 'Endpoint order determines which rewards can be summed'
+      - 'It is only for easier printing of the schedule'
+    answer: 0
+    explanation: 'The recurrence needs "all projects ending strictly before a_i". When sorted by end, those form a prefix, so lower_bound on the end array gives their count j in O(log n), and dp[j] (best over that prefix) is exactly the best compatible base to add the current reward to. Sorting by start does not yield such a prefix.'
+type: content
+---

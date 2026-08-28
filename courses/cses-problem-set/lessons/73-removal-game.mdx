@@ -1,0 +1,260 @@
+---
+id: removal-game
+title: "Removal Game"
+difficulty: medium
+order: 73
+tags:
+  - dynamic-programming
+  - interval-dp
+  - minimax
+blocks:
+  - type: markdown
+    content: |
+      # Removal Game — optimal play over a shrinking array
+
+      There is a list of `n` numbers. Two players alternate; on your turn you
+      remove **either the first or the last** remaining number and add it to your
+      score. Both players play optimally, each trying to maximise their own
+      total. You need the maximum score the **first** player can force.
+
+      This is a **two-player game DP** over a shrinking *interval*: every move
+      takes a number off one of the two ends, so the remaining game is always
+      some contiguous subarray `[l, r]`. You cannot reason greedily (taking the
+      bigger visible number is often a trap, as the walkthrough shows), so you
+      must evaluate what happens afterwards — exactly what DP does.
+
+      ## The score-difference formulation
+
+      Define a "whoever's turn it is" function over the interval:
+
+      ```
+      f(l, r) = (points the player to move collects from [l..r])
+              - (points the other player collects from [l..r])
+                under optimal play from both sides.
+      ```
+
+      If both play to maximise their own totals, then whoever is to move picks
+      the move that maximises *their* score difference. Taking the left end `x_l`
+      scores `x_l` now, and then the opponent faces `[l+1, r]` and will achieve
+      difference `f(l+1, r)` *in their favour*. So removing `x_l` leaves a net
+      difference for us of `x_l - f(l+1, r)`. Similarly the right end gives
+      `x_r - f(l, r-1)`. The player picks the better of the two:
+
+      ```
+      f(l, r) = max( x_l - f(l+1, r),   x_r - f(l, r-1) )
+      f(l, l) = x_l
+      ```
+
+      With `f(0, n-1)` known and `total = sum(x_i)`, the first player's score is
+
+      ```
+      first = ( total + f(0, n-1) ) / 2
+      ```
+
+      because `f = first - second` and `first + second = total`. The two
+      equations sum to `2·first = total + f`.
+
+      Fill intervals **by increasing length** (length 1 first) so every `f(l+1,r)`
+      and `f(l, r-1)` needed by a longer interval is already computed.
+
+      **Time:** O(n²), **Space:** O(n²). For `n ≤ 5000` a `long long[5000][5000]`
+      table is ~200 MB, within CSES's 512 MB limit; scores can reach 5000·10^9,
+      so `long long` is required.
+
+      :::tip
+      **Interview tip:** "optimal strategy for a game / coins in a line / remove
+      from either end" is a family classic. The score-*difference* DP
+      (`dp[l][r] = max(x[l]-dp[l+1][r], x[r]-dp[l][r-1])`) is the formulation
+      interviewers look for — it neatly avoids double-counting the opponent and
+      answers "how much can the first player guarantee?" in one table.
+      :::
+  - type: markdown
+    content: |
+      # Question — Removal Game
+
+      There is a list of `n` numbers and two players who move alternately. On
+      each turn, a player removes either the first or the last number from the
+      list and receives that number as points. Both players aim to maximise their
+      own total points.
+
+      **Input**
+
+      The first input line has an integer `n`.
+
+      The second line has `n` integers `x_1, x_2, ..., x_n`: the contents of the
+      list.
+
+      **Output**
+
+      Print the maximum possible score of the first player.
+
+      **Constraints**
+
+      - `1 <= n <= 5000`
+      - `1 <= x_i <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      4
+      4 5 1 3
+      ```
+
+      Output:
+
+      ```
+      8
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — optimal-search over the game tree, O(2^n) time, O(n) space**
+
+      Recursively try both moves. `best(l, r)` returns the score the player to
+      move can force from `[l..r]`. With `n = 5000`, `2^5000` game states is
+      impossibly large; but the recursion itself is the natural starting model:
+
+      ```cpp
+      // returns the extra score (this player's - other's) from best play
+      long long dfs(int l, int r, const vector<long long>& x) {
+          if (l == r) return x[l];
+          long long takeLeft  = x[l] - dfs(l + 1, r, x);
+          long long takeRight = x[r] - dfs(l, r - 1, x);
+          return max(takeLeft, takeRight);
+      }
+      ```
+
+      The tree revisits the same `(l, r)` exponentially many times — that
+      duplication is exactly what the DP fixes.
+
+      **② Optimisation — interval DP, O(n²) time, O(n²) space**
+
+      Cache every `(l, r)` once by computing intervals in order of increasing
+      length. `f` holds the score difference; the answer is `(total + f(0,n-1))/2`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n;
+          cin >> n;
+          vector<long long> x(n);
+          long long total = 0;
+          for (auto &v : x) { cin >> v; total += v; }
+
+          vector<vector<long long>> f(n, vector<long long>(n, 0));
+          for (int i = 0; i < n; ++i) f[i][i] = x[i];
+
+          for (int len = 2; len <= n; ++len)          // fill by increasing length
+              for (int l = 0; l + len - 1 < n; ++l) {
+                  int r = l + len - 1;
+                  long long takeLeft  = x[l] - f[l + 1][r];
+                  long long takeRight = x[r] - f[l][r - 1];
+                  f[l][r] = max(takeLeft, takeRight);
+              }
+
+          cout << (total + f[0][n - 1]) / 2 << "\n";
+      }
+      ```
+
+      **③ Memory-tight variant — O(n²) time, O(n) space**
+
+      Interval DP needs only the previous *length* to build the next one. `f[l][r]`
+      depends only on `f[l+1][r]` and `f[l][r-1]`, both of length `len-1`. Keep
+      just the most recent length's row `prev[l] = f[l][l+len-2]` and compute the
+      current `cur[l] = f[l][l+len-1]`. This keeps memory O(n) instead of O(n²) —
+      useful when n is large and memory is tight.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n;
+          cin >> n;
+          vector<long long> x(n);
+          long long total = 0;
+          for (auto &v : x) { cin >> v; total += v; }
+
+          vector<long long> prev(n);            // f[l][l+len-2] for previous length
+          for (int i = 0; i < n; ++i) prev[i] = x[i];   // length 1
+          for (int len = 2; len <= n; ++len) {
+              vector<long long> cur(n);
+              for (int l = 0; l + len - 1 < n; ++l) {
+                  int r = l + len - 1;
+                  // prev[l+1] == f[l+1][r], prev[l] == f[l][r-1]
+                  cur[l] = max(x[l] - prev[l + 1], x[r] - prev[l]);
+              }
+              prev.swap(cur);
+          }
+          cout << (total + prev[0]) / 2 << "\n";
+      }
+      ```
+
+      **④ Alternative algorithm** — none is meaningfully better than O(n²): any
+      algorithm must at least read all n values (Ω(n)) and the interval structure
+      inherently has O(n²) subproblems to disambiguate. Big-integer free, the
+      difference formulation avoids overflow because `x_l - f(...)` never exceeds
+      `total` in absolute value and we only add/subtract; still, `long long` is
+      the safe type for products of the scale `10^9`.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O(n²) interval DP in **②**:
+
+      - `f[l][r]` stores the **score difference** (current player minus opponent)
+        attainable from interval `[l..r]`, assuming optimal play.
+      - Base case length 1: `f[i][i] = x[i]` — the only number is taken by the
+        player to move.
+      - Transition: removing `x_l` scores it now, then the opponent faces `[l+1,r]`
+        with difference `f[l+1][r]` in *their* favour, so net is `x_l - f[l+1][r]`.
+        Removing `x_r` gives `x_r - f[l][r-1]`. Take the max of the two.
+      - We fill `len = 2 .. n` so both references (`[l+1][r]` and `[l][r-1]`) are
+        length `len-1` and already computed.
+      - Finally, solving `first - second = f[0][n-1]` and `first + second = total`
+        together gives `first = (total + f[0][n-1]) / 2`, printed as the answer.
+      - The ③ space-tight version only ever holds one length's row: `prev[l]` is
+        `f[l][l+len-2]`, and reusing it for both needed references preserves
+        correctness with O(n) memory.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the O(n²) DP on `4 5 1 3` (total = 13). Length-1 cells first:
+      `f[0][0]=4`, `f[1][1]=5`, `f[2][2]=1`, `f[3][3]=3`.
+
+      | len | interval | f[l][r] = max(x_l - f[l+1][r], x_r - f[l][r-1]) | value |
+      |-----|----------|------------------------------------------------|-------|
+      | 2 | [0,1] | max(4 - 5, 5 - 4) = max(-1, 1) | 1 |
+      | 2 | [1,2] | max(5 - 1, 1 - 5) = max(4, -4) | 4 |
+      | 2 | [2,3] | max(1 - 3, 3 - 1) = max(-2, 2) | 2 |
+      | 3 | [0,2] | max(4 - f[1][2], 1 - f[0][1]) = max(4-4, 1-1) | 0 |
+      | 3 | [1,3] | max(5 - f[2][3], 3 - f[1][2]) = max(5-2, 3-4) | 3 |
+      | 4 | [0,3] | max(4 - f[1][3], 3 - f[0][2]) = max(4-3, 3-0) | 3 |
+
+      So `f[0][3] = 3`. First player's score = `(total + f) / 2 = (13 + 3)/2 =
+      8`, matching the sample. Optimal play: first takes `3` (right end), leaving
+      `[4,5,1]`; whatever second does, first can force `8` — note first **does
+      not** grab the big `5` first, because that would hand the run to the
+      opponent and cap first at `7`. That is the non-greedy point the difference
+      DP captures.
+  - type: mcq
+    prompt: 'Why does the recurrence store a score difference f(l,r) rather than the raw max score of the player to move?'
+    options:
+      - 'It makes the interval have a single well-defined value regardless of who moves, and converts the two-player battle into a clean max() that yields the first player''s score as (total + f(0,n-1))/2'
+      - 'It allows using 32-bit integers safely'
+      - 'It avoids sorting the array before the DP'
+      - 'It is required for the O(n) space optimisation to work'
+    answer: 0
+    explanation: 'f(l,r) = current player s minus the opponent s is one self-contained value per interval (independent of whose turn it is). Transition f = max(x_l - f(l+1,r), x_r - f(l,r-1)) then tracks the opponent s gain as a subtraction, and combining first + second = total recovers the first player s score.'
+type: content
+---

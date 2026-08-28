@@ -1,0 +1,196 @@
+---
+id: tasks-and-deadlines
+title: Tasks and Deadlines
+difficulty: easy
+order: 48
+tags:
+  - sorting-and-searching
+  - greedy
+blocks:
+  - type: markdown
+    content: |
+      # Tasks and Deadlines — greedy by duration
+
+      You have `n` tasks. Each task has a **duration** `d[i]` and a **deadline**
+      `dl[i]`. You do the tasks one at a time, starting at time `0`. If a task is
+      finished at time `f`, you get a reward of `dl[i] - f` (this can be
+      negative if you exceed the deadline — so we want tasks *done early*).
+
+      You may order the tasks any way you like. Maximize the **total reward**.
+
+      This is a *scheduling* problem, and scheduling problems almost always have
+      a greedy answer — the question is *which* order. Two natural candidates
+      are "by earliest deadline" and "by shortest duration". Here the right one
+      is **shortest duration first**.
+
+      **Why?** Write the total reward out. The sum of all deadlines,
+      `Σ dl[i]`, is a constant you cannot change — it is the same in every
+      ordering. So maximizing `Σ (dl[i] - f[i])` is the same as **minimizing
+      `Σ f[i]`**, the sum of finish times.
+
+      Given an order, rewrite each finish time as the cumulative sum of
+      durations: if the tasks are done in order `π` (a permutation), then
+      `f[i] = d[π1] + d[π2] + ... + d[πi]`. Summing over all `i`:
+
+      ```
+      Σ f[i] = n·d[π1] + (n-1)·d[π2] + ... + 1·d[πn]
+      ```
+
+      Task done *first* gets weight `n`; the one done *last* gets weight `1`. To
+      minimize this weighted sum we must put the **smallest** durations where
+      the weights are **largest** — i.e. sort by duration ascending. (This is
+      an exchange/exchange-argument: if two adjacent tasks are out of order, a
+      shorter-before-longer swap only lowers `Σ f`.)
+
+      **Complexity:** sorting dominates: `O(n log n)` time, `O(n)` space.
+
+      :::tip
+      **Interview tip:** the "sum of finish times / weighted completion times"
+      reduction is a workhorse. Whenever a reward equals `deadline − finish`
+      and the deadline sum is fixed, the objective collapses to *minimize the
+      sum of finish times*, which shortest-first solves. The exchange argument
+      is the expected justification to give an interviewer.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You have `n` tasks, and you have to do them one at a time. Each task has a
+      duration `d[i]` and a deadline `dl[i]`. You do the tasks in some order;
+      task `i` gives you a reward `dl[i] - f` where `f` is the time when you
+      finish it (starting at time `0`).
+
+      **What is the maximum total reward you can obtain?**
+
+      **Constraints:** `1 <= n <= 2*10^5`, `1 <= d[i] <= 10^6`, `1 <= dl[i] <= 10^6`
+
+      ## Input
+
+      The first input line has an integer `n`. Then there are `n` lines, each
+      with two integers `d[i]` and `dl[i]`: the duration and the deadline.
+
+      ## Output
+
+      One integer: the maximum total reward.
+
+      ## Sample
+
+      **Input:**
+      ```
+      3
+      6 10
+      8 15
+      5 12
+      ```
+      **Output:**
+      ```
+      2
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n!·log n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(int n, const std::vector<long long>& d,
+                           const std::vector<long long>& dl) {
+          vector<int> p(n);
+          iota(p.begin(), p.end(), 0);
+          long long best = LLONG_MIN;
+          do {
+              long long t = 0, reward = 0;
+              for (int idx : p) { t += d[idx]; reward += dl[idx] - t; }
+              best = max(best, reward);
+          } while (next_permutation(p.begin(), p.end()));
+          return best;
+      }
+      ```
+      Tries every ordering. There are `n!` permutations — fine for `n ≤ 8`,
+      impossible for `n = 2·10^5`.
+
+      **② Optimization — greedy (sort by duration), O(n log n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(int n, const std::vector<long long>& d,
+                           const std::vector<long long>& dl) {
+          vector<pair<long long,long long>> tasks;   // (duration, deadline)
+          for (int i = 0; i < n; i++) tasks.push_back({d[i], dl[i]});
+          sort(tasks.begin(), tasks.end());          // shortest duration first
+
+          long long time = 0, reward = 0;
+          for (auto& [dur, dl_]: tasks) {
+              time += dur;
+              reward += dl_ - time;
+          }
+          return reward;
+      }
+      ```
+      Sorting by duration ascending (structure ensures the first task is
+      shortest) minimizes `Σ f`, hence maximizes total reward. `O(n log n)` —
+      passes comfortably.
+
+      **③ Further optimization — none needed.**
+      The greedy is already `O(n log n)`, dominated by one sort. There is no
+      lower bound below reading input + sorting for this problem.
+
+      **④ Alternative — same result, think of it as closed-form.**
+      There isn't a meaningfully different algorithm (the greedy *is* the
+      problem's structure). Note that sorting by **deadline** instead of
+      duration would be wrong: try it on the sample and you will get a smaller
+      reward. The objective's reduction to "minimize sum of finish times" forces
+      shortest-first, so we skip a distinct fourth approach.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Model the tasks** as `(duration, deadline)` pairs and sort ascending by
+        duration. Because the pair's `.first` is the duration, `sort` orders them
+        shortest-first automatically — we don't even need a custom comparator.
+      - **Simulate the schedule.** Keep a running clock `time`, starting at `0`.
+        For each task in the chosen order: advance `time` by its duration, then
+        add `dl - time` to the reward. This `dl - time` is exactly the reward
+        the problem defines.
+      - **Why this order?** From the theory: total reward `= Σ dl − Σ finish`.
+        `Σ dl` is fixed, so we minimize `Σ finish`, which shortest-first does
+        (the exchange argument). The loop computes `Σ(dl − finish)` directly.
+
+      The `ll` (`long long`) types matter: with `n = 2·10^5` tasks of duration up
+      to `10^6`, the final time and reward easily exceed 32-bit `int`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:** `n = 3`; tasks `(6,10)`, `(8,15)`, `(5,12)`.
+
+      **Expected output:** `2`.
+
+      **Actual run.** Sort by duration ascending: `(5,12)`, `(6,10)`, `(8,15)`.
+
+      | step | task | time before | finish | reward |
+      |------|------|-------------|--------|--------|
+      | 1 | (5, 12) | 0 | 5 | 12 − 5 = 7 |
+      | 2 | (6, 10) | 5 | 11 | 10 − 11 = −1 |
+      | 3 | (8, 15) | 11 | 19 | 15 − 19 = −4 |
+
+      Total reward `= 7 − 1 − 4 =` **2** ✓ (matches the sample).
+
+      **Why not by deadline?** Sorted by deadline we'd do `(6,10)`, `(5,12)`,
+      `(8,15)`: finishes `6, 11, 19` → rewards `4, 1, −4` → total `1 < 2`. The
+      greedy duration order is strictly better — exactly the value of the
+      exchange argument.
+  - type: mcq
+    prompt: Which property lets us ignore the deadlines when choosing the ordering?
+    options:
+      - The deadlines are all equal in the sample
+      - 'Total reward = Σ deadline − Σ finish, and Σ deadline is constant, so maximizing reward is equivalent to minimizing Σ finish, which shortest-duration-first solves'
+      - Deadlines are never used at all in the optimal solution
+      - The reward formula guarantees every reward is positive
+    answer: 1
+    explanation: 'Σ (dl − f) = Σ dl − Σ f. The deadline sum does not depend on the order, so the ordering decision reduces to minimizing the sum of finish times. Sorting by duration ascending assigns large coefficients to small durations, minimizing Σ f and maximizing reward.'
+type: content
+---

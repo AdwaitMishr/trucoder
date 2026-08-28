@@ -1,0 +1,265 @@
+---
+id: tree-traversals
+title: Tree Traversals (Rebuild)
+difficulty: medium
+order: 297
+tags:
+  - tree-algorithms
+  - binary-tree
+  - recursion
+  - divide-and-conquer
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — rebuilding a binary tree from two traversals
+
+      A **binary tree** with all-distinct labels can be uniquely rebuilt from its
+      **preorder** (root, then left subtree, then right subtree) together with its
+      **inorder** (left subtree, root, right subtree). Two traversals that both
+      "fix" the root's position — preorder gives *where* the root is, inorder
+      gives *which* nodes lie on each side — pin down the whole tree.
+
+      **The core identity.** `preorder[0]` is always the root. Look that value up
+      in `inorder`: everything to its left is the entire left subtree, everything
+      to its right is the entire right subtree. Their **sizes** tell us how the
+      root block of the preorder splits: the next `LeftSize` elements of preorder
+      are the left subtree's preorder, the remainder is the right subtree's
+      preorder. Recurse.
+
+      So the job is a **divide-and-conquer**: at each step split by the root,
+      solve the two halves recursively, then stitch.
+
+      **How we print.** Because each recursion solves one root and we recurse on
+      the left then the right, we can emit the nodes **postorder** (left, right,
+      root) directly during unwinding — no tree data structure is required at
+      all. The same split also lets us emit preorder/inorder/level-order with tiny
+      changes.
+
+      **Complexity.** If we look the root up in `inorder` by linear scan each
+      time, the worst case is a skewed tree → `O(n²)`. Pre-indexing each label's
+      inorder position in a hash map makes every lookup `O(1)` → **`O(n)`**.
+
+      :::tip
+      **Interview tip:** "Build a binary tree from its traversals" is a classic
+      whiteboard question. The pattern to remember: **preorder gives the next
+      root, inorder tells left vs right side**; the same trick works for
+      *inorder + postorder* (postorder's *last* element is the root). Follow-ups
+      probe an `O(n²)`↔`O(n)` improvement (hash the inorder indices) or ask for an
+      iterative/stack build to avoid recursion depth on skew trees.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given the **preorder** and **inorder** traversals of a binary tree
+      whose vertices have all-distinct labels `1 … n`. Rebuild the tree and print
+      its **postorder** traversal (left subtree, right subtree, root), as a single
+      sequence of `n` space-separated integers.
+
+      **Input.** The first line has `n`. The second line has the `n` labels of
+      the preorder traversal. The third line has the `n` labels of the inorder
+      traversal. Both are permutations of `1 … n`, and they describe the same
+      tree.
+
+      **Output.** Print the `n` labels of the postorder traversal.
+
+      **Constraints** `1 ≤ n ≤ 2·10^5`.
+
+      **Sample**
+      ```
+      Input:
+      7
+      1 2 4 5 3 6 7
+      4 2 5 1 6 3 7
+
+      Output:
+      4 5 2 6 7 3 1
+      ```
+      Explanation: root 1; left subtree is `2 4 5` (postorder `4 5 2`), right
+      subtree is `3 6 7` (postorder `6 7 3`), then root last → `4 5 2 6 7 3 1`.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²) recursive split with linear root lookup.** At each
+      (sub)tree, scan `inorder[lo..hi]` to find the root's index. Correct but the
+      scan recurs on every level; a left-skewed tree does `n + (n-1) + … ≈ n²/2`
+      work.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      vector<int> pre, ino;
+      int pi = 0;
+      void post(int il, int ir){
+          if(il>ir) return;
+          int root = pre[pi++], m = il;
+          while(ino[m] != root) m++;          // linear lookup — O(n) per call
+          post(il, m-1);                      // left subtree
+          post(m+1, ir);                      // right subtree
+          cout << root << " ";
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin>>n;
+          pre.resize(n); ino.resize(n);
+          for(auto& x: pre) cin>>x;
+          for(auto& x: ino) cin>>x;
+          post(0, n-1); cout<<"\n";
+      }
+      ```
+
+      **② Optimization — hash the inorder positions, O(n) (submission).** Precompute
+      `pos[value] = its index in inorder` once (`O(n)`); then every root lookup is
+      `O(1)` and the recursion does total `O(n)` work.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      vector<int> pre, ino, pos;   // pos[label] = inorder index
+      int pi = 0;
+      void post(int il, int ir){
+          if(il>ir) return;
+          int root = pre[pi++];
+          int m = pos[root];                  // O(1) root lookup
+          post(il, m-1);
+          post(m+1, ir);
+          cout << root << " ";
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin>>n;
+          pre.resize(n); ino.resize(n); pos.assign(n+1, 0);
+          for(auto& x: pre) cin>>x;
+          for(int i=0;i<n;i++){ cin>>ino[i]; pos[ino[i]]=i; }
+          post(0, n-1); cout<<"\n";
+      }
+      ```
+
+      **③ Further optimization — iterative/stack build, O(n) time, O(h) stack.**
+      The recursion above is elegant but can overflow the *call stack* on a
+      skew tree of `n ≈ 2·10^5`. An explicit-stack version walks the same
+      divide-and-conquer to print postorder iteratively — same O(n) time, no
+      recursion-depth risk.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct Task { int il, ir, lpi; bool emit; };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin>>n;
+          vector<int> pre(n), ino(n), pos(n+1);
+          for(auto& x: pre) cin>>x;
+          for(int i=0;i<n;i++){ cin>>ino[i]; pos[ino[i]]=i; }
+          stack<Task> st;
+          st.push({0, n-1, 0, false});   // (inorder range, preorder index of this root)
+          vector<int> out;
+          while(!st.empty()){
+              Task t = st.top(); st.pop();
+              if(t.il>t.ir) continue;
+              if(t.emit){ out.push_back(pre[t.lpi]); continue; }
+              int root = pre[t.lpi];
+              int m = pos[root];
+              // postorder = left, right, root -> push root-last via emit marker
+              st.push({t.il, t.ir, t.lpi, true});        // emit root after children
+              st.push({m+1, t.ir, t.lpi+1+(m-t.il), false}); // right subtree
+              st.push({t.il, m-1, t.lpi+1, false});      // left subtree
+          }
+          for(int i=0;i<n;i++) cout<<out[i]<<(i+1<n?" ":"\n");
+      }
+      ```
+      Each frame carries `(inorder range, preorder index, emit?)`; children are
+      pushed so the root is emitted only after both children — the result is
+      exactly postorder, with no recursion-depth risk.
+
+      **④ Alternative — rebuild the actual tree, O(n).** If the problem asked for a
+      tree object instead of a traversal, the same split builds the nodes
+      explicitly: `build(il, ir)` returns the root of the subtree, allocating
+      `Node{root, build(left), build(right)}`. Postorder printing then is a plain
+      recursive walk. The split logic is identical to ② — the only difference is
+      we *materialise* the structure.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      vector<int> pre, pos;
+      int pi = 0;
+      struct Node { int val; Node *l, *r; Node(int v):val(v),l(nullptr),r(nullptr){} };
+      Node* build(int il, int ir){
+          if(il>ir) return nullptr;
+          Node* node = new Node(pre[pi++]);
+          int m = pos[node->val];
+          node->l = build(il, m-1);
+          node->r = build(m+1, ir);
+          return node;
+      }
+      void post(Node* t){ if(!t) return; post(t->l); post(t->r); cout<<t->val<<" "; }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin>>n;
+          pre.resize(n); pos.assign(n+1,0);
+          for(auto& x: pre) cin>>x;
+          for(int i=0;i<n;i++){ int v; cin>>v; pos[v]=i; }
+          Node* root = build(0, n-1);
+          post(root); cout<<"\n";
+      }
+      ```
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The submission (② ) is a recursive divide-and-conquer with constant-time
+      root lookup.
+
+      1. **Read** preorder and inorder; fill `pos[value] = inorder index`.
+      2. **Recursive `post(il, ir)`** solves the subtree whose nodes are the
+         inorder slice `[il, ir]`:
+         - the root is `pre[pi++]` (preorder always yields roots left-to-right);
+         - `m = pos[root]` splits the slice into left `[il, m-1]` and right
+           `[m+1, ir]`;
+         - recurse left, recurse right, then print the root — that *is* postorder.
+      3. **Why `pi` is global and monotonically increasing.** In preorder, after
+         the current subtree's root, the next `LeftSize` values are exactly that
+         subtree's left side, then the right side. So one pointer suffices: each
+         recursive call claims its root at `pre[pi]` and increments.
+
+      Space is `O(n)` (the implicit recursion stack mirrors the tree height).
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 7`, `pre = 1 2 4 5 3 6 7`, `ino = 4 2 5 1 6 3 7`.
+
+      | Step | range | root (`pre[pi++]`) | split (`pos[root]`) | recurse |
+      |------|-------|--------------------|---------------------|---------|
+      | 1 | `[0,6]` | 1 | `m=3` → L `[0,2]`, R `[4,6]` | ✓ |
+      | 2 | `[0,2]` | 2 | `m=1` → L `[0,0]`, R `[2,2]` | ✓ |
+      | 3 | `[0,0]` | 4 | `m=0`, no children | print 4 |
+      | 4 | `[2,2]` | 5 | `m=2`, no children | print 5 |
+      | — | back at 2 | 2 | — | print 2 |
+      | 5 | `[4,6]` | 3 | `m=5` → L `[4,4]`, R `[6,6]` | ✓ |
+      | 6 | `[4,4]` | 6 | `m=4` | print 6 |
+      | 7 | `[6,6]` | 7 | `m=6` | print 7 |
+      | — | back at 3 | 3 | — | print 3 |
+      | — | back at 1 | 1 | — | print 1 |
+
+      **Printed in order:** `4 5 2 6 7 3 1`.
+
+      **Actual vs expected:** exactly the sample's postorder `4 5 2 6 7 3 1` ✓.
+
+  - type: mcq
+    prompt: "In rebuilding from preorder+inorder, why does preorder's first element always locate the root, splitting inorder into exactly the two subtrees?"
+    options:
+      - "Because preorder visits root before children, so it holds every subtree's root first; the root’s inorder position splits left vs right."
+      - "Because inorder is sorted ascending, so any split is by value."
+      - "Because preorder and inorder always have equal length only when the tree is balanced."
+      - "Because the root always appears at the exact middle of preorder."
+    answer: 0
+    explanation: "Preorder output is root → left → right, so the first element of any (sub)tree's slice is that subtree's root. Locating that value in inorder splits the node set into the left subtree (indices before it) and right subtree (indices after it). The ALS (left subtree size) then tells exactly how many following preorder elements belong to each side, so the recursion can proceed with a single preorder pointer. This dual-information structure is what makes the tree uniquely recoverable."
+type: content
+---

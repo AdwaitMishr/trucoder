@@ -1,0 +1,242 @@
+---
+id: line-segment-intersection
+title: Line Segment Intersection
+difficulty: easy
+order: 219
+tags:
+  - geometry
+  - orientation
+  - cross-product
+blocks:
+  - type: markdown
+    content: |
+      # Line Segment Intersection — do two segments share a point?
+
+      Unlike its cousin "do two infinite lines intersect" (which always reduce to
+      a single linear solve), the question for **segments** is about whether two
+      *bounded* pieces `AB` and `CD` have at least one common point. Because the
+      answer reverses based on where the endpoints happen to fall, we decide it
+      with **orientation** (the cross-product sign from lesson 218) rather than
+      with floats.
+
+      **The two cases.**
+
+      1. **Proper intersection.** The segments cross in their interiors.
+         Segment `AB` crosses line `CD` exactly when `C` and `D` are on
+         *opposite* sides of line `AB`; segment `CD` crosses line `AB` exactly
+         when `A` and `B` are on opposite sides of line `CD`. When **both** hold,
+         the segments properly intersect.
+      2. **Collinear / touching.** If an endpoint lies *on* the other segment
+         (orientation is `0` *and* it falls within the segment's bounding box),
+         the segments share that point and intersect. This covers "they cross at
+         an endpoint", "they touch", and "they overlap collinearly".
+
+      **The primitives.**
+
+      - `orient(a, b, c)` = sign of `(b−a) × (c−a)`: `+1`, `-1`, or `0`.
+      - `onSegment(a, b, p)`: `p` is collinear with `a,b` **and** `p` lies in the
+        axis-aligned box of `a,b`. (The cross-product sign `0` guarantees
+        collinearity, so the box check is exactly "between the endpoints".)
+
+      **Complexity.** Each test uses a constant number of orientation tests, so
+      all `t` tests finish in **O(t)** time and **O(1)** extra space.
+
+      :::tip
+      **Interview tip:** when a computational-geometry interviewer asks
+      "do these segments intersect?", they are testing whether you (a) know the
+      endpoint-bounding-box / collinear special cases and (b) avoid floating
+      point. A solution that only checks strict sign opposition and forgets the
+      `orient == 0` collinear cases will fail subtle tests. Always handle
+      `onSegment`.
+      :::
+  - type: markdown
+    content: |
+      # Question — Line Segment Intersection
+
+      There are two line segments: the first goes through the points
+      `(x1, y1)` and `(x2, y2)`, and the second goes through the points
+      `(x3, y3)` and `(x4, y4)`.
+
+      Your task is to determine if the line segments intersect, i.e., they have
+      at least one common point.
+
+      **Input.** The first input line has an integer `t`: the number of tests.
+      After this, there are `t` lines that describe the tests. Each line has
+      eight integers `x1, y1, x2, y2, x3, y3, x4, y4`.
+
+      **Output.** For each test, print `"YES"` if the line segments intersect and
+      `"NO"` otherwise.
+
+      **Constraints**
+
+      - `1 ≤ t ≤ 10^5`
+      - `-10^9 ≤ x1, y1, x2, y2, x3, y3, x4, y4 ≤ 10^9`
+      - `(x1, y1) ≠ (x2, y2)`
+      - `(x3, y3) ≠ (x4, y4)`
+
+      Sample input:
+
+      ```
+      5
+      1 1 5 3 1 2 4 3
+      1 1 5 3 1 1 4 3
+      1 1 5 3 2 3 4 1
+      1 1 5 3 2 4 4 1
+      1 1 5 3 3 2 7 4
+      ```
+
+      Sample output:
+
+      ```
+      NO
+      YES
+      YES
+      YES
+      YES
+      ```
+
+      (First test: the segments miss each other. Second: they share the endpoint
+      `(1,1)`. Third and fourth: they properly cross. Fifth: they touch at
+      `(3,2)`, which lies exactly on segment 1.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — floating-point line solve, O(t)**
+
+      Solve the two parametric line equations for the intersection point in
+      `double` and check whether both parameters lie in `[0, 1]`. Conceptually
+      correct, but with coordinates of `10^9` the computed intersection point can
+      round to *just* outside the segment (or land on neither) even when the
+      truth is "overlaps" — and the collinear overlap case needs extra handling.
+      Works in principle, too fragile for judging.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using d = double;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int t; cin >> t;
+          while(t--){
+              d x1,y1,x2,y2,x3,y3,x4,y4; cin>>x1>>y1>>x2>>y2>>x3>>y3>>x4>>y4;
+              d dx1=x2-x1, dy1=y2-y1, dx2=x4-x3, dy2=y4-y3;
+              d den = dx1*dy2 - dy1*dx2;      // parallel if ~0
+              if(fabs(den) < 1e-12){ cout << "NO\n"; continue; } // collinear ignored!
+              d tparam = ((x3-x1)*dy2 - (y3-y1)*dx2)/den;
+              d uparam = ((x3-x1)*dy1 - (y3-y1)*dx1)/den;
+              cout << (0<=tparam && tparam<=1 && 0<=uparam && uparam<=1 ? "YES\n":"NO\n");
+          }
+      }
+      ```
+
+      **O(t)** time, but floats + the skipped collinear branch make it wrong on
+      realistic inputs.
+
+      **② Optimization — exact orientation test, O(t) (submission)**
+
+      Replace floats with the exact integer orientation test from lesson 218,
+      plus the collinear `onSegment` special case. Each test is four orientation
+      products, all in `__int128_t`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      using i128 = __int128_t;
+      struct P { ll x, y; };
+      i128 cross(P a, P b, P c){ // (B-A) x (C-A)
+          return (i128)(b.x-a.x)*(c.y-a.y) - (i128)(b.y-a.y)*(c.x-a.x);
+      }
+      // is p on segment ab, assuming p is collinear (orient == 0)?
+      bool onSeg(P a, P b, P p){
+          return min(a.x,b.x) <= p.x && p.x <= max(a.x,b.x)
+              && min(a.y,b.y) <= p.y && p.y <= max(a.y,b.y);
+      }
+      bool intersect(P a, P b, P c, P d){
+          i128 o1 = cross(a,b,c); // orientation of c w.r.t. line ab
+          i128 o2 = cross(a,b,d);
+          i128 o3 = cross(c,d,a);
+          i128 o4 = cross(c,d,b);
+          // proper: c,d on opposite sides of ab AND a,b on opposite sides of cd
+          if(((o1>0 && o2<0) || (o1<0 && o2>0))
+          && ((o3>0 && o4<0) || (o3<0 && o4>0))) return true;
+          // collinear / endpoint-on-segment cases
+          if(o1 == 0 && onSeg(a,b,c)) return true;
+          if(o2 == 0 && onSeg(a,b,d)) return true;
+          if(o3 == 0 && onSeg(c,d,a)) return true;
+          if(o4 == 0 && onSeg(c,d,b)) return true;
+          return false;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int t; cin >> t;
+          while(t--){
+              P a,b,c,d;
+              cin >> a.x >> a.y >> b.x >> b.y >> c.x >> c.y >> d.x >> d.y;
+              cout << (intersect(a,b,c,d) ? "YES\n" : "NO\n");
+          }
+          return 0;
+      }
+      ```
+
+      **O(t)** time, **O(1)** space. This is the submission tier — compile with
+      `g++ -std=c++17 -O2`. Reading all `t` tests makes it information-theoretically
+      optimal.
+
+      **③ Alternative — jump out early on first `YES`, O(t)**
+
+      Same algorithm, structured as a single `if/else` chain that emits a verdict
+      (and any future callers can short-circuit). The logic is identical; only the
+      code shape differs, which can read more clearly for contest solutions.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **Four orientations, not two.** To know whether the segments properly
+        cross you must test each segment against the *other* segment's line.
+        `o1, o2` say where `C` and `D` sit relative to line `AB`; `o3, o4` say
+        where `A` and `B` sit relative to line `CD`.
+      - **Proper case.** Opposite signs for `o1,o2` **and** opposite signs for
+        `o3,o4` is an interior crossing. If only one pair is opposite (e.g. both
+        `C,D` on the same side of `AB`), the lines might still collide at a
+        shared endpoint — handled next.
+      - **Collinear case.** If any orientation is `0`, that point lies on the
+        other segment's *line*; it belongs to the segment itself only if it is
+        also inside that segment's bounding box (`onSegment`). That is what
+        catches endpoint-touching and collinear overlap.
+      - **`__int128_t` again.** The products reach `4·10^18` and their
+        difference ≈`8·10^18`, borderline for `long long`, so compute in 128-bit.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `t = 5`. Segment 1 is always `(1,1)-(5,3)`. Tracing
+      the orientations for each test:
+
+      | # | C | D | o1 (C rel ab) | o2 (D rel ab) | o3 (A rel cd) | o4 (B rel cd) | verdict |
+      |---|------|------|---------------|---------------|---------------|---------------|---------|
+      | 1 | (1,2) | (4,3) | +4 | +2 | −3 | −1 | same side both → **NO** |
+      | 2 | (1,1) | (4,3) | 0 (C==A) | +2 | 0 | −1 | `o3==0, onSeg(cd,a)` → **YES** |
+      | 3 | (2,3) | (4,1) | +6 | −6 | −3 | +6 | opposite/opposite → **YES** |
+      | 4 | (2,4) | (4,1) | +10 | −6 | −9 | +7 | opposite/opposite → **YES** |
+      | 5 | (3,2) | (7,4) | 0 | +4 | −3 | 0 | `o1==0, onSeg(ab,c)` → **YES** |
+
+      Tests 1–4 match the hand-trace above; test 5 is the collinear touch at
+      `(3,2)`, caught by the `onSegment` special case.
+
+      Output: `NO`, `YES`, `YES`, `YES`, `YES`.
+
+      **Expected `NO / YES / YES / YES / YES` — Actual `NO / YES / YES / YES /
+      YES` (from the compiled `g++ -std=c++17 -O2` submission). Match.**
+  - type: mcq
+    prompt: 'Why is checking only strict side-opposition (both pairs of orientations nonzero and opposite) insufficient for segment intersection?'
+    options:
+      - It fails when the two segments are perfectly perpendicular
+      - It misses cases where C or D lies on segment AB while A and B are on the same side of CD
+      - The cross product is undefined at integer coordinates
+      - Strict opposition always over-counts and reports false positives
+    answer: 1
+    explanation: Opposite signs for both (o1,o2) and (o3,o4) detects interior crossings only. When an endpoint lies exactly on the other segment (orientation 0), the side-opposition test says nothing — that endpoint could coincide even though the non-endpoint of each segment is on the same side. The onSegment(orient==0 && within bounding box) special case is required to detect endpoint-touching and collinear overlap; without it those answers are wrong. Perpendicularity and integers are handled fine by the cross product.
+type: content
+---

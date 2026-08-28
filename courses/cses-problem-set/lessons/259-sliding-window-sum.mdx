@@ -1,0 +1,240 @@
+---
+id: sliding-window-sum
+title: Sliding Window Sum
+type: content
+difficulty: easy
+order: 259
+tags:
+  - sliding-window
+  - prefix-sum
+  - sum
+blocks:
+  - type: markdown
+    content: |
+      # Sliding Window Sum — the running sum of every k-length window
+
+      You have `n` numbers and a fixed window length `k`. You must report the
+      **sum of every contiguous window of length `k`** — there are `n - k + 1`
+      of them.
+
+      The naive reading — "start a fresh addition for each of the `n - k + 1`
+      windows" — costs `O(n·k)` because each window adds `k` numbers. But the
+      windows overlap so heavily that almost all the work is repeated.
+
+      ## When you reach for a sliding-window sum
+
+      A window of length `k` that starts one position to the right differs from
+      the previous window by **exactly two elements**: the one that slides in on
+      the right, and the one that slides out on the left. Everything in between
+      is shared. So instead of re-adding `k` numbers, keep a running total and
+      only touch the two endpoints:
+
+      ```
+      sum( [i+1 .. i+k] ) = sum( [i .. i+k-1] ) - a[i] + a[i+k]
+      ```
+
+      Because `sum` is **linear** (it has an additive inverse — subtraction
+      undoes addition), the outgoing element is simply *subtracted*. This is the
+      whole trick and it is why this family of problems maps to a two-element
+      shift of a single running value.
+
+      ## Time and space
+
+      One pass, constant extra memory:
+
+      - **Time:** `O(n)` — each element enters once and leaves once.
+      - **Space:** `O(1)` beyond the input array (a single running total).
+
+      ## Worked mini-example
+
+      `a = [2, 4, 5, 1, 3, 6, 2]`, `k = 3`. Start `cur = 2+4+5 = 11`.
+
+      | step | slide in | slide out | cur |
+      |------|----------|-----------|-----|
+      | start | – | – | 11 |
+      | +1 | 1 | 2 | 11 − 2 + 1 = 10 |
+      | +1 | 3 | 4 | 10 − 4 + 3 = 9 |
+      | +1 | 6 | 5 | 9 − 5 + 6 = 10 |
+      | +1 | 2 | 1 | 10 − 1 + 2 = 11 |
+
+      Result: `11 10 9 10 11`.
+
+      :::tip
+      **Interview tip:** "sum of each window of size k" is the opening rep of
+      the sliding-window family. The key sentence is *"the next window differs
+      by two elements, so update a running total instead of re-adding"* — that
+      turns an `O(nk)` into an `O(n)`, which is the expected answer. The prefix
+      sum formulation (tier ③ below) is the equivalent trick seen from the
+      other side, and it extends naturally to *any* fixed-width range query over
+      an invertible operator.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given an array of `n` integers and a window length `k`, print the sum of
+      each contiguous window of length `k`, from the window starting at position
+      `1` to the window starting at position `n - k + 1`.
+
+      ## Input
+
+      The first line has two integers `n` and `k`. The second line has `n`
+      integers `a_1, a_2, …, a_n` (each `abs(a_i) <= 10^9`). The values may be
+      negative; sums fit in a signed 64-bit integer.
+
+      **Constraints:** `1 <= k <= n <= 2 * 10^5`
+
+      ## Output
+
+      Print `n - k + 1` integers separated by spaces: the sum of each window in
+      left-to-right order.
+
+      ## Sample
+
+      **Input:**
+      ```
+      7 3
+      2 4 5 1 3 6 2
+      ```
+      **Output:**
+      ```
+      11 10 9 10 11
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(nk)**
+
+      For each starting index sum the next `k` elements from scratch. Correct,
+      but `n * k` can reach `4 * 10^10` additions at the constraint limit —
+      far over the time budget.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          for(int i=0;i<n-k+1;i++){
+              ll s=0;
+              for(int j=i;j<i+k;j++) s+=a[j];
+              cout<<s<<(i==n-k?"\n":" ");
+          }
+          return 0;
+      }
+      ```
+
+      *`O(nk)` time, `O(1)` extra space.*
+
+      **② Optimization — sliding window, O(n) time, O(1) space (optimal)**
+
+      Keep one running total. Slide the window by adding the incoming element
+      and subtracting the outgoing one. This is the tier we compile and verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          ll cur=0;
+          for(int i=0;i<k;i++) cur+=a[i];
+          cout<<cur;
+          for(int i=k;i<n;i++){
+              cur += a[i];      // slide in a[i]
+              cur -= a[i-k];    // slide out a[i-k]
+              cout<<" "<<cur;
+          }
+          cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n)` time, `O(1)` extra space.*
+
+      **③ Further optimization — prefix sums, O(n) time (top tier, alternative)**
+
+      Precompute `pref[i]` = sum of `a[0..i-1]`. Then any window `[i, i+k)`
+      is a single subtraction: `pref[i+k] - pref[i]`. This is "monotonic
+      prefix" — a running cumulative total that answers every window in `O(1)`
+      after an `O(n)` build.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          vector<ll> pref(n+1,0);
+          for(int i=0;i<n;i++) pref[i+1]=pref[i]+a[i];
+          for(int i=0;i<n-k+1;i++){
+              ll s = pref[i+k] - pref[i];
+              cout<<s<<(i==n-k?"\n":" ");
+          }
+          return 0;
+      }
+      ```
+
+      *`O(n)` time, `O(n)` space. Same complexity as ②; pick the sliding form
+      when you want `O(1)` space, the prefix form when you want to answer many
+      *online* range-sum queries.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Seed the first window.** The loop `for(i<k) cur += a[i]` sums the
+        first `k` elements into `cur`. From here on every window is a one-armed
+        update, not a fresh sum.
+      - **Window `[i-k, i]` = window `[i-k-1, i-1]` shifted.** When `i` advances,
+        `a[i]` enters on the right and `a[i-k]` leaves on the left. `cur += a[i];
+        cur -= a[i-k]` performs both in O(1).
+      - **`long long` matters.** Values reach `10^9` and `k` reaches `2*10^5`,
+        so a window sum can reach `2*10^14` — far beyond `int`. Cast sums to
+        `long long` (our arrays are already `vector<ll>`).
+      - **`n - k + 1` outputs.** The running loop emits one value per index from
+        `k` to `n`. Because sum is invertible, subtraction is the exact inverse
+        of the earlier addition — nothing is "recomputed".
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 7, k = 3`, `a = [2, 4, 5, 1, 3, 6, 2]`. Expected output
+      `11 10 9 10 11`.
+
+      Using tier ②:
+
+      - seed: `cur = 2+4+5 = 11` → print `11`.
+      - `i=3`: `cur += a[3](1)` → `12`; `cur -= a[0](2)` → `10`. print `10`. (window `[4,5,1]`)
+      - `i=4`: `cur += a[4](3)` → `13`; `cur -= a[1](4)` → `9`. print `9`. (window `[5,1,3]`)
+      - `i=5`: `cur += a[5](6)` → `15`; `cur -= a[2](5)` → `10`. print `10`. (window `[1,3,6]`)
+      - `i=6`: `cur += a[6](2)` → `12`; `cur -= a[3](1)` → `11`. print `11`. (window `[3,6,2]`)
+
+      Printed: `11 10 9 10 11` — matches expected. Each new window reuses the
+      previous total and only modifies two elements.
+  - type: flowchart
+    title: "Sliding window sum"
+    nodes: ["seed: cur = sum of first k", "for i in [k, n): slide in a[i]", "slide out a[i-k]", "print cur", "advance i"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 1, label: "next i"}
+  - type: mcq
+    prompt: "Why does the sliding-window method give the same answer as recomputing each window from scratch?"
+    options:
+      - "Because each window is independent and must be re-summed."
+      - "Because adjacent windows of length k share exactly k-1 elements, and the sum of the next window equals the current sum plus the incoming element minus the outgoing one; since subtraction is the inverse of addition, the shared middle is neither lost nor double-counted."
+      - "Because array values are guaranteed positive."
+      - "Because the output needs only one number, not all windows."
+    answer: 1
+    explanation: "Window [i+1 .. i+k] contains the same k-1 middle elements as window [i .. i+k-1]. Only a[i] (leaving) and a[i+k] (entering) change, so cur' = cur - a[i] + a[i+k]. This is exact for any integers, positive or negative, which is precisely why sum (an invertible commutative operation) works so cleanly — operators without an inverse, like OR, do not."

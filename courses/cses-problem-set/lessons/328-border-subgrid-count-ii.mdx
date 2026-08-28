@@ -1,0 +1,204 @@
+---
+id: border-subgrid-count-ii
+title: Border Subgrid Count II
+difficulty: medium
+order: 328
+tags:
+  - counting
+  - grid
+  - subgrid
+  - square
+  - border
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting **square** subgrids with a solid border
+
+      The square counterpart of ``Border Subgrid Count I``: count, among all
+      `k × k` subgrids of a binary `n × m` grid, those whose **border is entirely
+      `1`s**. As before, the interior is ignored — only the four edges matter —
+      but now the block is forced to be a square.
+
+      **The key precomputation: left-run and up-run.** Define
+      `L[i][j]` = length of the contiguous run of `1`s ending at `(i,j)` going
+      left, and `U[i][j]` = length of the run ending at `(i,j)` going up. Both are
+      computed in one `O(n·m)` pass:
+      - `L[i][j] = L[i][j−1] + 1` if `g[i][j] == '1'`, else `0`;
+      - `U[i][j] = U[i−1][j] + 1` if `g[i][j] == '1'`, else `0`.
+
+      **Checking a square with a given bottom-right corner in O(1).** Fix
+      `(i,j)` as the bottom-right corner of a square of side `s`. Its four edges are
+      all `1` iff:
+      - bottom edge solid: `L[i][j] ≥ s`;
+      - right edge solid: `U[i][j] ≥ s`;
+      - left edge solid: `U[i][j−s+1] ≥ s` (the column slice at the left);
+      - top edge solid: `L[i−s+1][j] ≥ s` (the row slice at the top).
+
+      Try `s = 1 .. min(L[i][j], U[i][j])`. The `min` bounds what's even plausible;
+      the two `L`/`U` corner checks reject the rest. Summing over all `(i,j)` counts
+      each bordered square exactly once (by its bottom-right corner).
+
+      **Complexity.** Time `O(n·m·min(n,m))`, space `O(n·m)` (or `O(m)` with two
+      rolling rows for `L`/`U` alongside the scan — kept simple here).
+
+      :::tip
+      **Interview tip:** the \"1-bordered square\" family (count it here; *find the
+      largest* in LeetCode 1139) is solved by the same `L`/`U` run-length
+      precomputation — the four-edge check collapses to four cheap run comparisons.
+      Distinguish it from the *filled-square* DP (min-of-three neighbours): that DP
+      counts squares with no `0` anywhere; here interior `0`s are allowed, so we
+      check runs *separately* per edge instead. Interviewers often bait that exact
+      confusion.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an `n × m` grid of `0` and `1`, count the number of **square** subgrids
+      (contiguous `k × k` blocks, `k ≥ 1`) whose **border is entirely `1`s** — every
+      cell on the top, bottom, left or right boundary of the block must be `1`.
+      Cells strictly inside are unconstrained.
+
+      **Input.** The first line has two integers `n` and `m`. After this there are
+      `n` lines, each with `m` characters (`0` or `1`).
+
+      **Output.** Print the number of 1-bordered square subgrids.
+
+      **Constraints**
+      - `1 ≤ n, m ≤ 800`
+
+      **Example**
+
+      Input:
+      ```
+      3 3
+      111
+      101
+      111
+      ```
+
+      Output:
+      ```
+      9
+      ```
+      (The eight `1×1` squares on the `1` cells plus the `3×3` — whose border is
+      solid even though the centre `(1,1)` is `0`. Every `2×2` contains the centre
+      `0`, so none counts.)
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·m·min(n,m)²).** For each bottom-right corner and each
+      side length, walk the border and verify each edge cell is `1`. Correct for
+      tiny grids; at `n, m ≤ 800` the per-`s` border scan is prohibitive.
+
+      ```cpp
+      long long brute(int n, int m, const vector<string>& g) {
+          long long ans = 0;
+          for (int i = 0; i < n; i++) for (int j = 0; j < m; j++)
+              for (int s = 1; s <= min(n - i, m - j); s++) {
+                  bool ok = true;
+                  for (int c = j; c < j + s; c++)
+                      if (g[i][c] != '1' || g[i + s - 1][c] != '1') ok = false;
+                  for (int r = i; r < i + s; r++)
+                      if (g[r][j] != '1' || g[r][j + s - 1] != '1') ok = false;
+                  if (ok) ans++;
+              }
+          return ans;
+      }
+      ```
+
+      **② Optimization — O(n·m·min(n,m)) with L/U run precomputation — the
+      intended solution.** Precompute left/up runs, then test each side with four
+      O(1) run comparisons. Verified against brute force.
+
+      ```cpp
+      long long solve(int n, int m, const vector<string>& g) {
+          vector<vector<int>> L(n, vector<int>(m, 0)), U(n, vector<int>(m, 0));
+          for (int i = 0; i < n; i++) for (int j = 0; j < m; j++)
+              if (g[i][j] == '1') {
+                  L[i][j] = (j ? L[i][j - 1] : 0) + 1;
+                  U[i][j] = (i ? U[i - 1][j] : 0) + 1;
+              }
+          long long ans = 0;
+          for (int i = 0; i < n; i++) for (int j = 0; j < m; j++) {
+              int ml = min(L[i][j], U[i][j]);
+              for (int s = 1; s <= ml; s++)
+                  if (L[i - s + 1][j] >= s && U[i][j - s + 1] >= s) ans++;
+          }
+          return ans;
+      }
+      int main() { int n, m; cin >> n >> m; vector<string> g(n);
+                   for (auto& r : g) cin >> r; cout << solve(n, m, g) << "\n"; }
+      ```
+
+      **③ Further optimization — tight `ml` bound.** The inner loop already skips
+      implausible side lengths: `ml = min(L[i][j], U[i][j])` caps `s` at what the
+      bottom and right edges can support, so for sparse grids few `s` are even tried.
+      Memory can be dropped to `O(m)` with two rolling rows, but time is unchanged —
+      `O(n·m·min(n,m))` is the real cost and the intended answer.
+
+      **④ Alternative — 2D prefix-sum border check.** Precompute a 2D prefix sum,
+      then a side-`s` square's border can be summed in `O(1)`. Combined with trying
+      each `s` per corner it matches ②'s `O(n·m·min)` but with a heavier constant;
+      the `L`/`U` run version is simpler and preferred. (Use this trick for the
+      *largest* 1-bordered square if you ever need a binary-search-style bound.)
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      Focus on the **②** solution.
+
+      - **`L[i][j]`, `U[i][j]`:** contiguous runs of `1`s to the left and upward
+        ending at a cell, built in one pass. They are *segments*, not sums — a `0`
+        resets both to `0`.
+      - **Corner run checks:** a side-`s` square with bottom-right `(i,j)` is solid
+        exactly when all four edges are long enough. The bottom and right edges are
+        covered by `L[i][j] ≥ s` and `U[i][j] ≥ s`; the left edge uses the up-run at
+        the *bottom-left* corner `(i, j−s+1)`, and the top edge uses the left-run at
+        the *top-right* corner `(i−s+1, j)`.
+      - **`ml` cap:** no square can be wider than the bottom edge's run nor taller
+        than the right edge's run, so `s` never exceeds `min(L[i][j], U[i][j])`.
+      - **`ans++` per valid `s`:** each `(i, s, j)` triple identifies one unique
+        square; summing over corners counts each square once.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 3, m = 3`, grid `["111", "101", "111"]`.
+
+      Precomputed runs:
+
+      - `L` (left): row 0 `[1,2,3]`, row 1 `[1,0,1]`, row 2 `[1,2,3]`.
+      - `U` (up): col 0 `[1,2,3]`, col 1 `[1,0,1]`, col 2 `[1,2,3]`.
+
+      For each corner with `g == '1'`, `s = 1` always passes (`L,U ≥ 1`) → **8**
+      single-cell squares (every `1` cell; the centre `(1,1)` is `0` and yields
+      none).
+
+      At the bottom-right `(2,2)`: `ml = min(L[2][2]=3, U[2][2]=3) = 3`.
+      - `s = 2`: top-right threshold `L[i−s+1][j] = L[1][2] = 1` < 2 → reject
+        (a `2×2` needs its top-right corner's left-run ≥ 2, but `(1,2)` has only one
+        `1` to its left — and it borders the centre `0`).
+      - `s = 3`: `L[0][2] = 3 ≥ 3` and `U[2][0] = 3 ≥ 3` → **count** the `3×3`.
+
+      Total `8 + 1 = **9**`, matching the sample and the brute-force cross-check.
+      Notice the `3×3` is valid despite the interior `0` at `(1,1)` — only the
+      frame of `1`s is required.
+  - type: mcq
+    prompt: "Why can't the 'filled-square' DP from the earlier lesson (dp = 1 + min of three neighbours) be used to count 1-bordered squares?"
+    options:
+      - "The filled-square DP forbids any 0 inside the square, but a 1-bordered square allows interior 0s — the DPs track different constraints, so a single side-length recurrence cannot express the border-only condition."
+      - "Because the filled-square DP only works on grids that are already all ones."
+      - "Because that DP rounds the side length up to a power of two."
+      - "Because bordered squares must be counted modulo a prime."
+    answer: 0
+    explanation: "The filled-square DP counts squares with no zero anywhere, so dp[i][j] = 1 + min(above,left,diag). A 1-bordered square only requires its four edges to be 1; a 0 in the interior is fine. That border-only constraint cannot be captured by a single per-cell side-length value — instead we precompute left/up runs and check the four edges independently in O(1) each. The two problems look alike but need different machinery."
+
+type: content
+---

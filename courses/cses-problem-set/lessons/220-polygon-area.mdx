@@ -1,0 +1,219 @@
+---
+id: polygon-area
+title: Polygon Area
+difficulty: easy
+order: 220
+tags:
+  - geometry
+  - shoelace
+  - cross-product
+blocks:
+  - type: markdown
+    content: |
+      # Polygon Area — the shoelace formula
+
+      Given a simple polygon (no self-intersections) you want its area. The
+      elegant tool is the **shoelace formula** (also called the surveyor's
+      formula or Green's theorem in the plane), which computes the *signed* area
+      directly from the vertex coordinates with nothing but cross products.
+
+      **The formula.** For vertices `(x1,y1)…(xn,yn)` (with `(x_{n+1},y_{n+1})`
+      wrapping to `(x1,y1)`):
+
+      ```
+      2a = | Σ over each edge i:  x_i · y_{i+1} − x_{i+1} · y_i |
+      ```
+
+      The sum is the (doubled) **signed** area: positive for a counter-clockwise
+      polygon, negative for clockwise, so we take the absolute value. The result
+      is a whole number `2a` (twice the area), which is why CSES asks for
+      **`2a`** — it is exactly this sum and is always an integer.
+
+      **Why it works.** Interpreting the sum as a telescope of cross products,
+      each edge `(x_i,y_i)→(x_{i+1},y_{i+1})` contributes
+      `x_i·y_{i+1} − x_{i+1}·y_i`, which is twice the signed area of the triangle
+      `(0,0)`, `v_i`, `v_{i+1}`. Adding these over all edges cancels everything
+      except one full traversal of the boundary — a signed "orbit" of the origin
+      around the polygon. Positive when counter-clockwise, negative when
+      clockwise.
+
+      **Why `__int128_t`.** With `n ≤ 1000` and coordinates up to `10^9`, a single
+      cross term reaches `≈8·10^18` and the running partial sum of many such terms
+      can reach `≈10^21` — far beyond `long long`. So accumulate in `__int128_t`.
+      The *final* answer `2a` is guaranteed to fit in `long long`: the polygon's
+      area is at most the bounding box `(2·10^9)² = 4·10^18`, so
+      `2a ≤ 8·10^18 < 9.2·10^18`.
+
+      **Complexity.** One pass over the `n` edges → **O(n)** time, **O(1)** extra
+      space (just the running 128-bit sum).
+
+      :::tip
+      **Interview tip:** the shoelace formula distinguishes "I've solved a
+      geometry problem before" from "I searched the web during the interview."
+      It also builds on the cross product from lesson 218 and, importantly,
+      gives the *signed* area — sign is what you'll use later for
+      convex-hull and point-in-polygon work, and for the Pick's-theorem problem
+      (lesson 222).
+      :::
+  - type: markdown
+    content: |
+      # Question — Polygon Area
+
+      Your task is to calculate the area of a given polygon.
+
+      The polygon consists of `n` vertices `(x1,y1), (x2,y2), …, (xn,yn)`. The
+      vertices `(xi,yi)` and `(x_{i+1},y_{i+1})` are adjacent for
+      `i = 1, 2, …, n-1`, and the vertices `(x1,y1)` and `(xn,yn)` are also
+      adjacent.
+
+      **Input.** The first input line has an integer `n`: the number of vertices.
+      After this, there are `n` lines that describe the vertices. The `i`th such
+      line has two integers `xi` and `yi`.
+
+      You may assume that the polygon is **simple**, i.e., it does not intersect
+      itself.
+
+      **Output.** Print one integer: **`2a`** where the area of the polygon is
+      `a` (this ensures that the result is an integer).
+
+      **Constraints**
+
+      - `3 ≤ n ≤ 1000`
+      - `-10^9 ≤ xi, yi ≤ 10^9`
+
+      Sample input:
+
+      ```
+      4
+      1 1
+      4 2
+      3 5
+      1 4
+      ```
+
+      Sample output:
+
+      ```
+      16
+      ```
+
+      (Twice the area of the quadrilateral `(1,1)(4,2)(3,5)(1,4)` is `16`.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — triangulate from one vertex, O(n)**
+
+      Split the polygon into `n−2` triangles all anchored at `v1`, compute each
+      triangle's doubled area with the cross product, halve, and sum. This gives
+      a *correct* area **only when the polygon is convex** (or when `v1` can
+      "see" every other vertex). For a concave polygon, triangles anchored at
+      `v1` spill *outside* the polygon and the total is wrong — so this is not
+      robust for the general "simple polygon" constraint.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      using i128 = __int128_t;
+      i128 cross(ll ax,ll ay,ll bx,ll by,ll cx,ll cy){
+          return (i128)(bx-ax)*(cy-ay) - (i128)(by-ay)*(cx-ax);
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<ll> x(n), y(n);
+          for(int i=0;i<n;i++) cin >> x[i] >> y[i];
+          i128 sum = 0;
+          for(int i=1;i+1<n;i++){
+              i128 c = cross(x[0],y[0],x[i],y[i],x[i+1],y[i+1]); // doubled triangle area
+              if(c < 0) c = -c;                // NAIVE: absolute area of each triangle
+              sum += c;                        // correct only if polygon is convex
+          }
+          cout << (ll)sum << "\n";
+      }
+      ```
+
+      **O(n)** time, but valid only for convex polygons — wrong on concave
+      simple polygons.
+
+      **② Optimization — shoelace formula, O(n) (submission)**
+
+      Use the full shoelace sum over every edge. It is correct for **any** simple
+      polygon (convex or concave) and needs no "visibility" assumption.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      using i128 = __int128_t;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<ll> x(n), y(n);
+          for(int i=0;i<n;i++) cin >> x[i] >> y[i];
+          i128 s = 0;
+          for(int i=0;i<n;i++){
+              int j = (i + 1) % n;
+              s += (i128)x[i]*y[j] - (i128)x[j]*y[i]; // shoelace cross term
+          }
+          if(s < 0) s = -s;             // 2a = |sum of cross products|
+          cout << (ll)s << "\n";        // 2a fits in long long (area <= 4e18)
+          return 0;
+      }
+      ```
+
+      **O(n)** time, **O(1)** space. This is the submission tier — compile with
+      `g++ -std=c++17 -O2`.
+
+      **③ Alternative — why 2a, not a.** The problem deliberately asks for `2a`
+      so the answer is an integer (the shoelace sum). If you genuinely needed the
+      half, integer division `s/2` truncates the `.5` when `s` is odd, so contest
+      problems ask for `2a` to keep things exact. There is no faster asymptotics
+      than `O(n)` — you must read all `n` vertices — so nothing more to optimize.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **Cycle the edges.** `for (i = 0; i < n; i++)` with
+        `j = (i+1) % n` visits every edge and closes back to edge `n→1`.
+      - **One 128-bit accumulator.** `s += x[i]*y[j] − x[j]*y[i]`. All products
+        are widened to `__int128_t` *before* multiplying, so the big running sums
+        never overflow. (Casting a single operand to `i128` widens the whole
+        product.)
+      - **Absolute value at the end.** For a counter-clockwise input `s > 0`; for
+        clockwise `s < 0`. Taking `|s|` gives `2a` either way.
+      - **Print as `long long`.** The guaranteed `2a ≤ 8·10^18` fits, so a plain
+        `(ll)s` cast prints correctly.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 4`, vertices `(1,1), (4,2), (3,5), (1,4)`.
+      Tracing the shoelace sum (`j = i+1 mod 4`):
+
+      | i | j | x_i | y_i | x_j | y_j | term x_i·y_j − x_j·y_i | running s |
+      |---|----|-----|-----|-----|-----|------------------------|-----------|
+      | 0 | 1 | 1 | 1 | 4 | 2 | 1·2 − 4·1 = **−2** | −2 |
+      | 1 | 2 | 4 | 2 | 3 | 5 | 4·5 − 3·2 = **+14** | 12 |
+      | 2 | 3 | 3 | 5 | 1 | 4 | 3·4 − 1·5 = **+7** | 19 |
+      | 3 | 0 | 1 | 4 | 1 | 1 | 1·1 − 1·4 = **−3** | 16 |
+
+      The vertices run clockwise (s went negative then we took the absolute
+      value): `|s| = 16`. So `a = 8`.
+
+      Output: `16`.
+
+      **Expected `16` — Actual `16` (from the compiled `g++ -std=c++17 -O2`
+      submission). Match.**
+  - type: mcq
+    prompt: 'The shoelace sum returns a signed value. What is the point of taking its absolute value?'
+    options:
+      - To convert clockwise (negative) polygons into counter-clockwise positive ones, since the raw sum is signed area while the problem wants unsigned area
+      - To make the answer fit in long long
+      - To round the area to the nearest integer
+      - To count the number of edges in the polygon
+    answer: 0
+    explanation: 'The shoelace sum is the signed area: positive for counter-clockwise vertex order, negative for clockwise. CSES wants the actual (unsigned) area, so you take the absolute value. The value already fits in long long (2a ≤ 8e18) without the abs, and abs does no rounding or edge counting — its only role is to drop the orientation sign.'
+type: content
+---

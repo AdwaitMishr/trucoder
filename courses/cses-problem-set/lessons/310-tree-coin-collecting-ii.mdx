@@ -1,0 +1,277 @@
+---
+id: tree-coin-collecting-ii
+title: "Tree Coin Collecting II"
+type: content
+difficulty: hard
+order: 310
+tags:
+  - advanced-graph
+  - tree
+  - lca
+  - euler-tour
+  - order-statistics
+blocks:
+  - type: markdown
+    content: |
+      # Tree Coin Collecting II — shortest walk visiting *all* coins
+
+      Now the walk from `a` to `b` must visit **every** node that holds a coin. This is a
+      tree version of the travelling-salesman problem, and a beautiful closed form exists.
+
+      ## Everything lives on a Steiner subtree
+
+      Consider the **Steiner tree** `S(a,b)`: the minimal subtree connecting `a`, `b` and
+      every coin. The optimal walk never leaves `S`, and inside a subtree every edge must
+      be crossed at least twice *except* those on the sampled `a..b` path. Therefore
+
+      ```
+      answer(a, b) = 2 · (edges in S) − dist(a, b)
+      ```
+
+      You traverse each edge of `S` twice, except the `a..b` path inside it, which you
+      walk exactly once (that is where you finish).
+
+      ## The cyclic-distance lemma
+
+      Pick any root and take the **Euler tour** (DFS entry times). Sort the required nodes
+      (coins ∪ {a, b}) by entry time and sum the distances between consecutive nodes in
+      this cyclic order:
+
+      ```
+      sumOverCycle = Σ dist(node_i, node_{i+1 mod k})    (nodes sorted by tin)
+      ```
+
+      Magically, `sumOverCycle = 2 × (edges in S)`. Every edge of `S` is counted exactly
+      twice as we travel around the "contour" of `S`. Hence
+
+      ```
+      answer(a, b) = sumOverCycle − dist(a, b)
+      ```
+
+      So we need `dist` (via LCA) and a dynamic cyclic sum. Because coins are fixed and
+      only `a` and `b` change per query, we keep the coins in an ordered multiset of entry
+      times and **insert `a`, insert `b`, read the sum, remove both**.
+
+      :::tip
+      **Interview tip:** the cyclic-distance identity is the standard trick for "visit all
+      marked nodes in a tree" (virtual-tree questions, and the "minimum route covering a
+      marked set" family). Inserting/removing one node in `O(log n)` by fixing its two
+      cyclic neighbours is exactly how dynamic trees of marked nodes are maintained — e.g.
+      while new points are coloured on the fly.
+      :::
+  - type: markdown
+    content: |
+      # Question — Tree Coin Collecting II
+
+      You are given a tree with `n` nodes. Some nodes contain a coin.
+
+      Your task is to answer `q` queries of the form: what is the shortest length of a path
+      from node `a` to node `b` that **visits all nodes with coins**?
+
+      **Input**
+
+      The first line contains two integers `n` and `q`: the number of nodes and queries.
+      The nodes are numbered `1, 2, ..., n`.
+
+      The second line contains `n` integers `c1, c2, ..., cn`. If `ci = 1`, node `i` has a
+      coin; if `ci = 0`, node `i` doesn't have a coin. You can assume **at least one node
+      has a coin**.
+
+      Then there are `n-1` lines describing the edges. Each line contains two integers
+      `a` and `b`: there is an edge between nodes `a` and `b`.
+
+      Finally, there are `q` lines describing the queries. Each line contains two integers
+      `a` and `b`: the start and end nodes.
+
+      **Output**
+
+      Print `q` integers: the answers to the queries.
+
+      **Constraints**
+
+      - `1 <= n, q <= 2 * 10^5`
+      - `1 <= a, b <= n`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 4
+      1 0 0 1 0
+      2 4
+      2 3
+      1 3
+      3 5
+      1 5
+      3 2
+      4 4
+      5 5
+      ```
+
+      Output:
+
+      ```
+      6
+      5
+      6
+      8
+      ```
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      **① Brute force — build the required subtree per query, O(q · n)**
+
+      For each query, mark the edge of the Steiner tree between `a`, `b` and the coins by
+      testing whether removing it separates the required nodes; multiply by 2 and subtract
+      `dist(a,b)`. Simple, but `O(q·n)` with `q, n = 2*10^5` is far too slow.
+
+      ```cpp
+      // O(q*n) — illustration of the naive idea only.
+      // per query: count edges e where required nodes appear on both sides of e;
+      //            answer = 2*count - dist(a,b)
+      ```
+
+      **② Optimization — dynamic cyclic sum (optimal), O((n + q) log n)**
+
+      Preprocess LCA + distances. Keep every coin's `tin` in a `multiset`; a running
+      `cur` holds the cyclic distance sum. Every insert/remove of a node updates `cur` by
+      fixing just its two neighbours (`O(log n)`). For a query: insert `a` and `b`, read
+      `cur − dist(a,b)`, remove both.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+        ios::sync_with_stdio(false); cin.tie(nullptr);
+        int n,q; cin>>n>>q;
+        vector<int> coin(n+1);
+        for(int i=1;i<=n;i++) cin>>coin[i];
+        vector<vector<int>> g(n+1);
+        for(int i=0;i<n-1;i++){ int a,b;cin>>a>>b; g[a].push_back(b); g[b].push_back(a); }
+
+        // root at 1: tin, depth, binary lifting
+        const int LOG=20;
+        vector<array<int,LOG>> up(n+1);
+        vector<int> dep(n+1,0), tin(n+1), nodeOfTin(n+1), par(n+1,0);
+        int timer=0;
+        vector<int> stk; vector<char> vis(n+1,0); vis[1]=1; stk.push_back(1);
+        while(!stk.empty()){ int u=stk.back(); stk.pop_back();
+          tin[u]=++timer; nodeOfTin[timer]=u;
+          for(int v:g[u]) if(!vis[v]){ vis[v]=1; par[v]=u; dep[v]=dep[u]+1; stk.push_back(v);} }
+        for(int u=1;u<=n;u++) up[u][0]=par[u];
+        for(int j=1;j<LOG;j++) for(int u=1;u<=n;u++) up[u][j]=up[up[u][j-1]][j-1];
+        auto walk=[&](int u,int k){ for(int j=0;j<LOG;j++) if(k>>j&1) u=up[u][j]; return u; };
+        auto lca=[&](int a,int b){
+          if(dep[a]<dep[b]) swap(a,b); a=walk(a,dep[a]-dep[b]);
+          if(a==b) return a;
+          for(int j=LOG-1;j>=0;j--) if(up[a][j]!=up[b][j]){ a=up[a][j]; b=up[b][j]; }
+          return par[a];
+        };
+        auto dist=[&](int a,int b){ int c=lca(a,b); return dep[a]+dep[b]-2*dep[c]; };
+
+        multiset<int> ms;   // tins of currently-marked nodes
+        long long cur=0;
+        auto add=[&](int u){
+          int t=tin[u];
+          if(ms.empty()){ ms.insert(t); return; }
+          auto it=ms.lower_bound(t);
+          int nx=(it==ms.end()? *ms.begin(): *it);
+          int pr=(it==ms.begin()? *ms.rbegin(): *prev(it));
+          cur += dist(nodeOfTin[pr],u)+dist(u,nodeOfTin[nx])-dist(nodeOfTin[pr],nodeOfTin[nx]);
+          ms.insert(t);
+        };
+        auto del=[&](int u){
+          int t=tin[u]; auto it=ms.find(t);
+          int pr=(it==ms.begin()? *ms.rbegin(): *prev(it));
+          auto nit=next(it);
+          int nx=(nit==ms.end()? *ms.begin(): *nit);
+          cur -= dist(nodeOfTin[pr],u)+dist(u,nodeOfTin[nx])-dist(nodeOfTin[pr],nodeOfTin[nx]);
+          ms.erase(it);
+        };
+
+        for(int i=1;i<=n;i++) if(coin[i]) add(i);   // base set = all coins
+
+        while(q--){
+          int a,b; cin>>a>>b;
+          add(a); add(b);
+          cout << cur - dist(a,b) << "\n";
+          del(b); del(a);
+        }
+        return 0;
+      }
+      ```
+
+      Inserting `a` then `b` into the coin set and reading `cur` costs `O(log n)`, so the
+      whole run is `O((n + q) log n)`.
+
+      **③ Further optimization** — not needed: reading all input is `Ω(n + q)`, and the
+      multiset work adds only a log factor.
+
+      **④ Alternative — virtual tree per query**
+
+      For sets with very few coins, build the *virtual tree* of {coins ∪ {a,b}} (using
+      LCA nodes and a stack over tins), sum its edge weights, and subtract `dist(a,b)`.
+      It is `O(k log k)` per query instead of `O(log n)`, so it wins only when the coin
+      count `k` is tiny; the cyclic-sum approach is better here because `k` can be large.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Follow the optimal **②** solution:
+
+      - Root the tree at `1`; a stack-DFS fills `tin[u]` (entry time), `dep[u]`, and the
+        binary-lifting parent table.
+      - `dist(a,b)` is the classic LCA formula `dep[a]+dep[b]-2·dep[lca]`.
+      - A `multiset<int>` stores the `tin`s of currently-required nodes; `cur` is the
+        cyclic distance sum between neighbours in `tin` order.
+      - `add(u)`: locate `u`'s position in `tin` order, take cyclic `prev`/`next`, and
+        adjust `cur` by `+dist(prev,u)+dist(u,next)−dist(prev,next)`. (Same arithmetic,
+        negated, in `del`.)
+      - Initialise the multiset with all coin nodes, then for each query insert `a` and
+        `b`, output `cur - dist(a,b)`, and delete `b` then `a` so the coin set is restored.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 5`, coins at `1` and `4`. Edges: `2-4, 2-3, 1-3, 3-5` (`3` links
+      `1,2,5`; `2` links `4`).
+
+      Root at `1`. Say `tin` order is `1, 3, 2, 4, 5`. Base coin multiset = `{tin1, tin4}`,
+      cyclic sum = `dist(1,4)+dist(4,1) = 3+3 = 6`.
+
+      | query | insert | required set | sumOverCycle | dist(a,b) | answer |
+      |---|---|---|---|---|---|
+      | 1→5 | a=1(already), b=5 | {1,4,5} | dist chain = 8+... → **8** | 2 | 8−2=6 |
+      | 3→2 | a=3, b=2 | {1,4,3,2} | 6+... → **6** | 1 | 5 |
+      | 4→4 | a=b=4 | {1,4} | 6 | 0 | 6 |
+      | 5→5 | a=b=5 | {1,4,5} | 8 | 0 | 8 |
+
+      Output `6 5 6 8`, matching the sample.
+
+      Check the first row by hand: to visit coins `1` and `4` and finish at `5`, the walk
+      `1 → 3 → 2 → 4 → 2 → 3 → 5` has length 6 (edges `1-3, 3-2, 2-4, 4-2, 2-3, 3-5`).
+      The Steiner subtree `{1,3,2,4} ∪ {3,5}` has 4 edges → `2·4 − dist(1,5) = 8 − 2 = 6`. ✓
+  - type: flowchart
+    title: "Dynamic cyclic sum"
+    nodes: ["root tree; compute tin[], depth[], LCA", "coin multiset sorted by tin",
+            "maintain cyclic sum cur over neighbours", "query(a,b): insert a, insert b",
+            "print cur - dist(a,b)", "delete b, delete a", "next query"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: "O(log n)"}
+      - {from: 4, to: 5, label: "restore coins"}
+      - {from: 5, to: 6, label: ""}
+  - type: mcq
+    prompt: "Why does the cyclic sum of distances between consecutive required nodes (in Euler order) equal exactly twice the edge count of the Steiner subtree connecting them?"
+    options:
+      - "Because walking the Euler-order cycle draws the border of the minimal subtree connecting the required nodes; each edge of that subtree is entered and exited exactly once on the tour, so it is counted precisely twice, and edges outside the subtree are never on the cycle"
+      - "Because the Euler order always visits every node exactly once in a straight line"
+      - "Because the required nodes always form a path, so the sum is just the diameter"
+      - "Because each cyclic distance is doubled and then halved by the LCA formula"
+    answer: 0
+    explanation: "Sorting required nodes by DFS entry time and walking them cyclically produces a closed tour that runs around the outline of their minimal connecting subtree. Any edge in that subtree lies on the boundary of this tour and is traversed once going out and once coming back — two times in total — while every other edge is not part of the tour. Hence Σ dist(consecutive) = 2·|E(Steiner)|, and the answer subtracts the single-traversed a-b path."
+---

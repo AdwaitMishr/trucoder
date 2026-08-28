@@ -1,0 +1,288 @@
+---
+id: eulerian-subgraphs
+title: Eulerian Subgraphs
+difficulty: hard
+order: 245
+tags:
+  - linear-algebra
+  - mod2
+  - rank
+  - gaussian-elimination
+  - combinatorics
+blocks:
+  - type: markdown
+    content: |
+      # Eulerian Subgraphs — counting even-degree edge subsets with linear algebra mod 2
+
+      Given an undirected graph with `n` nodes and `m` edges, count how many
+      **subgraphs** (all nodes, an arbitrary subset of the edges) have **every
+      node of even degree** — an *Eulerian* subgraph — modulo `10^9 + 7`.
+
+      This is a linear-algebra problem in disguise, over the field **GF(2)**
+      (arithmetic where `1 + 1 = 0`, i.e. XOR). Here is the translation:
+
+      - Represent each edge `e = (a, b)` as a **0/1 vector** of length `n` with a
+        `1` in positions `a` and `b` (its *incidence vector*).
+      - Choosing a subset of edges and XOR-ing their incidence vectors gives the
+        **degree parity** of every node in that subgraph.
+      - "Every node has even degree" ⟺ the XOR of the chosen vectors is the
+        **zero vector**.
+
+      So we need to count subsets of edge-vectors whose XOR is zero — exactly the
+      number of **solutions to a homogeneous linear system over GF(2)**. If the
+      matrix of edge-vectors has **rank `r`** (number of linearly independent
+      edges), the system has `m - r` free variables, hence `2^(m-r)` solutions.
+      The answer is **`2^(m - r)` mod `10^9+7`**.
+
+      **The crucial shortcut.** The rank of the incidence matrix mod 2 is almost
+      always full rank in terms of nodes: it equals **`n - c`**, where `c` is the
+      number of connected components. (Each connected component contributes
+      exactly `n_k - 1` independent equations — its edges form a connected
+      structure, and one degree equation per component is implied by the others,
+      because the sum of all degree parities in a component is always `0`.)
+      Therefore:
+
+      > **Number of Eulerian subgraphs = `2^(m - n + c)` mod `10^9+7`.**
+
+      You only need to find the number of connected components `c` (via DSU or a
+      DFS) and a fast exponentiation.
+
+      **Intuition check on the sample.** Triangle `{1,2,3}` (3 edges) plus an
+      isolated node `4`. Three edges that form a cycle → `1` degree of freedom →
+      `2` Eulerian subgraphs (take the whole cycle, or take nothing). The formula:
+      `m = 3, n = 4, c = 2` → `2^(3-4+2) = 2^1 = 2`. Exactly right.
+
+      **Complexity.** Components via a single pass + fast exponentiation:
+      **O(n + m + log m)** time and **O(n)** space.
+
+      :::tip
+      **Interview tip:** "count subsets whose XOR is zero" is the canonical
+      **linear basis / rank over GF(2)** question. Whenever you count subsets of
+      edges/vectors with some XOR constraint, the answer is almost always
+      `2^(free variables)` — reduce the set to a linearly independent **basis**
+      (rank), and the number of solutions is `2^(size − rank)`. Recognizing that
+      an "Eulerian subgraph" is really "edge subset with zero degree-parity
+      vector" is the whole insight.
+      :::
+  - type: markdown
+    content: |
+      # Question — Eulerian Subgraphs
+
+      You are given an undirected graph that has `n` nodes and `m` edges. We
+      consider subgraphs that have all nodes of the original graph and some of
+      its edges. A subgraph is called *Eulerian* if each node has even degree.
+      Your task is to count the number of Eulerian subgraphs modulo `10^9+7`.
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 10^5`
+      - `0 ≤ m ≤ 2·10^5`
+      - `1 ≤ a, b ≤ n`
+
+      **Input.** The first input line has two integers `n` and `m`: the number
+      of nodes and edges. The nodes are numbered `1,2,…,n`. After this, there
+      are `m` lines that describe the edges. Each line has two integers `a` and
+      `b`: there is an edge between nodes `a` and `b`. There is at most one edge
+      between two nodes, and each edge connects two distinct nodes.
+
+      **Output.** Print the number of Eulerian subgraphs modulo `10^9+7`.
+
+      Sample input:
+
+      ```
+      4 3
+      1 2
+      1 3
+      2 3
+      ```
+
+      Sample output:
+
+      ```
+      2
+      ```
+
+      Explanation: You can either keep or remove all edges, so there are two
+      possible Eulerian subgraphs. (Node 4 has no edges; the kept triangle keeps
+      nodes 1, 2, 3 at degree 2, the removed set keeps them at degree 0.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate every edge subset, O(2^m · n)**
+
+      Iterate over all `2^m` subsets with a bitmask; for each, xor the degrees of
+      the chosen edges; count how often all degrees come out even. Correct but
+      exponential — useless past `m ≈ 25`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main(){ // too slow: O(2^m * (m + n))
+          int n, m; cin >> n >> m;
+          vector<pair<int,int>> e(m);
+          for (auto& [a,b] : e){ cin >> a >> b; --a; --b; }
+          int cnt = 0;
+          for (int mask = 0; mask < (1 << m); ++mask){
+              vector<int> deg(n, 0);
+              for (int i = 0; i < m; ++i) if (mask >> i & 1){
+                  deg[e[i].first] ^= 1; deg[e[i].second] ^= 1;
+              }
+              bool ok = true;
+              for (int d : deg) if (d) { ok = false; break; }
+              if (ok) ++cnt;
+          }
+          cout << cnt % 1000000007 << "\n";
+      }
+      ```
+
+      **O(2^m · n)** — correct but exponential.
+
+      **② Optimization — linear basis / rank over GF(2), O(m·n/64)**
+
+      Model edges as incidence vectors over GF(2) (a `1` at each endpoint) and
+      maintain a **linear basis**: insert each vector; if it is independent, the
+      rank grows. The number of edge-subsets whose XOR is `0` is exactly
+      `2^(m - rank)`. Gaussian elimination on length-`n` bit vectors gives the
+      rank without needing the `n - c` theorem (yet):
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+      long long modpow(long long b, long long e){ long long r=1; while(e){ if(e&1) r=r*b%MOD; b=b*b%MOD; e>>=1;} return r; }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<unsigned long long> v(m, 0);   // one bit per node (handles n<=64 in this sketch)
+          for (int i = 0; i < m; ++i){
+              int a, b; cin >> a >> b; --a; --b;
+              v[i] = (1ULL << a) | (1ULL << b);
+          }
+          int rank = 0;
+          vector<unsigned long long> basis(n);
+          for (auto x : v){
+              for (int bit = n - 1; bit >= 0; --bit) if (x >> bit & 1){
+                  if (basis[bit]) x ^= basis[bit];
+                  else { basis[bit] = x; ++rank; break; }
+              }
+          }
+          cout << modpow(2, m - rank) << "\n";   // works for n <= 64
+      }
+      ```
+
+      **O(m·n/64)** — the rank idea is correct, but the bit-vector version only
+      handles `n ≤ 64` cleanly; with `n` up to `10^5` you would use bitsets
+      (`O(m·n/word)`) which is still slower than we need. Good conceptually,
+      not the submission.
+
+      **③ Further optimization — closed form 2^(m - n + c), O(n + m) (submission)**
+
+      Use the rank equality `rank(incidence) = n - c` where `c` is the number of
+      connected components. Count `c` with a union-find (or DFS), then compute
+      `2^(m - n + c)` by fast exponentiation:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+
+      long long modpow(long long b, long long e){
+          long long r = 1;
+          while (e){
+              if (e & 1) r = r * b % MOD;
+              b = b * b % MOD;
+              e >>= 1;
+          }
+          return r;
+      }
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<int> par(n);
+          iota(par.begin(), par.end(), 0);
+          function<int(int)> find = [&](int x){ return par[x] == x ? x : par[x] = find(par[x]); };
+          auto unite = [&](int a, int b){ a = find(a); b = find(b); if (a != b) par[a] = b; };
+          for (int i = 0; i < m; ++i){ int a, b; cin >> a >> b; --a; --b; unite(a, b); }
+          int c = 0;
+          for (int i = 0; i < n; ++i) if (find(i) == i) ++c;
+          cout << modpow(2, (long long)m - n + c) << "\n";
+          return 0;
+      }
+      ```
+
+      **O((n + m)·α(n) + log m)** time and **O(n)** space — the submission tier.
+      (`m - n + c` is always non-negative because a graph on `n` nodes with `c`
+      components has at least `n - c` edges.)
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **The GF(2) model.** Each edge is a vector with `1`s at its two
+        endpoints. XOR-ing the vectors of a chosen edge set yields every node's
+        degree *parity*. An Eulerian subgraph ⟺ that XOR is the all-zero vector.
+      - **Counting zero-XOR subsets.** The edge vectors span a space of rank `r`.
+        The solutions to `(chosen sum) = 0` form a subspace of dimension
+        `m - r`, so there are `2^(m - r)` of them.
+      - **`rank = n - c`.** In each connected component of `k` nodes, the edges
+        give exactly `k - 1` independent equations (one "sum of all parities is
+        0" redundancy per component). Summed over components this is `n - c`
+        independent edges, hence the rank.
+      - **The closed form.** Substituting gives `2^(m - n + c)`. The walkthrough
+        below shows why `c` is the *only* graph property we need — which is why
+        a single DSU pass suffices.
+      - **Modular exponentiation.** `modpow(2, e)` reduces in `O(log e)` and is
+        needed because the exponent can be on the order of `2·10^5`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 4, m = 3`, edges `1-2, 1-3, 2-3`.
+
+      **Step 1 — count components with DSU.**
+
+      | edge | union | components after |
+      |------|-------|------------------|
+      | 1-2 | {1,2} | {1,2},{3},{4} |
+      | 1-3 | {1,2,3} | {1,2,3},{4} |
+      | 2-3 | already joined | {1,2,3},{4} |
+
+      `c = 2` (component `{1,2,3}` and isolated node `4`).
+
+      **Step 2 — apply the formula.** `m - n + c = 3 - 4 + 2 = 1`, so the answer
+      is `2^1 = 2`.
+
+      **Step 3 — confirm by hand.** The only edge subsets in which every vertex
+      has even degree are: taking *no* edges (all degrees `0`), and taking the
+      full triangle `{1-2, 1-3, 2-3}` (nodes 1, 2, 3 reach degree `2` each —
+      even — and node 4 stays at degree `0`). So exactly **2** Eulerian
+      subgraphs:
+
+      | subset | degree parities | Eulerian? |
+      |--------|-----------------|-----------|
+      | ∅ | all 0 | yes |
+      | {1-2} | 1:1, 2:1 (odd) | no |
+      | {1-3} | 1:1, 3:1 (odd) | no |
+      | {2-3} | 2:1, 3:1 (odd) | no |
+      | {1-2,1-3} | node1:0, node2:1, node3:1 | no |
+      | {1-2,2-3} | node2:0, node1:1, node3:1 | no |
+      | {1-3,2-3} | node3:0, node1:1, node2:1 | no |
+      | {1-2,1-3,2-3} | node1,2,3: 2 each; node4:0 | yes |
+
+      **Output:** we print **`2`**, matching the sample. (Also note the lone
+      node `4` never blocks anything: an isolated vertex contributes one extra
+      component and one extra node to `n - c`, and the `+1/-1` cancel out.)
+  - type: mcq
+    prompt: 'Why is the number of Eulerian subgraphs equal to 2^(m - n + c)?'
+    options:
+      - Because every Eulerian subgraph is a spanning tree plus an extra edge
+      - Because the rank of the incidence matrix mod 2 is n - c, so the edge-set solutions with zero degree parity form a 2^(m - rank) subspace
+      - Because all graphs are Eulerian
+      - Because n is always small
+    answer: 1
+    explanation: Represent edges as GF(2) incidence vectors; an Eulerian subgraph is an edge set whose XOR (degree parities) is zero, a homogeneous linear system. Its solution space has dimension m - rank, and rank = n - c, so there are 2^(m - (n-c)) such subsets.
+type: content
+---

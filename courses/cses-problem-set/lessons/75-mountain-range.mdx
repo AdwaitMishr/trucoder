@@ -1,0 +1,266 @@
+---
+id: mountain-range
+title: "Mountain Range"
+difficulty: easy
+order: 75
+tags:
+  - dynamic-programming
+  - partition-dp
+  - boolean-dp
+blocks:
+  - type: markdown
+    content: |
+      # Mountain Range — can the array be cut into "mountains"?
+
+      You are given `n` hill heights `h_1, ..., h_n` in a row. A **mountain** is a
+      contiguous block of at least **three** hills whose heights strictly climb
+      to a single peak and then strictly fall:
+
+      ```
+      h_l < h_{l+1} < ... < h_p > h_{p+1} > ... > h_r
+      ```
+
+      with the peak `h_p` strictly between the ends (`p` is not `l` or `r`).
+      Adjacent equal heights break a mountain (nothing is strictly climbing or
+      falling).
+
+      The question is whether the whole array can be split into consecutive
+      mountains with no leftover hills. This is a **boolean / reachability DP** —
+      `dp[i] = "can we tile the prefix [0, i) with mountains?"`.
+
+      ## The boolean reachability recurrence
+
+      ```
+      dp[0] = true
+      dp[i] = true   if there is a l in [0, i) with dp[l]=true and [l, i) is a mountain
+      answer = dp[n]
+      ```
+
+      Every tiling ends in a final mountain `[l, n)`; recursively its left part
+      must already be tileable — that is `dp[l]`. Walking `i` from 1 to `n` and
+      testing every possible `l` is a classic O(n²) reachability pass.
+
+      The only non-trivial piece is testing `[l, i)` is a mountain in O(1). Two
+      arrays make that instant:
+
+      - `runInc[l]` = the last index of the longest strictly-increasing run that
+        starts at `l` (the peak candidate for a mountain starting at `l`).
+      - `runDec[p]` = the last index of the longest strictly-decreasing run that
+        starts at `p`.
+
+      Then `[l, i)` is a mountain iff its peak `p = runInc[l]` is strictly inside
+      (`l < p < i`) **and** the decreasing run from `p` reaches `i`
+      (`runDec[p] >= i`). Both arrays are built in O(n).
+
+      **Time:** O(n²) for the DP + O(n) precompute; **Space:** O(n). For
+      `n ≤ 5000` that is ~25·10^6 boolean checks — fast.
+
+      :::tip
+      **Interview tip:** boolean "can you partition / tile / cover an array with
+      pieces of a given shape" is the bread-and-butter reachability DP. The
+      key habits: seed `dp[0]=true`, think piece-by-piece (`dp[i]` joins a valid
+      piece to a valid prefix), and make the piece test O(1) by precomputing
+      structure (here the run-length arrays). A correct greedy is usually the
+      trap — it fails, so DP is what is expected.
+      :::
+  - type: markdown
+    content: |
+      # Question — Mountain Range
+
+      You have a row of `n` hills whose heights are `h_1, h_2, ..., h_n`. A
+      mountain is a contiguous block of at least three hills whose heights
+      **strictly increase** up to a single peak and then **strictly decrease**:
+
+      ```
+      h_l < h_{l+1} < ... < h_p > h_{p+1} > ... > h_r
+      ```
+
+      where the peak `h_p` is strictly between `h_l` and `h_r`. Adjacent equal
+      heights are not allowed inside one mountain.
+
+      Determine whether the entire array can be partitioned into a sequence of
+      such mountains with every hill belonging to exactly one mountain.
+
+      **Input**
+
+      The first line has an integer `n`. The second line has `n` integers.
+
+      **Output**
+
+      Print a single line: `YES` if a valid partition exists, otherwise `NO`.
+
+      **Constraints**
+
+      - `1 <= n <= 5000`
+      - `1 <= h_i <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      6
+      1 3 2 5 7 6
+      ```
+
+      Output:
+
+      ```
+      YES
+      ```
+
+      (Mountains `[1, 3, 2]` and `[5, 7, 6]` cover the whole row.)
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — recursive backtracking, O(n³) time, O(n) space**
+
+      Try every split point, and for a candidate mountain range test it by
+      scanning its heights. Correct but O(n³) at `n = 5000` is far too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      vector<long long> a;
+      int n;
+
+      bool isMountain(int l, int r) {            // O(r-l) scan
+          if (r - l + 1 < 3) return false;
+          int p = l;
+          while (p + 1 <= r && a[p] < a[p + 1]) ++p;   // climb to peak
+          if (p == l || p == r) return false;          // peak must be strictly inside
+          for (int k = p; k < r; ++k) if (a[k] <= a[k + 1]) return false; // must strictly fall
+          return true;
+      }
+
+      bool can(int start) {                    // tile [start, n)
+          if (start == n) return true;
+          for (int end = start + 2; end < n; ++end)
+              if (isMountain(start, end) && can(end + 1)) return true;
+          return false;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          cin >> n;
+          a.resize(n);
+          for (auto &v : a) cin >> v;
+          cout << (can(0) ? "YES" : "NO") << "\n";
+      }
+      ```
+
+      **② Optimisation — boolean DP + O(1) mountain test, O(n²) time, O(n) space**
+
+      Replace the exponential-`can` recursion with a `dp[i]` reachability pass,
+      and precompute the run arrays so each `[l, i)` test is O(1).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n;
+          cin >> n;
+          vector<long long> h(n);
+          for (auto &v : h) cin >> v;
+
+          // runInc[l] = last index of the strict-increasing run starting at l
+          // runDec[p] = last index of the strict-decreasing run starting at p
+          vector<int> runInc(n), runDec(n);
+          runInc[n - 1] = runDec[n - 1] = n - 1;
+          for (int i = n - 2; i >= 0; --i) {
+              runInc[i] = (h[i] < h[i + 1]) ? runInc[i + 1] : i;
+              runDec[i] = (h[i] > h[i + 1]) ? runDec[i + 1] : i;
+          }
+
+          vector<char> dp(n + 1, 0);
+          dp[0] = 1;
+          for (int r = 1; r <= n; ++r) {          // prefix [0, r)
+              for (int l = 0; l < r; ++l) {
+                  if (!dp[l]) continue;
+                  int i = r - 1;                  // last index of this piece
+                  int p = runInc[l];              // peak of a mountain starting at l
+                  if (p >= l + 1 && p <= i - 1 && runDec[p] >= i) {
+                      dp[r] = 1;                  // found a valid last mountain
+                      break;
+                  }
+              }
+          }
+          cout << (dp[n] ? "YES" : "NO") << "\n";
+      }
+      ```
+
+      **③ Alternative — memoised recursion (top-down), same O(n²)**
+
+      Same recurrence, computed recursively with a memo. Identical to ② in
+      complexity; the bottom-up array form above is shown because it needs no
+      recursion depth care at `n = 5000`.
+
+      **④ Further optimisation** — an O(n) *greedy* (always snap the longest valid
+      mountain) is tempting but **fails**: a long mountain can swallow hills
+      needed by a neighbouring one. The partition structure has O(n²) subproblems
+      (`dp[i]` x starting positions), so O(n²) is the natural bound and the
+      intended solution. There is no faster exact method for this shape.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O(n²) solution in **②**:
+
+      - `runInc`: scanning right to left, `runInc[i] = runInc[i+1]` while
+        `h[i] < h[i+1]`, else `i`. So `runInc[i]` is the furthest index a
+        strictly-increasing run from `i` reaches — the only possible peak of a
+        mountain that starts at `i`.
+      - `runDec` is symmetric: the furthest a strictly-decreasing run from `i`
+        reaches.
+      - `dp[r]` is true iff prefix `[0, r)` can be fully tiled. We seed `dp[0]`
+        (the empty prefix is tileable) and test, for each `r`, every split `l`:
+        if `dp[l]` is tileable and the block `[l, r)` is a mountain, then `dp[r]`
+        is reachable. We `break` on the first success.
+      - The O(1) mountain test for `[l, i)`: `p = runInc[l]` is the peak; it must
+        be strictly inside the block (`l < p < i`, i.e. `p >= l+1 && p <= i-1`),
+        and the decreasing run from the peak must reach the block's end
+        (`runDec[p] >= i`). This simultaneously enforces ≥3 length, a strict
+        climb, and a strict fall.
+      - Answer is `dp[n]`, printed as `YES`/`NO`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the DP on `h = 1 3 2 5 7 6` (`n = 6`). Right-to-left run ends:
+
+      - `runInc`: i4=4 (7>6), i3=4 (5<7), i2=4 (2<5), i1=1 (3>2), i0=1 (1<3)
+        → `[1,1,4,4,4,5]`
+      - `runDec`: i4=5 (7>6), i3=3 (5<7), i2=2 (2<5), i1=2 (3>2), i0=0 (1<3)
+        → `[0,2,2,3,5,5]`
+
+      Filling `dp` (only the decisive `l` per `r` shown):
+
+      | r | l passes | piece [l, i) | p=runInc[l] | ok? | dp[r] |
+      |---|----------|--------------|-------------|-----|-------|
+      | 1 | 0 | [0,0] | 1 | p<=i-1? no | F |
+      | 2 | 0 | [0,1] | 1 | p<=0? no | F |
+      | 3 | 0 | [0,2] | 1 | p>=1, p<=1, runDec[1]=2>=2 ✓ | T |
+      | 4 | 0 (dp[1..2]=F) | [0,3] | 1 | runDec[1]=2>=3? no | F |
+      | 5 | 3 | [3,5) → [3,4] | runInc[3]=4 | p<=3? no | F |
+      | 6 | 3 | [3,6) → [3,5] | runInc[3]=4 | p>=4, p<=4, runDec[4]=5>=5 ✓ | T |
+
+      `dp[6]` is `true`, so the answer is `YES`. The tiling found is the final
+      mountain `[5, 7, 6]` (indices 3..5) on top of the tileable prefix
+      `[1, 3, 2]` (indices 0..2) captured by `dp[3]`. Both match the sample.
+  - type: mcq
+    prompt: 'In the boolean reachability DP, why do we test every start l for each prefix end r rather than just take the first valid mountain greedily?'
+    options:
+      - 'Greedily snapping the longest (or any) valid first mountain can consume hills that a later adjacent mountain needs, so only an exhaustive over start positions over all prefixes is guaranteed correct'
+      - 'Because mountains must all have the same length'
+      - 'To keep the answer deterministic'
+      - 'Because h_i can exceed 10^9'
+    answer: 0
+    explanation: 'The partition is a regular-layout DP: dp[r] depends on which valid last mountain [l, r) sits on a tileable prefix dp[l]. A greedy choice at the front ignores that a long mountain may block the tiling later, so it can answer NO when a valid split exists. Trying all l per r covers every tiling.'
+type: content
+---

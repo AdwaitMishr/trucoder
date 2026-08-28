@@ -1,0 +1,267 @@
+---
+id: signal-processing
+title: Signal Processing
+type: content
+difficulty: hard
+order: 253
+tags:
+  - fft
+  - convolution
+  - signal-processing
+  - polynomial-multiplication
+blocks:
+  - type: markdown
+    content: |
+      # Signal Processing — cross-correlation as a convolution
+
+      You have a **signal** `a` (length `n`) and a **mask** `b` (length `m`).
+      You slide the mask across the signal from left to right; at each position
+      you sum the products of the *aligned* values in the region where signal
+      and mask overlap. The result is `n + m - 1` numbers — one per mask
+      position.
+
+      This "sum of aligned products as one sequence slides over another" is the
+      textbook definition of **convolution** (or **cross-correlation**), and that
+      is the entire insight: instead of a quadratic sliding-loop, compute one
+      convolution. When the values can be as large as `100` and the lengths as
+      large as `2·10⁵`, an `O(n·m)` sliding sum (`4·10¹⁰`) is hopeless — the
+      **Fast Fourier Transform** reduces it to `O(n log n)`.
+
+      ## Sliding windows are convolutions in disguise
+
+      Define the *reversed* mask `br[j] = b[m-1-j]`. Then the sliding sum at
+      mask position `t` equals the convolution coefficient `(a * br)[t]`:
+
+      ```
+      (a * br)[t]  =  sum_{i} a[i] * br[t - i]  =  sum over aligned (i, j) with
+                     i + j = t of a[i] * b[m-1-j]
+      ```
+
+      Reversing `b` is what maps "the mask slides right and each overlap is a
+      sum" into a single polynomial product. Every aligned product appears
+      exactly once, across the whole range `t = 0 … n+m-2`.
+
+      ## The FFT pipeline
+
+      1. Build polynomials from `a` and the reversed `b`.
+      2. Pad both to the next power of two (so no coefficient wraps around).
+      3. Forward FFT each, multiply pointwise, inverse FFT the product.
+      4. Round the floating-point results to integers — the true coefficients.
+
+      Complexity lands at `O((n+m) log(n+m))`.
+
+      :::tip
+      **Interview tip:** "for each offset/overlap, sum of aligned products" is a
+      direct tell for convolution — reach for FFT/NTT whenever `n·m` is too big.
+      Watch for the reverse: sometimes the statement slides one sequence over
+      another directly (correlation), in which case you reverse one operand so
+      the offsets become convolution indices. This is the exact same trick used
+      in polynomial multiplication, pattern matching with wildcards, and image
+      convolution.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given two integer sequences: a signal and a mask. Your task is to
+      process the signal by moving the mask through the signal from left to
+      right. At each mask position, calculate the sum of products of aligned
+      signal and mask values in the part where the signal and the mask overlap.
+
+      ## Input
+
+      The first input line consists of two integers `n` and `m`: the length of
+      the signal and the length of the mask.
+
+      The next line consists of `n` integers `a_1, a_2, …, a_n` defining the
+      signal.
+
+      The last line consists of `m` integers `b_1, b_2, …, b_m` defining the
+      mask.
+
+      **Constraints:** `1 <= n, m <= 2·10^5`, `1 <= a_i, b_i <= 100`
+
+      ## Output
+
+      Print `n + m - 1` integers: the sum of products of aligned values at each
+      mask position from left to right.
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 3
+      1 3 2 1 4
+      1 2 3
+      ```
+      **Output:**
+      ```
+      3 11 13 10 16 9 4
+      ```
+      For example, at the second mask position the sum of aligned products is
+      `2·1 + 3·3 = 11`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — slide and sum, O(n·m)**
+
+      For each mask position `t` (the number of output values is `n+m-1`), loop
+      over all aligned `(i, j)` pairs and add `a[i] * b[m-1-j]`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          vector<long long> a(n), b(m);
+          for (auto& x : a) cin >> x;
+          for (auto& x : b) cin >> x;
+          vector<long long> br = b; reverse(br.begin(), br.end());
+          for (int t = 0; t < n + m - 1; t++) {
+              long long s = 0;
+              for (int i = 0; i < n; i++) {
+                  int j = t - i;                 // aligned mask index in br
+                  if (0 <= j && j < m) s += a[i] * br[j];
+              }
+              if (t) cout << " ";
+              cout << s;
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      *Correct but `O(n·m)` — `4·10¹⁰` multiply-adds for `n = m = 2·10⁵`. Too
+      slow.*
+
+      **② Optimization — FFT convolution, O((n+m) log(n+m)) (optimal)**
+
+      Convolve `a` with the reversed mask and round the result. Compiled and run
+      against the sample below.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef complex<double> cd;
+      const double PI = acos(-1.0);
+
+      void fft(vector<cd>& a, bool invert) {
+          int n = a.size();
+          for (int i = 1, j = 0; i < n; i++) {
+              int bit = n >> 1;
+              for (; j & bit; bit >>= 1) j ^= bit;
+              j ^= bit;
+              if (i < j) swap(a[i], a[j]);
+          }
+          for (int len = 2; len <= n; len <<= 1) {
+              double ang = 2 * PI / len * (invert ? -1 : 1);
+              cd wlen(cos(ang), sin(ang));
+              for (int i = 0; i < n; i += len) {
+                  cd w(1);
+                  for (int j = 0; j < len / 2; j++) {
+                      cd u = a[i + j], v = a[i + j + len / 2] * w;
+                      a[i + j] = u + v; a[i + j + len / 2] = u - v;
+                      w *= wlen;
+                  }
+              }
+          }
+          if (invert) for (auto& x : a) x /= n;
+      }
+
+      vector<long long> multiply(const vector<long long>& a, const vector<long long>& b) {
+          vector<cd> fa(a.begin(), a.end()), fb(b.begin(), b.end());
+          int n = 1;
+          while (n < (int)a.size() + (int)b.size()) n <<= 1;
+          fa.resize(n); fb.resize(n);
+          fft(fa, false); fft(fb, false);
+          for (int i = 0; i < n; i++) fa[i] *= fb[i];
+          fft(fa, true);
+          vector<long long> res(a.size() + b.size() - 1);
+          for (int i = 0; i < (int)res.size(); i++) res[i] = llround(fa[i].real());
+          return res;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, m; cin >> n >> m;
+          vector<long long> a(n), b(m);
+          for (auto& x : a) cin >> x;
+          for (auto& x : b) cin >> x;
+          reverse(b.begin(), b.end());            // slide = convolution with reversed mask
+          auto c = multiply(a, b);
+          for (int i = 0; i < (int)c.size(); i++) {
+              if (i) cout << " ";
+              cout << c[i];
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      *`O((n+m) log(n+m))` time, `O(n+m)` space, `n+m-1` output values. The
+      maximum single output is `≤ n·100·100 = 2·10⁹`, well within `long long`
+      and roundable from the FFT's doubles.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Reverse the mask.** `reverse(b.begin(), b.end())` converts the
+        narrative "slide the mask across the signal" into a textbook convolution
+        `a * br`. The reversal is the one-line core of the solution.
+      - **One product, all positions.** The convolution contains every output
+        value in index order — `c[t]` is exactly the aligned sum when the mask
+        is at position `t`. No looping over overlaps remains.
+      - **Power-of-two padding.** `multiply` pads both operands to length
+        `2^p ≥ n + m - 1`, so no coefficient "wraps" onto another; the FFT is
+        circular by nature and padding prevents circular wrap-around from
+        corrupting the linear convolution.
+      - **Rounding.** The inverse FFT returns exact integer coefficients as
+        `double`s with tiny floating-point error; `llround` recovers them.
+      - **Range safety.** Each product term ≤ `100·100 = 10⁴`; at most `n ≤ 2·10⁵`
+        terms align, so outputs ≤ `2·10⁹` — safe in `long long`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `a = [1, 3, 2, 1, 4]`, `b = [1, 2, 3]` (`n = 5`, `m = 3`).
+
+      **Reverse the mask:** `br = [3, 2, 1]`.
+
+      Convolve `a * br` — coefficient `c[t] = a[0]*br[t] + a[1]*br[t-1] + …`:
+
+      ```
+      c[0] = 1*3                       = 3
+      c[1] = 1*2 + 3*3                 = 2  + 9  = 11
+      c[2] = 1*1 + 3*2 + 2*3           = 1  + 6  + 6  = 13
+      c[3] = 3*1 + 2*2 + 1*3           = 3  + 4  + 3  = 10
+      c[4] = 2*1 + 1*2 + 4*3           = 2  + 2  + 12 = 16
+      c[5] = 1*1 + 4*2                 = 1  + 8  = 9
+      c[6] = 4*1                       = 4
+      ```
+
+      Printed:
+      ```
+      3 11 13 10 16 9 4
+      ```
+      Expected (sample) `3 11 13 10 16 9 4` — **match**. Spot-check the second
+      mask position: aligned products `2·1 + 3·3 = 11`, which is `c[1]`.
+  - type: flowchart
+    title: "Sliding-window sum via FFT convolution"
+    nodes: ["read signal a and mask b", "reverse b into br", "multiply a * br with FFT O((n+m) log)", "round coefficients to integers", "print c[0..n+m-2]"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+  - type: mcq
+    prompt: "Why do we reverse the mask before convolving it with the signal?"
+    options:
+      - "Convolution only works on data that is sorted descending, and reversing guarantees that."
+      - "Sliding b across a is, index by index, exactly the product a * reverse(b): each output c[t] collects aligned products, but without the reversal those alignments map to sums i+j=t that would misalign the mask."
+      - "Reversing makes the mask contain only positive numbers."
+      - "The FFT requires the second operand to be reversed or it returns the output in reverse order."
+    answer: 1
+    explanation: "A convolution coefficient c[t] pairs index i of a with index t-i of the second operand. To pair a[i] with the mask element that actually aligns with it — the one at distance t-i from the *front* — we place b[m-1-j] at index j, i.e. reverse it. Then i + j = t means the aligned elements sit at positions i and m-1-j = m-1-(t-i), exactly the physical overlap. Without reversing, the offsets swap sides and the sums are wrong."
+---

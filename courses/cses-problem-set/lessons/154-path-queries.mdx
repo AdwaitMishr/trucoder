@@ -1,0 +1,329 @@
+---
+id: path-queries
+title: Path Queries
+difficulty: hard
+order: 154
+tags:
+  - tree
+  - euler-tour
+  - fenwick
+  - range-update
+  - heavy-light-decomposition
+blocks:
+  - type: markdown
+    content: |
+      # Path Queries — sum on a root-to-node path, with point updates
+
+      You have a rooted tree where each node holds a value. A query either
+      **changes node `s` to a new value `x`** or asks for the **sum of values on
+      the path from the root to node `s`**.
+
+      **The technique: the Euler tour turns a "subtree update" into a range add,
+      and a root-to-node path sum into a point query.** The key insight reuses
+      the previous lesson's `tin/tout` flattening, but *inverted*:
+
+      - Think of each node's value as "contributed to" every node below it:
+        changing node `s` to `x` (delta `d = x - old`) adds `d` to the
+        root-to-node sum of *every node in the subtree of `s`*. That is a
+        **range add over `[tin[s], tout[s]]`**.
+      - The root-to-node sum for node `s` is then just the accumulated value at
+        the single index `tin[s]` — a **point query**.
+
+      So we need a Fenwick tree that supports **range-add + point-query** — the
+      mirror image of the point-update/range-query BIT from the last lesson. The
+      standard trick uses the *difference* representation: to add `d` to
+      `[l, r]`, do `bit.add(l, +d)` and `bit.add(r+1, -d)`; a point query at `p`
+      is `bit.sum(p)` (the running sum up to `p`). (The "two-BIT" name in some
+      references comes from viewing the add-at-`l` / subtract-at-`r+1` pair as
+      two point contributions.)
+
+      **Complexity.** Euler tour **O(n)**; every update and query **O(log n)**.
+
+      **When the path is not root-to-node.** If a problem asks for the sum on an
+      *arbitrary* path `u → v`, this simple Euler trick stops working and you
+      need **Heavy-Light Decomposition (HLD)** — see the alternative tier below.
+      Here the root-to-node restriction is exactly what keeps the "subtree
+      update / point query" Euler solution valid.
+
+      :::tip
+      **Interview tip:** "subtree update + path sum" is a classic trap. The
+      question divides people on *which* one becomes the update and which the
+      query. Because updating a single node affects a whole subtree's
+      root-paths, and a root-path sum reads one point, the Euler trick maps it
+      to range-add + point-query. Recognize the pattern, flip it the right way,
+      and the Fenwick solution falls out. Interviewers also love the follow-up:
+      "now make it an arbitrary u→v path" — which is exactly HLD.
+      :::
+  - type: markdown
+    content: |
+      # Question — Path Queries
+
+      You are given a rooted tree consisting of `n` nodes (node `1` is the
+      root), each with a value.
+
+      Your task is to process `q` queries:
+      - `1 s x`: change the value of node `s` to `x`.
+      - `2 s`: calculate the **sum of values on the path from the root to node
+        `s`**.
+
+      **Constraints**
+
+      - `1 ≤ n, q ≤ 2·10^5`
+      - `1 ≤ a, b, s ≤ n`
+      - `1 ≤ v_i, x ≤ 10^9`
+
+      **Input.** Line 1: `n q`. Line 2: `n` integers `v_1..v_n` (initial node
+      values). Then `n-1` lines describing the edges (each `a b`). Then `q`
+      lines: either `1 s x` or `2 s`.
+
+      **Output.** Print the answer to each query of type 2.
+
+      Time limit 1.00 s, memory 512 MB.
+
+      Sample input:
+
+      ```
+      5 3
+      4 2 5 2 1
+      1 2
+      1 3
+      3 4
+      3 5
+      2 4
+      1 3 2
+      2 4
+      ```
+
+      Sample output:
+
+      ```
+      11
+      8
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — climb to the root per query, O(depth) each**
+
+      For type 2, walk from `s` up to the root, adding each node's value; for
+      type 1, just overwrite it.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<long long> val(n + 1);
+          for(int i = 1; i <= n; i++) cin >> val[i];
+          vector<vector<int>> g(n + 1);
+          for(int i = 0; i < n - 1; i++){ int a, b; cin >> a >> b; g[a].push_back(b); g[b].push_back(a); }
+          vector<int> par(n + 1);
+          function<void(int,int,int)> dfs = [&](int u, int p, int pr){
+              par[u] = pr;
+              for(int v : g[u]) if(v != p) dfs(v, u, u);
+          };
+          dfs(1, 0, 0);
+          while(q--){
+              int t; cin >> t;
+              if(t == 1){ int s, x; cin >> s >> x; val[s] = x; }
+              else { int s; cin >> s; long long sum = 0;
+                  for(int u = s; u != 0; u = par[u]) sum += val[u];
+                  cout << sum << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      **O(depth) per query, O(nq) worst case** — on a chain, every path sum
+      walks the whole tree. Too slow.
+
+      **② Optimization — Euler tour + range-add/point-query Fenwick (submission)**
+
+      Flatten with `tin/tout`, load each node's value as a range add over its
+      subtree, then answer type 2 with one point query.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct BIT{                          // range-add, point-query
+          int n; vector<long long> t;
+          BIT(int sz){ n = sz; t.assign(n + 1, 0); }
+          void add(int i, long long v){ for(; i <= n; i += i & -i) t[i] += v; }
+          void range_add(int l, int r, long long v){ add(l, v); add(r + 1, -v); }
+          long long point(int i){ long long s = 0; for(; i > 0; i -= i & -i) s += t[i]; return s; }
+      };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<long long> val(n + 1);
+          for(int i = 1; i <= n; i++) cin >> val[i];
+          vector<vector<int>> g(n + 1);
+          for(int i = 0; i < n - 1; i++){ int a, b; cin >> a >> b; g[a].push_back(b); g[b].push_back(a); }
+          int timer = 0; vector<int> tin(n + 1), tout(n + 1);
+          function<void(int,int)> dfs = [&](int u, int p){
+              tin[u] = ++timer;
+              for(int v : g[u]) if(v != p) dfs(v, u);
+              tout[u] = timer;
+          };
+          dfs(1, 0);
+          BIT bit(n);
+          for(int i = 1; i <= n; i++) bit.range_add(tin[i], tout[i], val[i]);  // load
+          while(q--){
+              int t; cin >> t;
+              if(t == 1){ int s, x; cin >> s >> x;
+                  bit.range_add(tin[s], tout[s], x - val[s]);   // subtree update
+                  val[s] = x;
+              } else {
+                  int s; cin >> s; cout << bit.point(tin[s]) << "\n";   // path sum
+              }
+          }
+          return 0;
+      }
+      ```
+
+      **O(n)** Euler tour + **O(log n)** per operation. This is the submission
+      tier.
+
+      **③ Alternative — Heavy-Light Decomposition + segment tree, O(log² n)**
+
+      HLD splits the tree into heavy paths, assigns each node a contiguous
+      segment-tree index along its chain, and can therefore answer sums on an
+      *arbitrary* `u → v` path by walking `O(log n)` chain segments. It is
+      overkill for a root-to-node query, but it is the general tool (and the
+      prerequisite for Path Queries II, which adds arbitrary node updates).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<long long> val(n + 1);
+          for(int i = 1; i <= n; i++) cin >> val[i];
+          vector<vector<int>> g(n + 1);
+          for(int i = 0; i < n - 1; i++){ int a, b; cin >> a >> b; g[a].push_back(b); g[b].push_back(a); }
+          int timer = 1;
+          vector<int> parent(n + 1), depth(n + 1), heavy(n + 1), head(n + 1), pos(n + 1), sz(n + 1);
+          function<int(int)> dfs_size = [&](int u){
+              int size = 1, big = 0;
+              for(int v : g[u]) if(v != parent[u]){
+                  parent[v] = u; depth[v] = depth[u] + 1;
+                  int sv = dfs_size(v); size += sv;
+                  if(sv > big){ big = sv; heavy[u] = v; }
+              }
+              return sz[u] = size;
+          };
+          parent[1] = 0; dfs_size(1);
+          function<void(int,int)> decompose = [&](int u, int h){
+              head[u] = h; pos[u] = timer++;
+              if(heavy[u]) decompose(heavy[u], h);
+              for(int v : g[u]) if(v != parent[u] && v != heavy[u]) decompose(v, v);
+          };
+          decompose(1, 1);
+          int N = 1; while(N < n) N <<= 1;                       // seg tree over pos
+          vector<long long> seg(2 * N, 0);
+          auto points = [&](int p, long long v){ int i = p + N - 1; seg[i] = v;
+              for(i >>= 1; i; i >>= 1) seg[i] = seg[i<<1] + seg[i<<1|1]; };
+          for(int u = 1; u <= n; u++) points(pos[u], val[u]);
+          auto query_seg = [&](int l, int r){ long long s = 0; l += N - 1; r += N - 1;
+              while(l <= r){ if(l & 1) s += seg[l++]; if(!(r & 1)) s += seg[r--]; l >>= 1; r >>= 1; } return s; };
+          auto path_sum = [&](int u, int v){                    // sum on path u..v
+              long long s = 0;
+              while(head[u] != head[v]){
+                  if(depth[head[u]] < depth[head[v]]) swap(u, v);
+                  s += query_seg(pos[head[u]], pos[u]);
+                  u = parent[head[u]];
+              }
+              if(depth[u] > depth[v]) swap(u, v);
+              s += query_seg(pos[u], pos[v]);
+              return s;
+          };
+          while(q--){
+              int t; cin >> t;
+              if(t == 1){ int s, x; cin >> s >> x; points(pos[s], x); }
+              else { int s; cin >> s; cout << path_sum(1, s) << "\n"; }
+          }
+          return 0;
+      }
+      ```
+
+      **O(n)** build, **O(log² n)** per path query. HLD is the general
+      solution; prefer the compact Euler BIT (tier ②) for this specific
+      root-to-node restriction.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The submission's three moves:
+
+      - **Load:** each node's initial value contributes to every node in its
+        subtree's root-path, so `range_add(tin[i], tout[i], val[i])` seeds the
+        difference BIT. (All `n` range adds give the correct per-index point
+        sums at `O(n log n)`.)
+      - **Type 1 (subtree update):** setting node `s` changes the root-path sum
+        of exactly the subtree of `s`, so add `x - val[s]` over `[tin[s],
+        tout[s]]`; the `range_add` writes the pair `(l,+d), (r+1,-d)`.
+      - **Type 2 (path query):** the root-to-`s` sum is the running total at
+        `tin[s]`, i.e. `bit.point(tin[s])`, which the difference BIT computes as
+        the prefix sum of all active adds covering position `tin[s]`.
+
+      The trap to avoid: for Path Queries the *update* is the range (subtree)
+      and the *query* is the point (path), the opposite pairing of Subtree
+      Queries. Getting that flipped is the #1 bug in this problem.
+
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):**
+
+      ```
+      5 3
+      4 2 5 2 1
+      1 2
+      1 3
+      3 4
+      3 5
+      2 4
+      1 3 2
+      2 4
+      ```
+
+      **Euler tour.** DFS from `1` (child `2` before `3`):
+
+      | node | tin | tout |
+      |------|-----|------|
+      | 1 | 1 | 5 |
+      | 2 | 2 | 2 |
+      | 3 | 3 | 5 |
+      | 4 | 4 | 4 |
+      | 5 | 5 | 5 |
+
+      **Initial range-adds** (value [`+4` on [1,5]], node2 `+2`, node3 `+5`,
+      node4 `+2`, node5 `+1`). Running point values after seeding:
+      `tin1=4, tin2=6, tin3=11, tin4=13, tin5=14` (each = sum of its ancestors).
+
+      **Query `2 4`:** `point(tin4=4)` = contributions covering index 4:
+      node1(+4) + node3(+5) + node4(+2) = **11**. Print **11**. ✓
+      (Path 1→3→4 = 4 + 5 + 2 = 11.)
+
+      **Query `1 3 2`:** delta `2 - 5 = -3`; `range_add([3,5], -3)`.
+
+      **Query `2 4`:** index 4 now covered by node1(+4) + node3(5−3=2) +
+      node4(+2) = **8**. Print **8**. ✓ (Path 1→3→4 = 4 + 2 + 2 = 8.)
+
+      Output: **11, 8** — matches the sample. **Expected — actual: match.**
+  - type: mcq
+    prompt: 'In Path Queries, why is a value change at node s applied as a range add over its subtree [tin[s], tout[s]] rather than a single point update?'
+    options:
+      - Because changing node s only affects node s by itself
+      - Because s's value contributes to the root-to-node sum of every node whose path passes through s, which is exactly the subtree of s, and the Euler tour makes that subtree one contiguous range
+      - Because the subtree is never contiguous under a DFS
+      - Because a point update would update the entire path from root to s
+    answer: 1
+    explanation: A root-to-node path sum for some node v includes the value of s exactly when the path from the root to v passes through s — i.e. when v is inside s's subtree (including s itself). Those nodes are a contiguous index range [tin[s], tout[s]] under the Euler numbering, so a delta at s is a range add over that whole interval. A point update would only change the count for s, missing all other descendants.
+type: content
+---

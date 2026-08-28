@@ -1,0 +1,271 @@
+---
+id: lines-and-queries-ii
+title: "Lines and Queries II — Insert & Query Online (Li Chao tree)"
+type: content
+difficulty: medium
+order: 231
+tags:
+  - geometry
+  - li-chao-tree
+  - online
+  - maximum-query
+  - adhoc
+blocks:
+  - type: markdown
+    content: |
+      # Lines and Queries II — interleaved inserts and max-queries
+
+      This is the *online* sequel to "Lines and Queries I". Now the lines do
+      **not** arrive up front: an *insert* operation (`1 m b`) and a *query*
+      operation (`2 x`) are mixed freely. At every query `x` you must output the
+      maximum `y` over **all lines inserted so far**. Because new lines keep
+      arriving, you cannot pre-sort slopes or build one static convex hull before
+      any query — the data structure has to absorb a new line and still answer
+      max-at-`x` queries correctly.
+
+      ## Why the Li Chao tree wins here
+
+      - A brute per query scans every inserted line → `O(n)` per query, `O(n^2)`
+        total on `2·10^5` operations.
+      - The **convex hull trick (CHT)** from "Lines and Queries I" assumed all
+        slopes sorted *before* queries. When a line with any slope can appear at
+        any time, inserting into a sorted-hull structure needs `O(n)` worst-case
+        to re-sort — not good.
+      - The **Li Chao tree** inserts a line in `O(log C)` and answers a max
+        query in `O(log C)`, regardless of slope order — perfect for online
+        interleaving. Each insert still only touches `O(log K)` nodes because a
+        node keeps the single line that wins at its midpoint and pushes the
+        loser down one branch.
+
+      The exact same `add`/`query` code from "Lines and Queries I" is reused
+      verbatim; the only change is that inserts and queries now alternate.
+
+      **Time:** `O(C_ops log C)`. **Space:** `O(4·K)` for the tree.
+
+      :::tip
+      **Interview tip:** the tell is *reads and writes interleaved*, with each
+      write needing to affect all future reads. That is exactly when a static
+      sort/prefix structure breaks and you reach for a balanced structure. The
+      Li Chao tree is the "convex-hull trick, but online" version — if an
+      interviewer says *"I add lines and query the max at x, in any order"*,
+      build a Li Chao tree. The key invariant to state out loud: *every node
+      owns the line optimal at its midpoint, and a query reads exactly one line
+      per level.*
+      :::
+  - type: markdown
+    content: |
+      # Question — Lines and Queries II
+
+      Your task is to maintain a set of lines `y = m·x + b`. You receive `q`
+      operations, processed in order:
+
+      - `1 m b` — insert line `y = m·x + b`
+      - `2 x` — print the maximum `y` over all lines inserted so far, at `x`
+
+      At every type-`2` operation at least one line has already been inserted.
+
+      **Input**
+
+      The first line contains an integer `q`. Each of the next `q` lines is one
+      operation as above.
+
+      **Output**
+
+      Print one integer per query operation.
+
+      **Constraints**
+
+      - `1 <= q <= 2 * 10^5`
+      - `-10^6 <= m <= 10^6`
+      - `-10^9 <= b <= 10^9`
+      - `-10^9 <= x <= 10^9`
+      - all results fit in a signed 64-bit integer
+
+      **Example**
+
+      Input:
+      ```
+      7
+      1 2 1
+      1 -1 4
+      2 0
+      1 1 3
+      2 1
+      2 -1
+      2 5
+      ```
+
+      Output:
+      ```
+      4
+      4
+      5
+      11
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — keep the list, scan it per query, O(n) per query**
+
+      Store every inserted `(m, b)` in a vector; on a query scan all of them.
+      Correct, but `2·10^5` queries × `2·10^5` lines is `4·10^10` evaluations.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int q; cin >> q;
+          vector<pair<ll,ll>> lines;
+          while (q--){
+              int t; cin >> t;
+              if (t == 1){ ll m, b; cin >> m >> b; lines.push_back({m, b}); }
+              else {
+                  ll x; cin >> x; ll best = LLONG_MIN;
+                  for (auto &p : lines) best = max(best, p.first * x + p.second);
+                  cout << best << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      **② Optimization — Li Chao tree over compressed query x, O(ops log C)**
+
+      Read **all** operations first so every type-`2` `x` is known. Compress
+      those `x` into the leaves, then replay the operations in order: inserts
+      call `add`, queries call `query`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      struct Line { ll m, b; };
+      const ll NEG = LLONG_MIN / 4;
+      vector<ll> xs;
+      vector<Line> st;
+
+      inline ll val(const Line &l, ll x) { return l.m * x + l.b; }
+
+      void add(int node, int l, int r, Line nw) {
+          int mid = (l + r) >> 1;
+          bool leftBetter = val(nw, xs[l]) > val(st[node], xs[l]);
+          bool midBetter  = val(nw, xs[mid]) > val(st[node], xs[mid]);
+          if (midBetter) swap(st[node], nw);
+          if (l == r) return;
+          if (leftBetter != midBetter) add(node << 1, l, mid, nw);
+          else add(node << 1 | 1, mid + 1, r, nw);
+      }
+
+      ll query(int node, int l, int r, int pos) {
+          ll best = val(st[node], xs[pos]);
+          if (l == r) return best;
+          int mid = (l + r) >> 1;
+          if (pos <= mid) return max(best, query(node << 1, l, mid, pos));
+          return max(best, query(node << 1 | 1, mid + 1, r, pos));
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int opCnt; cin >> opCnt;
+          struct Op { int t; ll m, b, x; };
+          vector<Op> ops(opCnt);
+          for (auto &o : ops) {
+              cin >> o.t;
+              if (o.t == 1) cin >> o.m >> o.b;
+              else { cin >> o.x; xs.push_back(o.x); }
+          }
+          sort(xs.begin(), xs.end());
+          xs.erase(unique(xs.begin(), xs.end()), xs.end());
+          int K = (int)xs.size();
+          st.assign(4 * K + 4, {0, NEG});
+          if (K == 0) return 0;               // no query points
+          for (auto &o : ops) {
+              if (o.t == 1) add(1, 0, K - 1, {o.m, o.b});
+              else {
+                  int pos = (int)(lower_bound(xs.begin(), xs.end(), o.x) - xs.begin());
+                  cout << query(1, 0, K - 1, pos) << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      **③ Further optimization** — none needed: inserting each of `q` lines and
+      answering each query in `O(log K)` is already `O(q log q)`, and `log K ≤
+      18` for `q ≤ 2·10^5`. Nothing is left to shave; the online Li Chao tree
+      is the textbook optimum for this exact operation mix.
+
+      **④ Alternative — a lightweight trick for small slope ranges**
+
+      If every slope `m` came from a small range, a simpler structure works:
+      keep an array `best[m]` = highest intercept among lines of slope `m`, and
+      answer a query by iterating all distinct slopes (CHT-online-by-brute).
+      That is `O(#slopes)` per query — fine when `#slopes` is small, hopeless
+      when `|m|` can reach `10^6`, which is exactly why the Li Chao tree (tier ②)
+      is the general answer. For this lesson, tier ② is the intended solution.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on **②**:
+
+      - We read every operation up front and collect only the type-`2` `x`
+        values into `xs`. This *offline coordinate compression* is what lets the
+        tree fit in `O(K)` nodes; the operations are still replayed **in the
+        original order**, so the behaviour is fully online.
+      - `add` compares the incoming line to the node's stored line at the
+        node's midpoint. The midpoint winner stays; the loser descends into the
+        child where it can still be useful.
+      - Because an un-inserted line never "improves" a query, and each node
+        holds at most one line, inserting `n` lines costs `O(n log K)` total.
+      - `query` walks root → leaf for `x`, returning the max of the lines
+        stored along the path. Every inserted line lives in exactly one node
+        whose interval contains `x`, so its value is considered exactly once.
+      - `NEG` is the identity line so empty nodes never win a comparison — and
+        the problem guarantees at least one insert precedes every query, so
+        real answers are always finite.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Run the sample: `1 2 1`, `1 -1 4`, `2 0`, `1 1 3`, `2 1`, `2 -1`, `2 5`.
+
+      Lines inserted so far at each query, evaluated at `x`:
+
+      | query x | inserted lines             | values at x        | max |
+      |---------|----------------------------|--------------------|-----|
+      | 0       | 2x+1, -x+4                 | 1, 4               | 4   |
+      | 1       | 2x+1, -x+4, x+3            | 3, 3, 4            | 4   |
+      | -1      | 2x+1, -x+4, x+3            | -1, 5, 2           | 5   |
+      | 5       | 2x+1, -x+4, x+3            | 11, -1, 8          | 11  |
+
+      The tree returns `4, 4, 5, 11` — exactly the column `max` above. Notice
+      the third query (`2 1`) occurs *after* the third insert (`x+3`), and the
+      answer changes accordingly: online order is respected.
+  - type: flowchart
+    title: "Online Li Chao insert & query"
+    nodes: ["Read all ops", "Compress query x into xs", "st[] = identity",
+            "Replay ops in order", "Type 1? insert line to tree",
+            "Type 2? query max along root→leaf", "Print answers"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: "insert"}
+      - {from: 3, to: 5, label: "query"}
+      - {from: 4, to: 3, label: ""}
+      - {from: 5, to: 6, label: ""}
+      - {from: 5, to: 3, label: "more ops"}
+  - type: mcq
+    prompt: "Why does the Li Chao tree stay correct when lines are inserted after queries in ``Lines and Queries II``, whereas the static convex-hull trick from ``Lines and Queries I`` does not?"
+    options:
+      - "The Li Chao tree has no notion of ``already sorted slopes``: each node stores the midpoint-optimal line, and any incoming slope descends exactly one branch per level in O(log K), so a line inserted at any time is available to every later query along the affected root-to-leaf paths"
+      - "The Li Chao tree copies all lines into a sorted array at every insert, so any query sees the latest slopes"
+      - "Online problems forbid using segment trees, so the Li Chao tree is slower but always correct"
+      - "The convex hull trick works online automatically because sorting is never needed there either"
+    answer: 0
+    explanation: "The static CHT builds one hull after sorting slopes before any query; inserting a line later can change every hull breakpoint, which is expensive. The Li Chao tree instead keeps the midpoint-winner per node and routes a new line down a single O(log K) branch regardless of slope ordering, so later inserts update exactly the paths that must see them and all subsequent queries remain exact."
+---

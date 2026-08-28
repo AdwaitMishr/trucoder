@@ -1,0 +1,260 @@
+---
+id: distinct-substrings
+title: Distinct Substrings
+type: content
+difficulty: hard
+order: 209
+tags:
+  - string-algorithms
+  - suffix-array
+  - suffix-automaton
+  - lcp
+blocks:
+  - type: markdown
+    content: |
+      # Distinct Substrings — suffix array + LCP (or suffix automaton)
+
+      Count how many **different** substrings a string has. Every one of the
+      `n(n+1)/2` substrings can be thought of as **a prefix of one of the
+      suffixes**. The only ones that are *repeats* are those that appear as a
+      common prefix of two neighbouring suffixes in sorted order.
+
+      ## The LCP idea
+
+      Sort all suffixes (the **suffix array**) and compute **LCP** — the longest
+      common prefix between each adjacent pair. When two sorted neighbours share
+      `x` initial characters, those `x` substrings were already seen ending in the
+      earlier neighbour, so they should *not* be counted again. Total:
+
+      ```
+      distinct substrings = total substrings − Σ LCP[i]
+                        = n(n+1)/2 − Σ LCP[i]      (i over adjacent pairs)
+      ```
+
+      Intuition: if you list suffixes in sorted order and write how much each new
+      suffix contributes that hasn't appeared before, it is exactly its length
+      minus the common prefix with its predecessor.
+
+      **Worked mini-example.** `s = "abaa"`. Sorted suffixes: `a`, `aa`, `abaa`,
+      `baa`. Adjacent LCPs: `1, 1, 0`, sum `= 2`. Total `4·5/2 = 10`; distinct
+      `10 − 2 = 8` (the 8 listed in the statement). ✓
+
+      **Complexity.** Building the suffix array by doubling is `O(n log n)`;
+      Kasai's LCP is `O(n)`. Total `O(n log n)` — the intended solution.
+
+      ### Alternative in the same family
+
+      A **suffix automaton (SAM)** counts distinct substrings directly: every
+      state adds `len[state] − len[link[state]]` new substrings, because that is
+      exactly the number of *new* strings in the state's equivalence class not
+      already produced by its suffix link. Answer `= Σ (len − len[link])`,
+      computed online in `O(n)`.
+
+      :::tip
+      **Interview tip:** "count distinct substrings / how many distinct X a
+      string has" → suffix array + LCP (or automaton). Know the one-line
+      identity `Σ over LCP = duplicates`, and the automaton identity
+      `Σ(len − len[link])`. Pairs well with "longest repeated substring" (next
+      lesson) which is literally `max LCP`.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Count the number of distinct substrings that appear in a string.
+
+      ## Input
+
+      The only input line has a string of length `n` that consists of characters
+      `a–z`.
+
+      **Constraints:** `1 ≤ n ≤ 10^5`.
+
+      ## Output
+
+      Print one integer: the number of substrings.
+
+      ## Sample
+
+      **Input:**
+      ```
+      abaa
+      ```
+      **Output:**
+      ```
+      8
+      ```
+      **Explanation:** the substrings are `a`, `b`, `aa`, `ab`, `ba`, `aba`,
+      `baa` and `abaa`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — store every substring in a set, O(n²·L)**
+
+      Generate all `n(n+1)/2` substrings into a hash set and count. Memory is
+      `O(n²·n)` and comparing strings costs `O(L)` each — hopeless for `n = 10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          string s; cin >> s;
+          unordered_set<string> se;
+          for(int i = 0; i < (int)s.size(); i++)
+              for(int j = i + 1; j <= (int)s.size(); j++)
+                  se.insert(s.substr(i, j - i));
+          cout << se.size() << "\n";
+          return 0;
+      }
+      ```
+      *O(n³) worst-case on comparisons — correct, far too slow.*
+
+      **② Optimization — suffix array + LCP, O(n log n)**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      vector<int> build_sa(const string& S){
+          string s = S + (char)('a'-1);        // sentinel smaller than 'a'
+          int n = (int)s.size(), classes = 1;
+          vector<int> sa(n), c(n), pn(n), cn(n), cnt(max(n,256));
+          iota(sa.begin(), sa.end(), 0);
+          sort(sa.begin(), sa.end(), [&](int i,int j){ return s[i] < s[j]; });
+          c[sa[0]] = 0;
+          for(int i = 1; i < n; i++) c[sa[i]] = c[sa[i-1]] + (s[sa[i]] != s[sa[i-1]]);
+          classes = c[sa[n-1]] + 1;
+          for(int h = 0; (1 << h) < n; h++){
+              int sh = 1 << h;
+              for(int i = 0; i < n; i++){ pn[i] = sa[i] - sh; if(pn[i] < 0) pn[i] += n; }
+              fill(cnt.begin(), cnt.begin()+classes, 0);
+              for(int i = 0; i < n; i++) cnt[c[pn[i]]]++;
+              for(int i = 1; i < classes; i++) cnt[i] += cnt[i-1];
+              for(int i = n-1; i >= 0; i--) sa[--cnt[c[pn[i]]]] = pn[i];
+              cn[sa[0]] = 0; classes = 1;
+              for(int i = 1; i < n; i++){
+                  pair<int,int> cur  = {c[sa[i]],   c[(sa[i]+sh)%n]};
+                  pair<int,int> pre  = {c[sa[i-1]], c[(sa[i-1]+sh)%n]};
+                  if(cur != pre) classes++;
+                  cn[sa[i]] = classes-1;
+              }
+              c.swap(cn);
+          }
+          vector<int> res;                       // drop sentinel suffix
+          for(int x : sa) if(x != sa[0]) res.push_back(x);
+          return res;
+      }
+      vector<int> kasai_lcp(const string& s, const vector<int>& sa){
+          int n = (int)s.size();
+          vector<int> lcp(n, 0), pos(n);
+          for(int i = 0; i < n; i++) pos[sa[i]] = i;
+          int k = 0;
+          for(int i = 0; i < n; i++){
+              if(pos[i] == n-1){ k = 0; continue; }
+              int j = sa[pos[i]+1];
+              while(i+k < n && j+k < n && s[i+k] == s[j+k]) k++;
+              lcp[pos[i]] = k;
+              if(k) k--;
+          }
+          return lcp;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          string s; cin >> s;
+          int n = (int)s.size();
+          vector<int> sa = build_sa(s);
+          vector<int> lcp = kasai_lcp(s, sa);
+          long long ans = 1LL * n * (n+1) / 2;
+          for(int i = 0; i < n-1; i++) ans -= lcp[i];
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+      *O(n log n) build + O(n) LCP — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      `O(n log n)` is well within the 1 s limit; a suffix automaton below reaches
+      linear time but is not required.
+
+      **④ Alternative — suffix automaton, O(n)**
+
+      Build the SAM and sum `len − len[link]` over all states; each state issues
+      exactly the new substrings its class introduces.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          string s; cin >> s;
+          struct St{ int len, link; array<int,26> next; };
+          vector<St> st; st.push_back({0,-1,{}}); st[0].next.fill(-1);
+          int last = 0;
+          auto extend = [&](int c){
+              int cur = st.size(); st.push_back({st[last].len+1,-1,{}}); st[cur].next.fill(-1);
+              int p = last;
+              while(p != -1 && st[p].next[c] == -1){ st[p].next[c] = cur; p = st[p].link; }
+              if(p == -1) st[cur].link = 0;
+              else{
+                  int q = st[p].next[c];
+                  if(st[p].len + 1 == st[q].len) st[cur].link = q;
+                  else{
+                      int cl = st.size(); st.push_back(st[q]); st[cl].len = st[p].len + 1;
+                      while(p != -1 && st[p].next[c] == q){ st[p].next[c] = cl; p = st[p].link; }
+                      st[q].link = st[cur].link = cl;
+                  }
+              }
+              last = cur;
+          };
+          for(char ch : s) extend(ch - 'a');
+          long long ans = 0;
+          for(int i = 1; i < (int)st.size(); i++) ans += st[i].len - st[st[i].link].len;
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+      *O(n) — the fastest method, requires knowing SAM theory.*
+
+      **Which to use:** suffix array + LCP (②) is the safer, more general tool;
+      the SAM (④) is shorter once you know automata.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the suffix-array solution:
+
+      - **Suffix array with a sentinel.** A `'a'-1` sentinel appended to the
+        string makes the cyclic-doubling algorithm produce a true suffix array;
+        the sentinel suffix (always first) is dropped. `c[]` holds each suffix's
+        current equivalence class, refined doubling their length each round.
+      - **Kasai's LCP.** `pos[i]` is the sorted index of suffix `i`. Walk suffixes
+        in original order; `k` never decreases by more than 1, so the total work is
+        `O(n)`.
+      - **`ans = n(n+1)/2 − Σlcp`.** Each new (later) sorted suffix contributes
+        its length minus the characters it shares with its predecessor — the
+        shortest, cleanest invariant for distinct substrings.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      `s = "abaa"` (n = 4). Suffixes and their sorted order:
+
+      | sorted rank | suffix | LCP with previous |
+      |-------------|--------|-------------------|
+      | 0 | `a` (idx 3) | — |
+      | 1 | `aa` (idx 2) | 1 |
+      | 2 | `abaa` (idx 0) | 1 |
+      | 3 | `baa` (idx 1) | 0 |
+
+      `Σ LCP = 1 + 1 + 0 = 2`. Total `= 4·5/2 = 10`.
+
+      `10 − 2 = 8`. ✓ Matches the sample (`a, b, aa, ab, ba, aba, baa, abaa`).
+  - type: mcq
+    prompt: "Why does 'total substrings minus the sum of the LCP array' give the number of distinct substrings?"
+    options:
+      - "Because the i-th smallest suffix contributes length minus its common prefix with the (i-1)-th — the substrings that appear in both are exactly those overlapping prefix characters, and counting them again would double-count."
+      - "Because the suffix array must always be at least half the string."
+      - "Because LCP values are always equal to zero."
+      - "Because subtracting by the number of suffixes cancels the answer."
+    answer: 0
+    explanation: "Sort the suffixes: each new suffix has already contributed exactly LCP(i) substrings (its overlap with the previous suffix), so its own fresh contribution is len − LCP(i). Summing these contributions over all suffixes equals total-count minus Σ LCP, the distinct-substring count."

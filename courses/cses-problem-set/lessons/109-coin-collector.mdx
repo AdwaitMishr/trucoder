@@ -1,0 +1,340 @@
+---
+id: coin-collector
+title: Coin Collector
+difficulty: medium
+order: 109
+tags:
+  - graph
+  - scc
+  - condensation
+  - dag
+  - dp
+  - kosaraju
+blocks:
+  - type: markdown
+    content: |
+      # Coin Collector — SCC condensation + longest-path DP
+
+      A game has `n` rooms and `m` one-way tunnels. Each room holds some coins.
+      You may **start in any room** and move along tunnels, collecting each
+      room's coins **the first time you enter it**. You may freely choose your
+      starting *and* ending room. What is the maximum number of coins you can
+      collect?
+
+      **The technique: contract SCCs, then find the maximum-weight path in the
+      resulting DAG.** Two ideas combine:
+
+      1. **Inside an SCC you can collect everything.** Since every room in a
+         strongly connected component reaches every other, once you enter an
+         SCC you can tour all of it and grab the whole pile. Treat each SCC as
+         one super-room *worth the sum of its coins*.
+      2. **Between components you can only move one way.** After contraction
+         the graph is a **DAG** (last lesson's key fact), so you cannot revisit
+         a component and cannot loop. Collecting coins then reduces to picking
+         the **single directed s-t style path** with maximum total weight.
+
+      Because you choose the start anywhere, the answer is the **maximum-weight
+      path over all nodes of the condensation DAG**. "Maximum coins on a path"
+      on a DAG is a trivial DP: process components in topological order and take
+      `dp[c] = sum[c] + max over successors dp[s]`.
+
+      **Worked mini-example.** Rooms `{1,2}` make an SCC worth `4+5=9`; rooms
+      `{3}` and `{4}` are singletons worth `2` and `7`. Edges `{1,2}→3` and
+      `{1,2}→4`. Best: start in `{1,2}` grab `9`, then go to the better of `3`
+      (`2`) or `4` (`7`) → `9 + 7 = 16`.
+
+      **Complexity.** Kosaraju `O(n+m)` + one pass over condensation edges and a
+      linear DP → **O(n + m)** time, **O(n + m)** space.
+
+      :::tip
+      **Interview tip:** anytime a directed problem lets you roam freely inside
+      a cycle but not escape, the reflex is "condense SCCs → solve on the DAG."
+      This pairing — SCC condensation + DP — is a classic two-step pattern
+      (find components, then do the *easy* version of the problem on the
+      compression). Interviewers like asking for the maximum-coins / longest
+      path / "how many planets reachable" variant. Longest path in a *general*
+      graph is NP-hard; the fact it becomes easy on a DAG is exactly the punch
+      line.
+      :::
+  - type: markdown
+    content: |
+      # Question — Coin Collector
+
+      A game has `n` rooms and `m` tunnels between them. Each room has a certain
+      number of coins.
+
+      What is the maximum number of coins you can collect while moving through
+      the tunnels, when you can **freely choose your starting and ending room**?
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 10^5`, `1 ≤ m ≤ 2·10^5`
+      - `1 ≤ k_i ≤ 10^9` (coins in room `i`)
+      - `1 ≤ a, b ≤ n` — a one-way tunnel from `a` to `b`
+
+      **Input.** Line 1: `n m`. Line 2: `n` integers `k_1..k_n` (coins per
+      room). Then `m` lines, each `a b` (a tunnel from `a` to `b`).
+
+      **Output.** One integer — the maximum number of coins collectible.
+
+      Sample input:
+
+      ```
+      4 4
+      4 5 2 7
+      1 2
+      2 1
+      1 3
+      2 4
+      ```
+
+      Sample output:
+
+      ```
+      16
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate all simple paths, exponential**
+
+      For each possible starting room, try every simple path (no room twice,
+      because coins are collected once) and sum the coins; take the global max.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<long long> k(n + 1);
+          for (int i = 1; i <= n; ++i) cin >> k[i];
+          vector<vector<int>> g(n + 1);
+          for (int i = 0; i < m; ++i) { int a, b; cin >> a >> b; g[a].push_back(b); }
+
+          long long best = 0;
+          vector<char> used(n + 1, 0);
+          function<void(int, long long)> dfs = [&](int u, long long sum) {
+              best = max(best, sum);
+              for (int v : g[u])
+                  if (!used[v]) { used[v] = 1; dfs(v, sum + k[v]); used[v] = 0; }
+          };
+          for (int s = 1; s <= n; ++s) { used[s] = 1; dfs(s, k[s]); used[s] = 0; }
+          cout << best << "\n";
+          return 0;
+      }
+      ```
+
+      **Exponential** in the worst case (all simple paths often), unusable at
+      `n = 10^5`. Only correct as a baseline.
+
+      **② Optimization — SCC condensation + DP, O(n + m) (submission)**
+
+      Kosaraju for SCCs, sum coins per component, build the condensation DAG,
+      then longest-path DP over it in topological order.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<long long> k(n + 1);
+          for (int i = 1; i <= n; ++i) cin >> k[i];
+          vector<vector<int>> g(n + 1), gr(n + 1);
+          for (int i = 0; i < m; ++i) {
+              int a, b; cin >> a >> b;
+              g[a].push_back(b); gr[b].push_back(a);
+          }
+          // Kosaraju
+          vector<char> vis(n + 1, 0);
+          vector<int> order; order.reserve(n);
+          function<void(int)> dfs1 = [&](int u) {
+              vis[u] = 1;
+              for (int v : g[u]) if (!vis[v]) dfs1(v);
+              order.push_back(u);
+          };
+          for (int u = 1; u <= n; ++u) if (!vis[u]) dfs1(u);
+          int compCnt = 0;
+          vector<int> comp(n + 1, 0);
+          function<void(int)> dfs2 = [&](int u) {
+              comp[u] = compCnt;
+              for (int v : gr[u]) if (!comp[v]) dfs2(v);
+          };
+          for (int it = (int)order.size() - 1; it >= 0; --it) {
+              int u = order[it];
+              if (!comp[u]) { ++compCnt; dfs2(u); }
+          }
+          // sum coins per component
+          vector<long long> sum(compCnt + 1, 0);
+          for (int u = 1; u <= n; ++u) sum[comp[u]] += k[u];
+          // condensation DAG
+          vector<vector<int>> dag(compCnt + 1);
+          for (int u = 1; u <= n; ++u)
+              for (int v : g[u])
+                  if (comp[u] != comp[v]) dag[comp[u]].push_back(comp[v]);
+          // Kosaraju numbers components so every condensation edge goes from a
+          // HIGHER id to a LOWER id => process ids descending = topological DP.
+          vector<long long> dp(compCnt + 1, 0);
+          long long ans = 0;
+          for (int c = compCnt; c >= 1; --c) {
+              long long best = 0;
+              for (int s : dag[c]) best = max(best, dp[s]);
+              dp[c] = sum[c] + best;
+              ans = max(ans, dp[c]);
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n + m)** time and space — linear and ideal. This is the submission
+      tier.
+
+      **③ Alternative — Tarjan condensation + memoized DFS DP**
+
+      Same DP, but find SCCs with Tarjan (one pass) and compute the longest path
+      with a memoised recursive function on the DAG instead of a topo loop.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<long long> k(n + 1);
+          for (int i = 1; i <= n; ++i) cin >> k[i];
+          vector<vector<int>> g(n + 1);
+          for (int i = 0; i < m; ++i) { int a, b; cin >> a >> b; g[a].push_back(b); }
+
+          int timer = 0, compCnt = 0;
+          vector<int> disc(n + 1, 0), low(n + 1, 0), comp(n + 1, 0);
+          vector<char> inStack(n + 1, 0);
+          stack<int> stk;
+          function<void(int)> tarjan = [&](int u) {
+              disc[u] = low[u] = ++timer;
+              stk.push(u); inStack[u] = 1;
+              for (int v : g[u]) {
+                  if (!disc[v]) { tarjan(v); low[u] = min(low[u], low[v]); }
+                  else if (inStack[v]) low[u] = min(low[u], disc[v]);
+              }
+              if (low[u] == disc[u]) {
+                  ++compCnt;
+                  while (true) {
+                      int w = stk.top(); stk.pop(); inStack[w] = 0;
+                      comp[w] = compCnt;
+                      if (w == u) break;
+                  }
+              }
+          };
+          for (int u = 1; u <= n; ++u) if (!disc[u]) tarjan(u);
+
+          vector<long long> sum(compCnt + 1, 0);
+          for (int u = 1; u <= n; ++u) sum[comp[u]] += k[u];
+          vector<vector<int>> dag(compCnt + 1);
+          for (int u = 1; u <= n; ++u)
+              for (int v : g[u])
+                  if (comp[u] != comp[v]) dag[comp[u]].push_back(comp[v]);
+
+          vector<long long> dp(compCnt + 1, -1);
+          function<long long(int)> solveDag = [&](int c) {
+              if (dp[c] != -1) return dp[c];
+              long long best = 0;
+              for (int s : dag[c]) best = max(best, solveDag(s));
+              return dp[c] = sum[c] + best;
+          };
+          long long ans = 0;
+          for (int c = 1; c <= compCnt; ++c) ans = max(ans, solveDag(c));
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n + m)** time and space. Tarjan avoids the reversed graph; memoization
+      replaces the explicit topological order. (Watch recursion depth on very
+      long DAG chains — the iterative topo-loop of tier ② has no such risk.)
+  - type: markdown
+    content: |
+      # Code-logic
+
+      Every tier ultimately computes the maximum-weight path, but tier ② is the
+      efficient one, in four moves:
+
+      - **Find SCCs (Kosaraju).** `dfs1` builds a finish order; `dfs2` on the
+        reverse graph in reverse finish order stamps each component with an id
+        `1..compCnt`.
+      - **Sum rooms into components.** `sum[comp[u]] += k[u]` collapses each
+        SCC into one super-node worth all its coins. Because you can tour an
+        entire SCC once you enter it, this sum is exactly what a path "through"
+        the component collects.
+      - **Build the condensation DAG.** For every original edge `u → v` with
+        `comp[u] != comp[v]`, add `comp[u] → comp[v]`. These edges cannot form a
+        cycle (they'd be one SCC), so this graph is a DAG.
+      - **Topological DP.** A useful property of Kosaraju's numbering: every
+        condensation edge goes from a *higher* component id to a *lower* one.
+        So iterating `c` from `compCnt` down to `1` visits every component after
+        all of its successors (`dp[s]` already final). `dp[c] = sum[c] +
+        max(dp[successor])` is the max coins for a path that reaches `c`; the
+        answer is the largest `dp` over all components (you may start anywhere).
+
+      The coins are up to `10^9` and a path can touch up to `10^5` components, so
+      totals need `long long` — every `k`, `sum`, and `dp` here is a `long long`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):**
+
+      ```
+      4 4
+      4 5 2 7
+      1 2
+      2 1
+      1 3
+      2 4
+      ```
+
+      **Step 1 — SCCs.** Rooms `1` and `2` are mutual via `1→2` and `2→1` →
+      component A. Room `3` (`1→3`) → component B. Room `4` (`2→4`) → component
+      C.
+
+      **Step 2 — component sums.**
+
+      | component | rooms | coins sum |
+      |-----------|-------|-----------|
+      | A | 1,2 | `4 + 5 = 9` |
+      | B | 3 | `2` |
+      | C | 4 | `7` |
+
+      **Step 3 — condensation edges.** `A → B` (from `1→3`), `A → C` (from
+      `2→4`). No other cross edges.
+
+      **Step 4 — DP topo (descending component id).**
+
+      | component | best successor | dp |
+      |-----------|----------------|-----|
+      | C | none → 0 | `7` |
+      | B | none → 0 | `2` |
+      | A | max(`dp[B]`, `dp[C]`) = `7` | `9 + 7 = 16` |
+
+      `ans = max(7, 2, 16) = 16`.
+
+      Output: **16**. **Expected 16 — Actual 16. Match.**
+
+      Alternative valid path: enter `{1,2}` (9) → room 4 (7) = 16. Going to room
+      3 instead gives only 11, so 16 is the max and is confirmed by the sample.
+  - type: mcq
+    prompt: 'After condensing strongly connected components to nodes, why can the remaining problem be solved with a simple longest-path DP?'
+    options:
+      - Because every remaining path is of length at most one edge
+      - Because the condensation graph is a DAG, and on a DAG the longest (max-weight) path is found by a linear topological DP, whereas in a general directed graph it is NP-hard
+      - Because SCCs are always connected in a straight line
+      - Because we no longer care about the coins inside a component
+    answer: 1
+    explanation: Contracting SCCs removes all directed cycles (a cycle among components would merge them into one SCC), so the condensation is a DAG. On a DAG the topological order lets you evaluate dp[c] = sum[c] + max(dp[successor]) once, in linear time. In a general directed graph the condensation has cycles and the same "longest path" becomes NP-hard — the DAG structure is precisely what makes the DP trivial.
+type: content
+---

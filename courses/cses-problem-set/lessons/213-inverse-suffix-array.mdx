@@ -1,0 +1,277 @@
+---
+id: inverse-suffix-array
+title: Inverse Suffix Array
+difficulty: hard
+order: 213
+tags:
+  - string
+  - suffix-array
+  - inverse
+  - lcp
+  - kasai
+blocks:
+  - type: markdown
+    content: |
+      # Inverse Suffix Array — rebuild a string from the order of its suffixes
+
+      The **suffix array (SA)** of a length-`n` string lists its suffixes in
+      lexicographic order. The *inverse* problem asks the other way: given only
+      the order in which the suffixes must appear, **reconstruct any string**
+      (over `a..z`) that realises exactly that order — or report that none
+      exists (`-1`).
+
+      Because a suffix array is a permutation, the key tool is its **inverse
+      array** `rank[pos] = how far down the SA suffix at `pos` sits`. That rank
+      answers "which of these two suffixes is the smaller one?" instantly.
+
+      **The core idea.** Walk the SA from smallest suffix to largest. The first
+      character of each suffix must be **non-decreasing** along this order
+      (if `suffix a < suffix b` then `s[a] ≤ s[b]`). Whenever two *consecutive*
+      suffixes can only be ordered by making their first characters strictly
+      different, we know exactly when that strictness is forced:
+
+      - If `suffix a` comes right before `suffix b` in the SA and `s[a] == s[b]`
+        were allowed, then the comparison must be settled by the `+1`-shifted
+        suffixes: we need `s[a+1..] < s[b+1..]`, i.e.
+        `rank[a+1] < rank[b+1]`.
+      - So we are **forced to write a strictly smaller first char** (bump the
+        letter) precisely when `rank[a+1] > rank[b+1]`, or when `b` is the last
+        index (its `+1` suffix is empty, and "non-empty < empty" is false).
+
+      Assigning the letters greedily — start the smallest suffix at `'a'`, then
+      keep the same letter whenever equality is allowed and step to the next
+      letter only when forced — yields the lexicographically smallest valid
+      string. If the forced chain ever exceeds `'z'` (26 letters), the order is
+      impossible and the answer is `-1`.
+
+      This rank-based rule is the dual of the **Kasai LCP** construction:
+      Kasai derives each `lcp[i]` from a comparison between neighbouring
+      suffixes driven by `rank[]`; here the same neighbouring comparison tells
+      us whether the first characters *must differ*.
+
+      **Complexity.** One scan over the SA plus a rank lookup per step:
+      **O(n)** time, **O(n)** space.
+
+      :::tip
+      **Interview tip:** the inverse suffix array is the "duality" that ties the
+      whole suffix-array toolkit together — `rank[]` and the LCP (Kasai)
+      construction are the pair of ideas interviewers probe when they ask *"how
+      would you check whether two suffixes can be ordered this way?"* The
+      'can I keep the same character?' decision — resolved by comparing the two
+      shifted ranks — is the exact insight to articulate.
+      :::
+  - type: markdown
+    content: |
+      # Question — Inverse Suffix Array
+
+      Given a suffix array of a string, your task is to **reconstruct** the
+      string.
+
+      The suffix array of an `n`-character string is a permutation of the
+      numbers `1, 2, ..., n` that gives the lexicographical order of its
+      suffixes.
+
+      **Constraints**
+
+      - `1 ≤ n ≤ 10^5`
+
+      **Input.** The first line has an integer `n`: the length of the string.
+      The next line has `n` integers: the suffix array.
+
+      **Output.** Print a string that corresponds to the suffix array. The
+      string must consist of characters `a`–`z`. If there are several possible
+      strings, you can print any of them. If no string corresponds to the
+      suffix array, print `-1`.
+
+      Sample input:
+
+      ```
+      7
+      4 1 3 5 6 7 2
+      ```
+
+      Sample output:
+
+      ```
+      aybabtu
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate & verify, exponential**
+
+      Try every string over `a..z` (in increasing lexicographic order), compute
+      its suffix array, and stop at the first string whose suffix array equals
+      the input. Guaranteed correct, but it searches `26^n` candidates — fine
+      for a handful of characters, unusable at `n = 10^5`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int n; vector<int> sa;
+
+      bool matches(const string& s) {
+          vector<int> idx(n); iota(idx.begin(), idx.end(), 0);
+          sort(idx.begin(), idx.end(), [&](int a, int b) {
+              while (a < n && b < n && s[a] == s[b]) { a++; b++; }
+              if (a == n) return true;      // s[a..] ended first -> smaller
+              if (b == n) return false;
+              return s[a] < s[b];
+          });
+          for (int i = 0; i < n; ++i) if (idx[i] != sa[i]) return false;
+          return true;
+      }
+
+      bool dfs(string& cur, int pos) {
+          if (pos == n) return matches(cur);
+          for (int c = 0; c < 26; ++c) {
+              cur[pos] = char('a' + c);
+              if (dfs(cur, pos + 1)) return true;
+          }
+          return false;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          cin >> n;
+          sa.resize(n); for (auto& x : sa) { cin >> x; --x; }
+          string cur(n, 'a');
+          if (dfs(cur, 0)) cout << cur << "\n"; else cout << -1 << "\n";
+          return 0;
+      }
+      ```
+
+      **O(26^n · n log n)** — correct, hopeless for the real `n ≤ 10^5`.
+
+      **② Optimization — greedy via inverse ranks, O(n) (submission)**
+
+      Invert the SA into `rank[pos]`, then walk the SA once assigning letters
+      greedily. The only subtlety is the rule for when the first characters of
+      two consecutive suffixes must be **strictly** different:
+
+      ```
+      strict(a, b)  =  (b is the final index)         // s[b] alone; equal needs s[a+1..] < empty
+                   OR (rank[a+1] > rank[b+1])         // equal first chars would need a+1 < b+1
+      ```
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<int> sa(n);
+          for (int i = 0; i < n; ++i) { cin >> sa[i]; --sa[i]; }
+
+          vector<int> rank(n);                    // inverse of the suffix array
+          for (int i = 0; i < n; ++i) rank[sa[i]] = i;
+
+          vector<int> val(n, 0);                  // letter-level of each position
+          val[sa[0]] = 0;                         // smallest suffix starts at 'a'
+          bool ok = true;
+          for (int i = 0; i + 1 < n; ++i) {
+              int a = sa[i], b = sa[i + 1];
+              bool strict = false;
+              if (b + 1 == n)                                          // suffix b is a lone last char
+                  strict = true;
+              else if (a + 1 < n && rank[a + 1] > rank[b + 1])          // equal chars would violate a+1 < b+1
+                  strict = true;
+              val[b] = val[a] + (strict ? 1 : 0);
+              if (val[b] > 25) ok = false;                              // need a 27th letter -> impossible
+          }
+
+          if (!ok) { cout << -1 << "\n"; return 0; }
+          string ans(n, 'a');
+          for (int i = 0; i < n; ++i) ans[i] = char('a' + val[i]);
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n)** time and **O(n)** space. This is the submission tier.
+
+      **③ Alternative — an LCP/Kasai-flavoured view**
+
+      The same decision can be read from the **LCP array**: if the LCP of two
+      consecutive suffixes is `≥ 1` their first characters are equal; if it is
+      `0` they can still be equal (when the second char decides) — the rank test
+      above is exactly what decides those `0`-LCP ties. There is no faster
+      algorithm (any valid string needs at least one char per position), so this
+      is only a different way to *think*, not a different big-O.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The optimal tier is a single pass over the SA guided by `rank[]`.
+
+      - **`rank`.** `rank[pos]` tells us where suffix `pos` sits in the SA. The
+        check `rank[a+1] > rank[b+1]` asks "is the suffix one step after `a`
+        LARGER than the suffix one step after `b`?" If yes, then `s[a+1..]` is
+        the bigger of the two, so letting `s[a] == s[b]` would make `s[a..]`
+        bigger — impossible. Hence we must push `s[a]` strictly below `s[b]`.
+      - **The lone-last-char case.** If `b == n-1`, suffix `b` is just the final
+        character. If we set `s[a] == s[b]`, then `s[a..]` continues past that
+        character while `s[b..]` has ended, making `s[a..]` strictly larger.
+        So equality is disallowed → strict. (The symmetric case `a == n-1` is
+        fine: an *empty* `s[a+1..]` is smaller than any non-empty `s[b+1..]`.)
+      - **Greedy minimality.** `val[b] = val[a] + (strict ? 1 : 0)` is the
+        smallest non-decreasing assignment that respects every forced-strict
+        edge. That is why it realises the SA whenever any string can, and why it
+        is minimal: if even this minimal chain exceeds `'z'`, no assignment fits
+        the 26-letter alphabet.
+      - **`-1`.** Triggered only when the forced chain needs a 27th letter — a
+        genuine impossibility, not a bug.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 7`, SA = `4 1 3 5 6 7 2` (0-indexed:
+      `3 0 2 4 5 6 1`).
+
+      **Step 1 — inverse ranks.** For each position `pos`, `rank[pos]`:
+
+      | pos | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
+      |-----|---|----|----|----|----|----|----|
+      | rank | 1 | 6 | 2 | 0 | 3 | 4 | 5 |
+
+      (rank[pos] = index of pos inside the 0-indexed SA `[3,0,2,4,5,6,1]`.)
+
+      **Step 2 — greedy letter assignment.**
+
+      | step i | a=sa[i] | b=sa[i+1] | strict? | val[b] |
+      |--------|---------|-----------|---------|--------|
+      | 1 | 3 | 0 | b+1<n; rank[4]=3 > rank[1]=6? no | val[0]=0 |
+      | 2 | 0 | 2 | rank[1]=6 > rank[3]=0? yes | val[2]=1 |
+      | 3 | 2 | 4 | rank[3]=0 > rank[5]=4? no | val[4]=1 |
+      | 4 | 4 | 5 | rank[5]=4 > rank[6]=5? no | val[5]=1 |
+      | 5 | 5 | 6 | b+1==n → yes | val[6]=2 |
+      | 6 | 6 | 1 | rank[7]? a+1==n → no | val[1]=2 |
+
+      Letters: `val = [0, 2, 1, 0, 1, 1, 2]` → string `a.c.b.a.b.b.c` =
+      **`acbabbc`**.
+
+      **Verify.** The suffix array of `acbabbc` is `[4,1,3,5,6,7,2]` — exactly
+      the input, so our answer is valid.
+
+      **Expected:** sample prints `aybabtu`. **Actual:** we print `acbabbc`.
+      Both are correct: this problem accepts **any** string whose suffix array is
+      the given permutation, and `acbabbc` has suffix array `4 1 3 5 6 7 2`.
+      (Our greedy returns the lexicographically smallest valid string; the
+      judge's example happens to be a different valid one.)
+
+      For an impossible input (the forced chain needs a letter after `z`), the
+      program prints `-1`.
+  - type: mcq
+    prompt: 'When are the first characters of two consecutive suffixes in the suffix array forced to be strictly different?'
+    options:
+      - Whenever one first character is a and the other b
+      - When the second suffix is the lone last character, or when the suffix starting one character later is larger in the SA (rank[a+1] > rank[b+1])
+      - Whenever the two suffixes have equal ranks
+      - Only when the string is sorted
+    answer: 1
+    explanation: Equality s[a]==s[b] is only allowed if the +1-shifted suffixes still order correctly, i.e. rank[a+1] < rank[b+1] (or a+1 is the empty suffix). If rank[a+1] > rank[b+1], or if suffix b is the single final character so its +1 suffix is empty, equality would make s[a..] larger — so the first characters must differ strictly.
+type: content
+---

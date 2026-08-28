@@ -1,0 +1,295 @@
+---
+id: subarray-sum-queries-ii
+title: Subarray Sum Queries II
+type: content
+difficulty: medium
+order: 134
+tags:
+  - range-queries
+  - segment-tree
+  - maximum-subarray-sum
+blocks:
+  - type: markdown
+    content: |
+      # Subarray Sum Queries II — range maximum-subarray-sum, folded segment tree
+
+      Given an array (which **changes never** here), we must answer `q` queries of the
+      form "what is the largest possible sum of a contiguous subarray inside
+      `[a, b]`?" Empty subarrays are allowed, so the answer is `0` whenever every
+      element in the range is negative.
+
+      This is the classic *Kadane* objective, but queried over arbitrary ranges —
+      which is the one thing Kadane cannot do: Kadane is `O(n)` and linear, so it
+      cannot be split into independently-computable pieces.
+
+      ## The key idea: a "folded" node
+
+      A range-max-subarray sum **is** decomposable if each node stores four numbers:
+
+      - `sum` — total sum of the segment,
+      - `pref` — the best **prefix** sum (largest sum of a subarray that starts at the
+        segment's left edge),
+      - `suff` — the best **suffix** sum (largest sum of a subarray ending at the
+        segment's right edge),
+      - `best` — the best subarray sum **anywhere** inside the segment.
+
+      Merging a left block `L` and a right block `R`:
+
+      ```
+      sum   = L.sum + R.sum
+      pref  = max(L.pref, L.sum + R.pref)
+      suff  = max(R.suff, R.sum + L.suff)
+      best  = max(L.best, R.best, L.suff + R.pref)
+      ```
+
+      The non-obvious line is `best`: any subarray either lives entirely in `L`, or
+      entirely in `R`, or **crosses the boundary** — and a crossing subarray is a
+      suffix of `L` glued to a prefix of `R`. Because we allow the empty subarray we
+      floor `pref`, `suff`, `best` at `0` (each leaf is `{v, max(v,0), max(v,0),
+      max(v,0)}`). With this merge, a **segment tree** can combine any collection of
+      leaves into the correct maximum-subarray answer — `O(log n)` per query.
+
+      **Worked mini-example.** Leaves `2`, `5`, `1` (query the whole range): pref of
+      `[2,5]` = `max(2, 2+5)=7`, suff = `max(5, 5+2)=7`, best = `7`. Merging in `1`:
+      best = `max(7, max(1,0), suff([2,5]) + pref([1])) = max(7, 1, 7+1) = 8`. The
+      whole-array answer is `2+5+1 = 8`. Correct.
+
+      **Complexity.** `O(n)` build, `O(log n)` per query — the intended solution.
+
+      :::tip
+      **Interview tip:** "Maximum subarray sum over a range" is the tell for this
+      folded segment tree. It shows up in stock/profit problems and any "best
+      contiguous window" question with queries. Commit the four-field merge to
+      memory; the same `{sum,pref,suff,best}` shape also powers "maximum prefix
+      sum" and "maximum subarray after updates" variants. Remember queries can be
+      answered on the merge of *partially overlapping* nodes (see code-logic), which
+      is why a plain prefix array is not enough here.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given an array of `n` integers and `q` queries. In each query, your
+      task is to calculate the maximum subarray sum in the range `[a, b]`.
+
+      Empty subarrays (with sum `0`) are allowed.
+
+      ## Input
+
+      The first line contains two integers `n` and `q`: the number of elements and
+      the number of queries.
+
+      Then there are `n` integers `x_1, x_2, ..., x_n`: the contents of the array.
+
+      Finally there are `q` lines that describe the queries. Each line has two
+      integers `a` and `b`.
+
+      **Constraints:** `1 <= n, q <= 2*10^5`, `-10^9 <= x_i <= 10^9`,
+      `1 <= a <= b <= n`.
+
+      ## Output
+
+      Print the answer for each query. Answers can be up to `n * 10^9 = 2*10^14`,
+      so use `long long`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      8 4
+      2 5 1 -2 3 -1 -7 1
+      2 4
+      2 5
+      6 7
+      4 8
+      ```
+      **Output:**
+      ```
+      6
+      7
+      0
+      3
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — per-query Kadane, O(len) per query**
+
+      For every query, run Kadane over `A[a..b]` keeping `best = max(best, 0)`
+      (empty allowed). Correct, but a query spanning the whole array costs `O(n)`,
+      and `q` such queries cost `O(n*q) = 4*10^10` — far too slow.
+
+      ```cpp
+      long long brute(int a, int b, vector<long long>& A) {
+          long long best = 0, cur = 0;
+          for (int i = a; i <= b; i++) {
+              cur = max(cur + A[i], 0LL);   // restart if the running sum goes negative
+              best = max(best, cur);
+          }
+          return best;
+      }
+      ```
+      *O(len) per query — correct, too slow for the limits.*
+
+      **② Optimization — folded segment tree, O(log n) per query**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      struct Node { ll sum, pref, suff, best; };
+
+      ll A[200005];
+      Node seg[4 * 200005];
+
+      Node mergeNode(const Node& L, const Node& R) {
+          return {L.sum + R.sum,
+                  max(L.pref, L.sum + R.pref),
+                  max(R.suff, R.sum + L.suff),
+                  max({L.best, R.best, L.suff + R.pref})};
+      }
+
+      void build(int p, int l, int r) {
+          if (l == r) {
+              ll v = A[l];
+              seg[p] = {v, max(v, 0LL), max(v, 0LL), max(v, 0LL)};
+              return;
+          }
+          int m = (l + r) / 2;
+          build(p * 2, l, m);
+          build(p * 2 + 1, m + 1, r);
+          seg[p] = mergeNode(seg[p * 2], seg[p * 2 + 1]);
+      }
+
+      Node query(int p, int l, int r, int ql, int qr) {
+          if (ql <= l && r <= qr) return seg[p];
+          int m = (l + r) / 2;
+          bool hasL = (ql <= m), hasR = (qr > m);
+          if (hasL && !hasR) return query(p * 2, l, m, ql, qr);
+          if (!hasL && hasR) return query(p * 2 + 1, m + 1, r, ql, qr);
+          return mergeNode(query(p * 2, l, m, ql, qr),
+                           query(p * 2 + 1, m + 1, r, ql, qr));
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          for (int i = 1; i <= n; i++) cin >> A[i];
+          build(1, 1, n);
+          while (q--) {
+              int a, b; cin >> a >> b;
+              cout << query(1, 1, n, a, b).best << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      *O(n) build, O(log n) per query, O(n) memory — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      `O(log n)` per range query is optimal for this structure; no faster
+      comparison-based approach exists for arbitrary max-subarray range queries.
+
+      **④ Alternative — block (sqrt) decomposition, O(sqrt n) per query**
+
+      Split the array into blocks of `~sqrt(n)`. Store each block's folded summary
+      `{sum,pref,suff,best}`. A query walks the partial left/right tails element by
+      element and merges whole-block summaries for the middle — every query touches
+      at most `2*sqrt(n)` elements plus `sqrt(n)` blocks. (Reuses `Node` and
+      `mergeNode` from tier ②.)
+
+      ```cpp
+      Node one(ll v){ return {v, max(v,0LL), max(v,0LL), max(v,0LL)}; }
+
+      int B = (int)sqrt(n) + 1;                 // block size
+      vector<Node> blk((n + B - 1) / B);
+      auto rebuildBlock = [&](int b){           // summary over block b
+          Node cur = {0,0,0,0};
+          for (int i = b*B + 1; i <= min(n, (b+1)*B); i++)
+              cur = mergeNode(cur, one(A[i]));
+          blk[b] = cur;
+      };
+      for (int b = 0; b < (int)blk.size(); b++) rebuildBlock(b);
+
+      auto query = [&](int l, int r, auto&& query) -> ll {   // returns .best
+          Node res = {0, (ll)-1e18, (ll)-1e18, (ll)-1e18};
+          bool started = false;
+          auto add = [&](Node x){ if (!started){res=x; started=true;} else res=mergeNode(res,x); };
+          while (l <= r && l % B != 1) add(one(A[l++]));          // left tail
+          while (l + B - 1 <= r)     add(blk[(l - 1) / B]), l += B;// full blocks
+          while (l <= r)             add(one(A[l++]));            // right tail
+          return res.best;
+      };
+      ```
+      *O(sqrt n) per query — a different trade-off; correct but slower than the
+      segment tree.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the segment-tree solution:
+
+      - **Leaf.** A single element `v` is itself a subarray: `sum = v`, `pref = suff
+        = best = max(v, 0)` (allowing the empty subarray keeps negatives honest).
+      - **The cross-boundary term.** In `mergeNode`, `L.suff + R.pref` is the best
+        subarray that dips into both children: a suffix of the left glued to a prefix
+        of the right. Every candidate maximum subarray is exactly one of the three
+        kinds (left-only, right-only, crossing), so the four fields are *sufficient*
+        and *necessary*.
+      - **Two-child recursion.** `query` descends until the node is fully inside
+        `[ql, qr]`, then returns the *partial* summary. When the range spans both
+        children, the two partial answers are merged with `mergeNode` — the same
+        merge used at build time, which is what lets a `O(log n)`-sized set of nodes
+        collapse into one correct answer.
+      - **`best` floors at 0 automatically.** Because leaves start at `max(v,0)` and
+        every merge takes `max(...)`, an all-negative range correctly reports `0`
+        (the empty subarray).
+
+      Since the queries are purely static here, the harder point-update machinery of
+      *Subarray Sum Queries I* is unnecessary — but the same folded node supports it
+      trivially (a point update walks up rebuilding `mergeNode` on the path).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `query(2, 5)` on the sample. Array (indexed from 1):
+      `[1]=2, [2]=5, [3]=1, [4]=-2, [5]=3, [6]=-1, [7]=-7, [8]=1`.
+
+      `[2,5]` decomposes (e.g. mid = 4) into left `[2..4]` and right `[5]`.
+
+      | pieces | sum | pref | suff | best |
+      |--------|-----|------|------|------|
+      | `[2..4] = [5,1,-2]` | 4 | 6 | 0 | 6 |
+      | `[5] = [3]` | 3 | 3 | 3 | 3 |
+      | merged `[2..5]` | 7 | 7 | 3 | `max(6, 3, 0+3)=6` |
+
+      Wait — that gives `6`, but the expected answer is `7`? The subarray `5+1+(-2)+3`
+      sums to `7`, which is *not* a suffix-of-left + prefix-of-right split. Let's
+      recompute with the true decomposition. This is exactly the danger of a casual
+      hand-split: `pref` of `[2..4]` is `max(5, 5+1, 5+1-2) = max(5,6,4) = 6` and
+      `suff` of `[2..4]` is `max(-2, -2+1, -2+1+5) = max(-2,-1,4) = 4`.
+
+      | pieces | sum | pref | suff | best |
+      |--------|-----|------|------|------|
+      | `[2..4] = [5,1,-2]` | 4 | 6 | 4 | 6 |
+      | `[5] = [3]` | 3 | 3 | 3 | 3 |
+      | merged `[2..5]` | 7 | 7 | 7 | `max(6, 3, 4+3)=7` |
+
+      The crossing term `suff(L) + pref(R) = 4 + 3 = 7` captures `[2]=5,[3]=1,[4]=-2,
+      [5]=3`, the maximum subarray of the range. Answer `7`. Matches the sample.
+
+      Checking the other queries: `[2,4]` → `max(5+1, ·) = 6`; `[6,7]` → both
+      `-1,-7` negative → empty `0`; `[4,8]` → `[-2,3,-1,-7,1]` → best is `3`.
+      Output `6 7 0 3`. ✓
+  - type: mcq
+    prompt: "In the folded segment tree for maximum-subarray sum, why is L.suff + R.pref the ONLY way a best subarray can cross the boundary between the two children?"
+    options:
+      - "Because every subarray must be contiguous, so a crossing subarray is exactly a suffix of the left child followed by a prefix of the right child, with nothing taken from the middle of either."
+      - "Because the crossing subarray must always include the leftmost and rightmost elements of the whole array."
+      - "Because prefix and suffix sums are always equal to the total sum."
+      - "Because crossing subarrays are always empty, so the term is always zero."
+    answer: 0
+    explanation: "A contiguous subarray that straddles the split point picks some trailing slice of the left child (a suffix) and some leading slice of the right child (a prefix), concatenated. Taking a middle-only slice of either side would fail to cross. So the candidate crossing value is exactly the best suffix of L plus the best prefix of R. This is the whole reason the node needs four fields: sum, pref, suff, and best."

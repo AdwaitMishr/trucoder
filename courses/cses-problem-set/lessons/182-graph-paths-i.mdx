@@ -1,0 +1,226 @@
+---
+id: graph-paths-i
+title: "Graph Paths I"
+type: content
+difficulty: medium
+order: 182
+tags:
+  - mathematics
+  - graph-algorithms
+  - matrix-exponentiation
+  - counting-paths
+  - modular-arithmetic
+blocks:
+  - type: markdown
+    content: |
+      # Graph Paths I — count length-k walks with a matrix power
+
+      Count the number of paths (walks) from node `1` to node `n` with **exactly
+      `k` edges** in a directed graph. With `k` up to `10^9`, a per-step DP is
+      impossible — but the count is given by the **`k`-th power of the adjacency
+      matrix**.
+
+      ## Walks and adjacency matrix powers
+
+      Let `A` be the adjacency matrix, `A[i][j] = number of edges i -> j`. Then a
+      classic identity holds:
+
+      ```
+      (A^k)[i][j] = number of walks from i to j with exactly k edges
+      ```
+
+      because a `k`-edge walk `i -> ... -> j` picks an intermediate node at the
+      last step — `(A^k)[i][j] = sum over t of (A^(k-1))[i][t] * A[t][j]` — which is
+      exactly the matrix product. Since `A` is fixed, `A^k` is found by **binary
+      exponentiation (square-and-multiply)** in `O(n^3 log k)`.
+
+      This unifies what would otherwise require `k` DP rounds into about
+      `log2(k) <= 30` matrix multiplications.
+
+      **Time:** `O(n^3 log k)`. **Space:** `O(n^2)`.
+
+      :::tip
+      **Interview tip:** *"number of paths/walks of length exactly k"* is the
+      definitive signal for adjacency-matrix exponentiation — the entry
+      `(A^k)[i][j]`. It generalises cleanly: if edges carry weights and the metric
+      is "minimum total weight", swap `+`/`×` for `min`/`+` (the min-plus product in
+      Graph Paths II). Count-of-walks with exact length is the single most-tested
+      matrix-power application after Fibonacci.
+      :::
+  - type: markdown
+    content: |
+      # Question — Graph Paths I
+
+      Consider a directed graph that has `n` nodes and `m` edges. Your task is to
+      count the number of paths from node `1` to node `n` with exactly `k` edges.
+
+      **Input**
+
+      The first input line contains three integers `n`, `m` and `k`: the number of
+      nodes and edges, and the length of the path. The nodes are numbered
+      `1, 2, ..., n`.
+
+      Then, there are `m` lines describing the edges. Each line contains two
+      integers `a` and `b`: there is an edge from node `a` to node `b`.
+
+      **Output**
+
+      Print the number of paths modulo `10^9+7`.
+
+      **Constraints**
+
+      - `1 <= n <= 100`
+      - `1 <= m <= n(n-1)`
+      - `1 <= k <= 10^9`
+      - `1 <= a,b <= n`
+
+      **Example**
+
+      Input:
+      ```
+      3 4 8
+      1 2
+      2 3
+      3 1
+      3 2
+      ```
+
+      Output:
+      ```
+      2
+      ```
+
+      The two walks are `1 -> 2 -> 3 -> 1 -> 2 -> 3 -> 1 -> 2 -> 3` and
+      `1 -> 2 -> 3 -> 2 -> 3 -> 2 -> 3 -> 2 -> 3`.
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — DP over edge counts, O(k · m) time, O(n) space**
+
+      Let `dp[v]` be the number of walks to `v` after the current number of steps;
+      relax for `k` steps. Correct, but `k` up to `10^9` means `10^9` rounds —
+      far too slow.
+
+      ```cpp
+      // Illustration only — O(k*m), unusable for k up to 1e9.
+      // vector<ll> dp(n+1), nd; dp[1]=1;
+      // for step in 1..k: nd[v] = sum over edge (u,v) of dp[u]; swap.
+      ```
+
+      **② Optimization — adjacency-matrix exponentiation, O(n^3 log k) time, O(n^2) space**
+
+      Build `A`, exponentiate it to `A^k`, read `(A^k)[0][n-1]`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1e9 + 7;
+      const int MAXN = 100;
+      using Mat = array<array<ll,MAXN>,MAXN>;
+
+      Mat mul(const Mat& a, const Mat& b, int n){
+          Mat c{};
+          for (int i = 0; i < n; ++i)
+              for (int k = 0; k < n; ++k){
+                  if (!a[i][k]) continue;
+                  ll ai = a[i][k];
+                  for (int j = 0; j < n; ++j)
+                      c[i][j] = (c[i][j] + ai * b[k][j]) % MOD;
+              }
+          return c;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; ll k; cin >> n >> m >> k;
+          Mat A{};                                  // adjacency matrix
+          for (int i = 0; i < m; ++i){ int a, b; cin >> a >> b; --a; --b; A[a][b]++; }
+          Mat R{}; for (int i = 0; i < n; ++i) R[i][i] = 1;   // identity
+          Mat base = A;
+          while (k){                                // raise A to k by squaring
+              if (k & 1) R = mul(R, base, n);
+              base = mul(base, base, n);
+              k >>= 1;
+          }
+          cout << R[0][n - 1] % MOD << "\n";        // (A^k)[1][n]
+          return 0;
+      }
+      ```
+
+      `~30` matrix multiplications (binary exponentiation over `k <= 10^9`), each
+      `O(n^3) = 10^6` for `n = 100`, so roughly `3·10^7` operations — a fraction of
+      the time limit.
+
+      **③ Further optimization** — the `O(n^3 log k)` is already the intended bound;
+      for `n <= 100` the 100 x 100 multiplication dominates and there is no faster
+      asymptote for a general dense directed graph.
+
+      **④ Alternative** — the sequence `a_t = (A^t)[1][n]` satisfies a linear
+      recurrence of order `<= n` (Cayley–Hamilton), so one could obtain the first
+      `2n` terms by an `O(n·m)` DP and then jump to `a_k` with a linear-recurrence
+      (Kitamasa-style) exponentiation in `O(n^2 log k)`. It is asymptotically
+      better but overkill here — binary matrix exponentiation is simpler and within
+      limits. Note also that swapping `+`/`×` for `min`/`+` in the same multiplication
+      turns this whole solution into the min-plus version used by Graph Paths II.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on **②**:
+
+      - `A[a][b]++` builds the adjacency matrix with multiplicity (each edge is a
+        separate walk), and `m` can repeat nothing but ordering, so counts stay
+        exact mod `MOD`.
+      - `mul(a, b, n)` is the standard matrix product restricted to the `n` real
+        nodes; the `if (!a[i][k]) continue;` skip speeds it up.
+      - `R` starts as the identity (`A^0`), then the `while (k)` loop multiplies in
+        `A` for every set bit — textbook square-and-multiply.
+      - The final `R[0][n-1]` is exactly the number of length-`k` walks from node
+        `1` (index 0) to node `n` (index `n-1`).
+      - Everything is reduced mod `10^9+7` so the count stays a normal integer.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 3`, edges `1->2, 2->3, 3->1, 3->2`, `k = 8`.
+      Let `c_t[v]` = number of length-`t` walks from `1` to `v`.
+
+      | t | c_t[1] | c_t[2] | c_t[3] |
+      |---|--------|--------|--------|
+      | 0 | 1 | 0 | 0 |
+      | 1 | 0 | 1 | 0 |
+      | 2 | 0 | 0 | 1 |
+      | 3 | 1 | 1 | 0 |
+      | 4 | 0 | 1 | 1 |
+      | 5 | 1 | 1 | 1 |
+      | 6 | 1 | 2 | 1 |
+      | 7 | 1 | 2 | 2 |
+      | 8 | 2 | 3 | 2 |
+
+      So `c_8[3] = 2` walks of length 8 from node 1 to node 3, matching the sample
+      output `2`. `(A^8)[0][2]` in the matrix solution gives the same `2`.
+  - type: flowchart
+    title: "Count length-k walks"
+    nodes: ["Read n,m,k", "build adjacency matrix A",
+            "R = identity, base = A",
+            "while k > 0", "k odd? R = R*base",
+            "base = base*base, k >>= 1",
+            "print (A^k)[1][n]"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: "bit set -> R=R*base"}
+      - {from: 5, to: 3, label: "loop"}
+      - {from: 3, to: 6, label: "k == 0"}
+  - type: mcq
+    prompt: "Why does (A^k)[i][j] count exactly the walks from i to j with k edges, and how is A^k computed fast enough for k up to 10^9?"
+    options:
+      - "Each matrix product A^(t-1)*A combines a (t-1)-edge walk to a middle node with a final edge, so the k-th power counts k-edge walks; A^k is found by binary exponentiation in O(n^3 log k)"
+      - "Because A^k equals the number of edges in the graph, so one multiplication suffices"
+      - "Because walks are independent of powering, A^k always reduces to the identity"
+      - "Because A^k is only defined for undirected graphs, and here we square each edge"
+    answer: 0
+    explanation: "By induction, (A^k)[i][j] = sum_t (A^(k-1))[i][t] * A[t][j]: every length-k walk from i to j passes through some node t at the second-to-last step, pairing a length-(k-1) walk i->t with a final edge t->j. That is exactly a matrix product, so A^k accumulates all length-k walks. Binary exponentiation squares A ~log2(k) times, giving O(n^3 log k)."

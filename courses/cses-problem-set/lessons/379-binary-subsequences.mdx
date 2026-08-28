@@ -1,0 +1,205 @@
+---
+id: binary-subsequences
+title: Binary Subsequences
+difficulty: hard
+order: 379
+tags:
+  - additional
+  - counting
+  - number-theory
+  - euclid
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — distinct subsequences of a binary string
+
+      A *subsequence* is any string obtainable by deleting some (possibly zero)
+      characters and keeping the rest in order. We want the **shortest** bit
+      string whose set of pairwise-different (distinct) subsequences has size
+      exactly `n`, for `n ≤ 10^6`.
+
+      **Counting distinct subsequences fast.** A linear DP counts them without
+      enumerating: keep `end[c]` = number of distinct subsequences *ending*
+      with character `c` (each pattern counted once). When we append character
+      `c`, the number of *new* distinct subsequences is `total − end[c]`
+      (all so far, minus those already ending in `c`, to avoid duplicates), and
+      `end[c]` becomes `total`. Start `total = 1` (the empty string). This lets
+      a brute force verify *any* candidate string's count in `O(L)`.
+
+      **The minimal construction (number theory).** The two-run/balanced
+      structure of optimal strings is governed by a classic combinatorial fact:
+      minimal binary strings with a prescribed number of distinct subsequences
+      are built from a coprime pair via the **extended Euclidean algorithm**. In
+      compact form, set `N = n + 2`; among the `i` coprime to `N`, pick the one
+      whose Euclidean-algorithm *quotient sum* (`Σ (b div a)` while reducing
+      `(i, N)`) is the smallest — that quotient sum is the minimal string length,
+      and `i` is its "slope." Then subtract `d = i` from `N` and run a
+      subtraction loop (the classic Euclidean emission of a *Christoffel /
+      lower-mechanical word*) that prints `0`s and `1`s until the two values meet.
+
+      :::tip
+      **Interview tip:** Building strings/objects with an exact count "n" often
+      has a clean number-theoretic closed form (here via coprime fractions and
+      the Euclidean algorithm) instead of an exponential search. The distinct-
+      subsequence counting DP (`end[c]`, `total ← total·… − end[c]`) is itself a
+      very frequently reused trick.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Your task is to find a **minimum length** bit string that has exactly `n`
+      distinct subsequences. For example, a correct solution for `n = 6` is
+      `101`, whose distinct subsequences are `0`, `1`, `01`, `10`, `11` and
+      `101`.
+
+      **Input.** The only input line has an integer `n`.
+
+      **Output.** Print one bit string: a solution to the task. You can print
+      any valid solution.
+
+      **Constraints**
+      - `1 ≤ n ≤ 10^6`
+
+      **Sample**
+
+      Input:
+      ```
+      6
+      ```
+
+      Output:
+      ```
+      101
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(sum of 2^L) search by length.** For `L = 1, 2, …`,
+      enumerate every bit string of length `L`, count its distinct subsequences
+      with the `O(L)` DP, and return the first string whose count equals `n`.
+      Exact (and even finds the *lexicographically first* minimal answer), but
+      exponential — hopeless beyond tiny `n`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int n;
+      ll count_distinct(const string& s){
+          ll total=1, end0=0, end1=0;                 // empty string counted
+          for(char ch: s){
+              if(ch=='0'){ ll add=total-end0; end0+=add; total+=add; }
+              else       { ll add=total-end1; end1+=add; total+=add; }
+          }
+          return total-1;                              // drop the empty substring
+      }
+      int main(){
+          cin>>n;
+          for(int L=1; L<40; L++){
+              for(int mask=0; mask<(1<<L); mask++){
+                  string s;
+                  for(int b=0;b<L;b++) s += (mask>>b)&1 ? '1':'0';
+                  if(count_distinct(s)==n){ cout<<s<<"\n"; return 0; }
+              }
+          }
+      }
+      ```
+      *Complexity: O(Σ_L 2^L · L) — exponential, only for very small `n`.*
+
+      **② Optimization — O(log n) Euclidean construction.** The number-theoretic
+      construction described in the theory: find the best coprime slope by
+      minimising the quotient sum, then emit the Christoffel word via the
+      subtraction loop.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          n += 2;
+          int k = n, d = 1;
+          for(int i=1;i<n;i++){
+              if(std::gcd(i,n)==1){
+                  int res=0, a=i, b=n;
+                  while(a){ res += b/a; int c=a; a=b%a; b=c; if(a>0 && a>b) swap(a,b); }
+                  if(res<k){ k=res; d=i; }
+              }
+          }
+          n -= d;
+          while(n!=d){
+              if(n>d){ cout<<"0"; n-=d; }
+              if(d>n){ cout<<"1"; d-=n; }
+          }
+          cout<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: O(log n) — trivial for `n ≤ 10^6`.*
+
+      **④ Alternative / note.** The brute tier (①) prints e.g. `101` for `n=6`
+      (the sample) while the construction (②) prints `010` — both are minimal
+      length 3 and both have exactly 6 distinct subsequences, so both are
+      accepted. This highlights that the answer is *not unique*; any minimal
+      valid string is fine.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(log n). Key lines:
+
+      1. **`n += 2`** — the counting model (subsequence counts) is shifted by an
+         additive constant, so the construction works on `N = n + 2`.
+      2. **Coprime scan.** For each `i` with `gcd(i, N) = 1`, the inner
+         Euclidean loop sums the quotients `b/a`; that sum is the length of the
+         string this fraction would produce. We keep the `i` with the smallest
+         such length (`d`).
+      3. **Emission loop.** `n -= d` then repeatedly subtract the larger from the
+         smaller, printing `0` when the first operand is larger and `1` when the
+         second is — the standard subtraction algorithm that yields the balanced
+         Christoffel / lower-mechanical word for the slope `d/N`. The loop ends
+         when the two values coincide.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 6` → `N = 8`.
+
+      Coprime `i ∈ {1,3,5,7}`; compute the Euclidean quotient sums:
+
+      | `i` | quotient sum | best? |
+      |-----|--------------|-------|
+      | 1   | 8            | no    |
+      | 3   | 5            | **yes → d = 3** |
+      | 5   | 5            | tie, keep d=3 |
+      | 7   | 8            | no    |
+
+      `N = 8`, `d = 3`, so `n = 8 − 3 = 5`. Emission loop:
+
+      | state `(n,d)` | test | print | new `(n,d)` |
+      |---------------|------|-------|--------------|
+      | (5,3)         | n>d  | `0`   | (2,3)        |
+      | (2,3)         | d>n  | `1`   | (2,1)        |
+      | (2,1)         | n>d  | `0`   | (1,1)        |
+      | (1,1)         | equal| stop  | —            |
+
+      Output `010` (length 3). Its distinct non-empty subsequences are
+      `0, 1, 00, 01, 10, 010` — exactly 6, and length 3 is minimal, so `010` is a
+      valid answer. The sample's `101` is an equally valid minimal string.
+
+  - type: mcq
+    prompt: "Why is enumerating every bit string of increasing length (brute force) not viable for n up to 10^6?"
+    options:
+      - "The search space doubles with each extra character, so total candidates up to the minimal length L is exponential (about 2^L), far beyond 10^6 for the required L."
+      - "Because bit strings have to contain only 0s and 1s and no other characters."
+      - "Because n is too small for enumeration to help."
+      - "Because the distinct-subsequence count can never be checked exactly."
+    answer: 0
+    explanation: "The number of length-L bit strings is 2^L, and trying all of them for L = 1, 2, … until the count matches n is exponential in the minimal length, which becomes astronomically large long before n ≈ 10^6. The number-theoretic (Euclidean) construction instead returns a minimal string directly in O(log n)."
+type: content
+---

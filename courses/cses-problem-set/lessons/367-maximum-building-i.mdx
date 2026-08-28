@@ -1,0 +1,230 @@
+---
+id: maximum-building-i
+title: Maximum Building I
+difficulty: medium
+order: 367
+tags:
+  - additional
+  - monotonic-stack
+  - histogram
+  - grid
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — largest rectangle in a histogram, applied row by row
+
+      We want the largest axis-aligned rectangle made only of `.` cells (empty
+      forest squares) in an `n × m` grid. This is the classic **largest rectangle
+      in a binary matrix** problem, and the standard technique reduces it to the
+      simpler **largest rectangle in a histogram**.
+
+      **From grid to histogram.** For each column `c`, let `h[c]` be the number
+      of consecutive `.` cells ending at (and including) the current row — i.e.
+      the *height of the tower of empty cells* above `c`. We sweep the grid row
+      by row from top to bottom:
+
+      ```
+      h[c] = (grid[r][c] == '.') ? h[c] + 1 : 0
+      ```
+
+      The bottom row of any `.`-only rectangle is some row `r`, and the columns
+      it can span are exactly the columns whose (running) height `h[c]` is at
+      least the rectangle's height `H`. So at row `r` the best rectangle *with
+      bottom edge on row `r`* is the **largest rectangle in the histogram** `h[]`
+      (height `H`, width equal to the longest contiguous band of columns with
+      height `≥ H`). Taking the max over all rows gives the answer.
+
+      **Largest rectangle in a histogram in O(m)** uses a **monotonic stack**.
+      Sweep columns left to right; maintain a stack of column indices with
+      non-decreasing heights. When a column is shorter than the top of the stack,
+      pop the top — it is the *right edge* for a rectangle of that tall height,
+      and the *left edge* is the column just below it on the stack. Width =
+      `c - stack_top - 1`, area = `height · width`. Every column enters and
+      leaves the stack once → linear.
+
+      :::tip
+      **Interview tip:** "Largest all-1s / free-cell rectangle in a bit grid" is a
+      frequent interview question (LeetCode 85, SPOJ HISTOGRA). Reach for the
+      two-step reduction: **histogram heights + monotonic stack**. Often the
+      bonus is to also return the rectangle's coordinates, which the stack keeps
+      for free. The monotonic-stack "left & right smaller element" pattern
+      appears in trap-rain-water, next-greater-element, and MAB-adjacent tasks.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given a map of a forest where some squares are empty and some
+      squares have trees. What is the maximum area of a rectangular building that
+      can be placed in the forest so that no trees must be cut down?
+
+      **Input.** The first input line contains integers `n` and `m`: the size of
+      the forest. After this, the forest is described: each square is empty (`.`)
+      or has trees (`*`).
+
+      **Output.** Print the maximum area of a rectangular building.
+
+      **Constraints**
+      - `1 ≤ n, m ≤ 1000`
+
+      **Sample**
+
+      Input:
+      ```
+      4 7
+      ...*.*.
+      .*.....
+      .......
+      ......*
+      ```
+
+      Output:
+      ```
+      12
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²·m).** Fix a top row `r1` and grow the bottom row
+      `r2` downward; maintain a running `h[c]` (empty-tower heights). A rectangle
+      that spans rows `r1..r2` needs height `need = r2-r1+1`, so count the
+      longest run of columns with `h[c] ≥ need`; the max width × `need` is the
+      best for that band. This is correct for every cell but costs a pass per
+      row *pair*, quadratic in `n`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,m; cin>>n>>m;
+          vector<string> g(n); for(int r=0;r<n;r++) cin>>g[r];
+          vector<int> h(m,0); ll best=0;
+          for(int r2=0;r2<n;r2++){
+              for(int c=0;c<m;c++) h[c]=(g[r2][c]=='.')?h[c]+1:0;
+              for(int r1=0;r1<=r2;r1++){
+                  int need=r2-r1+1, run=0;
+                  for(int c=0;c<m;c++){
+                      run=(h[c]>=need)?run+1:0;
+                      best=max(best,(ll)need*run);
+                  }
+              }
+          }
+          cout<<best<<"\n";
+      }
+      ```
+      *Complexity: O(n²·m) time — for `n = m = 1000` that is 10⁹+ steps, far too slow.*
+
+      **② Optimization — O(n·m) histogram + monotonic stack.** Process one row
+      at a time, maintaining `h[]`, and after updating each row run the linear
+      largest-rectangle-in-histogram via a monotonic stack. The running max is
+      the answer.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,m; cin>>n>>m;
+          vector<int> h(m,0); ll best=0;
+          for(int r=0;r<n;r++){
+              string row; cin>>row;
+              for(int c=0;c<m;c++) h[c]=(row[c]=='.')?h[c]+1:0;
+              vector<int> st;                       // indices with non-decreasing height
+              for(int c=0;c<=m;c++){
+                  int cur=(c==m)?0:h[c];            // sentinel of height 0 flushes the stack
+                  while(!st.empty()&&h[st.back()]>=cur){
+                      int H=h[st.back()]; st.pop_back();
+                      int w=st.empty()?c:(c-st.back()-1);
+                      best=max(best,(ll)H*w);
+                  }
+                  st.push_back(c);
+              }
+          }
+          cout<<best<<"\n";
+      }
+      ```
+      *Complexity: O(n·m) time, O(m) space — instantly handles `1000 × 1000`.*
+
+      **④ Alternative / note.** The monotonic-stack formulation is optimal; an
+      equally-simple alternative computes, for every histogram, the **left and
+      right bounds** of each column via two monotonic-stack passes (`next/prev
+      strictly-shorter element`), then `area = h[c]·(right[c]-left[c]-1)`. It is
+      the same complexity and the same underlying idea — the single-pass version
+      shown above is the compact form.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n·m) histogram sweep. Key lines:
+
+      1. **Height update.** `h[c] = (row[c]=='.') ? h[c]+1 : 0` — a tree resets
+         the tower to 0, an empty cell extends it by 1. After processing row `r`,
+         `h[c]` equals the number of consecutive `.` ending at row `r` in column
+         `c`.
+      2. **The stack sweep.** For `c` from 0 to `m` (with a virtual height-0
+         sentinel at `c == m`), while the current cell is shorter than the stack
+         top, pop the top as the *early-bird* height `H`. Its rectangle can't
+         extend past `c` (right bound), and its left bound is the new stack top.
+         So `width = c - st.top() - 1` and we take `H * width`.
+      3. **Why it's linear:** each column index is pushed once and popped once,
+         so the inner `while` is O(m) total per row.
+      4. **Running best** across all rows gives the global maximum rectangle.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** the `4 × 7` sample. Expected output `12`.
+
+      Growing the heights column-by-column, then the best rectangle found at
+      each bottom row:
+
+      | row | `h[]` after update | best rectangle with that bottom edge |
+      |-----|--------------------|-------------------------------------|
+      | 0 | `[1 1 1 0 1 0 1]` | `1×3` at cols 0-2 → area 3 |
+      | 1 | `[2 0 2 1 2 1 2]` | `1×5` band at cols 2-6 → area 5 |
+      | 2 | `[3 1 3 2 3 2 3]` | `2×5` band at cols 2-6 → area 10 |
+      | 3 | `[4 2 4 3 4 3 0]` | `3×4` at cols 2-5 → **area 12** |
+
+      The `3×4` rectangle spanning rows 1-3 and columns 2-5 (value `12`) is the
+      maximum (a `2×6` band across cols 0-5 also scores 12). The brute tier (①)
+      finds the same via row-pair enumeration; the stack tier (②) reaches it in
+      one monotonic-stack pass per row. Output: `12`.
+
+  - type: flowchart
+    title: "Row-by-row histogram + monotonic stack"
+    nodes:
+      - For each row: update h[c] (+1 empty / reset tree)
+      - Sweep columns with a monotonic stack
+      - Pop taller columns on a shorter one; area = height * (c - newTop - 1)
+      - Track global best
+      - All rows done?
+      - Print best
+    edges:
+      - {from: 0, to: 1, label: "next column"}
+      - {from: 1, to: 2, label: "h[c] < stack height"}
+      - {from: 2, to: 3, label: "update max"}
+      - {from: 3, to: 4, label: ""}
+      - {from: 1, to: 4, label: "all columns pushed"}
+      - {from: 4, to: 0, label: "next row"}
+      - {from: 4, to: 5, label: "no rows left"}
+
+  - type: mcq
+    prompt: "Why is a *monotonic* stack (kept in non-decreasing height order) sufficient to find every candidate rectangle in one pass?"
+    options:
+      - "Because popping the top on a shorter column gives that height's exact left and right bounds, so every tallest rectangle is evaluated exactly once."
+      - "Because the stack guarantees the grid has no trees."
+      - "Because heights are always positive, so a stack is unnecessary."
+      - "Because every rectangle must be a single column."
+    answer: 0
+    explanation: "Each popped column becomes the limiting height of a rectangle whose right edge is the current (shorter) column and whose left edge is the next item on the stack — the nearest strictly-shorter columns on both sides. That is precisely the maximum width a rectangle of that height can have, so the true optimum is covered. Each index is pushed and popped once, giving the O(m) sweep."
+
+type: content
+---

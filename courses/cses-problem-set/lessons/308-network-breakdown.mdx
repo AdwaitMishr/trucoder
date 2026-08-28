@@ -1,0 +1,225 @@
+---
+id: network-breakdown
+title: "Network Breakdown"
+type: content
+difficulty: medium
+order: 308
+tags:
+  - advanced-graph
+  - disjoint-set-union
+  - offline-queries
+  - connectivity
+blocks:
+  - type: markdown
+    content: |
+      # Network Breakdown — counting components under edge deletions (offline)
+
+      We are given a network whose connections only ever **break** over time. After every
+      broken connection we must report how many connected components the network has.
+      Deletions are the hard direction for union-find: DSU can only merge, it cannot
+      easily split a component.
+
+      ## The offline trick: reverse time
+
+      Instead of deleting edges, replay time **backwards**: the last state (all `k`
+      breakdowns applied) becomes the *initial* graph, and each "breakdown" becomes an
+      **addition** of an edge. DSU handles additions natively, so the whole sequence
+      becomes simple unions.
+
+      The bookkeeping: track how many `components` exist. Start with the graph
+      containing every edge **except** the ones that will be broken — that is the state
+      *after all* `k` breakdowns, so it is the answer for breakdown `k`. Then run the
+      breakdowns from `k-1` down to `1`, each time unioning back the edge that broke at
+      step `i+1`; every successful merge decrements `components`, and the resulting count
+      is the answer for step `i`.
+
+      :::tip
+      **Interview tip:** "decremental connectivity" is a classic interview signal. If the
+      queries are known offline and only delete, reverse them into additions and use a
+      plain DSU — no rolling back needed. Reserve rollback-DSU (segment tree over time)
+      for the harder case where edges are both added *and* removed. Always ask: can I flip
+      the timeline?
+      :::
+  - type: markdown
+    content: |
+      # Question — Network Breakdown
+
+      Syrjälä's network has `n` computers and `m` connections between them. The network
+      consists of components of computers that can send messages to each other.
+
+      Nobody understands how the network works; if a connection breaks down, nobody will
+      repair it. In this situation a component may be divided into two components.
+
+      Your task is to calculate the **number of components after each connection
+      breakdown**.
+
+      **Input**
+
+      The first input line has three integers `n`, `m` and `k`: the number of computers,
+      connections and breakdowns. The computers are numbered `1, 2, ..., n`.
+
+      Then, there are `m` lines describing the connections. Each line has two integers
+      `a` and `b`: there is a connection between computers `a` and `b`. Each connection
+      is between two different computers, and there is at most one connection between two
+      computers.
+
+      Finally, there are `k` lines describing the breakdowns. Each line has two integers
+      `a` and `b`: the connection between computers `a` and `b` breaks down.
+
+      **Output**
+
+      Print `k` numbers: the number of components after each breakdown.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `1 <= m <= 2 * 10^5`
+      - `1 <= k <= m`
+      - `1 <= a, b <= n`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 5 3
+      1 2
+      1 3
+      2 3
+      3 4
+      4 5
+      3 4
+      2 3
+      4 5
+      ```
+
+      Output:
+
+      ```
+      2 2 3
+      ```
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      **① Brute force — re-scan the graph after each deletion, O(k · (n + m))**
+
+      After each breakdown, run a BFS/DFS from every untouched node to count components.
+      Correct, but `k` and `m` can both be `2*10^5`, giving `≈4*10^10` traversals.
+
+      ```cpp
+      // O(k*(n+m)) — naive illustration only.
+      // after each break: remove that edge from adjacency; then
+      //   count = 0; for s in 1..n if !seen[s]: count++, dfs(s)
+      ```
+
+      **② Optimization — offline reverse DSU (optimal), O((n + m + k) α(n))**
+
+      Process deletions as backward additions. Track the component count explicitly so we
+      never recount.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+        ios::sync_with_stdio(false); cin.tie(nullptr);
+        int n,m,k; cin>>n>>m>>k;
+        vector<pair<int,int>> edges(m);
+        set<pair<int,int>> broken;
+        for(int i=0;i<m;i++){ int a,b;cin>>a>>b; if(a>b)swap(a,b); edges[i]={a,b}; }
+        vector<pair<int,int>> br(k);
+        for(int i=0;i<k;i++){ int a,b;cin>>a>>b; if(a>b)swap(a,b); br[i]={a,b}; broken.insert(br[i]); }
+        vector<int> par(n+1), sz(n+1);
+        for(int i=1;i<=n;i++){par[i]=i;sz[i]=1;}
+        function<int(int)> find=[&](int x){ while(par[x]!=x){par[x]=par[par[x]]; x=par[x];} return x; };
+        auto unite=[&](int a,int b)->bool{ a=find(a);b=find(b); if(a==b)return false;
+            if(sz[a]<sz[b])swap(a,b); par[b]=a; sz[a]+=sz[b]; return true; };
+        int comp = n;
+        for(auto &e: edges) if(!broken.count(e)) if(unite(e.first,e.second)) comp--;
+        vector<int> ans(k);
+        ans[k-1] = comp;                                  // after ALL k breakdowns
+        for(int i=k-2;i>=0;i--){                          // re-add edge br[i+1]
+          if(unite(br[i+1].first, br[i+1].second)) comp--;
+          ans[i] = comp;
+        }
+        for(int i=0;i<k;i++) cout << ans[i] << (i+1==k?'\n':' ');
+        return 0;
+      }
+      ```
+
+      The only components counted immediately are the total; each union is amortized
+      near-constant via path compression + union by size.
+
+      **③ Further optimization** — not needed: `O((n + m + k) α(n))` is optimal since the
+      whole input must be read.
+
+      **④ Alternative — DSU with rollback (dynamic connectivity)**
+
+      If the problem instead *both* added and removed edges, build a segment tree over the
+      query timeline, place every edge's active interval into `O(log q)` nodes, and perform
+      a DFS over the segment tree, adding/rolling back DSU changes as you enter/leave
+      nodes. That solves the fully dynamic case in `O((n + m) log q)`, at the cost of a
+      rollback DSU. For pure deletions, the reverse-addition trick in **②** is simpler and
+      faster.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Follow the optimal **②** solution:
+
+      - Read all `m` edges; normalize each to `(min, max)` so the `set<pair<int,int>>`
+        match works regardless of endpoint order.
+      - Read the `k` breakdowns into `br`; also insert them into `broken`.
+      - Union together every edge *not* in `broken`; each merge lowers `comp`. This state
+        is exactly "the graph after all `k` breakdowns" → `ans[k-1] = comp`.
+      - Walk breakdowns from `k-2` down to `0`: re-add edge `br[i+1]` (the one that was
+        removed between state `i+1` and state `i`). If it merges two components, `comp--`.
+        `ans[i] = comp` is the answer for breakdown `i+1`.
+      - Print `ans[0 .. k-1]` on one line.
+
+      All updates are amortized `O(α(n))`; the total is `O((n + m + k) α(n))`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, connections `1-2, 1-3, 2-3, 3-4, 4-5`, breakdowns
+      `3-4, 2-3, 4-5` in that order.
+
+      `broken = {(3,4), (2,3), (4,5)}`. Surviving edges (not broken): `{1-2, 1-3}`.
+
+      **Reverse pass:**
+
+      | step | action | components |
+      |---|---|---|
+      | init | union 1-2, 1-3 | {1,2,3}{4}{5} → 3 |
+      | ans[2] = 3 | state after breakdown 3 | 3 |
+      | re-add 4-5 | 4∪5 | {1,2,3}{4,5} → 2 |
+      | ans[1] = 2 | state after breakdown 2 | 2 |
+      | re-add 2-3 | already connected | 2 |
+      | ans[0] = 2 | state after breakdown 1 | 2 |
+
+      Output `2 2 3`, matching the sample. Sanity check forward: after breaking `3-4` the
+      components are `{1,2,3}` and `{4,5}` → 2; after `2-3` still `{1,2,3}` and `{4,5}` →
+      2; after `4-5` the isolates split `{4}` and `{5}` → 3.
+  - type: flowchart
+    title: "Offline DSU"
+    nodes: ["read edges + breakdowns", "flag broken edges in a set", "union all non-broken edges; count comp",
+            "ans[k-1] = comp", "for i = k-2 down to 0: union edge br[i+1]", "comp-- if merged; ans[i] = comp", "print ans"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: "after all k breaks"}
+      - {from: 3, to: 4, label: "reverse time"}
+      - {from: 4, to: 5, label: ""}
+      - {from: 5, to: 4, label: "next i"}
+      - {from: 4, to: 6, label: "i < 0"}
+  - type: mcq
+    prompt: "Why may we process the breakdowns in reverse and simply union edges back, instead of deleting edges forward?"
+    options:
+      - "Because DSU supports merging far more easily than splitting; by reversing time each deletion becomes an addition, so every along-the-way change is a union we can apply in amortized near-constant time, and the component count at each reverse step is exactly the count after the corresponding forward deletion"
+      - "Because DSU with union-by-size can also split components in constant time"
+      - "Because reversing the order changes the final set of components"
+      - "Because only edges with distinct weights can ever be removed"
+    answer: 0
+    explanation: "Union-find is built for merging: a union is O(α(n)) amortized, while splitting a component would require rebuilding it. Reversing the timeline turns every forward deletion into a backward insertion, so we only merge. Starting from the 'everything that will break is already gone' graph, each re-added edge updates the component count exactly as the opposite forward deletion would, giving the correct per-step answers."
+---

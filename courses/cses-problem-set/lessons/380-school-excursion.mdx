@@ -1,0 +1,207 @@
+---
+id: school-excursion
+title: School Excursion
+difficulty: medium
+order: 380
+tags:
+  - additional
+  - dsu
+  - connected-components
+  - subset-sum
+  - bitset
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — independent groups make a subset-sum reachability problem
+
+      A group of `n` children each go to one of two attractions (zoo or park).
+      Some pairs of children want to visit the **same** attraction — those two
+      must always pick the same one. The question: for which numbers `i` is it
+      possible that **exactly `i`** children visit the zoo?
+
+      **The "same attraction" constraint glues children into groups.** A pair
+      that must agree forces both to be together; chaining several such pairs
+      merges a whole connected component. Inside one connected component every
+      child must choose the same attraction (any disagreement would break one of
+      the wanted-same edges). So each component contributes, to the zoo count,
+      either its **whole size** `s` (everyone in it goes to the zoo) or `0`
+      (everyone goes to the park).
+
+      **Reduction.** Find the connected components (via DSU) and read off their
+      sizes `s_1, …, s_c`. A zoo-count `i` is achievable iff `i` is a subset sum
+      of these sizes, where each size may be taken once (`0` or `s`):
+
+      ```
+      reachable[0] = true
+      for each size s:  reachable |= reachable << s
+      ```
+
+      This is a classic knapsack **reachability** over a total bound of `n`
+      (`Σ sizes = n`), done efficiently with a bitset shift.
+
+      :::tip
+      **Interview tip:** "Pairs must agree / can't differ" is the signature of
+      **connected components** or **2-SAT**, and once groups are independent the
+      question "which totals are possible" becomes **subset-sum reachability** —
+      answerable with a bitset (`reachable |= reachable << weight`) in
+      `O(#groups · n / word)`. Spot the decomposition, then reach for the bitset.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      A group of `n` children are visiting Helsinki. There are two possible
+      attractions: a child can visit either Korkeasaari (zoo) or Linnanmäki
+      (amusement park). There are `m` pairs of children who want to visit the
+      **same** attraction. Your task is to find all possible alternatives for
+      the number of children that will visit Korkeasaari. The children's wishes
+      have to be taken into account.
+
+      **Input.** The first input line has integers `n` and `m`. Then there are
+      `m` lines, each with two integers `a` and `b`: a pair who want to visit the
+      same attraction.
+
+      **Output.** Print a bit string of length `n` where a one-bit at index `i`
+      indicates that it is possible that exactly `i` children visit Korkeasaari
+      (the bit string is to be considered one-indexed).
+
+      **Constraints**
+      - `1 ≤ n ≤ 10^5`
+      - `0 ≤ m ≤ 10^5`
+
+      **Sample**
+
+      Input:
+      ```
+      5 3
+      1 2
+      2 3
+      1 5
+      ```
+
+      Output:
+      ```
+      10011
+      ```
+
+      *Explanation:* the number of children visiting Korkeasaari can be 1, 4 or 5.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(c · 2^c) assign-or-skip.** Split the children into
+      connected components, then for every bitmask over components decide each
+      component all-zoo or all-park and mark the resulting zoo count. Exact but
+      exponential in the number of components.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int n; vector<vector<int>> adj;
+      // (dfs to find component sizes, then enumerate 2^c zoo/park choices)
+      ```
+      *Complexity: O(c · 2^c) — only viable for very few components.*
+
+      **② Optimization — O((n+m) + c·n/64) DSU + bitset subset-sum.** Build the
+      components with DSU, collect the distinct component sizes, then fold each
+      size into a `std::bitset` of possible zoo counts.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long LL;
+      const int MX = 400005;
+      int par[MX], sz[MX];
+      int find(int a){ return par[a]==a ? a : par[a]=find(par[a]); }
+      void unite(int a,int b){
+          a=find(a); b=find(b);
+          if(a==b) return;
+          if(sz[a]<sz[b]) swap(a,b);
+          par[b]=a; sz[a]+=sz[b];
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,m; cin>>n>>m;
+          for(int i=1;i<=n;i++){ par[i]=i; sz[i]=1; }
+          for(int i=0;i<m;i++){ int a,b; cin>>a>>b; unite(a,b); }
+          std::bitset<400001> bit; bit[0]=1;
+          for(int i=1;i<=n;i++)
+              if(find(i)==i)                    // i is a component representative
+                  bit |= bit << sz[i];          // take this component zoo (size) or park (0)
+          for(int i=1;i<=n;i++) cout<<bit[i];
+          cout<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: O((n + m) + c · n / 64) — comfortably fast for `n ≤ 10^5`.*
+
+      **④ Alternative / note.** The same decomposition idea reappears whenever a
+      set of "must-agree" constraints partitions elements: split into groups,
+      then any achievable aggregate is a subset sum. If turns out a full zoo
+      count of `0` (everyone to the park) is always possible but lies outside the
+      printed `1..n` range, so the bit string simply never shows it.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O((n+m) + c·n/64). Key lines:
+
+      1. **DSU.** `unite` merges every wanted-same pair; after all `m` edges the
+         representatives identify the connected components.
+      2. **Representative scan.** `find(i)==i` holds exactly at roots; each root
+         reports `sz[i]`, the size its whole component must move zoo together.
+      3. **Bitset subset-sum.** `bit |= bit << sz[i]` adds the choice "this
+         component goes to the park (0)" or "goes to the zoo (its size)" for
+         every already-reachable count.
+      4. **Output.** Print `bit[1..n]` — one means "exactly that many children
+         to the zoo is possible."
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5`, edges `(1,2) (2,3) (1,5)` → expected `10011`.
+
+      Merging `1-2`, `2-3`, `1-5` puts `{1,2,3,5}` in one component; child `4` is
+      isolated. Component sizes: `4` and `1`.
+
+      | take 4-component? | take 1-component? | zoo count |
+      |-------------------|-------------------|-----------|
+      | park (0)          | park (0)          | 0 (hidden) |
+      | park (0)          | zoo (1)           | **1 ✓**     |
+      | zoo (4)           | park (0)          | **4 ✓**     |
+      | zoo (4)           | zoo (1)           | **5 ✓**     |
+
+      Possible zoo counts are 1, 4, 5 (plus 0, which is outside the printed
+      1-based string). The bitset runs `bit = 1` → after size 4: bits `{0,4}` →
+      after size 1: bits `{0,1,4,5}`; printing positions 1..5 yields `10011`,
+      matching the sample.
+
+  - type: flowchart
+    title: "Possible zoo counts (components + bitset subset-sum)"
+    nodes:
+      - Build DSU over the n children
+      - Union each wanted-same pair
+      - Collect root component sizes
+      - bit[0] = 1; for each size s: bit |= bit << s
+      - Print bit[1..n]
+    edges:
+      - {from: 0, to: 1, label: "m edges"}
+      - {from: 1, to: 2, label: "find roots"}
+      - {from: 2, to: 3, label: "subset-sum reachability"}
+      - {from: 3, to: 4, label: ""}
+
+  - type: mcq
+    prompt: "Why does each connected component contribute to the zoo count an all-or-nothing amount equal to its size?"
+    options:
+      - "Because a wanted-same pair forces two children to pick the same attraction, and chaining such pairs merges the whole connected component into one unanimous group — the component's full size goes to the zoo, or none of it does."
+      - "Because every child independently picks a random attraction."
+      - "Because the component size is always exactly 1."
+      - "Because the zoo is the only valid attraction."
+    answer: 0
+    explanation: "A wanted-same edge forces its two endpoints to pick the same attraction; chaining edges forces an entire connected component to be unanimous. That component therefore adds either its full size to the zoo count or zero. Choosing per component (0 or s) reduces the goal to subset-sum reachability over component sizes."
+type: content
+---

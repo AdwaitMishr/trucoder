@@ -1,0 +1,239 @@
+---
+id: writing-numbers
+title: Writing Numbers
+difficulty: medium
+order: 365
+tags:
+  - additional
+  - binary-search
+  - digit-counting
+  - math
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting digit occurrences, then binary searching the answer
+
+      The problem is about **digit resources**. You type the positive integers
+      `1, 2, 3, …` in order, and each key `0`‑`9` may be pressed **at most `n`
+      times** in total. The moment any digit would need to be pressed a total of
+      `n+1` times, you can no longer write the next number. We want the last
+      number you *can* complete.
+
+      **Key reduction.** Writing `1..X` uses `cnt_d(X)` presses of key `d`,
+      where `cnt_d(X)` is the number of occurrences of digit `d` among the
+      numbers `1..X`. You can write `X` iff
+
+      ```
+      cnt_d(X) <= n   for every digit d = 0,1,...,9
+      ```
+
+      As `X` grows, every `cnt_d(X)` is non-decreasing, so the set of "writable"
+      numbers is a prefix `1..answer`. That monotonicity is exactly what lets us
+      **binary search** `answer`.
+
+      **Counting `cnt_d(X)` in O(#digits)** — the classic positional formula. For
+      each decimal place `10^k`, split `X` into `hi = X / 10^(k+1)`, `cur = (X/10^k) % 10`,
+      `lo = X % 10^k`. The rule is:
+
+      - **d ≠ 0:** that digit at place `k` appears `hi·10^k` times in the full
+        blocks `00..hi-1`; then if `cur > d` add `10^k`, if `cur == d` add `lo+1`.
+      - **d = 0:** leading zeros don't exist, so when `hi == 0` (the number has
+        fewer digits) skip; otherwise use `(hi-1)·10^k` instead of `hi·10^k`.
+
+      Digging into the most-used digit: for the final ranges `0` is *not* the
+      bottleneck (no leading zeros), the binding digit is usually `1`. But the
+      binary search doesn't care which digit binds — it just checks all ten.
+
+      :::tip
+      **Interview tip:** "How many times does digit `d` appear in `1..X`?" is a
+      stand-alone classic (the digit-frequency formula), often used inside a
+      **binary-search-on-the-answer** wrapper exactly like this — answer is
+      monotone in the input, so (monotone check) → (binary search). Recognising
+      *which* quantity is monotone is the whole trick.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You would like to write a list of positive integers `1,2,3,…` using your
+      computer. However, you can press each key `0`‑`9` at most `n` times during
+      the process. What is the last number you can write?
+
+      **Input.** The only input line contains the value of `n`.
+
+      **Output.** Print the last number you can write.
+
+      **Constraints**
+      - `1 ≤ n ≤ 10^18`
+
+      **Sample**
+
+      Input:
+      ```
+      5
+      ```
+
+      Output:
+      ```
+      12
+      ```
+
+      *Explanation:* you can write `1,2,…,12`. This requires pressing key `1`
+      five times, so you cannot write `13`.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(ans · log₁₀ ans).** Simulate typing `1,2,3,…`, keeping a
+      per-digit running count; stop as soon as writing the next number would
+      take some digit past `n`, and print the last number written.
+      Correct, but the answer for `n = 10^18` has enormous magnitude — the
+      simulation loops `ans` times and is unusable.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef unsigned long long ull;
+      int main(){
+          ull n; cin >> n;
+          ull cnt[10] = {0}, last = 0;
+          for (ull x = 1; ; ++x) {
+              string t = to_string(x);
+              ull tmp[10]; for (int d = 0; d < 10; ++d) tmp[d] = cnt[d];
+              for (char c : t) tmp[c-'0']++;
+              bool ok = true;
+              for (int d = 0; d < 10; ++d) if (tmp[d] > n) ok = false;
+              if (!ok) { cout << last << "\n"; return 0; }
+              for (int d = 0; d < 10; ++d) cnt[d] = tmp[d];
+              last = x;
+          }
+      }
+      ```
+      *Complexity: O(ans · len(ans)) time, O(1) space — fine for tiny `n`, hopeless for `n ~ 10^18`.*
+
+      **② Optimization — O(log A · 10 · digits) ≈ O(1).** Binary search the
+      largest `X` with `cnt_d(X) ≤ n` for all `d`. Each feasibility check
+      (`X` valid) is just ten per-digit counts, each `O(#digits of X)`. Because
+      every `cnt_d(X)` climbs monotonically, the predicate "all ten ≤ n" is
+      monotone, so the binary search is exact.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef unsigned long long ull;
+      // occurrences of digit d among 1..x (no leading zeros); capped at cap
+      ull cntd(ull x, int d, ull cap) {
+          ull cnt = 0;
+          for (ull m = 1; m <= x; m *= 10) {
+              ull hi = x/(m*10), cur = (x/m)%10, lo = x%m;
+              if (d != 0) {
+                  cnt += hi*m;
+                  if (cur > d) cnt += m;
+                  else if (cur == d) cnt += lo + 1;
+              } else {
+                  if (hi == 0) continue;            // no leading zeros
+                  cnt += (hi-1)*m;
+                  if (cur > d) cnt += m;
+                  else if (cur == d) cnt += lo + 1;
+              }
+              if (cnt > cap) return cnt;            // salvage: we only need "> n"
+          }
+          return cnt;
+      }
+      int main(){
+          ull n; cin >> n;
+          ull lo = 0, hi = 10000000000000000000ULL; // 1e19 >> any answer for n<=1e18
+          ull ans = 0;
+          while (lo <= hi) {
+              ull mid = lo + (hi - lo)/2;
+              bool ok = true;
+              for (int d = 0; d <= 9; ++d) if (cntd(mid, d, n) > n) { ok = false; break; }
+              if (ok) { ans = mid; lo = mid + 1; } else hi = mid - 1;
+          }
+          cout << ans << "\n";
+      }
+      ```
+      *Complexity: ~60 iterations × 10 digits × ~20 places = O(1) effectively — instant for `n ≤ 10^18`.*
+
+      **④ Alternative / note.** There is no asymptotically faster exact method —
+      the digit-count feasibility check is already `O(digits)` and the answer
+      search is logarithmic. The only refinement worth recalling is the **digit
+      `0` special case** (leading zeros are not counted), which is the classic
+      bug source; the brute tier and the optimized tier agree on the sample.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(1) binary search. Key lines:
+
+      1. **`cntd(x, d, cap)`** computes how many times digit `d` appears when
+         writing `1..x`. For each place `m = 10^k` it splits `x` into
+         `hi` (everything above), `cur` (this digit), `lo` (below). The three
+         cases (`cur > d`, `cur == d`, `cur < d`) count exactly how many numbers
+         put `d` at this place.
+      2. **Zero handling.** If `d == 0`, the most-significant place of a number
+         is never `0`, so when `hi == 0` we skip; otherwise the asymptotic
+         `hi·m` becomes `(hi-1)·m` to remove the block headed by the leading
+         zero that never occurs.
+      3. **The binary search.** `lo=0, hi=1e19`. For `mid`, one scan of ten
+         digits decides "can we write `mid`?". If yes, the answer is at least
+         `mid` (`cnt` is monotone), else it's below. The largest feasible `mid`
+         is `ans`.
+      4. **Cap.** `if (cnt > cap) return cnt;` stops the moment a digit blows
+         past `n`, so no 64-bit overflow can happen for huge `x`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5` → expected output `12`.
+
+      Feasibility at the key boundary (the dominant digit is `1`):
+
+      | `X` | `cnt_1(X)` | `cnt_0(X)` | max digit cnt | writable? |
+      |-----|--------|--------|---------------|-----------|
+      | 11 | 4 | 1 | 4 | ✅ |
+      | 12 | 5 | 1 | 5 | ✅ (≤ 5) |
+      | 13 | 6 | 1 | 6 | ❌ (6 > 5) |
+
+      For `1..12` the digit counts are: `1:5, 2:2, 3:1, 4:1, 5:1, 6:1, 7:1, 8:1,
+      9:1, 0:1` — every digit is used at most 5 times. Adding `13` uses a sixth
+      `1`, violating `n = 5`. So the binary search zeroes in on `12`.
+
+      The brute force (①) would type `1,2,…,12`, then fail to type `13`, and
+      report `12`; the binary search (②) reaches the same answer through the
+      digit-count predicate. Both match the CSES sample.
+
+  - type: flowchart
+    title: "Binary search for the last writable number"
+    nodes:
+      - Start: lo=0, hi=1e19
+      - Check mid: are all 10 digit counts <= n?
+      - yes: answer>=mid, lo=mid+1
+      - no: answer<mid, hi=mid-1
+      - lo > hi?
+      - Print answer
+    edges:
+      - {from: 0, to: 1, label: "mid = lo + (hi-lo)/2"}
+      - {from: 1, to: 2, label: "all cnt_d(mid) <= n"}
+      - {from: 1, to: 3, label: "some cnt_d(mid) > n"}
+      - {from: 2, to: 4, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 1, label: "lo <= hi: repeat"}
+      - {from: 4, to: 5, label: "lo > hi: done"}
+
+  - type: mcq
+    prompt: "Why does binary search work here, i.e. why is the predicate 'all ten digit counts are <= n' monotone in X?"
+    options:
+      - "Because as X increases, every cnt_d(X) only ever grows or stays the same."
+      - "Because the digits 0-9 are sorted."
+      - "Because n is at most 10^18, so the answer is always small."
+      - "Because writing numbers 1..X uses fewer presses than 1..X+1."
+    answer: 0
+    explanation: "Going from 1..X to 1..X+1 adds only the digits of X+1 (each count either stays equal or increases by one); no digit count ever decreases. So if X is writable, every smaller number is also writable, making the feasible set a prefix [1..answer] — exactly the shape a binary search needs."
+
+type: content
+---

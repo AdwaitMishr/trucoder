@@ -1,0 +1,268 @@
+---
+id: one-bit-positions
+title: One Bit Positions
+type: content
+difficulty: hard
+order: 252
+tags:
+  - bit-string
+  - fft
+  - convolution
+  - polynomial-multiplication
+blocks:
+  - type: markdown
+    content: |
+      # One Bit Positions — pair distances via polynomial multiplication
+
+      You have a binary string `s` and you want to know, for every distance `k`,
+      how many pairs of positions hold a `1` at both ends and are exactly `k`
+      apart. For example in `1010` the `1`s sit at positions `0` and `2`, so
+      the only such pair is at distance `2`.
+
+      A naive idea is a double loop over all pairs of `1`s — `O(p²)` where `p`
+      is the number of `1`s, up to `O(n²)`. For `n = 2·10⁵` that is `4·10¹⁰`
+      pair checks — far too slow. The trick is to **rephrase the count as a
+      convolution**, then evaluate it in `O(n log n)` with the **Fast Fourier
+      Transform** (FFT).
+
+      ## Counting pairs as a product of polynomials
+
+      Turn the string into a polynomial `P` whose coefficient `P[i]` is `1` when
+      `s[i] == '1'` and `0` otherwise. Now consider the **reversed** polynomial
+      `R[i] = P[n-1-i]`. The ordinary (linear) convolution
+
+      ```
+      C = P * R,   C[k] = sum_{i} P[i] * R[k-i]
+      ```
+
+      has a beautiful meaning: a coefficient `C[k]` counts, over all pairs of
+      `1`s at positions `(i, j)`, the pairs with `i + (n-1-j) = k`, i.e. with
+      `i - j = k - (n-1)`. Rearranged, the count of pairs whose **larger index
+      minus smaller index equals `d`** lives exactly at the coefficient
+      `C[n-1+d]`.
+
+      So: build `P`, build `R = reverse(P)`, multiply them with FFT, and read
+      the answers straight out of the result. One clever product replaces a
+      quadratic scan.
+
+      ## Why FFT makes the product fast
+
+      Multiplying two degree-`n` polynomials naively is `O(n²)` — the same
+      quadratic wall. The FFT instead:
+
+      1. **evaluates** both polynomials at `n` complex roots of unity in
+         `O(n log n)` (using the symmetry of the roots to reuse work),
+      2. **pointwise-multiplies** the two value tables in `O(n)`,
+      3. **interpolates** back (an inverse FFT, also `O(n log n)`) to recover
+         the coefficient polynomial `C`.
+
+      Because convolution in the time domain equals pointwise multiplication
+      in the frequency domain, the whole product is `O(n log n)`.
+
+      :::tip
+      **Interview tip:** "count pairs of positions at every distance" (and its
+      siblings — "sum over all `i` of `a[i]·b[i+k]`", "how many pairs have a
+      given difference") is a classic **signal** for "rephrase as a
+      convolution and use FFT/NTT". Recognise the pairing `i - j = k`: reverse
+      one sequence and the differences become indices of a convolution. The
+      same machinery powers signal processing, string matching with wildcards,
+      and fast polynomial arithmetic.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given a binary string of length `n`. Your task is to calculate,
+      for every `k` between `1 … n-1`, the number of ways we can choose two
+      positions `i` and `j` such that `i-j=k` and there is a one-bit at both
+      positions.
+
+      ## Input
+
+      The only input line has a string that consists only of characters `0` and
+      `1`.
+
+      **Constraints:** `2 <= n <= 2·10^5`
+
+      ## Output
+
+      For every distance `k` between `1 … n-1`, print the number of ways we can
+      choose two such positions.
+
+      ## Sample
+
+      **Input:**
+      ```
+      1001011010
+      ```
+      **Output:**
+      ```
+      1 2 3 0 2 1 0 1 0
+      ```
+      (Nine numbers — one per distance `k = 1 … 9`.)
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — count every pair, O(n²)**
+
+      Collect the positions of all `1`s, then for each distance `d` count the
+      ordered pairs whose larger index minus smaller index equals `d`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin >> s; int n = s.size();
+          vector<int> pos;
+          for (int i = 0; i < n; i++) if (s[i] == '1') pos.push_back(i);
+          for (int d = 1; d <= n - 1; d++) {
+              long long c = 0;
+              for (int a : pos) for (int b : pos) if (a - b == d) c++;
+              if (d > 1) cout << " ";
+              cout << c;
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      *Correct, but `O(n²)` — up to `4·10¹⁰` checks for `n = 2·10⁵`. Too slow.*
+
+      **② Optimization — FFT convolution, O(n log n) (optimal)**
+
+      Build `P` and its reverse `R`, multiply with an iterative FFT, and read
+      `C[n-1+d]`. This is the tier we compile and verify against the sample.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef complex<double> cd;
+      const double PI = acos(-1.0);
+
+      void fft(vector<cd>& a, bool invert) {
+          int n = a.size();
+          for (int i = 1, j = 0; i < n; i++) {
+              int bit = n >> 1;
+              for (; j & bit; bit >>= 1) j ^= bit;
+              j ^= bit;
+              if (i < j) swap(a[i], a[j]);
+          }
+          for (int len = 2; len <= n; len <<= 1) {
+              double ang = 2 * PI / len * (invert ? -1 : 1);
+              cd wlen(cos(ang), sin(ang));
+              for (int i = 0; i < n; i += len) {
+                  cd w(1);
+                  for (int j = 0; j < len / 2; j++) {
+                      cd u = a[i + j], v = a[i + j + len / 2] * w;
+                      a[i + j] = u + v; a[i + j + len / 2] = u - v;
+                      w *= wlen;
+                  }
+              }
+          }
+          if (invert) for (auto& x : a) x /= n;
+      }
+
+      vector<long long> multiply(const vector<long long>& a, const vector<long long>& b) {
+          vector<cd> fa(a.begin(), a.end()), fb(b.begin(), b.end());
+          int n = 1;
+          while (n < (int)a.size() + (int)b.size()) n <<= 1;
+          fa.resize(n); fb.resize(n);
+          fft(fa, false); fft(fb, false);
+          for (int i = 0; i < n; i++) fa[i] *= fb[i];
+          fft(fa, true);
+          vector<long long> res(a.size() + b.size() - 1);
+          for (int i = 0; i < (int)res.size(); i++) res[i] = llround(fa[i].real());
+          return res;
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin >> s; int n = s.size();
+          vector<long long> P(n), R(n);
+          for (int i = 0; i < n; i++) { P[i] = (s[i] == '1') ? 1 : 0; R[n-1-i] = P[i]; }
+          auto C = multiply(P, R);
+          for (int d = 1; d <= n - 1; d++) {
+              if (d > 1) cout << " ";
+              cout << C[n - 1 + d];      // # pairs i>j, both 1, with i-j = d
+          }
+          cout << "\n";
+          return 0;
+      }
+      ```
+
+      *`O(n log n)` time, `O(n)` space. Convolution size is the next power of
+      two above `2n-1`, so `≈ 2^19` for `n = 2·10^5` — comfortable.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Turn bits into coefficients.** `P[i] = 1` iff `s[i] == '1'`. Convolution
+        counts arrangements of two `1`s; a zero coefficient contributes nothing.
+      - **Reverse to turn differences into indices.** Instead of `P * P` (which
+        would encode sums `i + j`), we multiply by `R[i] = P[n-1-i]`. Now a pair
+        `(i, j)` of `1`s lands at index `i + (n-1-j) = (n-1) + (i-j)`, so distance
+        `d` is index `n-1+d`. Multiplication by `R` is the "reverse one operand"
+        trick that converts a *difference* query into a *sum* (convolution index).
+      - **FFT rounds to integers.** Coefficients are exact integers, but the
+        inverse FFT returns them as floating-point values with tiny noise; we
+        round with `llround` to recover the true count.
+      - **Answer mapping.** `C[n-1+d]` is the number of (ordered) pairs of `1`s
+        with `i - j = d`. Because every pair `(larger, smaller)` is counted
+        exactly once — the larger index plays the role of `i` — this is exactly
+        the number of ways to choose two `1`-positions at distance `d`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `s = "1001011010"`, `n = 10`.
+
+      **Positions of `1`** (0-based): `{0, 3, 5, 6, 8}`.
+
+      **Polynomials.** `P[i] = 1` at `i ∈ {0,3,5,6,8}`; `R` is `P` reversed:
+      `R[i] = 1` at `i ∈ {1,3,4,6,9}` (since `R[i] = P[9-i]`).
+
+      **Convolution `C = P * R`.** Each pair of `1`s `(i, j)` with `j` indexing
+      the reversed polynomial contributes at coefficient `i + (9 - j)`. For
+      distance `d` we read `C[9 + d]`.
+
+      Count pairs of `1`s `(p, q)` with `p > q` (so `p - q` is the distance):
+
+      ```
+      (3,0)d3   (5,3)d2   (6,5)d1   (8,6)d2
+      (5,0)d5   (6,3)d3   (8,5)d3
+       (6,0)d6   (8,3)d5
+       (8,0)d8
+      ```
+
+      Sort by distance:
+      ```
+      d: 1  2  3  4  5  6  7  8  9
+      c: 1  2  3  0  2  1  0  1  0
+      ```
+
+      Printed:
+      ```
+      1 2 3 0 2 1 0 1 0
+      ```
+      Expected (sample) `1 2 3 0 2 1 0 1 0` — **match**.
+  - type: flowchart
+    title: "Counting 1-bit pair distances with FFT"
+    nodes: ["turn s into polynomial P (1 at each 1-bit)", "build reversed polynomial R", "multiply P and R with FFT  O(n log n)", "read answer at index n-1+d", "round coefficients to integers", "print for d = 1..n-1"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+  - type: mcq
+    prompt: "Why do we multiply P by its reverse R (instead of P by P)?"
+    options:
+      - "Convolving P with P would only count pairs of identical coefficients, which collapses every distance to 0."
+      - "P*P encodes sums of indices, but we need differences. Reversing one operand turns a difference i-j into a sum i + (n-1-j) = (n-1) + (i-j), so each distance d lands at a distinct convolution index n-1+d."
+      - "The FFT only works on reversed polynomials."
+      - "Multiplying P times P is undefined for binary coefficients."
+    answer: 1
+    explanation: "Reversing one polynomial is the standard trick to convert a difference query into a convolution index. A pair (i, j) of 1s maps to index i + (n-1-j); subtracting n gives the distance i-j. The answer for distance d sits exactly at C[n-1+d], which a P*P product (indices = sums) would never expose."
+---

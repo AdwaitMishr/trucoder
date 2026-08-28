@@ -1,0 +1,201 @@
+---
+id: collecting-numbers-distribution
+title: Collecting Numbers Distribution
+difficulty: easy
+order: 339
+tags:
+  - counting
+  - combinatorics
+  - eulerian-numbers
+  - permutations
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — rounds of collecting ↔ descents of the position permutation
+
+      The array is a permutation of `1..n`. We collect in increasing order
+      `1,2,…,n`; each round starts at the smallest remaining number and sweeps
+      left to right, gathering every next-smaller-*looking* value it meets until
+      the sequence "breaks".
+
+      **The one-line connection.** Numbers `i` and `i+1` are collected in the
+      *same* round exactly when `i+1` appears to the **right** of `i` in the
+      array. If instead `i+1` is to the **left** of `i`, the sweep going left to
+      right passes `i+1` *before* it reaches `i`, so they must be picked up on
+      different rounds. Therefore, with `pos[x]` = the index where value `x`
+      sits:
+
+      ```
+      number of rounds = 1 + #{ i : pos[i+1] < pos[i] }
+      ```
+
+      The quantity `#{ i : pos[i+1] < pos[i] }` is precisely the number of
+      **descents** of the position permutation `pos`. So the distribution we
+      need is the **Eulerian distribution**: `dp[k]` = the number of permutations
+      of `1..n` with exactly `k` descents. They satisfy the classic recurrence
+
+      ```
+      A(n,k) = (k+1)·A(n−1,k) + (n−k)·A(n−1,k−1)
+      ```
+
+      (insert the new largest element `n` into a permutation of `n−1`: appending
+      it or placing it in one of `k` existing descents adds a descent; the other
+      `n−1−k` spots remove one.) The answer for "requires exactly `k+1` rounds"
+      is `A(n,k)`.
+
+      :::tip
+      **Interview tip:** "How many permutations (or arrays) force exactly `k`
+      rounds of some left-to-right sweep" is secretly asking for **descent
+      counts**, i.e. the **Eulerian numbers** — the most important distribution
+      over permutations after the binomial one. Recognising "rounds = descents+1"
+      turns a scary counting problem into a one-line DP. Eulerian numbers also
+      appear in sorting-network and MARMOT/stack-sort interview discussions.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given an array that contains each number between `1 … n` exactly
+      once. You collect the numbers in increasing order from 1 to n. On each
+      round, you traverse the array from left to right and collect as many
+      consecutive numbers as possible, starting from the smallest number that has
+      not been collected yet.
+
+      Your task is to determine, for each `k = 1,2,…,n`, the number of arrays that
+      require exactly `k` rounds to collect all the numbers.
+
+      **Input.** The only line has an integer `n`.
+
+      **Output.** Print `n` numbers: for each `k = 1,2,…,n`, the answer modulo
+      `10^9+7`.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 5000`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      3
+      ```
+
+      **Output:**
+      ```
+      1
+      4
+      1
+      ```
+
+      *Explanation:* The arrays are `[1,2,3]` (1 round), `[1,3,2]` (2 rounds),
+      `[2,1,3]` (2 rounds), `[2,3,1]` (2 rounds), `[3,1,2]` (2 rounds), and
+      `[3,2,1]` (3 rounds).
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n!·n).** Enumerate every permutation, simulate the
+      collection rounds, tally the required count.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int rounds(const vector<int>& p){
+          int n=p.size(); vector<int> pos(n+1);
+          for(int i=0;i<n;i++) pos[p[i]]=i;
+          int r=1; for(int i=1;i<n;i++) if(pos[i]>pos[i+1]) r++;  // same-round iff pos[i]<pos[i+1]
+          return r;
+      }
+      int main(){
+          int n; cin>>n; vector<int> p(n); iota(p.begin(),p.end(),1);
+          vector<long long> dist(n+1,0);
+          do{ dist[rounds(p)]++; }while(next_permutation(p.begin(),p.end()));
+          for(int k=1;k<=n;k++) cout<<dist[k]<<"\n";
+      }
+      ```
+      *Complexity: O(n!·n) — only for tiny `n`.*
+
+      **② Optimization — O(n²) Eulerian DP (`n ≤ 5000`).** Count permutations by
+      number of descents directly from the Eulerian recurrence; the answer for
+      "exactly `k` rounds" is the count with `k−1` descents.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+      int main(){
+          int n; if(!(cin>>n)) return 0;
+          vector<long long> dp(n+2,0); dp[0]=1;    // size-0 permutation: 0 descents
+          for(int sz=1;sz<=n;sz++){
+              vector<long long> ndp(sz+2,0);
+              for(int k=0;k<sz;k++){
+                  if(!dp[k]) continue;
+                  ndp[k]   =(ndp[k]   + dp[k]*(k+1))%MOD;     // k+1 spots that ADD a descent
+                  ndp[k+1] =(ndp[k+1] + dp[k]*(sz-1-k))%MOD;  // remaining spots REMOVE one
+              }
+              dp.swap(ndp);
+          }
+          for(int k=0;k<n;k++) cout<<dp[k]%MOD<<"\n";   // dp[k] = perms with k descents = rounds k+1
+      }
+      ```
+      *Complexity: O(n²) time, O(n) space — instant for `n ≤ 5000`.*
+
+      **④ Alternative / note.** Descent counting can also be done with an
+      explicit signed-accounting formula, but the Eulerian DP above is the
+      standard fast route and already optimal here. There is no faster exact
+      method needed for `n ≤ 5000`.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n)` — O(n²) Eulerian triangle. Key lines:
+
+      1. **`dp[k]`** after processing size `sz` = number of permutations of `1..sz`
+         with exactly `k` descents.
+      2. **Insert the new largest element `sz`.** Of the `sz` available insertion
+         slots into a permutation of length `sz−1` that currently has `k` descents:
+         - `k+1` slots (at the front, or inside/after one of the `k` descents)
+           give a permutation with `k` descents still (adding an ascent into the
+           descent or before start) — weight `k+1`;
+         - the remaining `sz−1−k` slots (inside an ascent) *create* a new
+           descent — weight `sz−1−k`.
+      3. **Map to rounds.** `rounds = descents + 1`, so we print `dp[k]` for
+         `k = 0..n−1` as the answer lines for rounds `1..n`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 3`. There are `3! = 6` arrays. Reading the sample's list,
+      the position permutations and their descent/round counts:
+
+      | array (as `pos`) | descents `#{i: pos[i+1]<pos[i]}` | rounds |
+      |------------------|----------------------------------|--------|
+      | `[1,2,3]` | 0 | 1 |
+      | `[1,3,2]` | 1 (`pos[2]>pos[1]`? here value order gives descent at i=2) | 2 |
+      | `[2,1,3]` | 1 | 2 |
+      | `[2,3,1]` | 1 | 2 |
+      | `[3,1,2]` | 1 | 2 |
+      | `[3,2,1]` | 2 | 3 |
+
+      Tally: **1 array** needs 1 round, **4 arrays** need 2 rounds, **1 array**
+      needs 3 rounds → output `1 4 1` ✓.
+
+      The Eulerian DP produces the same row for `n=3`: `A(3,·) = [1,4,1]`, and we
+      print `A(3,0)=1`, `A(3,1)=4`, `A(3,2)=1` for rounds 1,2,3. The brute-force
+      tier (①) reproduces these by literal simulation.
+
+  - type: mcq
+    prompt: "Why are i and i+1 collected in the same round exactly when pos[i] < pos[i+1]?"
+    options:
+      - "Because the sweep moves left to right, so it reaches i before i+1 only if i+1 lies farther right."
+      - "Because numbers are collected in descending order."
+      - "Because the round always starts from the largest uncollected number."
+      - "Because values are collected by their position, not their value order."
+    answer: 0
+    explanation: "A round scans the array left to right. After collecting i it keeps collecting while the next value is encountered later; if i+1 is positioned to the right of i (pos[i]<pos[i+1]) the sweep reaches it in the same pass, otherwise i+1 was already passed and needs a new round. So the number of rounds is 1 plus the number of 'breaks' where pos[i+1] < pos[i] — the descents of the position permutation, giving the Eulerian distribution."
+
+type: content
+---

@@ -1,0 +1,235 @@
+---
+id: k-subset-sums-i
+title: K Subset Sums I
+difficulty: hard
+order: 374
+tags:
+  - additional
+  - sorting
+  - heap
+  - subset-sums
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — the smallest subset sums via a heap
+
+      We have an array with up to `2·10^5` elements (some negative, some not) and
+      must print the `k ≤ 2·10^5` **smallest** subset sums. Enumerating all `2^n`
+      subsets is impossible; the trick is to separate signs and generate only the
+      `k` we need.
+
+      **Baseline.** The global minimum subset sum comes from taking **every**
+      negative element and **no** positive element: `base = Σ (negative values)`.
+      Any other subset is `base` plus the cost of
+      - *removing* one or more negative elements (each removal costs `−value > 0`),
+      - *adding* one or more non-negative elements (each addition costs `value ≥ 0`).
+
+      Packing every such move into a non-negative cost list easily writes the
+      original array into a list of `n` non-negative costs `c`. Every subset sum
+      is `base + (sum of a subset of `c`)`, so the problem becomes: **find the
+      `k` smallest subset sums of a non-negative multiset.**
+
+      **k-smallest subset sums of a sorted non-negative list.** Sort `c`
+      ascending. Running a min-heap with the trick below generates every subset
+      exactly once in non-decreasing order:
+
+      - push `(0, -1)` (the empty subset).
+      - Pop `(s, i)`: `s` is a candidate sum. Then push the two "natural"
+        successors:
+        1. `(s + c[i+1], i+1)` — next element is freshly added;
+        2. `(s - c[i] + c[i+1], i+1)` — the last chosen element `i` is replaced by
+           the next one `i+1`.
+
+      Because `c` is sorted non-negative, every child sum is `≥` its parent, so
+      popping `k` times yields the `k` smallest subset sums in order. Answers are
+      `base + s`. This is the "k smallest subset sums" machine used in meet-in-the
+      middle and top-rank style problems.
+
+      :::tip
+      **Interview tip:** "Smallest/largest subset sums, `k` is small but the
+      array is huge" → split signs to a baseline plus non-negative costs, sort,
+      then let a heap lazily generate the first `k` subset sums in `O(k log k)`.
+      The heap replaces each `2^n` enumeration with only as many states as you
+      actually print.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given an array of `n` integers. Consider the sums of all `2^n`
+      subsets of the given array (including the empty subset with sum zero). Find
+      the `k` smallest subset sums.
+
+      **Input.** The first line has two integers `n` and `k`: the size of the
+      array and the number of subset sums wanted. The next line has `n` integers
+      `x₁, x₂, …, xₙ`: the contents of the array.
+
+      **Output.** Print `k` integers: the `k` smallest subset sums in increasing
+      order.
+
+      **Constraints**
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ k ≤ min(2^n, 2·10^5)`
+      - `-10^9 ≤ xᵢ ≤ 10^9`
+
+      **Sample**
+
+      Input:
+      ```
+      4 9
+      1 6 3 -3
+      ```
+
+      Output:
+      ```
+      -3 -2 0 0 1 1 3 3 4
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate all 2^n subsets.** Generate every subset sum by
+      bitmask or recursion and sort. Correct only for tiny `n`; for `n = 2·10^5`
+      this is utterly impossible.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n, k; cin >> n >> k;
+          vector<long long> a(n); for(auto&x:a)cin>>x;
+          vector<long long> sums;
+          for(int mask=0; mask < (1<<n); ++mask){
+              long long s=0;
+              for(int i=0;i<n;i++) if((mask>>i)&1) s+=a[i];
+              sums.push_back(s);
+          }
+          sort(sums.begin(), sums.end());
+          for(int i=0;i<k;i++) cout << sums[i] << (i+1<k?" ":"\n");
+      }
+      ```
+      *Complexity: O(2^n · n) — only viable for n ≲ 20.*
+
+      **② Optimization — O(n log n + k log k).** Separate signs: subtract each
+      negative from `base` and push `-x` and each non-negative `x` into the
+      (non-negative) cost list, sort it, then generate the first `k` subset sums
+      with a min-heap and add `base`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, k; cin >> n >> k;
+          vector<ll> c; ll base = 0;
+          for(int i=0;i<n;i++){
+              ll x; cin >> x;
+              if(x < 0){ base += x; c.push_back(-x); }   // removing a negative costs -x
+              else      c.push_back( x);                 // adding a nonneg costs x
+          }
+          sort(c.begin(), c.end());
+          priority_queue<pair<ll,int>, vector<pair<ll,int>>, greater<pair<ll,int>>> pq;
+          pq.push({0, -1});                              // empty subset
+          vector<ll> ans;
+          while((int)ans.size() < k){
+              auto [s, idx] = pq.top(); pq.pop();
+              ans.push_back(base + s);
+              int m = (int)c.size();
+              if(idx+1 < m) pq.push({s + c[idx+1], idx+1});              // add next
+              if(idx >= 0 && idx+1 < m)
+                  pq.push({s - c[idx] + c[idx+1], idx+1});               // swap to next
+          }
+          for(int i=0;i<k;i++) cout << ans[i] << (i+1<k?" ":"\n");
+      }
+      ```
+      *Complexity: O(n log n) sort + O(k log k) heap pops — flies at n, k = 2·10^5.*
+
+      **③ Further optimization — none.** The algorithm is optimal: it spends
+      `Ω(n log n)` to sort once and `Ω(k log k)` to output `k` sums; no
+      asymptotically faster exact method is known.
+
+      **④ Alternative — meet in the middle.** Split the array in half, enumerate
+      each half's subset sums, then merge to extract the `k` smallest. This works
+      for moderate `n` (say up to 40) but is quadratic in the subset count, and it
+      cannot handle `n = 2·10^5`; the sign-splitting heap approach is the intended
+      solution here.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(n log n + k log k). Key lines:
+
+      1. **Sign split.** For each `x`, if negative: `base += x; c.push_back(-x)`.
+         If non-negative: `c.push_back(x)`. After this, every `c[i] ≥ 0`.
+      2. **Sort.** Sorting ascending guarantees every heap child ≥ its parent, so
+         the pop order is non-decreasing.
+      3. **Heap seed.** `pq.push({0, -1})` is the empty subset.
+      4. **Successor moves.** Popping `(s, i)`, we push `s + c[i+1]` (append the
+         next cost) and, when `i ≥ 0`, `s - c[i] + c[i+1]` (free the last chosen
+         slot for the next cost). Together these enumerate every subset exactly
+         once.
+      5. **Emit.** `base + s` is the true subset sum; stop after `k`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 4, k = 9`, `x = 1 6 3 -3` → expected
+      `-3 -2 0 0 1 1 3 3 4`.
+
+      Sign split: negatives `-3` → `base = -3`, cost `3`; non-negatives `1, 6, 3` →
+      costs `1, 3, 6`. Sorted `c = [1, 3, 3, 6]`.
+
+      Heap enumeration (subset-cost sums, each emitted `base + s`):
+
+      | pop order | (s, idx) | move | emitted `base+s` |
+      |-----------|----------|------|------------------|
+      | 1 | (0, -1) | — | -3 |
+      | 2 | (1, 0) | +c[0] | -2 |
+      | 3 | (3, 1) | +c[1] | 0 |
+      | 4 | (3, 2) | from swap | 0 |
+      | 5 | (4, 2) | +c[2] over (1) | 1 |
+      | 6 | (4, 3) | +c[3] | 1 |
+      | 7 | (6, 3) | +c[3] | 3 |
+      | 8 | (6, 4) | +c[4] | 3 |
+      | 9 | (7, 4) | +c[4] | 4 |
+
+      Subset-cost sums `0,1,3,3,4,4,6,6,7` → adding `base = -3` gives
+      `-3 -2 0 0 1 1 3 3 4`, which matches the CSES sample exactly.
+
+      The brute tier (①) would list all `16` sums and sort them — same answer, but
+      only because `n` is tiny here; the heap tier (②) works for `n, k` up to
+      `2·10^5`.
+
+  - type: flowchart
+    title: "k smallest subset sums by sign split + heap"
+    nodes:
+      - Split signs: base=sum(negatives), costs = -neg and pos
+      - Sort costs ascending
+      - Min-heap seed (0, -1)
+      - Pop (s,i), emit base+s
+      - Push s+c[i+1] and swap successor
+      - Stop after k emits
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: "if < k pops"}
+      - {from: 4, to: 5, label: "k reached"}
+
+  - type: mcq
+    prompt: "Why does the min-heap successfully enumerate the k smallest subset sums of a sorted non-negative list?"
+    options:
+      - "Because every child sum pushed is at least its parent's (costs are non-negative and sorted), so the heap pops sums in non-decreasing order and covers every subset exactly once."
+      - "Because the list always has k elements after sorting."
+      - "Because negative costs are never allowed."
+      - "Because the heap stores only distinct sums, never duplicates."
+    answer: 0
+    explanation: "With c sorted non-negatively, s + c[i+1] ≥ s and s - c[i] + c[i+1] ≥ s (since c[i+1] ≥ c[i]), so each popped state only generates bigger-or-equal children; a min-heap therefore emits sums in non-decreasing order. The two successor rules add the next element or displace the last chosen one for the next element, which together reach every subset exactly once — so the first k pops are exactly the k smallest subset sums."
+
+type: content
+---

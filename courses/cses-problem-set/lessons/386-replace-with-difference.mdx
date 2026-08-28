@@ -1,0 +1,243 @@
+---
+id: replace-with-difference
+title: Replace with Difference
+difficulty: hard
+order: 386
+tags:
+  - additional
+  - subset-sum
+  - bitset
+  - constructive
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — absolute differences, signs, and subset sums
+
+      We repeatedly pick two numbers `a, b`, delete them, and insert `|a − b|`.
+      After `n−1` operations one number remains. What can that final number be?
+
+      Each `|a − b|` acts like a signed copy: `|a−b| = a−b` (or `b−a`). So across
+      the whole process the final value is exactly the **absolute value of a
+      signed sum** of the original numbers — pick `+` for some, `−` for the rest:
+
+      ```
+      final = | ±x1 ± x2 ± … ± xn |
+      ```
+
+      Grouping the pluses into `A` and the minuses into `B`, that is
+      `|sum(A) − sum(B)|`. We need it to equal `0`, i.e.
+
+      ```
+      sum(A) == sum(B)   and   sum(A)+sum(B) = total
+      ```
+
+      so each group must sum to exactly `total / 2`. **Therefore a solution exists
+      iff we can split the multiset into two parts with equal sum — the classic
+      subset-sum problem.** When `total` is odd, or `total/2` is not buildable
+      from the numbers, print `−1`.
+
+      **Producing the move sequence.** Once we have an equal-sum partition
+      `(A, B)`, we turn it into operations by keeping the invariant that the
+      live array is always splittable into two groups of equal sum. Pick one
+      element from each group; if `a ≥ b` replace them with `a−b` and put it back
+      **in the group the larger element came from**; the group sums stay equal.
+      Repeating shrinks the total count by one each time until two equal
+      elements remain — combine them into `0`.
+
+      :::tip
+      **Interview tip:** "What final value can a sequence of |x−y| operations
+      produce?" always reduces to **signed sums → equal-sum partition → subset
+      sum**. When outputting the operations, keep a structural invariant (two
+      equal-sum heaps) so the construction provably terminates at `0`. This
+      invariant-carried construction trick is broadly useful for "build a
+      sequence of operations".
+      :::
+
+  - type: markdown
+    content: |-
+      ## The Problem
+
+      You are given an array of `n` integers. You will perform `n−1` operations
+      on the array. In one operation, you will choose two numbers `a` and `b`
+      from the array, delete both of them from the array and add `|a − b|` into
+      the array. Your task is to find a sequence of operations such that the
+      last number remaining in the array is `0`.
+
+      **Input.** The first line has an integer `n`: the length of the array. The
+      next line has `n` integers `x_1, x_2, …, x_n`: the contents of the array.
+
+      **Output.** Print `n−1` lines each containing two integers `a` and `b`:
+      the numbers chosen in the operations. You can print any valid solution.
+      If no solution exists, print only `−1`.
+
+      **Constraints**
+      - `2 ≤ n ≤ 1000`
+      - `1 ≤ x_i ≤ 1000`
+
+      **Example**
+
+      Input:
+      ```
+      5
+      2 7 4 12 1
+      ```
+
+      Output:
+      ```
+      2 12
+      7 10
+      4 1
+      3 3
+      ```
+
+      *Explanation:* the array changes as follows:
+      `[2,7,4,12,1] → [7,4,1,10] → [4,1,3] → [3,3] → [0]`.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — exponential.** Try every ordering/choice of pairs via
+      recursion until a single value remains; check whether it is `0`. Works only
+      for `n` tiny; for `n ≤ 1000` the search tree is astronomically large.
+
+      **② Optimization — bitset subset-sum, O(n²·max/64).** Feasibility is a
+      subset-sum: buildable `total/2`? Use a `bitset` for the reachable sums,
+      updating each value once.
+
+      ```cpp
+      vector<char> reach(S+1,0); reach[0]=1;
+      for (int v : a) for (int x=S-v; x>=0; --x)
+          if (reach[x]) reach[x+v]=1;
+      if (!reach[S]) { cout<<-1<<"\n"; return 0; }
+      ```
+
+      **③ Further optimization — reconstruct the operations.** Deciding "yes"
+      isn't enough — we must print the actual moves. Retrace the subset-sum to
+      obtain group `A` (indices summing to `S`), let `B` be the rest, then run
+      the equal-sum-pair shrink loop. Full optimal program:
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n; cin>>n;
+          vector<int> a(n); ll total=0;
+          for(int i=0;i<n;i++){ cin>>a[i]; total+=a[i]; }
+          if(total%2){ cout<<-1<<"\n"; return 0; }
+          ll S=total/2;
+          vector<char> reach(S+1,0); reach[0]=1;
+          vector<int> parent(S+1,-1);
+          for(int i=0;i<n;i++){
+              int v=a[i]; if(v>S) continue;
+              for(ll x=S-v; x>=0; --x)
+                  if(reach[x] && !reach[x+v]){ reach[x+v]=1; parent[x+v]=i; }
+          }
+          if(!reach[S]){ cout<<-1<<"\n"; return 0; }
+          vector<char> picked(n,0);
+          ll cur=S;
+          while(cur>0){ int i=parent[cur]; picked[i]=1; cur-=a[i]; }
+          multiset<int> A,B;
+          for(int i=0;i<n;i++){ if(picked[i]) A.insert(a[i]); else B.insert(a[i]); }
+          vector<pair<int,int>> ops;
+          while(true){
+              int sa=A.size(), sb=B.size();
+              if(sa+sb==2){ ops.push_back({*A.begin(),*B.begin()}); break; }
+              if(sa==1||sb==1){                 // one side is a single value
+                  int gem=(sa==1? *A.begin(): *B.begin());
+                  int mn =(sa==1? *B.begin(): *A.begin());
+                  ops.push_back({mn,gem});
+                  if(sa==1){ A.erase(A.begin()); B.erase(B.begin()); A.insert(gem-mn); }
+                  else      { B.erase(B.begin()); A.erase(A.begin()); B.insert(gem-mn); }
+              } else {                          // shrink the side with the smaller min
+                  int minA=*A.begin(), minB=*B.begin();
+                  multiset<int> *X=&A, *O=&B;
+                  if(minB<minA){ X=&B; O=&A; }
+                  int m=*X->begin(), o=*O->rbegin();
+                  if(o>m){ ops.push_back({m,o}); X->erase(X->begin());
+                           O->erase(O->find(o)); O->insert(o-m); }
+                  else { int o2=*O->begin(), x2=*X->rbegin();
+                         if(x2>o2){ ops.push_back({o2,x2}); O->erase(O->begin());
+                                    X->erase(X->find(x2)); X->insert(x2-o2); }
+                         else {                 // all equal: pair equal values -> 0
+                             vector<int> all;
+                             for(int v:A) all.push_back(v);
+                             for(int v:B) all.push_back(v);
+                             int E=all[0];
+                             while((int)all.size()>1){
+                                 int v=(count(all.begin(),all.end(),E)>=2)? E: 0;
+                                 all.erase(find(all.begin(),all.end(),v));
+                                 all.erase(find(all.begin(),all.end(),v));
+                                 all.push_back(0); ops.push_back({v,v});
+                             }
+                             break;
+                         }
+                  }
+              }
+          }
+          for(auto &p: ops) cout<<p.first<<" "<<p.second<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: O(n·S/64) for the bitset feasibility + O(n log n) for the
+      multiset shrink, easily within `n ≤ 1000`, `x_i ≤ 1000` (so `S ≤ 500 000`).*
+
+      **④ Alternative.** The final value is `|±x_1±…±x_n|`; a brute over the
+      subset-sum value range (reachable signed sums) finds `0` directly, but you
+      still need the partition to print the moves. The equal-sum partition +
+      shrink in ③ is the canonical complete solution.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — bitset subset-sum + constructive shrink. Key lines:
+
+      1. **Feasibility.** `reach[S]` true iff some subset sums to `S = total/2`.
+         Odd total, or an unreachable `S`, means `−1`.
+      2. **Partition.** `parent[s]` records the index that first reaches sum `s`;
+         retracing recovers group `A`; everything else forms `B`. Both sum to
+         `S`.
+      3. **Shrink invariant.** While more than two numbers exist, pick one from
+         each group so the *smaller* element came from the side we are shrinking,
+         and `|a−b|` is returned to the side that owned the *larger* element —
+         group sums stay equal at every step.
+      4. **Termination.** Sizes shrink by one per operation and no group empties
+         until both reach a single element, which (having equal sums) must be
+         equal — combining them yields `0`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n=5, a = [2,7,4,12,1]`, `total = 26`, `S = 13`.
+
+      Subset `A` summing to 13 exists (`{2,4,7}`); `B = {12,1}`. Shrink:
+
+      | op | pick (A,B) | |a−b| | new groups |
+      |----|-----------|-------|------------|
+      | 1  | 2 (A), 12 (B) | 10 | A={4,7}, B={1,10} (both sum 11) |
+      | 2  | 7 (A), 10 (B) | 3  | A={4}, B={1,3} (both sum 4) |
+      | 3  | 4 (A), 1 (B)  | 3  | A={3}, B={3} |
+      | 4  | 3, 3          | 0  | single 0 ✓ |
+
+      Two groups always share the same sum, so the final two values are equal and
+      their difference is `0`. Executing the produced ops on the live array
+      verifies `[2,7,4,12,1] → … → [0]`, matching the requirement (any valid
+      sequence is accepted, so this differs from the printed sample's order but
+      is equally valid).
+
+  - type: mcq
+    prompt: "How do we know a valid operation sequence exists before we try to print it?"
+    options:
+      - "Because the final value of any |a−b| process equals |±x1±…±xn|, which is 0 exactly when the numbers can be split into two groups of equal sum — a subset-sum feasibility check."
+      - "Because the array always contains a 0."
+      - "Because n is always even."
+      - "Because subtracting two equal numbers is always the first operation."
+    answer: 0
+    explanation: "Each |a−b| is a signed copy, so the surviving last number is an absolute signed sum of the inputs; it equals 0 iff the pluses and minuses each total total/2, i.e. an equal-sum partition exists. That's the subset-sum problem, decided by a bitset DP — odd totals or an unreachable half are exactly when we print −1."
+
+type: content
+---

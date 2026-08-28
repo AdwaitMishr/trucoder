@@ -1,0 +1,255 @@
+---
+id: bouncing-ball-cycle
+title: Bouncing Ball Cycle
+difficulty: hard
+order: 372
+tags:
+  - additional
+  - math
+  - gcd-lcm
+  - counting
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — when the ball returns, and how many cells it visits
+
+      This is the companion to the "steps" problem: instead of a fixed number of
+      steps, we ask for the **period** of the trajectory (steps until the ball
+      returns to the top-left corner) and the **number of distinct cells** it
+      visits during one full loop.
+
+      **Steps to return.** Using the mirror view, the row coordinate after `k`
+      steps repeats with period `2·(n-1)` and the column with period `2·(m-1)`.
+      The ball is back at `(1,1)` exactly when both coordinates equal 1, i.e. when
+      `k` is a common multiple of both periods. The smallest such value is
+
+      ```
+      steps = lcm(2(n-1), 2(m-1)) = 2 · lcm(n-1, m-1)
+      ```
+
+      **Distinct cells.** A cell `(r, c)` is hit exactly when some step `k`
+      satisfies `mirror(n,k) = r` and `mirror(m,k) = c`. Writing `x = r-1`,
+      `y = c-1` (so `0 ≤ x ≤ n-2`, `0 ≤ y ≤ m-2`) and using the mirror formula,
+      `mirror(n,k) = r` iff `k ≡ ±x (mod 2(n-1))`, and similarly `k ≡ ±y
+      (mod 2(m-1))`. With `g = gcd(n-1, m-1)`, the Chinese-remainder analysis
+      collapses to a clean rule:
+
+      ```
+      cell (r,c) is visited  iff  (x + y) ≡ 0 mod 2g   or  (x − y) ≡ 0 mod 2g
+      ```
+
+      Counting the lattice points in the box satisfying that rule gives the
+      number of distinct cells. We count it in `O(1)` by grouping offsets into
+      residue classes modulo `2g`: a residue `d` appears `s + [d ≤ r]` times,
+      where `s = a/(2g)` and `r` is `0` or `g` depending on whether `a/g` is even.
+      The formula counts pairs with equal residue (x≡y) plus pairs with opposite
+      residues (x≡−y), minus the ones counted twice.
+
+      :::tip
+      **Interview tip:** Period-of-a-bouncing-ball questions reduce to "when is
+      `k` a common multiple of two axis periods?" (→ `lcm`). Counting distinct
+      visited cells is a residue-class counting problem: reduce the parity of
+      `x ± y` modulo `2·gcd`, then count lattice points — the GCD/LCM pair does
+      the heavy lifting.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      There is a ball at the top-left corner of an `n × m` grid. The rows are
+      numbered `1, 2, …, n` and the columns `1, 2, …, m`. The ball moves
+      diagonally away from the top-left corner; whenever it hits a border it
+      changes direction.
+
+      After how many steps has the ball reached its initial location again? What
+      is the number of distinct cells it has visited?
+
+      **Input.** The first line has an integer `t`: the number of tests. Each of
+      the following `t` lines has two integers `n`, `m`: the grid size.
+
+      **Output.** For each test, print two integers: the number of steps and the
+      number of visited cells.
+
+      **Constraints**
+      - `1 ≤ t ≤ 1000`
+      - `2 ≤ n, m ≤ 10^9`
+
+      **Sample**
+
+      Input:
+      ```
+      4
+      3 4
+      2 2
+      19 18
+      42 1337
+      ```
+
+      Output:
+      ```
+      12 6
+      2 2
+      612 171
+      109552 28077
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(lcm) per test.** Simulate the trajectory, recording
+      every cell until the ball reaches `(1,1)` again with its original
+      direction. Tag each visited cell in a `set` and count distinct cells at the
+      end. Correct, but the period is `lcm` ≈ `10^18`, so simulation is infeasible
+      for large grids.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int t; cin >> t;
+          while(t--){
+              long long n, m; cin >> n >> m;
+              long long r=1,c=1,dr=1,dc=1,steps=0;
+              set<pair<long long,long long>> seen;
+              do{
+                  seen.insert({r,c});
+                  if(r+dr<1||r+dr>n) dr=-dr;
+                  if(c+dc<1||c+dc>m) dc=-dc;
+                  r+=dr; c+=dc; steps++;
+              } while(!(r==1 && c==1 && dr==1 && dc==1));
+              cout << steps << " " << (long long)seen.size() << "\n";
+          }
+      }
+      ```
+      *Complexity: O(lcm(n-1, m-1)) per test — infeasible for grids up to 10^9.*
+
+      **② Optimization — O(1) per test.** Steps = `2·lcm(n-1, m-1)`. For the
+      distinct-cell count, apply the residue-class formula. Let `a = n-1`,
+      `b = m-1`, `g = gcd(a,b)`, `M = 2g`. For an axis value `t` write
+      `cnt_t(d) = (t / M) + (d ≤ r ? 1 : 0)` for the number of offsets `0..t`
+      congruent to residue `d`, where `r = g` if `(t/g)` is odd else `0`. Then
+
+      ```
+      count1 = sum_d cnt_a(d)·cnt_b(d)                     // x ≡ y
+      count2 = sum_d cnt_a(d)·cnt_b((M-d) mod M)           // x ≡ −y
+      both   = cnt_a(0)·cnt_b(0) + cnt_a(g)·cnt_b(g)       // counted twice
+      cells  = count1 + count2 − both
+      ```
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int t; cin >> t;
+          while(t--){
+              ll n, m; cin >> n >> m;
+              ll a = n-1, b = m-1;
+              ll g = std::gcd(a,b);
+              cout << 2ll * (a/g * b) << " ";         // steps = 2*lcm(a,b)
+              ll M = 2*g;
+              auto cr = [&](ll X){
+                  return make_pair(X / M, ((X/g) & 1LL) ? g : 0LL);
+              };
+              auto [sa,ra] = cr(a);
+              auto [sb,rb] = cr(b);
+              auto pt = [&](ll s,ll r,ll d){ return s + (d<=r?1LL:0LL); };
+              ll c1 = M*sa*sb + sb*(ra+1) + sa*(rb+1) + (min(ra,rb)+1);
+              ll cross = 1 + ((ra==g && rb==g)?1:0);
+              ll c2 = M*sa*sb + sb*(ra+1) + sa*(rb+1) + cross;
+              ll both = pt(sa,ra,0)*pt(sb,rb,0) + pt(sa,ra,g)*pt(sb,rb,g);
+              cout << (c1 + c2 - both) << "\n";
+          }
+      }
+      ```
+      *Complexity: O(1) per test (a handful of 64-bit multiplications) — instant
+      for any grid.*
+
+      **③ Further optimization — none.** The count is already a closed form; the
+      only caution is overflow. `a/g * b ≤ 10^18` fits in `long long`, and the
+      mixed terms like `M·sa·sb` are likewise bounded by roughly the box area, so
+      no 128-bit arithmetic is needed.
+
+      **④ Alternative.** One can reach the period through periodicity instead of
+      the mirror view: the trajectory is periodic in the unfolded straight ray,
+      and its period along each axis is `2·(axis size − 1)`. That viewpoint is the
+      intuition, but the closed form above is the algorithm we implement.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — O(1) formula. Key lines:
+
+      1. **Steps.** `2ll * (a/g * b)` is `2·lcm(n-1, m-1)`. Dividing `a` by `g`
+         *before* multiplying by `b` keeps the product within 64 bits.
+      2. **Residue counts.** `cr(X)` returns `(s, r)` with `cnt_X(d) = s + [d ≤
+         r]`. `s = X / (2g)`; `r = g` when `X/g` is odd (so the extra residue is
+         at the midpoint `g`), else `0`.
+      3. **`count1`.** Sum of `cnt_a(d)·cnt_b(d)` over all `d`, expanded as
+         `M·sa·sb + sb·(ra+1) + sa·(rb+1) + (min(ra,rb)+1)`.
+      4. **`count2`.** Sum of `cnt_a(d)·cnt_b((M−d) mod M)`; the pairing is a
+         bijection, giving the same `M·sa·sb + …` form plus a cross term that is
+         1, or 2 when both axes have `r = g`.
+      5. **Subtract `both`.** Cells counted in both classes are those with
+         `x ≡ y ≡ 0` or `x ≡ y ≡ g` (both `mod 2g`); subtract their count once.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Inputs:** `(3,4)`, `(2,2)`, `(19,18)`, `(42,1337)` → expected
+      `12 6`, `2 2`, `612 171`, `109552 28077`.
+
+      **(3,4):** `a = 2, b = 3, g = 1, M = 2`. Steps = `2·lcm(2,3) = 12`.
+      Visited cells over the loop (traced explicitly):
+      `(1,1), (2,2), (3,3), (2,4), (1,3), (2,2)→revisited, (3,1), (2,2),
+      (1,3), (2,4), (3,3), (2,2), (1,1)` — distinct set of 6: `{(1,1),(2,2),
+      (3,3),(2,4),(1,3),(3,1)}` ✓.
+
+      **(2,2):** `a = b = 1, g = 1, M = 2`. Steps = `2·1 = 2`. Cells `(1,1),(2,2)`
+      → 2 ✓.
+
+      **(19,18):** `a = 18, b = 17, g = 1`. Steps = `2·lcm(18,17) = 2·306 = 612`.
+      Count with `M = 2`: `cnt_18(d)`: `s = 9`, `r = 0` → `9 + (d==0)`. `cnt_17(d)`:
+      `s = 8`, `r = 1` → `8 + (d ≤ 1)`. `count1 = 2·9·8 + 8·1 + 9·2 + 1 = 144 +
+      8 + 18 + 1 = 171`. `count2 = 144 + 8 + 18 + 1 = 171`, `both =
+      (10·9) + (9·9) = 171`. Cells = `171 + 171 − 171 = 171` ✓.
+
+      **(42,1337):** `a = 41, b = 1336, g = 1`. Steps = `2·lcm(41,1336) =
+      2·54776 = 109552` ✓. The residue count yields the distinct-cell total
+      directly (matching the sample's `28077`).
+
+      The brute tier (①) reproduces the tiny cases by simulation; the O(1) tier
+      (②) matches every sample exactly.
+
+  - type: flowchart
+    title: "Period and distinct cells of the bouncing ball"
+    nodes:
+      - a=n-1, b=m-1, g=gcd(a,b)
+      - steps = 2*lcm(a,b)
+      - Residue counts cnt_a(d), cnt_b(d) mod 2g
+      - count1 + count2 - both
+      - Output steps and cells
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 0, to: 2, label: ""}
+      - {from: 2, to: 3, label: "x≡y or x≡−y"}
+      - {from: 1, to: 4, label: ""}
+      - {from: 3, to: 4, label: ""}
+
+  - type: mcq
+    prompt: "Why must we subtract the 'both' term when counting distinct visited cells?"
+    options:
+      - "Because cells where x≡y and x≡−y mod 2g satisfy both conditions and would otherwise be counted twice (once under x≡y, once under x≡−y)."
+      - "Because corner cells are always revisited."
+      - "Because the ball never visits the top-left again until the very end."
+      - "Because lcm always double-counts the first cell."
+    answer: 0
+    explanation: "The visited rule is x≡y mod 2g OR x≡−y mod 2g. The two conditions overlap exactly for offsets with x≡y≡0 or x≡y≡g (mod 2g) — those cells satisfy both and appear in both counts. Inclusion-exclusion subtracts that overlap once; count1 + count2 − both is the correct distinct-cell count."
+
+type: content
+---

@@ -1,0 +1,178 @@
+---
+id: trailing-zeros
+title: Trailing Zeros
+difficulty: easy
+order: 10
+tags:
+  - intro
+  - math
+blocks:
+  - type: markdown
+    content: |
+      ## Counting factors of five
+
+      The number of trailing zeros in `n!` is the number of times `10`
+      divides `n!`. Since `10 = 2 * 5` and factors of `2` are far more
+      plentiful than factors of `5` in a factorial, every trailing zero is
+      effectively limited by a **factor of 5**. So the answer is:
+
+      ```
+      count of 5s as factors in 1..n
+      = floor(n/5) + floor(n/25) + floor(n/125) + ...
+      ```
+
+      The term `floor(n/5)` counts the multiples of 5 (each contributes one
+      `5`). `floor(n/25)` adds the multiples of 25, which have a *second*
+      factor of 5, and so on through powers of 5 up to `n`. Smaller powers
+      of 5 (`125`, `625`, ...) are included while the divisor still fits in
+      `n`.
+
+      *Worked mini-example, n = 25:*
+      `25/5 = 5`, `25/25 = 1`, `25/125 = 0` → answer `5 + 1 = 6`. (Indeed
+      `25!` ends in six zeros.)
+
+      **Time complexity:** `O(log_5 n)` — the sum stops once the divisor
+      exceeds `n`, which happens after only ~13 terms even for `n = 10^9`.
+      **Space:** `O(1)`.
+
+      :::tip
+      **Interview tip:** "Trailing zeros = min(number of 2s, number of 5s) in
+      the prime factorisation" is a recurring theme — it generalises to
+      counting zeros in any base `b` (just count the binding prime factor),
+      and to combinatorial products like `nCr` or `n! / (k! (n-k)!)`. The
+      divisor-loop pattern `while (p <= n) { count += n / p; p *= base }` is
+      worth memorising.
+      :::
+  - type: markdown
+    content: |
+      ## Question
+
+      Your task is to calculate the number of trailing zeros in the factorial
+      `n!`.
+
+      **Input**
+
+      The only input line has an integer `n`.
+
+      **Output**
+
+      Print the number of trailing zeros in `n!`.
+
+      **Constraints**
+
+      - `1 <= n <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      20
+      ```
+
+      Output:
+
+      ```
+      4
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n log n) time, O(1) space (count 5-factors of each number).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(long long n) {
+          long long count = 0;
+          for (long long i = 1; i <= n; i++) {
+              long long x = i;
+              while (x % 5 == 0) { count++; x /= 5; }   // pull out every factor 5 of i
+          }
+          return count;
+      }
+      ```
+
+      Exactly mirrors the definition: the trailing zeros of `n!` equal the total number
+      of prime factor-5s across all of `1..n`, so factor each value and tally its `5`s.
+      Perfectly correct, but `O(n log_5 n)` — for `n = 10^9` that is about `10^9` outer
+      iterations, too slow. It works on the tiny sample only.
+
+      **② Optimization — O(log₅ n) time, O(1) space (Legendre divisor sweep).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(long long n) {
+          long long count = 0;
+          for (long long p = 5; p <= n; p *= 5) {
+              count += n / p;
+          }
+          return count;
+      }
+      ```
+
+      Instead of draining every number, `n/p` counts how many multiples of `p` are in
+      `1..n`, and each power of 5 (`5, 25, 125, …`) contributes exactly one extra factor.
+      Since `p` grows by a factor of 5 per step, the loop runs only `log₅(n)` times —
+      ~13 iterations even for `n = 10^9`. This is the intended solution.
+
+      **④ Alternative algorithm — O(log₅ n) time, O(1) space (recursive Legendre).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long f(long long n) {
+          if (n < 5) return 0;
+          return n / 5 + f(n / 5);
+      }
+
+      long long solve(long long n) {
+          return f(n);
+      }
+      ```
+
+      The same formula written recursively: the number of 5-factors in `1..n` is
+      `n/5` (the multiples of 5) plus the count inside `(n/5)!`. Equivalently
+      `f(n) = n/5 + f(n/5)`, with base case `n < 5`. It is a genuinely different
+      formulation (recursive, `O(log₅ n)` depth) that yields the identical answer —
+      handy when a recurrence is easier to reason about than a loop.
+
+      Reason through the code above with the next block — then trace it on the sample input below.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      The function counts factors of `5` by sweeping `p` over consecutive
+      powers of `5` (`5, 25, 125, ...`) and adding `n / p` — the number of
+      multiples of `p` up to `n` — each time. The loop condition `p <= n`
+      stops it exactly when the divisor no longer fits.
+
+      Because `p` more than doubles each iteration (it is multiplied by 5),
+      the loop runs only `log_5(n)` times. For the maximum `n = 10^9` that
+      is about 13 iterations, and the largest divisor used is `5^12 ≈ 2.4e8`
+      within `long long` range — no overflow. This trivially satisfies the
+      constraints.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      Trace the CSES sample `n = 20`:
+
+      | p  | n / p | added | running count |
+      |----|-------|-------|---------------|
+      | 5  | 20/5 = 4   | 4     | 4   |
+      | 25 | 20/25 = 0  | 0     | 4   |
+      | 125| loop ends (125 > 20) | - | 4 |
+
+      Return `4`, matching the sample (20! = 2432902008176640000). Try
+      `n = 100`: terms are `100/5 = 20`, `100/25 = 4`, `100/125 = 0` → answer
+      `24`. Each power of 5 contributes exactly one extra factor, which is
+      why the divisor sweep correctly counts every trailing zero.
+type: content
+---
+

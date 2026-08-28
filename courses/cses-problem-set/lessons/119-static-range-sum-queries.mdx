@@ -1,0 +1,262 @@
+---
+id: static-range-sum-queries
+title: Static Range Sum Queries
+difficulty: easy
+order: 119
+tags:
+  - prefix-sums
+  - range-queries
+  - static-array
+blocks:
+  - type: markdown
+    content: |
+      # Static Range Sum Queries
+
+      **The technique: prefix sums.** A **prefix sum array** `pref` stores, at
+      index `i`, the sum of the first `i` elements: `pref[i] = a[1] + a[2] + …
+      + a[i]`, with `pref[0] = 0`. Given any query `[l, r]`, the sum of that
+      range is:
+
+      ```
+      sum(l, r) = pref[r] - pref[l - 1]
+      ```
+
+      **Why it works.** The prefix up to `r` contains the whole range `[l, r]`
+      *plus everything before it* (`l-1` elements). Subtract that leading part
+      (`pref[l-1]`) and exactly the range is left. Because a range is a
+      *difference of two prefixes*, one subtraction answers the whole query.
+
+      **When you reach for it.** An array that **never changes** (static) with
+      many "sum from l to r" queries. This is the first tool for any range-sum
+      problem — and the backbone of subarray-counting problems (CSES "Subarray
+      Sums"), where `pref[hi] - pref[lo]` rewrites a subarray constraint into a
+      pair of prefix values.
+
+      **Worked mini-example.** Array `[3, 2, 4, 5, 1]`:
+
+      | i | 0 | 1 | 2 | 3 | 4 | 5 |
+      |---|----|----|----|----|----|----|
+      | a[i] | – | 3 | 2 | 4 | 5 | 1 |
+      | pref[i] | 0 | 3 | 5 | 9 | 14 | 15 |
+
+      `sum(2, 4) = pref[4] - pref[1] = 14 - 3 = 11` i.e. `2 + 4 + 5 = 11`. ✓
+
+      **Complexity.** One pass to build (O(n)), then **O(1)** per query, O(n)
+      memory. Since every element must be read once, O(n + q) is optimal.
+
+      :::tip
+      **Interview tip:** "Given a static array and many `[l, r]` queries, compute
+      X" is the classic setup for a prefix structure. Range *sum* and range
+      *xor* both reduce to a single subtraction/`^` between two prefixes, because
+      both operations are *invertible*. Range *min/max* cannot be answered this
+      way (subtraction has no inverse for min) — that is exactly when you reach
+      for a sparse table or segment tree. Interviewers love asking: "why can't
+      you do prefix-min the way you do prefix-sum?" The answer is that `min` has
+      no way to "remove" an earlier prefix.
+      :::
+  - type: markdown
+    content: |
+      # Question — Static Range Sum Queries
+
+      Given an array of `n` integers, your task is to process `q` queries asking
+      for the **sum of the values in the range** `[a, b]`. The array never
+      changes.
+
+      **Constraints:**
+      - `1 ≤ n, q ≤ 2·10^5`
+      - `1 ≤ x[i] ≤ 10^9`
+      - `1 ≤ a ≤ b ≤ n`
+
+      **Input:** the first line has two integers `n` and `q`. The second line
+      has `n` integers `x[1], …, x[n]`. Then there are `q` lines, each with two
+      integers `a b` describing a query.
+
+      **Output:** for each query, print the sum of values in the range `[a, b]`.
+
+      Sample input:
+
+      ```
+      8 4
+      3 2 4 5 1 1 5 3
+      2 4
+      5 6
+      1 8
+      3 3
+      ```
+
+      Sample output:
+
+      ```
+      11
+      2
+      24
+      4
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·q)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<long long> a(n + 1);
+          for (int i = 1; i <= n; ++i) cin >> a[i];
+          while (q--) {
+              int l, r; cin >> l >> r;
+              long long s = 0;
+              for (int i = l; i <= r; ++i) s += a[i];
+              cout << s << '\n';
+          }
+          return 0;
+      }
+      ```
+      O(n) per query → O(n·q): with `n = q = 2·10^5` that is up to `4·10^10`
+      additions — correct but minutes past the 1s limit.
+
+      **② Optimization — prefix sums, O(n + q)** (the chosen solution)
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<long long> pref(n + 1, 0);
+          for (int i = 1; i <= n; ++i) {
+              long long x; cin >> x;
+              pref[i] = pref[i - 1] + x;
+          }
+          while (q--) {
+              int a, b; cin >> a >> b;
+              cout << pref[b] - pref[a - 1] << '\n';
+          }
+          return 0;
+      }
+      ```
+      O(n + q). Build once (O(n)), then every query is a single subtraction
+      (O(1)). Optimal.
+
+      **③ Further optimization — none needed**
+      A query is answered in O(1) and reading the array costs O(n), so O(n + q)
+      is already the best possible. There is nothing faster to reach for.
+
+      **④ Alternative — Fenwick tree, O((n+q) log n)**
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      struct Fenwick {
+          int n; vector<ll> bit;
+          Fenwick(int n) : n(n), bit(n + 1, 0) {}
+          void add(int i, ll v) { for (; i <= n; i += i & -i) bit[i] += v; }
+          ll sum(int i) const { ll s = 0; for (; i > 0; i -= i & -i) s += bit[i]; return s; }
+          ll range(int l, int r) const { return sum(r) - sum(l - 1); }
+      };
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          Fenwick fw(n);
+          for (int i = 1; i <= n; ++i) { ll x; cin >> x; fw.add(i, x); }
+          while (q--) {
+              int a, b; cin >> a >> b;
+              cout << fw.range(a, b) << '\n';
+          }
+          return 0;
+      }
+      ```
+      O(log n) per query. Strictly heavier than prefix sums for a **static**
+      array, but this is the exact structure the *dynamic* range-sum problem
+      (next lessons) needs — a helpful forward look.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      The chosen tier is **② prefix sums**. It has two halves:
+
+      - **Build:** `pref[i] = pref[i-1] + x`. Reading the stream, the running
+        total at position `i` is simply the previous total plus the new value.
+        `pref` is `n+1` long with `pref[0] = 0` — the empty prefix.
+      - **Query:** `pref[b] - pref[a-1]`. The prefix ending at `b` includes the
+        whole range `[a, b]`; subtract `pref[a-1]`, the part strictly before
+        `a`, and only `[a, b]` remains.
+
+      Use `long long` (not `int`): with `n = 2·10^5` values of up to `10^9`, a
+      full-range sum can reach `2·10^14`, far beyond 32-bit range. `pref[i-1]`
+      for `a = 1` reads the sentinel `pref[0] = 0`, which is why queries work at
+      the boundary without a special case.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input:**
+      ```
+      8 4
+      3 2 4 5 1 1 5 3
+      2 4
+      5 6
+      1 8
+      3 3
+      ```
+
+      Build the prefix array from the stream:
+
+      | i | x | pref[i] = pref[i-1] + x |
+      |---|-----|--------------------------|
+      | 0 | – | 0 |
+      | 1 | 3 | 3 |
+      | 2 | 2 | 5 |
+      | 3 | 4 | 9 |
+      | 4 | 5 | 14 |
+      | 5 | 1 | 15 |
+      | 6 | 1 | 16 |
+      | 7 | 5 | 21 |
+      | 8 | 3 | 24 |
+
+      Then each query is one subtraction:
+
+      | Query | Answer | Check |
+      |-------|--------|-------|
+      | `2 4` | pref[4]−pref[1] = 14−3 = **11** | 2+4+5 = 11 ✓ |
+      | `5 6` | pref[6]−pref[4] = 16−14 = **2** | 1+1 = 2 ✓ |
+      | `1 8` | pref[8]−pref[0] = 24−0 = **24** | whole array ✓ |
+      | `3 3` | pref[3]−pref[2] = 9−5 = **4** | a[3] = 4 ✓ |
+
+      Result: `11 2 24 4` ✓. Note `/1 8/` correctly uses `pref[0]` — the
+      sentinel that makes the single-element and left-edge queries free.
+  - type: flowchart
+    title: "Prefix-sum build and query"
+    nodes:
+      - "Stream array x[1..n]"
+      - "pref[i] = pref[i-1] + x"
+      - "Read query a b"
+      - "Print pref[b] - pref[a-1]"
+      - "More queries?"
+      - "Done"
+    edges:
+      - {from: 0, to: 1, label: "one pass"}
+      - {from: 1, to: 2, label: "after build"}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 2, label: "yes"}
+      - {from: 4, to: 5, label: "no"}
+  - type: mcq
+    prompt: 'Why can a range-sum query be answered with a single subtraction of two prefix sums, while a range-minimum query cannot?'
+    options:
+      - Because sum is commutative but min is not
+      - Because a range is a difference of two prefixes, and subtraction "cancels" the leading prefix — this needs an invertible operation. Sum (and xor) have an inverse, but min has no way to remove an earlier prefix, so prefix structures cannot answer range min
+      - Because prefix sums are stored in sorted order
+      - Because min requires a sparse table on principle
+    answer: 1
+    explanation: The identity sum(l,r) = pref[r] − pref[l−1] works because the minus operation inverts +, "removing" the prefix before l. Range min has no such inverse, so knowing min(a[1..r]) and min(a[1..l−1]) tells you nothing about min(a[l..r]). That is why prefix arrays handle sum/xor in O(1) but static minimum needs a different structure (a sparse table).
+type: content
+---

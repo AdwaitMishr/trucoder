@@ -1,0 +1,215 @@
+---
+id: and-subset-count
+title: "Subsets with AND Equal to Zero"
+difficulty: hard
+order: 286
+tags:
+  - bitwise
+  - and
+  - subset
+  - inclusion-exclusion
+  - mobius
+  - sos-dp
+blocks:
+  - type: markdown
+    content: |
+      # Counting subsets whose bitwise AND is zero
+
+      We are given `n` integers and asked: how many **non-empty subsets** have a
+      bitwise **AND equal to `0`**? Equivalently, a subset of positions whose
+      values share no common `1`-bit.
+
+      The clean way to reason here is **inclusion-exclusion over the subset
+      lattice**. Rather than enumerate `2^n` subsets, we lift AND-conditions to
+      per-mask counts:
+
+      - For a mask `m`, let `sup[m]` = the number of array values `x` with
+        `x ⊇ m` (every bit of `m` is set in `x`).
+      - A subset's AND has all bits of `m` set **iff every element of the subset
+        contains `m`**, i.e. every chosen element is one of the `sup[m]` "rich"
+        values.
+
+      So letting `F(m) = 2^(sup[m]) - 1` (the number of **non-empty** subsets
+      whose AND covers `m`), we recover the *exact*-AND counts by **Möbius
+      inversion / inclusion–exclusion** over masks. The want is `G(0)`:
+
+          G(0) = number of subsets whose AND is exactly 0
+               = Σ over all masks m of (-1)^(popcount(m)) · F(m)
+
+      Computing `sup[m]` for every mask is itself a **superset SOS DP** in
+      `O(K · 2^K)` — the same table we built in the previous lesson, but used
+      with the alternating-sign sum.
+
+      :::tip
+      **Interview tip:** the "AND equals exactly X" counting family is solved by
+      counting *at-least* masks first (`F(m)` = subsets whose AND ⊇ m, each
+      element forced to carry `m`), then doing inclusion–exclusion / Möbius over
+      the subset lattice to peel down to *exactly* 0. Recognising
+      `G(0) = Σ (-1)^popcount F(m)` turns "subset with AND zero" into one SOS
+      table + one alternating sum.
+      :::
+  - type: markdown
+    content: |
+      # Question — Count Subsets with AND 0
+
+      You are given `n` integers `a[0..n-1]`, each in `[0, 2^K)`. Count the
+      number of **non-empty subsets** (of positions) whose **bitwise AND equals
+      `0`**, modulo `10^9 + 7`. Subsets differ by which positions they include,
+      even if the values repeat.
+
+      **Input.** The first line has an integer `n`. The second line has `n`
+      integers `a[0..n-1]`. (Here `K = 20`, so every value is `< 2^20`.)
+
+      **Output.** Print the number of such subsets modulo `10^9+7`.
+
+      **Constraints**
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ K ≤ 20`, `0 ≤ a[i] < 2^K`
+
+      **Example**
+      ```
+      Input:
+      3
+      1 2 3
+
+      Output:
+      2
+      ```
+      Explanation: subsets of `{1,2,3}` with AND `0`: `{1,2}` (`1&2=0`) and
+      `{1,2,3}` (`1&2&3=0`). The singletons and `{2,3}` keep a set bit. So the
+      answer is `2`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — try all subsets, O(2^n · n)**
+
+      Enumerate every non-empty subset by bitmask over the `n` positions, AND
+      the chosen values, count the zeros.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; if(!(cin>>n)) return 0;
+          vector<int> a(n);
+          for(auto &v:a) cin>>v;
+          long long ans = 0;
+          for(int s=1; s < (1<<n); s++){
+              int z = -1;                       // identity for AND
+              for(int i=0;i<n;i++)
+                  if(s & (1<<i)) z = (z==-1) ? a[i] : (z & a[i]);
+              if(z == 0) ans++;
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **O(2^n · n)** time — for `n = 2·10^5` that is impossibly large, and even
+      for `n = 40` the `2^40` subsets are infeasible. Correct only for tiny `n`.
+
+      **② Optimization — superset SOS + Möbius, O(K·2^K + n) (submission)**
+
+      Build `sup[mask]` = number of array values containing every bit of
+      `mask`, with the superset SOS DP. Then `F(mask) = 2^(sup) - 1` is the count
+      of non-empty subsets whose AND ⊇ `mask`. Sum `(-1)^popcount(mask) · F(mask)`
+      over all masks — that alternating sum is exactly the count of subsets whose
+      AND is **precisely** `0` (Möbius inversion).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int K = 20, M = 1 << K;
+      const long long MOD = 1000000007;
+      long long pow2(int e){                      // 2^e mod MOD
+          long long r = 1, b = 2;
+          while(e){ if(e&1) r=r*b%MOD; b=b*b%MOD; e>>=1; }
+          return r;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; if(!(cin>>n)) return 0;
+          vector<int> sup(M, 0);
+          for(int i=0;i<n;i++){ int v; cin>>v; sup[v]++; }
+
+          // superset SOS: sup[mask] = # values x with x ⊇ mask
+          for(int b=0; b<K; b++)
+              for(int mask=0; mask<M; mask++)
+                  if(!(mask & (1<<b))) sup[mask] += sup[mask | (1<<b)];
+
+          long long ans = 0;
+          for(int mask=0; mask<M; mask++){
+              long long F = (pow2(sup[mask]) - 1 + MOD) % MOD;  // subsets with AND ⊇ mask
+              int bits = __builtin_popcount(mask);
+              ans = (bits & 1) ? (ans - F + MOD) % MOD : (ans + F) % MOD;
+          }
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **O(K·2^K + n)** time, **O(2^K)** space — with `K = 20` that is ~2·10^7
+      operations, well within budget. This is the submission.
+  - type: markdown
+    content: |
+      ### Solution — ③/④ further insight
+
+      The same `sup[]` superset table, summed with Möbius signs, is the general
+      recipe for "count subsets whose AND is exactly `m`":
+      `G(m) = Σ_{m' ⊇ m} (-1)^(popcount(m')-popcount(m)) F(m')`. Setting `m = 0`
+      yields the code above. This works because `F(m)` counts *at-least*-`m`
+      sets and the subset lattice Möbius function `μ(m',m)=(-1)^(popcount(m')-popcount(m))`
+      inverts the nesting.
+
+      A *different* framing is a direct DP on the AND value: `dp[andval]` counts
+      subsets (including empty) whose current AND is `andval`; processing each
+      element transitions `dp[a&x] += dp[a]`. That is `O(n · distinct-ANDs)`,
+      and is better when `K` is large but `n` moderate and many values collide
+      on common ANDs. For `K ≤ 20` the SOS+inclusion–exclusion version is
+      cleaner and K-deterministic.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **Frequency → superset.** `sup[v]++` loads counts, and the `mask`
+        lacking bit `b` adds the bucket with `b` set — so `sup[mask]` ends as
+        the number of values containing all of `mask`'s bits.
+      - **`F(mask) = 2^(sup) - 1`.** From those `sup` eligible elements each may
+        be independently included or excluded; the `-1` drops the empty subset.
+      - **Alternating sum = Möbius.** Adding with `+1` weight on even-popcount
+        masks and `-1` on odd cancels every subset one layer above its true AND,
+        leaving exactly the AND-0 subsets.
+      - **Modulo throughout.** `pow2` is fast exponentiation mod `10^9+7`; the
+        alternating sign is applied with `(ans ± F + MOD) % MOD` to stay
+        non-negative.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 3`, `a = [1, 2, 3]`. Traced with `K = 2` bits for
+      readability (the code uses `K = 20` — identical logic).
+
+      Frequencies `{1:1, 2:1, 3:1}`. Superset sums (K=2, masks 0..3):
+      `sup[0]=3, sup[1]` (values with bit0) `=2` (`1`,`3`),
+      `sup[2]` (bit1) `=2` (`2`,`3`), `sup[3]`=`1` (`3`).
+
+      | mask | popcount | F = 2^sup − 1 | sign | term |
+      |------|----------|---------------|------|------|
+      | 0 | 0 | 2^3−1 = 7 | + | +7 |
+      | 1 | 1 | 2^2−1 = 3 | − | −3 |
+      | 2 | 1 | 2^2−1 = 3 | − | −3 |
+      | 3 | 2 | 2^1−1 = 1 | + | +1 |
+
+      Sum: `7 − 3 − 3 + 1 = 2`. Output: **2** — matches the expected **2**
+      (subsets `{1,2}` and `{1,2,3}` have AND 0).
+  - type: mcq
+    prompt: "Why does the alternating sum Σ_m (-1)^(popcount(m)) · F(m) give exactly the number of subsets whose AND is 0 ?"
+    options:
+      - F(m) counts subsets whose AND covers m; inclusion-exclusion over the subset lattice cancels all sets whose AND is a non-zero supermask of 0
+      - Because XOR distributes over AND, so odd masks flip the AND to zero
+      - Because each element can be used at most once, halving by popcount
+      - Because only masks with a single set bit contribute to a zero AND
+    answer: 0
+    explanation: F(m)=2^sup(m)-1 counts the subsets whose AND contains every bit of m. A subset whose true AND value is v is counted by exactly those masks m ⊆ v (it covers m iff m ⊆ v). The Möbius/alternating weight (-1)^|m| sums 1 for v=0 but 0 for any v≠0 (the alternating sum over all submasks of a non-empty set v is 0). So the total = number of subsets with true AND exactly 0.

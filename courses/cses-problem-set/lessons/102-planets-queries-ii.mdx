@@ -1,0 +1,286 @@
+---
+id: planets-queries-ii
+title: "Planets Queries II"
+type: content
+difficulty: hard
+order: 102
+tags:
+  - graph-algorithms
+  - functional-graph
+  - binary-lifting
+  - cycle-detection
+blocks:
+  - type: markdown
+    content: |
+      # Planets Queries II — distance in a functional graph
+
+      Same functional graph as Queries I (each planet teleports to exactly one
+      other), but now the query is a *reachability distance*: starting on
+      planet `a`, what is the **minimum** number of teleportations needed to
+      reach planet `b` — or `-1` if it is unreachable?
+
+      Because every node has out-degree 1, once you are on a **cycle** you can
+      never leave it, and from any node there is exactly one forward path: a
+      (possibly empty) **tail**, then one cycle, forever. This rigid structure
+      lets us answer each query in `O(log n)`.
+
+      ## The anatomy of a functional graph component
+
+      A component is one cycle with rooted in-trees feeding into it. For every
+      node `v` define:
+
+      - `dist[v]` — number of teleports from `v` until its **first cycle node**
+        `entry[v]` is reached.
+      - the cycle itself: its nodes share a cycle id, a size, and a `pos[v]`
+        giving the order around the cycle.
+
+      Then a query `(a, b)` splits into two clean cases:
+
+      - **`b` is on the cycle:** `b` is reachable iff `entry[a]` belongs to the
+        same cycle as `b`. The cost is `dist[a]` (walk to the cycle) plus the
+        clockwise distance from `entry[a]` around the cycle to `b`.
+      - **`b` is on a tail:** `b` is reachable iff `b` lies on `a`'s forward
+        path *before* the cycle. When both are on the same branch
+        (`dist[b] < dist[a]`) we still need to be sure the path from `a`
+        actually passes through `b` — two different tails can share an entry
+        node without touching. The exact check: jumping `a` forward by exactly
+        `dist[a] - dist[b]` steps must land on `b`. That jump is one binary
+        lifting operation.
+
+      So we combine the **cycle decomposition** (sizes, positions, `dist`,
+      `entry`) with the **binary-lifting `up` table** from Queries I (for the
+      tail ancestor test). Overall `O((n + q) log n)`.
+
+      :::tip
+      **Interview tip:** functional graphs are a classic "decompose the
+      structure, then answer structured queries" problem. The moment you see
+      *"every node has exactly one outgoing edge"*, immediately think *cycle +
+      trees feeding in*, and reach for binary lifting for any query that walks
+      forward. Reachability questions then reduce to a handful of arithmetic
+      checks on `dist` and cycle positions rather than actual walking.
+      :::
+  - type: markdown
+    content: |
+      # Question
+
+      You are playing a game consisting of `n` planets. Each planet has a
+      teleporter to another planet (or the planet itself). You must process
+      `q` queries of the form: *you are now on planet `a` and want to reach
+      planet `b`. What is the minimum number of teleportations?*
+
+      **Input**
+
+      The first input line contains two integers `n` and `q`: the number of
+      planets and queries. The planets are numbered `1, 2, ..., n`.
+
+      The second line contains `n` integers `t_1, t_2, ..., t_n`: for each
+      planet, the destination of the teleporter.
+
+      Finally, there are `q` lines describing the queries. Each line has two
+      integers `a` and `b`.
+
+      **Output**
+
+      For each query, print the minimum number of teleportations. If it is not
+      possible to reach the destination, print `-1`.
+
+      **Constraints**
+
+      - `1 <= n, q <= 2*10^5`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 3
+      2 3 2 3 2
+      1 2
+      1 3
+      1 4
+      ```
+
+      Output:
+
+      ```
+      1
+      2
+      -1
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — simulate per query, O(n) each**
+
+      From `a`, walk teleporter by teleporter, remembering visited planets, until
+      `b` is hit (answer = steps so far) or a planet repeats (unreachable,
+      `-1`). Correct, but a single query can cost `O(n)` and with `q` up to
+      `2*10^5` that is `O(nq)` — far too slow.
+
+      **② Optimization — cycle decomposition + binary lifting, O((n + q) log n)**
+
+      Decompose the functional graph (find every cycle; compute for each node
+      `dist`, `entry`, plus cycle `pos`/`size`), build a binary-lifting `up`
+      table, then answer each query in `O(log n)`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, q; cin >> n >> q;
+          vector<int> nxt(n);
+          for (int i = 0; i < n; ++i){ int t; cin >> t; nxt[i] = t - 1; }
+
+          // Binary lifting: up[j][v] = node after 2^j teleports.
+          const int LOG = 20;                    // 2^19 > 2*10^5
+          vector<vector<int>> up(LOG, vector<int>(n));
+          up[0] = nxt;
+          for (int j = 1; j < LOG; ++j)
+              for (int v = 0; v < n; ++v)
+                  up[j][v] = up[j-1][ up[j-1][v] ];
+
+          // Cycle decomposition of the functional graph.
+          vector<int> state(n,0), where(n,-1), inCycle(n,0), cycId(n,-1), pos(n,0);
+          vector<int> cycleSizeOf;
+          vector<int> entry(n), dist(n);   // entry = 1st cycle node on v's path; dist = steps to it
+
+          for (int i = 0; i < n; ++i){
+              if (state[i] == 2) continue;
+              vector<int> path;
+              int v = i;
+              while (state[v] == 0){
+                  state[v] = 1; where[v] = (int)path.size(); path.push_back(v);
+                  v = nxt[v];
+              }
+              if (state[v] == 1){            // closed a brand-new cycle inside this path
+                  int s = where[v];
+                  int cid = cycleSizeOf.size();
+                  int sz = (int)path.size() - s;
+                  cycleSizeOf.push_back(sz);
+                  for (int k = s; k < (int)path.size(); ++k){
+                      inCycle[path[k]] = 1; cycId[path[k]] = cid;
+                      pos[path[k]] = k - s; entry[path[k]] = path[k]; dist[path[k]] = 0;
+                  }
+                  for (int k = 0; k < s; ++k){ entry[path[k]] = path[s]; dist[path[k]] = s - k; }
+              } else {                        // walked into an already-processed tail
+                  for (int k = (int)path.size() - 1; k >= 0; --k){
+                      entry[path[k]] = entry[v];
+                      dist[path[k]] = ((int)path.size() - k) + dist[v];
+                  }
+              }
+              for (int u : path) state[u] = 2;
+          }
+
+          // jump(v, k): node reached after exactly k teleports from v.
+          auto jump = [&](int v, int k){
+              for (int j = 0; j < LOG; ++j) if ((k >> j) & 1) v = up[j][v];
+              return v;
+          };
+
+          while (q--){
+              int a, b; cin >> a >> b; --a; --b;
+              if (a == b){ cout << 0 << '\n'; continue; }
+              if (inCycle[b]){
+                  int ea = entry[a];
+                  if (cycId[ea] != cycId[b]){ cout << -1 << '\n'; continue; }
+                  int sz = cycleSizeOf[cycId[b]];
+                  int step = pos[b] - pos[ea];
+                  step %= sz; if (step < 0) step += sz;
+                  cout << (dist[a] + step) << '\n';
+              } else {
+                  if (dist[b] < dist[a] && jump(a, dist[a] - dist[b]) == b)
+                      cout << (dist[a] - dist[b]) << '\n';
+                  else
+                      cout << -1 << '\n';
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *O((n + q) log n) time, O(n log n) space — the intended solution.*
+
+      **③ Further optimization** — none needed; `O(log n)` per query is
+      optimal for this input size and format.
+
+      **④ Alternative algorithm** — equivalent formulations: compute `dist` /
+      `entry` with a Kahn-style in-degree pruning (removing cycle-feeding
+      tails first) instead of the DFS path-walk, and store `pos` around each
+      cycle. The query logic is identical; only the decomposition routine
+      changes.
+  - type: markdown
+    content: |
+      # Code logic
+
+      The decomposition loop and the query logic are the two halves:
+
+      - **Cycle discovery.** We walk each unprocessed node along `nxt`, pushing
+        nodes and recording their index in `where`. Two outcomes:
+        - we step back onto a node *already in this path* → a fresh cycle:
+          `path[s .. end]` is the cycle (assign id, size, positions, `dist=0`);
+          `path[0 .. s-1]` are its tail (each `dist` = `s - k` steps to reach
+          the cycle at `path[s]`).
+        - we step onto an already-processed node `v` → the whole path is tail;
+          every node inherits `entry[v]` and its `dist` grows by one more step
+          the farther it is from `v`.
+      - **`inCycle[b]` — `b` is on a cycle.** We can reach `b` only if
+        `entry[a]`'s cycle equals `b`'s cycle. `dist[a]` walks `a` to the
+        cycle, then `(pos[b] - pos[ea]) mod size` hops around it. The `% size`
+        with a `+ size` guard keeps it in range.
+      - **`b` on a tail.** Require `dist[b] < dist[a]` (b is above a on a
+        shared branch) **and** `jump(a, dist[a]-dist[b]) == b` — this confirms
+        `b` is *literally on* `a`'s forward path, ruling out the trap where two
+        separate tails share the same `entry`. The answer is the length of that
+        path segment.
+      - `a == b` short-circuits to `0` (even when `a` is on a cycle), before the
+        branch checks.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, teleporters `t = [2, 3, 2, 3, 2]`, so
+      0-indexed `nxt = [1, 2, 1, 2, 1]`. The cycle is `1 → 2 → 1` (planets
+      2–3), size 2, `pos[1]=0, pos[2]=1`; planet 1 (index 0) is a tail
+      `dist[0]=1, entry[0]=1`; planet 4 (index 3) and planet 5 (index 4) are
+      tails into the same cycle with `entry = 2` and `entry = 1` respectively,
+      each `dist = 1`.
+
+      | query | analysis | answer |
+      |-------|----------|--------|
+      | (1, 2): a=0, b=1 | b in cycle; entry[a]=1, same cycle; dist[a]=1 + (pos[1]-pos[1])=0 | **1** |
+      | (1, 3): a=0, b=2 | b in cycle; entry[a]=1; dist[a]=1 + (pos[2]-pos[1])=1 | **2** |
+      | (1, 4): a=0, b=3 | b on tail; dist[3]=1 not < dist[0]=1 | **-1** |
+
+      For the last row, note `dist[3] = dist[0] = 1` (both one step from their
+      cycle entries) so the `dist[b] < dist[a]` test fails — planet 4 is never
+      on planet 1's forward path, confirming `-1` (planet 4 is downstream of
+      the cycle, which planet 1 can never exit).
+
+      Expected (sample) — `1 2 -1`. Actual — `1 2 -1`. Match.
+  - type: flowchart
+    title: "Distance in a functional graph"
+    nodes: ["decompose cycles; compute dist/entry", "build binary-lifting up table", "query (a, b)", "a == b?", "print 0", "b on a cycle?", "same cycle as entry[a]?", "print dist[a] + (pos diff mod size)", "dist[b] < dist[a] and jump(a, diff) == b?", "print dist[a] - dist[b]", "print -1"]
+    edges:
+      - {from: 0, to: 1, label: "preprocess"}
+      - {from: 1, to: 2, label: "per query"}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "yes"}
+      - {from: 3, to: 5, label: "no"}
+      - {from: 5, to: 6, label: "yes (b on cycle)"}
+      - {from: 6, to: 7, label: "same cycle"}
+      - {from: 6, to: 10, label: "different cycle"}
+      - {from: 5, to: 8, label: "no (b on tail)"}
+      - {from: 8, to: 9, label: "yes (b on a's path)"}
+      - {from: 8, to: 10, label: "no"}
+  - type: mcq
+    prompt: "Why is a simple `entry[a] == entry[b]` test (shared cycle-entry) NOT enough to conclude that b is reachable from a when both are on tails?"
+    options:
+      - "Because two different planets on separate tails can point into the same cycle entry without one being on the other's forward path."
+      - "Because entry[a] is always undefined for planets on a tail."
+      - "Because a tail planet never reaches its own entry node."
+      - "Because cycle entry assignment requires O(n) time and cannot be precomputed."
+    answer: 0
+    explanation: "The functional graph has many tails feeding one cycle; a planet on tail T1 and a planet on tail T2 may share an entry node yet neither ever reaches the other (their paths merge only at the cycle). The exact, sufficient check is that jumping a forward by dist[a]-dist[b] lands on b — i.e. b sits on a's actual forward path."
+---

@@ -1,0 +1,286 @@
+---
+id: distinct-routes-ii
+title: Distinct Routes II
+type: content
+difficulty: hard
+order: 258
+tags:
+  - min-cost-flow
+  - max-flow
+  - edge-disjoint-paths
+  - successive-shortest-paths
+blocks:
+  - type: markdown
+    content: |
+      # Distinct Routes II — k edge-disjoint routes of minimum total length
+
+      You play a game for exactly `k` days. Each day you start in room `1` and
+      must reach room `n`, and **each teleporter can be used at most once across
+      all days**. Every use of a teleporter costs one coin. What is the minimum
+      number of coins you pay, and what `k` (edge-disjoint) routes achieve it?
+      If you cannot play all `k` days, print `-1`.
+
+      This is the natural companion to *Distinct Routes* (counting the *maximum*
+      number of edge-disjoint paths). Here we want a **fixed number `k` of them
+      with minimum total cost** — the textbook **min-cost flow** problem.
+
+      ## The reduction
+
+      Give every teleporter a **capacity of 1** (so each edge lies on at most one
+      route) and a **cost of 1 per unit** (each teleporter use is one coin). Then
+      send exactly `k` units of flow from room `1` to room `n`. Each unit is an
+      edge-disjoint route, and the total flow cost equals the total number of
+      teleporter uses = total coins. The answer is the min-cost value of a flow
+      of exactly `k` units; if max flow `< k` the game is impossible.
+
+      Because every edge carries at most one unit, ordinary **max flow** counts
+      *how many* days are possible, but it ignores cost. Min-cost flow picks
+      *which* `k` disjoint routes keep the total length small.
+
+      ## How min-cost flow keeps routes short
+
+      The **successive shortest path** method repeatedly finds the cheapest
+      residual `1 → n` path and augments. Cruise-ship fact: when all (original)
+      path lengths are shortest-available, the algorithm re-routes flow backward
+      via residual reverse edges, so the final unit of flow can "steal" a prefix
+      that an earlier unit already claimed — yielding edge-disjoint routes whose
+      total length is minimal, not merely individually greedy.
+
+      :::tip
+      **Interview tip:** "plan exactly k routes, each edge used at most once,
+      minimize total length/cost" is min-cost flow with unit capacities. Many
+      candidates only know "max flow = number of disjoint paths" (the *Distinct
+      Routes* problem); the interview twist here is the **cost** term. Say:
+      "unit-capacity edges + cost 1 each, min-cost flow to push k units, then
+      trace the saturated edges to print the routes."
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      A game consists of `n` rooms and `m` teleporters. At the beginning of each
+      day, you start in room `1` and you have to reach room `n`. You can use each
+      teleporter at most once during the game. You want to play the game for
+      exactly `k` days. Every time you use any teleporter you have to pay one
+      coin. What is the minimum number of coins you have to pay during `k` days
+      if you play optimally?
+
+      ## Input
+
+      The first input line has three integers `n`, `m` and `k`: the number of
+      rooms, the number of teleporters and the number of days you play the game.
+      The rooms are numbered `1, 2, …, n`.
+
+      After this, there are `m` lines describing the teleporters. Each line has
+      two integers `a` and `b`: there is a teleporter from room `a` to room `b`.
+      There are no two teleporters whose starting and ending room are the same.
+
+      **Constraints:** `2 <= n <= 500`, `1 <= m <= 1000`, `1 <= k <= n-1`,
+      `1 <= a, b <= n`
+
+      ## Output
+
+      First print one integer: the minimum number of coins you have to pay if you
+      play optimally. Then, print `k` route descriptions according to the
+      example. You can print any valid solution. If it is not possible to play
+      the game for `k` days, print only `-1`.
+
+      ## Sample
+
+      **Input:**
+      ```
+      8 10 2
+      1 2
+      1 3
+      2 5
+      2 4
+      3 5
+      3 6
+      4 8
+      5 8
+      6 7
+      7 8
+      ```
+      **Output:**
+      ```
+      6
+      4 1 2 4 8
+      4 1 3 5 8
+      ```
+      For each route, print its length (number of rooms) followed by the rooms.
+      The two routes share no teleporter and cost `3 + 3 = 6` coins.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Greedy — shortest paths, delete used edges (NOT always optimal)**
+
+      Repeatedly BFS a shortest `1 → n` path and mark its edges as used. Each
+      found path is edge-disjoint, but the chosen set can be *longer* than the
+      minimum, and an unlucky early path can even prevent reaching `k` routes.
+      Not a reliable solution.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,m,k; cin>>n>>m>>k;
+          vector<pair<int,int>> e(m); vector<int> used(m,0);
+          vector<vector<int>> adj(n); map<pair<int,int>,int> idx;
+          for(int i=0;i<m;i++){ cin>>e[i].first>>e[i].second; e[i].first--; e[i].second--;
+              adj[e[i].first].push_back(i); idx[{e[i].first,e[i].second}]=i; }
+          int s=0,t=n-1; vector<vector<int>> routes;
+          for(int d=0; d<k; d++){
+              queue<int> q; vector<int> prevE(n,-1),prevV(n,-1),vis(n,0);
+              q.push(s); vis[s]=1;
+              while(!q.empty()){ int v=q.front(); q.pop();
+                  for(int id:adj[v]){ if(used[id]) continue; int to=e[id].second;
+                      if(!vis[to]){ vis[to]=1; prevV[to]=v; prevE[to]=id; q.push(to); } } }
+              if(!vis[t]) break;
+              vector<int> path; for(int v=t;v!=s;v=prevV[v]){ used[prevE[v]]=1; path.push_back(v); }
+              path.push_back(s); reverse(path.begin(),path.end()); routes.push_back(path);
+          }
+          if((int)routes.size()<k){ cout<<-1<<"\n"; return 0; }
+          int cost=0; for(auto&r:routes) cost+=(int)r.size()-1;
+          cout<<cost<<"\n";
+          for(auto&r:routes){ cout<<r.size()<<" "; for(int v:r) cout<<v+1<<" "; cout<<"\n"; }
+          return 0;
+      }
+      ```
+
+      *Correct output shape, but the *cost can be suboptimal* (greedy has no
+      optimality guarantee) — not a valid solution to the minimum-cost problem.*
+
+      **② Optimization — min-cost flow for exactly k units, O(k·n·m) (optimal)**
+
+      Capacity-1, cost-1 edges; successive shortest paths to push `k` units; then
+      trace the saturated edges into `k` disjoint routes. This is the tier we
+      compile and verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      struct E { int to, rev; ll cap, cost; };
+      vector<vector<E>> g;
+      void addE(int a,int b,ll cap,ll cost){
+          g[a].push_back({b,(int)g[b].size(),cap,cost});
+          g[b].push_back({a,(int)g[a].size()-1,0,-cost});
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,m,k; cin>>n>>m>>k;
+          g.assign(n,{});
+          vector<int> u(m),v(m),fwd(m);
+          for(int i=0;i<m;i++){
+              int a,b; cin>>a>>b; a--;b--; u[i]=a; v[i]=b;
+              addE(a,b,1,1);                       // capacity 1, cost 1 per unit
+              fwd[i]=(int)g[a].size()-1;
+          }
+          int s=0,t=n-1; ll flow=0,cost=0;
+          while(flow<k){
+              vector<ll> dist(n,LLONG_MAX); vector<int> par(n,-1),pe(n,-1); vector<char> inq(n,false);
+              deque<int> q; dist[s]=0; q.push_back(s); inq[s]=true;
+              while(!q.empty()){
+                  int x=q.front(); q.pop_front(); inq[x]=false;
+                  for(int i=0;i<(int)g[x].size();i++){ auto&e=g[x][i];
+                      if(e.cap>0 && dist[e.to]>dist[x]+e.cost){
+                          dist[e.to]=dist[x]+e.cost; par[e.to]=x; pe[e.to]=i;
+                          if(!inq[e.to]){ inq[e.to]=true; q.push_back(e.to); } } }
+              }
+              if(dist[t]==LLONG_MAX) break;
+              ll f=1; for(int x=t;x!=s;x=par[x]) f=min(f,g[par[x]][pe[x]].cap);
+              for(int x=t;x!=s;x=par[x]){ auto&e=g[par[x]][pe[x]]; e.cap-=f; g[x][e.rev].cap+=f; cost+=f*e.cost; }
+              flow+=f;
+          }
+          if(flow<k){ cout<<-1<<"\n"; return 0; }
+          cout<<cost<<"\n";
+          // read the used teleporters off the residual network
+          vector<vector<int>> pathAdj(n);
+          for(int i=0;i<m;i++) if(g[u[i]][fwd[i]].cap==0) pathAdj[u[i]].push_back(v[i]);
+          for(int day=0; day<k; day++){
+              vector<int> pth; int cur=s; pth.push_back(cur);
+              while(cur!=t){ int nx=pathAdj[cur].back(); pathAdj[cur].pop_back();
+                  pth.push_back(nx); cur=nx; }
+              cout<<pth.size()<<" ";
+              for(int x:pth) cout<<x+1<<" ";
+              cout<<"\n";
+          }
+          return 0;
+      }
+      ```
+
+      *`O(k·n·m)` bounded SPFA (each round pushes a residual bottleneck); with
+      `k ≤ 100`, `n ≤ 500` it is comfortably fast. `O(n+m)` space.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Capacity 1 = route ownership.** `addE(a,b,1,1)` sets unit capacity and
+        unit cost. A unit of flow that crosses teleporter `a→b` consumes its only
+        capacity, so no other route can use it — exactly "each teleporter at most
+        once".
+      - **Cost 1 = one coin per teleporter.** Summing costs over the `k` flow
+        units equals the total number of teleporter uses.
+      - **Stop when we have k.** The `while(flow<k)` loop stops the moment `k`
+        units are routed; if the residual sinks become unreachable first
+        (`dist[t] == LLONG_MAX`) then fewer than `k` routes exist → print `-1`.
+      - **Residual re-routing keeps routes short.** Cost-`-1` reverse arcs let a
+        later augmenting path "undo" parts of earlier routes at zero net
+        coin-count, which is what guarantees minimal total length (not just a
+        greedy set of shortest paths).
+      - **Reading routes off the network.** A teleporter carried flow iff its
+        forward residual capacity dropped `1 → 0`. Collect those used edges into
+        `pathAdj`, then walk from room `1`, popping one used edge at a time, `k`
+        times — producing `k` edge-disjoint `1 → n` routes. Popping prevents
+        reusing an edge within the same output.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 8`, teleporters (all capacity 1, cost 1), `k = 2`.
+
+      **Min-cost flow (send 2 units):**
+      - Round 1: cheapest residual path `1 → 2 → 4 → 8` (cost 3). Bottleneck 1,
+        push 1. Edges `1-2, 2-4, 4-8` saturated. `flow = 1`.
+      - Round 2: cheapest residual path `1 → 3 → 5 → 8` (cost 3). Push 1.
+        Edges `1-3, 3-5, 5-8` saturated. `flow = 2 = k`. Done.
+
+      Total cost `3 + 3 = 6`.
+
+      **Used teleporters** (forward residual now 0): `1-2, 2-4, 4-8, 1-3, 3-5,
+      5-8`.
+
+      **Trace routes**: `1 → 2 → 4 → 8` and `1 → 3 → 5 → 8`.
+
+      Printed:
+      ```
+      6
+      4 1 2 4 8
+      4 1 3 5 8
+      ```
+      Expected (sample) `6` and those two lengths/rooms — **match**. The two
+      routes share no teleporter, and 6 is minimal: any other pairing of two
+      edge-disjoint `1 → 8` routes has total length ≥ 6.
+  - type: flowchart
+    title: "Minimum-cost edge-disjoint routes via min-cost flow"
+    nodes: ["each teleporter: capacity 1, cost 1", "while flow < k: cheapest residual path 1 -> n (SPFA)", "push bottleneck, accumulate cost", "no path -> print -1", "k units routed", "read saturated edges, trace k routes", "print cost + routes"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 1}
+      - {from: 1, to: 3, label: "no path"}
+      - {from: 2, to: 4, label: "flow == k"}
+      - {from: 4, to: 5}
+      - {from: 5, to: 6}
+  - type: mcq
+    prompt: "When can plain max flow (no costs) fail to solve Distinct Routes II?"
+    options:
+      - "Never — max flow always prints the routes in minimal total length."
+      - "Max flow counts how many edge-disjoint paths exist, but does not choose which k of them keep the total length smallest; with 0/1 per-edge use and a cost per use, only a min-cost flow selects a set of k disjoint routes of minimum total cost."
+      - "Max flow only works on undirected graphs."
+      - "Max flow requires k to be strictly larger than the number of rooms."
+    answer: 1
+    explanation: "Distinct Routes II fixes k and asks for minimum total cost, not for the maximum count. Max flow finds the value (how many days are possible) and can yield one feasible family, but cheap vs expensive edge usage is invisible to it. Min-cost flow augments along the cheapest residual path each round — with cost-1 edges that is the shortest available route, and its reverse arcs allow re-routing — so it provably produces k disjoint routes of minimum total length."
+---

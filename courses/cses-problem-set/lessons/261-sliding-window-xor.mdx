@@ -1,0 +1,233 @@
+---
+id: sliding-window-xor
+title: Sliding Window XOR
+type: content
+difficulty: easy
+order: 261
+tags:
+  - sliding-window
+  - xor
+  - prefix-xor
+blocks:
+  - type: markdown
+    content: |
+      # Sliding Window XOR — XOR of every k-length window in O(n)
+
+      Given `n` numbers and a window length `k`, report the **bitwise XOR of
+      every contiguous window of length `k`**.
+
+      XOR is the trickiest of the "three easy sliding operators" because it has
+      no *numeric* subtraction — but it has something even better: **XOR is its
+      own inverse** (`x ^ x = 0`). To remove an element, you XOR it in again.
+
+      ## The identity that makes it work
+
+      XOR is associative, commutative, and **self-inverse**:
+
+      ```
+      (a ^ b ^ c) ^ a  =  b ^ c      (removing a)
+      (a ^ b ^ c) ^ a ^ a  =  b ^ c ^ a   (re-adding a)
+      ```
+
+      So a running window value updates exactly like a sum — *add the newcomer
+      by XORing it in, remove the leaver by XORing it out*:
+
+      ```
+      cur = cur ^ a[i]      // slide in
+      cur = cur ^ a[i-k]    // slide out
+      ```
+
+      No carry, no sign, no overflow worry — XOR just flips the bits whose count
+      in the window changed parity. Each element appears an even number of times
+      across two consecutive windows (once extra on entry, once extra on exit),
+      and even occurrences cancel.
+
+      ## Time and space
+
+      - **Time:** `O(n)` — one XOR per element in and out.
+      - **Space:** `O(1)` beyond the input.
+
+      ## Worked mini-example
+
+      `a = [1, 3, 5, 2, 4, 6]`, `k = 3`. `cur = 1^3^5 = 7`. Then:
+
+      | step | in | out | cur |
+      |------|----|-----|-----|
+      | start | – | – | 7 |
+      | i=3 | 2 | 1 | 7 ^ 2 ^ 1 = 4 |
+      | i=4 | 4 | 3 | 4 ^ 4 ^ 3 = 3 |
+      | i=5 | 6 | 5 | 3 ^ 6 ^ 5 = 0 |
+
+      Result: `7 4 3 0`. (*Check `6 ^ 5 = 3`, then `3 ^ 3 = 0`.*)
+
+      :::tip
+      **Interview tip:** remember the "two views" of a running XOR: the sliding
+      form (tier ②, XOR in/out, `O(1)` space) and the **prefix-XOR** form (tier
+      ③), where `rangeXor(l,r) = pref[r+1] ^ pref[l]` because overlap cancels.
+      Prefix-XOR is the workhorse for *subarray-XOR-equals-k* counting
+      questions and for 2D XOR rectangle queries. If someone asks for "XOR of a
+      subarray range", they almost certainly want the prefix-XOR version.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given an array of `n` non-negative integers and a window length `k`, print
+      the bitwise XOR of each contiguous window of length `k`, from the window
+      starting at position `1` to the window starting at position `n - k + 1`.
+
+      ## Input
+
+      The first line has two integers `n` and `k`. The second line has `n`
+      integers `a_1, a_2, …, a_n` (each `0 <= a_i < 2^31`).
+
+      **Constraints:** `1 <= k <= n <= 2 * 10^5`
+
+      ## Output
+
+      Print `n - k + 1` integers separated by spaces: the XOR of each window in
+      left-to-right order.
+
+      ## Sample
+
+      **Input:**
+      ```
+      6 3
+      1 3 5 2 4 6
+      ```
+      **Output:**
+      ```
+      7 4 3 0
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(nk)**
+
+      For each window XOR together its `k` elements from scratch.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          for(int i=0;i<n-k+1;i++){
+              ll x=0;
+              for(int j=i;j<i+k;j++) x^=a[j];
+              cout<<x<<(i==n-k?"\n":" ");
+          }
+          return 0;
+      }
+      ```
+
+      *`O(nk)` time — up to `4 * 10^10` operations. Too slow.*
+
+      **② Optimization — sliding running XOR, O(n) time, O(1) space (optimal)**
+
+      Keep one running XOR; to slide, XOR in `a[i]` and XOR out `a[i-k]` (a
+      value toggled twice is removed). This is the tier we compile and verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          ll cur=0;
+          for(int i=0;i<k;i++) cur^=a[i];
+          cout<<cur;
+          for(int i=k;i<n;i++){
+              cur ^= a[i];       // slide in a[i]
+              cur ^= a[i-k];     // slide out a[i-k] (x^x == 0 toggles it off)
+              cout<<" "<<cur;
+          }
+          cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n)` time, `O(1)` extra space.*
+
+      **③ Alternative — prefix XOR, O(n) time, O(n) space**
+
+      Build `pref[i] = XOR(a[0..i-1])`. Because an even double-XOR cancels,
+      `XOR(a[l..r)) = pref[r] ^ pref[l]` — the shared prefix cancels out. Each
+      window `[i, i+k)` is `pref[i+k] ^ pref[i]` in O(1).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<ll> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          vector<ll> pref(n+1,0);
+          for(int i=0;i<n;i++) pref[i+1]=pref[i]^a[i];
+          for(int i=0;i<n-k+1;i++){
+              ll x = pref[i+k] ^ pref[i];
+              cout<<x<<(i==n-k?"\n":" ");
+          }
+          return 0;
+      }
+      ```
+
+      *`O(n)` time, `O(n)` space. Same speed as ② but built for *arbitrary*
+      range-XOR queries, not just fixed windows.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`cur ^= a[i]` inserts, `cur ^= a[i-k]` removes.** Worked because
+        `y ^ y == 0`: XORing a value twice into the accumulator leaves it
+        unchanged, so the single add/remove cycle is exact.
+      - **No special "remove" operator needed.** Where sum subtracts and OR has
+        to count bits (next lesson), XOR just re-applies itself. That makes the
+        sliding update two lines and O(1).
+      - **`long long` in, no overflow.** XOR never exceeds the bit-width of the
+        operands, so `long long` is strictly safe for `0 <= a_i < 2^31`.
+      - **Prefix-XOR is the general tool.** For *any* range `[l, r)` the answer
+        is `pref[r] ^ pref[l]`; the fixed-window loop reads it off directly, and
+        the same prefix array answers arbitrary queries later.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 6, k = 3`, `a = [1, 3, 5, 2, 4, 6]`. Expected output
+      `7 4 3 0`.
+
+      Using tier ②:
+
+      - seed: `cur = 1 ^ 3 ^ 5 = 7` → print `7`.
+      - `i=3`: `cur ^= a[3](2)` → `7^2 = 5`; `cur ^= a[0](1)` → `5^1 = 4`. print `4`. (window `[3,5,2]`)
+      - `i=4`: `cur ^= a[4](4)` → `4^4 = 0`; `cur ^= a[1](3)` → `0^3 = 3`. print `3`. (window `[5,2,4]`)
+      - `i=5`: `cur ^= a[5](6)` → `3^6 = 5`; `cur ^= a[2](5)` → `5^5 = 0`. print `0`. (window `[2,4,6]`)
+
+      Printed: `7 4 3 0` — matches expected. Verifying window `[2,4,6]` by
+      hand: `2^4=6`, `6^6=0` ✓.
+  - type: flowchart
+    title: "Sliding window XOR"
+    nodes: ["seed: cur = XOR of first k", "for i in [k, n): cur ^= a[i]", "cur ^= a[i-k]", "print cur", "advance i"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 1, label: "next i"}
+  - type: mcq
+    prompt: "How does XOR let us 'remove' the element leaving the window, the way subtraction removes it for sums?"
+    options:
+      - "XOR treats the element as a negative number."
+      - "XOR is its own inverse: applying the same value a second time cancels the first, because x ^ x == 0. So cur ^= a[i-k] exactly removes that element from the running window XOR."
+      - "XOR automatically tracks per-bit counts like OR does."
+      - "XOR keeps a stack of the elements it has seen."
+    answer: 1
+    explanation: "XOR is self-inverse (every bit toggles; toggling twice returns to the original). That makes an element cancellable: if it is present once, XORing it on removes it. In the sliding update, the incoming element is toggled once (added) and the outgoing one once (removing its earlier addition) — parity of every bit in the window is maintained in O(1)."

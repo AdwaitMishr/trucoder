@@ -1,0 +1,227 @@
+---
+id: shortest-routes-ii
+title: Shortest Routes II
+type: content
+difficulty: medium
+order: 91
+tags:
+  - graph-algorithms
+  - floyd-warshall
+  - all-pairs-shortest-path
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      # Shortest Routes II — Floyd–Warshall, all-pairs shortest paths
+
+      Where Shortest Routes I asks for distances from **one** source, this problem
+      answers up to `10^5` queries `dist(a, b)` between **any two** cities. With `n`
+      small (`<= 500`) but `q` huge, the winning move is to precompute the whole
+      `n × n` distance **matrix** once, then answer each query in `O(1)`.
+
+      ## The recurrence
+
+      Let `d[i][j]` be the current best distance from `i` to `j`. The key observation
+      is to consider intermediate vertices: the shortest path from `i` to `j` either
+      uses a middle vertex `k` or it does not. Trying every `k` as "the last middle
+      vertex allowed" gives:
+
+      ```
+      d[i][j] = min( d[i][j] ,  d[i][k] + d[k][j] )
+      ```
+
+      To get this right we must **order the loops with `k` outermost**:
+
+      ```cpp
+      for (int k = 1; k <= n; k++)
+          for (int i = 1; i <= n; i++)
+              for (int j = 1; j <= n; j++)
+                  d[i][j] = min(d[i][j], d[i][k] + d[k][j]);
+      ```
+
+      Why `k` outermost? It builds the answer incrementally: after the `k`-th outer
+      round, every `d[i][j]` is the shortest distance whose internal vertices all lie
+      in `{1..k}`. This is exactly a dynamic program over the allowed set of middle
+      nodes.
+
+      :::tip
+      **Interview tip:** "Shortest path between many source/target pairs, with a tiny
+      node count but a huge query count" is the exact trigger for all-pairs
+      precomputation. Floyd–Warshall's `O(n³)` pays off whenever `n` is small enough
+      (a few hundred) — answering `q` up to `10^5` in `O(1)` each. Just know the
+      `n³` wall: with `n >= 2000` it is too slow, and you switch to running Dijkstra
+      per needed source instead.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` cities and `m` roads between them. Your task is to process `q`
+      queries asking for the length of the shortest route between two given cities.
+      All roads are two-way.
+
+      ## Input
+
+      The first input line has three integers `n`, `m` and `q`: the number of cities,
+      roads and queries.
+
+      Then there are `m` lines describing the roads. Each line has three integers `a`,
+      `b` and `c`: there is a road between cities `a` and `b` whose length is `c`.
+
+      Finally there are `q` lines describing the queries. Each line has two integers
+      `a` and `b`.
+
+      **Constraints:** `1 <= n <= 500`, `1 <= m <= n^2`, `1 <= q <= 10^5`, `1 <= c <=
+      10^9`
+
+      ## Output
+
+      Print the length of the shortest route for each query. If there is no route,
+      print `-1` instead.
+
+      ## Sample
+
+      **Input:**
+      ```
+      4 3 5
+      1 2 5
+      1 3 9
+      2 3 3
+      1 2
+      2 1
+      1 3
+      1 4
+      3 2
+      ```
+      **Output:**
+      ```
+      5
+      5
+      8
+      -1
+      3
+      ```
+      Explanation: city 4 is unreachable (`-1`); `1→3` is cheapest as `1→2→3 = 5+3=8`
+      (direct is 9).
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — one Dijkstra per query, O(q·(n+m) log n)**
+
+      Run the Shortest-Routes-I Dijkstra from each query's source. With `q=10^5` and
+      `m` up to `n^2=2.5·10^5`, this is roughly `10^5 × 2.5·10^5 · 19` — tens of
+      billions of operations. No good.
+
+      **② Optimization — Floyd–Warshall, O(n³) precompute + O(1) per query**
+
+      `n <= 500` makes `n^3 = 1.25·10^8` acceptable (comfortably under the limit).
+      After one precompute, every query is a single matrix read.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          int n, m, q; cin >> n >> m >> q;
+          const long long INF = 4e18;
+          vector<vector<long long>> d(n + 1, vector<long long>(n + 1, INF));
+          for (int i = 1; i <= n; i++) d[i][i] = 0;          // no-op trip for free
+          for (int i = 0; i < m; i++) {
+              int a, b; long long c; cin >> a >> b >> c;
+              d[a][b] = min(d[a][b], c);                      // keep cheapest two-way edge
+              d[b][a] = min(d[b][a], c);
+          }
+          for (int k = 1; k <= n; k++)
+              for (int i = 1; i <= n; i++)
+                  for (int j = 1; j <= n; j++)
+                      if (d[i][k] < INF && d[k][j] < INF && d[i][j] > d[i][k] + d[k][j])
+                          d[i][j] = d[i][k] + d[k][j];
+          while (q--) {
+              int a, b; cin >> a >> b;
+              cout << (d[a][b] >= INF / 2 ? -1 : d[a][b]) << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      *O(n³) time, O(n²) memory — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      With `n=500`, O(n³) is already trivial. (For much denser `n` there is no better
+      general all-pairs algorithm for this class of graph.)
+
+      **④ Alternative — run Dijkstra from every node (n sources)**
+
+      If the graph were large and sparse, running Dijkstra once from each of the `n`
+      sources would give `O(n(n+m) log n)`. That is better when `m << n²`, but here
+      `m` can reach `n²` and `n` is small, so Floyd–Warshall's tight cubic loop wins.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Walking through the Floyd–Warshall solution:
+
+      - **Matrix setup.** `d[i][i] = 0` (staying put costs nothing); every two-way road
+        `a–b` writes the *cheapest* of possibly repeated parallel edges into both
+        `d[a][b]` and `d[b][a]`.
+      - **The triple loop.** `k` runs outermost because after round `k`, `d[i][j]` is
+        the optimal distance whose intermediate vertices lie in `{1..k}`. Most
+        textbooks write it this way for exactly this dynamic-programming reason; the
+        order of the `i`/`j` loops within a round does not matter.
+      - **The guard.** `if (d[i][k] < INF && d[k][j] < INF)` avoids overflow from
+        `INF + INF = 8·10^18`. We then compare with `>= INF/2` when printing so `INF`
+        maps to `-1` (unreachable).
+      - **O(1) queries.** Each of the `10^5` queries is a direct cell read plus a
+        reachability check — the whole point of paying `O(n³)` once.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample (`n=4`, roads `1–2:5`, `1–3:9`, `2–3:3`). The matrix after the
+      Floyd–Warshall loop (`∞` written as `-`):
+
+      | d | 1 | 2 | 3 | 4 |
+      |---|----|----|----|----|
+      | 1 | 0 | 5 | 8 | - |
+      | 2 | 5 | 0 | 3 | - |
+      | 3 | 8 | 3 | 0 | - |
+      | 4 | - | - | - | 0 |
+
+      Walk through round `k=2`: for `i=1, j=3` we test `d[1][2]+d[2][3] = 5+3 = 8 <
+      9`, so `d[1][3]` drops from 9 to 8 — the cheaper `1→2→3` route. Round `k=3`
+      similarly drops `d[1][3]`? It is already 8; and it enables `d[2][1]=5`, etc.
+      City 4 is isolated, so any query involving it stays `∞`.
+
+      Query-by-query:
+
+      | query | d[a][b] | printed |
+      |-------|---------|---------|
+      | 1 → 2 | 5 | 5 |
+      | 2 → 1 | 5 | 5 |
+      | 1 → 3 | 8 | 8 |
+      | 1 → 4 | ∞ | -1 |
+      | 3 → 2 | 3 | 3 |
+
+      Expected (sample) — `5 5 8 -1 3`. Actual — `5 5 8 -1 3`. Match.
+  - type: flowchart
+    title: "All-pairs shortest paths with Floyd–Warshall"
+    nodes: ["init matrix: d[i][i]=0, others=INF, load edges", "for k = 1..n  (allow k as middle)", "for i = 1..n", "for j = 1..n", "d[i][j] = min(d[i][j], d[i][k]+d[k][j])", "answer each query in O(1)"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 3, label: "next j"}
+      - {from: 3, to: 2, label: "next i"}
+      - {from: 2, to: 1, label: "next k"}
+      - {from: 1, to: 5, label: "all k done"}
+  - type: mcq
+    prompt: "Why is the middle vertex k the outermost loop in Floyd–Warshall?"
+    options:
+      - "To enforce that the shortest path from i to j uses only vertices in {1..k} as intermediates, building up the result incrementally as a dynamic program over allowed middle vertices."
+      - "Because matrix multiplication requires k first for cache efficiency."
+      - "Because i, j, k must all be equal for the recurrence to hold."
+      - "To guarantee the graph is acyclic before running the algorithm."
+    answer: 0
+    explanation: "With k outermost, after round k every d[i][j] is optimal using only intermediate nodes from {1..k}. This monotone 'allow one more vertex at a time' DP is exactly why the recurrence is correct; permuting i and j within a round would not change the result."

@@ -1,0 +1,215 @@
+---
+id: filled-subgrid-count-i
+title: Filled Subgrid Count I
+difficulty: medium
+order: 323
+tags:
+  - counting
+  - grid
+  - subgrid
+  - monotonic-stack
+  - histogram
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting \"fully filled\" subgrids
+
+      We are given an `n × m` binary grid (`0` = empty, `1` = filled) and must
+      **count every axis-aligned rectangular subgrid whose cells are all `1`s**.
+      A subgrid is chosen by a top row, a bottom row, a left column and a right
+      column (any of them may be equal), so naively there are `O(n²·m²)`
+      candidates — the challenge is counting the *valid* ones fast.
+
+      **The key tool: a histogram + monotonic stack.** Fix the bottom row `i`.
+      For each column `j`, let `h[j]` be the height of the contiguous run of `1`s
+      ending at cell `(i,j)` (i.e. how many consecutive `1`s you can stack going
+      straight up from that cell). Any all-`1` subgrid with bottom row `i` is then
+      exactly a subgrid of width `≥ 1` whose columns all have height `≥` the number
+      of rows it spans — which is exactly the classic **\"count submatrices with
+      all ones\"** pattern. A *monotonic increasing stack* over `h[0..m-1]` counts,
+      for each column as right edge, every such subgrid in **amortised O(1)**, so a
+      row costs `O(m)` and the whole grid costs `O(n·m)`.
+
+      **Why it works.** The monotonic stack keeps the columns in strictly
+      increasing height order. When a new (shorter) height arrives, we pop taller
+      columns; the number of all-`1` subgrids ending at the new column is obtained
+      from the previous stack state with the `dp[j] = h[j]·(j − p) + dp[p]`
+      recurrence, where `p` is the nearest column to the left that is *shorter*.
+      This counts every distinct (top, bottom, left, right) combination once.
+
+      **Complexity.** Time `O(n·m)`, space `O(m)` (the height array and stack).
+
+      :::tip
+      **Interview tip:** \"count submatrices where every cell satisfies a
+      property\" (all ones, all same value, below a threshold) is a staple
+      interview/CP problem. The winning pattern is: *build a per-column height
+      histogram row by row, then reduce to \"count subarrays with constraint\" via
+      a monotonic stack — O(n·m)*. Directly enumerating `O(n²·m²)` subgrids is the
+      classic TLE trap.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an `n × m` grid of `0` and `1` characters, count the number of
+      rectangular subgrids (contiguous blocks of cells) in which **every cell is
+      `1`**.
+
+      **Input.** The first line has two integers `n` and `m`. After this there are
+      `n` lines, each with `m` characters (`0` or `1`).
+
+      **Output.** Print the number of all-`1` subgrids.
+
+      **Constraints**
+      - `1 ≤ n, m ≤ 1000`
+
+      **Example**
+
+      Input:
+      ```
+      2 3
+      111
+      101
+      ```
+
+      Output:
+      ```
+      10
+      ```
+      (The column-1 / column-3 single cells, the three horizontal segments of the
+      top row, the `2×1` columns over columns 1 and 3, and nothing else — verified
+      in the walkthrough.)
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²·m²·max(n,m)).** Enumerate every subgrid
+      `(r1..r2, c1..c2)` and scan all its cells to confirm each is `1` (early-break
+      on the first `0`). Correct for tiny grids but the four loops alone are
+      `O(n²·m²)` and the scan adds another factor — hopeless for `n, m ≤ 1000`.
+
+      ```cpp
+      long long brute(int n, int m, const vector<string>& g) {
+          long long ans = 0;
+          for (int r1 = 0; r1 < n; r1++) for (int r2 = r1; r2 < n; r2++)
+              for (int c1 = 0; c1 < m; c1++) for (int c2 = c1; c2 < m; c2++) {
+                  bool ok = true;
+                  for (int r = r1; r <= r2 && ok; r++)
+                      for (int c = c1; c <= c2; c++)
+                          if (g[r][c] != '1') { ok = false; break; }
+                  if (ok) ans++;
+              }
+          return ans;
+      }
+      ```
+
+      **② Optimization — O(n·m) histogram + monotonic stack — the intended
+      solution.** For each bottom row, update column heights, then count all-`1`
+      subgrids ending on that row with a monotonic stack. This is the exact code we
+      verified against brute force.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      long long solve(int n, int m, const vector<string>& g) {
+          vector<int> h(m, 0);
+          long long ans = 0;
+          for (int i = 0; i < n; i++) {
+              for (int j = 0; j < m; j++)
+                  h[j] = (g[i][j] == '1') ? h[j] + 1 : 0;   // height of 1-run above (i,j)
+              vector<int> st;                                // stack of column indices (increasing h)
+              vector<long long> dp(m, 0);
+              for (int j = 0; j < m; j++) {
+                  while (!st.empty() && h[st.back()] >= h[j]) st.pop_back();
+                  if (st.empty()) dp[j] = (long long)h[j] * (j + 1);
+                  else           { int p = st.back(); dp[j] = (long long)h[j] * (j - p) + dp[p]; }
+                  st.push_back(j);
+                  ans += dp[j];
+              }
+          }
+          return ans;
+      }
+      int main() { int n, m; cin >> n >> m; vector<string> g(n);
+                   for (auto& r : g) cin >> r; cout << solve(n, m, g) << "\n"; }
+      ```
+
+      **③ Alternative — O(n²·m) row-pair \"consecutive full columns\".** Fix the top
+      row `r1` and bottom row `r2` (an `O(n²)` slice). Mark a column `c` \"good\" if
+      all of rows `r1..r2` in that column are `1`. The all-`1` subgrids inside this
+      slice are precisely the subarrays of consecutive good columns; a maximal run
+      of length `L` contributes `L·(L+1)/2` subgrids. Simple and correct, but
+      `O(n²·m)` is too slow for `n = m = 1000` — good intuition-builder, not the
+      ship answer.
+
+      **④ Note.** An alternative *memory-lean* take on ② stores only the stack of
+      heights plus a running sum instead of the full `dp` array; complexity is
+      unchanged, so ② (with `O(m)` `dp`) is already the right target.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      Focus on the **②** histogram + stack solution.
+
+      - **`h[j]` update:** `h[j] = h[j] + 1` when `(i,j)` is `1` (extend the run
+        upward), else `h[j] = 0` (the run breaks). `h[j]` is exactly the maximum
+        height of an all-`1` rectangle whose bottom-right sits in column `j` at row
+        `i`.
+      - **Monotonic stack `st`:** holds column indices with strictly increasing
+        `h`. Before processing column `j` we pop every column whose height is `≥
+        h[j]`, because those taller columns can no longer be the *nearest-shorter*
+        left neighbour for `j`.
+      - **`dp[j]` recurrence.** Let `p` be the nearest column left of `j` with
+        `h[p] < h[j]` (the stack top after popping). Any all-`1` subgrid ending at
+        the bottom-right cell `(i,j)` either (a) is exactly one column wide, coming
+        from columns strictly right of `p`, contributing `h[j]·(j − p)`; or (b)
+        starts at or left of `p`, which is exactly `dp[p]` (all subgrids that were
+        valid ending at column `p` extend unchanged to `j`, since `h[p] < h[j]`
+        keeps them all-`1`). Hence `dp[j] = h[j]·(j − p) + dp[p]`.
+      - **`ans += dp[j]`** accumulates every subgrid counted from this bottom row,
+        across all `j`; summing over all rows counts every all-`1` subgrid exactly
+        once (by its bottom row).
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 2, m = 3`, grid `["111", "101"]`.
+
+      Row 0 — heights `h = [1,1,1]`:
+
+      | col | h | stack after | dp | ans |
+      |-----|---|-------------|----|-----|
+      | 0 | 1 | [0] | `1·1 = 1` | 1 |
+      | 1 | 1 | pop 0 → [1] | `1·2 = 2` | 3 |
+      | 2 | 1 | pop → [2] | `1·3 = 3` | 6 |
+
+      Row-0 total = 6 — that's every sub-array of the top row `111` (3 + 2 + 1).
+
+      Row 1 — heights become `[2, 0, 2]`:
+
+      | col | h | stack | dp | ans |
+      |-----|---|-------|----|-----|
+      | 0 | 2 | [0] | `2·1 = 2` | 8 |
+      | 1 | 0 | pop 0 → [1] | `0` | 8 |
+      | 2 | 2 | [1, 2] | `2·(2−1) + dp[1](0) = 2` | 10 |
+
+      So the answer is **10**: the earlier 6 top-row subgrids, plus 4 new ones whose
+      bottom row is row 1 — `(0..1, col 1)` and `(0..1, col 3)` (the 2 tall
+      columns) each contribute 1, and `(1, 1)`, `(1, 3)` (single cells) contribute 2.
+
+      **Actual vs expected:** output `10` matches the sample.
+  - type: mcq
+    prompt: "Why does the monotonic-stack formulation run in O(n·m) instead of O(n²·m²)?"
+    options:
+      - "Each column is pushed and popped at most once per row, so per row the stack only does O(m) work, and we never enumerate the O(n²·m²) subgrids — we count them with the dp[j] recurrence."
+      - "Because the answer is always small enough to fit in a 32-bit integer."
+      - "Because we only ever look at single-cell subgrids."
+      - "Because the grid is guaranteed to have no zeros."
+    answer: 0
+    explanation: "The key is turning an explicit enumeration into a counting recurrence. The monotonic stack pushes and pops each column index at most once per row, giving O(m) amortised work per row and O(n·m) total — while dp[j] = h[j]·(j−p) + dp[p] counts all valid subgrids ending at that bottom-right cell without materialising them."
+
+type: content
+---

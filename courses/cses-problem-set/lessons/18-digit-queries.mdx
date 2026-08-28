@@ -1,0 +1,267 @@
+---
+id: digit-queries
+title: Digit Queries
+difficulty: medium
+order: 18
+tags:
+  - intro
+  - math
+  - binary-search
+blocks:
+  - type: markdown
+    content: |
+      # Digit Queries — find the k-th digit of the infinite sequence
+
+      Consider the infinite sequence formed by writing all positive integers in
+      order and concatenating them:
+
+      ```
+      1 2 3 4 5 6 7 8 9 1 0 1 1 1 2 1 3 ...
+      ```
+
+      (the string `"12345678910111213..."`). Given a position `k` (up to `10^18`),
+      find the digit sitting at that position.
+
+      We cannot build the string — `10^18` digits is far too much memory and
+      time. Instead we **skip whole blocks at once** using arithmetic.
+
+      ## Structure: blocks of fixed digit-length
+
+      Group the numbers by their length:
+
+      | length | numbers            | count      | digits in block |
+      |--------|--------------------|------------|-----------------|
+      | 1      | 1..9               | 9          | 9               |
+      | 2      | 10..99             | 90         | 180             |
+      | 3      | 100..999           | 900        | 2700            |
+      | d      | 10^(d-1) .. 10^d-1 | 9·10^(d-1) | d·9·10^(d-1)    |
+
+      ## The three-step algorithm
+
+      1. **Find the block.** Walk the lengths `1,2,3,…`; for each, subtract its
+         total digit count from `k` until the block that contains position `k`
+         is reached. At that point the block has `len` digits per number and
+         starts at `start = 10^(len-1)`.
+      2. **Find the number.** The leftover `k` (now counting within this block,
+         1-based) points into a number: the 0-based offset is `k-1`, so
+         `number = start + (k-1) / len`.
+      3. **Find the digit.** The offset within the number is `(k-1) % len`
+         (0 = leftmost). Convert the number to a string and index it.
+
+      Since each block contributes exponentially more digits, the loop runs at
+      most 18 times even for `k = 10^18` — **O(number of digits)** per query.
+
+      :::tip
+      **Interview tip:** This is the canonical "k-th digit of a big
+      concatenation" pattern — it recurses in LeetCode-style problems (find the
+      n-th digit of Champernowne's constant) and in problems asking for the n-th
+      element of a structured sequence. The reusable lesson: **skip full fixed-
+      size blocks with arithmetic before doing any per-digit work.**
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Consider an infinite sequence that is formed by reading first all one-digit
+      integers, then all two-digit integers, and so on. The sequence begins:
+
+      ```
+      123456789101112131415...
+      ```
+
+      You will be given `q` queries; for each, find the digit at position `k` in
+      this sequence.
+
+      ## Input
+
+      The first input line has an integer `q`: the number of queries. After this,
+      there are `q` lines that describe the queries. Each line has an integer
+      `k`: the position of a digit.
+
+      **Constraints:** `1 <= q <= 1000`, `1 <= k <= 10^18`
+
+      ## Output
+
+      For each query, print the corresponding digit.
+
+      ## Sample
+
+      **Input:**
+      ```
+      3
+      7
+      19
+      12
+      ```
+      **Output:**
+      ```
+      7
+      4
+      1
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — four tiers
+
+      All tiers find the correct digit; they differ in whether they touch the
+      actual string and how they locate the block.
+
+      **① Brute force — O(k) time, O(k) space.** Actually concatenate the numbers
+      `1,2,3,…` until the string has length ≥ `k`, then read position `k-1`. Dead
+      simple and obviously correct — but it materializes the giant string, so it
+      can only work for tiny positions. Position `k = 10^18` would need a
+      10^18-character string: impossible.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long digitAtBrute(long long k) {
+          std::string s;
+          long long x = 1;
+          while ((long long)s.size() < k) {
+              s += std::to_string(x);
+              x++;
+          }
+          return s[k - 1] - '0';
+      }
+      ```
+      Complexity: O(k) — builds the whole prefix. Too slow for `k ≤ 10^18`.
+
+      **② Optimization — O(18) (skip blocks with arithmetic).** The standard
+      three-step algorithm from the theory block: subtract whole fixed-length
+      digit blocks until the containing block is found, then locate the number
+      and read its digit. The loop runs at most 18 times regardless of `k`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long digitAt(long long k) {
+          long long len = 1, cnt = 9, start = 1;
+          while (k > len * cnt) {          // position is in a later block
+              k -= len * cnt;              // skip this block's digits
+              len++; cnt *= 10; start *= 10;
+          }
+          long long num = start + (k - 1) / len;       // the integer containing k
+          long long d = (k - 1) % len;                 // 0-based digit inside num
+          std::string s = std::to_string(num);
+          return s[d] - '0';
+      }
+
+      std::vector<long long> solve(const std::vector<long long>& queries) {
+          std::vector<long long> res;
+          res.reserve(queries.size());
+          for (long long k : queries) res.push_back(digitAt(k));
+          return res;
+      }
+      ```
+      Complexity: O(18) worst case per query, O(1) space. This is what you ship.
+
+      **③ Further optimization — O(1) per query (precomputed block look-up).**
+      Since there are at most 18 length-blocks, precompute their cumulative digit
+      counts once, then binary-search for the block that contains position `k`
+      instead of walking forward. With `q ≤ 1000` the loop is already plenty, but
+      this removes even the linear walk and shows the precompute+binsearch idiom.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long digitAtFast(long long k) {
+          // precomputed: len, block digit count, block start per length
+          static std::vector<long long> cum;      // cumulative up to each length
+          if (cum.empty()) {
+              long long len = 1, cnt = 9, start = 1, acc = 0;
+              for (int i = 0; i < 18; i++) {
+                  acc += len * cnt;
+                  cum.push_back(acc);             // total digits through length len
+                  len++; cnt *= 10; start *= 10;
+              }
+          }
+          // binary-search the block index b where cum[b-1] < k <= cum[b]
+          int lo = 0, hi = 17, b = 0;
+          while (lo <= hi) {
+              int mid = (lo + hi) / 2;
+              long long before = mid ? cum[mid - 1] : 0;
+              if (k > before) { b = mid; lo = mid + 1; }
+              else hi = mid - 1;
+          }
+          long long len = b + 1, cnt = 9, start = 1;
+          while (len > 1) { cnt *= 10; start *= 10; len--; }   // start = 10^(b)
+          long long off = k - (b ? cum[b - 1] : 0) - 1;        // 0-based in block
+          long long num = start + off / (b + 1);
+          long long d = off % (b + 1);
+          return std::to_string(num)[d] - '0';
+      }
+      ```
+      Complexity: O(log 18 + len) per query — effectively constant; the
+      precomputation runs once.
+
+      **④ Alternative algorithm — O(18) (digit-by-digit, no `to_string`).** Solve
+      it with pure arithmetic: once the containing number `num` and offset `d`
+      are known, extract the `d`-th digit by repeated division by powers of ten
+      instead of converting to a string. A distinct implementation of the same
+      block-skip idea that never allocates a string.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long digitAtArith(long long k) {
+          long long len = 1, cnt = 9, start = 1;
+          while (k > len * cnt) { k -= len * cnt; len++; cnt *= 10; start *= 10; }
+          long long num = start + (k - 1) / len;
+          long long d = len - 1 - ((k - 1) % len);   // 0-based from the right
+          for (long long i = 0; i < d; i++) num /= 10;
+          return num % 10;
+      }
+      ```
+      Complexity: O(18 + len) per query, O(1) space — no strings allocated.
+
+      Now walk through the chosen tier (②) in the next block — then trace it on
+      the sample input.
+  - type: markdown
+    content: |
+      # Code logic
+
+      `digitAt(k)` — given a 1-based position, returns the 0–9 digit there:
+
+      1. **Skip blocks.** `len = 1`, `cnt = 9`, `start = 1`. While `k > len*cnt`
+         (position lies past this block), subtract the full block length
+         `len*cnt` from `k`, then grow to the next length (`cnt *= 10`,
+         `start *= 10`). After the loop, `k` is the 1-based position within the
+         block of `len`-digit numbers that starts at `start`.
+      2. **Select the number.** Position `k` is the `(k-1)`th digit of the block;
+         it falls in number `start + (k-1)/len`.
+      3. **Select the digit.** `(k-1) % len` is the digit's offset inside the
+         number (0 = leftmost). Convert to a string and read that character.
+
+      `solve` just maps `digitAt` over every query. The per-query loop touches
+      at most 18 blocks, since `len*cnt` grows by a factor of 10 each iteration,
+      so a thousand queries are still microseconds.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `digitAt(19)` (the sample's middle query).
+
+      - Block length 1: `cnt=9`, `len*cnt=9`. `19 > 9` → subtract: `k = 10`,
+        `len=2`, `cnt=90`, `start=10`.
+      - Block length 2: `len*cnt = 180`. `10 <= 180` → stop. We are in the
+        2-digit numbers starting at `10`.
+      - `num = 10 + (10-1)/2 = 10 + 4 = 14`.
+      - `d = (10-1) % 2 = 1`, so digit 1 of `"14"` → `'4'`.
+
+      So `solve([7,19,12])`:
+
+      | k  | block skipped  | num | digit idx | digit |
+      |----|----------------|-----|-----------|-------|
+      | 7  | none (≤9)      | 7   | 0         | 7     |
+      | 19 | 9 → k=10 (len2)| 14  | 1         | 4     |
+      | 12 | 9 → k=3  (len2)| 11  | 0         | 1     |
+
+      Expected (sample) — `7, 4, 1`. Actual — `7, 4, 1`. Match. The sequence is
+      `1 2 3 4 5 6 7 8 9 10 11 12…`; position 7 is `7`, position 19 lands on the
+      `4` inside `"14"`, and position 12 lands on the `1` of `"11"`.
+type: content

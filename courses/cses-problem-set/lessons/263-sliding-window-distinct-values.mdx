@@ -1,0 +1,237 @@
+---
+id: sliding-window-distinct-values
+title: Sliding Window Distinct Values
+type: content
+difficulty: easy
+order: 263
+tags:
+  - sliding-window
+  - distinct-count
+  - frequency
+  - hashing
+blocks:
+  - type: markdown
+    content: |
+      # Sliding Window Distinct Values — count of distinct values in each window
+
+      Given `n` numbers and a window length `k`, report **how many distinct
+      values each contiguous window of length `k` contains**.
+
+      Unlike sum (`invertible`), XOR (`self-inverse`), and OR (`bit-counts`),
+      distinct-count is about **whether a value is present at all** — and that
+      naturally maps to a **frequency map** plus a running distinct counter. The
+      category of an element is decided by a single transition:
+
+      - a value *enters* the distinct set only when its frequency goes `0 → 1`
+        (it was absent, now present), and
+      - a value *leaves* the distinct set only when its frequency goes `1 → 0`
+        (its last copy slid out).
+
+      Everything else — an occurrence going `1 → 2` or `2 → 1` — changes the
+      count, not the *distinctness*. So we track `distinct` by watching only
+      those two transitions.
+
+      ## When you reach for this
+
+      Any "number of *unique*/different/window-heavy" query with a fixed or
+      two-pointer window. It is the same bookkeeping as the classic *longest
+      substring with at most K distinct characters* — a `map<value,count>` and a
+      distinct counter with the `0 → 1` / `1 → 0` triggers.
+
+      ## Complexity
+
+      - **Time:** `O(n)` average — each element inserted once (`unordered_map`
+      amortized O(1)) and removed once.
+      - **Space:** `O(k)` for the frequency map (at most `k` distinct live
+        values in a window of size `k`).
+
+      ## Worked mini-example
+
+      `a = [4, 1, 3, 2, 1, 4, 3]`, `k = 4`.
+
+      - window `[4,1,3,2]`: all distinct → **4**.
+      - slide out `4`, in `1`: `[1,3,2,1]` = `{1,2,3}` → **3**.
+      - slide out `1`, in `4`: `[3,2,1,4]` → **4**.
+      - slide out `3`, in `3`: `[2,1,4,3]` → **4**.
+
+      Result: `4 3 4 4`.
+
+      :::tip
+      **Interview tip:** distinct-in-window is the "first map pattern" of the
+      sliding chapter — bring the frequency map and the two transition rules
+      (`0→1` adds, `1→0` removes). It also solves *count distinct values in any
+      subarray* and powers the `distinct` variant of longest-substring problems.
+      When queries are arbitrary (not fixed windows), upgrade to an offline
+      sweep + Fenwick over last occurrence (see the course's *Distinct Values
+      Queries* lesson), which answers each range-query in `O(log n)`.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Given an array of `n` integers and a window length `k`, print the number
+      of distinct values in each contiguous window of length `k`, from the
+      window starting at position `1` to the window starting at position
+      `n - k + 1`.
+
+      ## Input
+
+      The first line has two integers `n` and `k`. The second line has `n`
+      integers `a_1, a_2, …, a_n` (each `-10^9 <= a_i <= 10^9`).
+
+      **Constraints:** `1 <= k <= n <= 2 * 10^5`
+
+      ## Output
+
+      Print `n - k + 1` integers separated by spaces: the number of distinct
+      values in each window, in left-to-right order.
+
+      ## Sample
+
+      **Input:**
+      ```
+      7 4
+      4 1 3 2 1 4 3
+      ```
+      **Output:**
+      ```
+      4 3 4 4
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(nk)**
+
+      For each window, pour its `k` elements into a fresh set and report its
+      size.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<int> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          for(int i=0;i<n-k+1;i++){
+              set<int> s;
+              for(int j=i;j<i+k;j++) s.insert(a[j]);
+              cout<<(int)s.size()<<(i==n-k?"\n":" ");
+          }
+          return 0;
+      }
+      ```
+
+      *`O(nk log k)` time — a fresh set per window is far too slow.*
+
+      **② Optimization — sliding frequency map, O(n) average time, O(k) space (optimal)**
+
+      Keep `map<value,frequency>`; `distinct` increments on `0→1`, decrements on
+      `1→0`. This is the tier we compile and verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<int> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          unordered_map<int,int> cnt;
+          int distinct=0;
+          for(int i=0;i<n;i++){
+              if(cnt[a[i]]++ == 0) distinct++;   // add a[i]: 0 -> 1
+              if(i>=k){                          // evict a[i-k]
+                  if(--cnt[a[i-k]] == 0){ distinct--; cnt.erase(a[i-k]); }
+              }
+              if(i>=k-1) cout<<distinct<<(i==n-1?"\n":" ");
+          }
+          return 0;
+      }
+      ```
+
+      *`O(n)` amortized time (hash map), `O(k)` space.*
+
+      **③ Alternative — coordinate compression + array counts, O(n) time, O(n) space**
+
+      If the value range is huge, compress values to ranks `0..m-1` (sort the
+      unique set), then a plain array of counts replaces the hash map — no
+      hashing, deterministic O(1) per access.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<int> a(n);
+          for(int i=0;i<n;i++) cin>>a[i];
+          vector<int> sorted=a; sort(sorted.begin(), sorted.end());
+          sorted.erase(unique(sorted.begin(), sorted.end()), sorted.end());
+          for(auto&x:a) x = lower_bound(sorted.begin(), sorted.end(), x) - sorted.begin();
+          vector<int> cnt(sorted.size(),0);
+          int distinct=0;
+          for(int i=0;i<n;i++){
+              if(cnt[a[i]]++ == 0) distinct++;
+              if(i>=k && --cnt[a[i-k]] == 0) distinct--;
+              if(i>=k-1) cout<<distinct<<(i==n-1?"\n":" ");
+          }
+          return 0;
+      }
+      ```
+
+      *`O(n log n)` (sort + compression) then `O(n)` amortized; `O(n)` space.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`if(cnt[a[i]]++ == 0) distinct++;`** a single expression that both
+        reads the old frequency and increments it. When the old count was `0`,
+        the value just became present → raise `distinct`.
+      - **Evicting with a second trigger.** `--cnt[a[i-k]] == 0` decrements the
+        leaving value's count; if it reached `0`, the value is now absent → lower
+        `distinct` and `erase` it to keep the map small.
+      - **`unordered_map` for O(1).** `std::map` (tier ①'s set) costs O(log k);
+        `unordered_map` gives amortized O(1) so the whole scan is linear.
+        Negative values are fine — the map hashes any `int`.
+      - **The `i>=k-1` gate.** The first full window appears at index `k-1`, so
+        answers print from there onward; the eviction runs from index `k`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 7, k = 4`, `a = [4, 1, 3, 2, 1, 4, 3]`. Expected output
+      `4 3 4 4`.
+
+      Using tier ② (frequency map `cnt` and `distinct`):
+
+      - `i=0..3` (build `[4,1,3,2]`): each `0→1`, `distinct=4`. At `i=3`
+        (window full) print `4`.
+      - `i=4`: add `a[4]=1`: count `1→2` (no change). evict `a[0]=4`: count
+        `1→0` → `distinct=3`. window `[1,3,2,1]` → print `3`.
+      - `i=5`: add `a[5]=4`: `0→1` → `distinct=4`. evict `a[1]=1`: count `2→1`
+        (no change). window `[3,2,1,4]` → print `4`.
+      - `i=6`: add `a[6]=3`: count `1→2` (no change). evict `a[2]=3`: count
+        `2→1` (no change). window `[2,1,4,3]` → print `4`.
+
+      Printed: `4 3 4 4` — matches expected. Notice how only the `0→1` and
+      `1→0` transitions move `distinct`; count changes between 1 and higher
+      values never do.
+  - type: flowchart
+    title: "Sliding window distinct count"
+    nodes: ["add a[i]: if cnt goes 0->1, distinct++", "evict a[i-k]: if cnt goes 1->0, distinct--", "window full? print distinct", "slide to next i"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 0}
+  - type: mcq
+    prompt: "When the same value appears twice in a window, why do we NOT count it twice?"
+    options:
+      - "Because distinct count tracks whether a value is present, not how many times: only the 0->1 transition (first appearance) adds to the count, and only the 1->0 transition (last copy leaving) removes it."
+      - "Because every value is stored only once in the array."
+      - "Because the window is required to contain unique elements."
+      - "Because distinct count equals the window OR."
+    answer: 0
+    explanation: "distinctness is a yes/no property per value. The frequency map tells us whether a transition crossed the 0 or the 1 boundary — appearance or disappearance — and those are the only events that change the distinct counter. A second copy (1->2) or a downgrade (2->1) alters multiplicity but not presence, so distinct is untouched."

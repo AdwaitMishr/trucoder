@@ -1,0 +1,217 @@
+---
+id: tournament-graph-distribution
+title: Tournament Graph Distribution
+difficulty: medium
+order: 338
+tags:
+  - counting
+  - combinatorics
+  - generating-functions
+  - graph-theory
+  - strongly-connected
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — tournaments by number of strongly connected components
+
+      A **tournament graph** is an orientation of the complete graph: for every
+      pair of nodes exactly one directed edge exists. A tournament is
+      *strongly connected* (one SCC) if you can get from any node to any other.
+      The number of tournaments on `n` labelled nodes is `2^(n(n−1)/2)`.
+
+      **Key structural fact.** The condensation of a tournament (contract each
+      SCC to a vertex) is *transitive*: the SCCs can be totally ordered
+      `C₁ ≺ C₂ ≺ … ≺ Cₖ` so that **every** edge between components points from an
+      earlier component to a later one. (If two SCCs were mutually reachable they
+      would be one SCC.) So a tournament is exactly an **ordered list of
+      strongly-connected blocks**, with all cross edges pointing forward.
+
+      This turns the count into a *sequence* (ordered composition) problem. Let
+
+      - `t[m]` = total tournaments on `m` labelled nodes = `2^(m(m−1)/2)`;
+      - `s[m]` = strongly connected tournaments on `m` labelled nodes.
+
+      With exponential generating functions `T(x)=Σ t[m]·x^m/m!` and
+      `S(x)=Σ s[m]·x^m/m!`, every tournament is an ordered list of SCCs, so
+      `T(x) − 1 = S(x) + S(x)² + S(x)³ + … = S(x)/(1−S(x))`. Inverting this gives
+      `S·T = T − 1`, i.e. the coefficient recurrence
+
+      ```
+      s[m] = t[m] − Σ_{i=1}^{m-1} C(m,i)·s[i]·t[m−i]
+      ```
+
+      Once all `s[m]` are known, the number of tournaments on `n` nodes with
+      exactly `k` SCCs is
+
+      ```
+      dp[k][n] = Σ_{i=1}^{n} C(n,i)·s[i]·dp[k−1][n−i],   dp[1][n] = s[n]
+      ```
+      (choose the *first*, "source" SCC of size `i`, which must be strongly
+      connected, then the rest is a tournament on `n−i` nodes with `k−1` SCCs).
+
+      :::tip
+      **Interview tip:** "Condensation of a tournament is a total order" is a
+      classic insight question. The counting trick that follows — represent a
+      structure as an *ordered list of irreducible blocks* and work with
+      exponential generating functions `S/(1−S)` — is a reusable pattern for
+      "how many X with exactly k irreducible components". Expect the 
+      strong-connectivity-via-generating-function dance in advanced
+      combinatorics interviews.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      A tournament graph is a directed graph where a single directed edge exists
+      between every pair of nodes. Given `n`, your task is to calculate for each
+      `k = 1 … n` the number of tournament graphs that have `n` nodes and `k`
+      strongly connected components.
+
+      **Input.** The only line has an integer `n`.
+
+      **Output.** Print `n` lines: for each `k = 1 … n` the number of graphs
+      modulo `10^9+7`.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 500`
+
+      **Sample.**
+
+      **Input:**
+      ```
+      3
+      ```
+
+      **Output:**
+      ```
+      2
+      0
+      6
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(2^(n(n−1)/2) · n²).** Enumerate every tournament (each
+      of the `n(n−1)/2` pairs oriented either way), run Kosaraju to find its SCC
+      count, and tally. Exact but the number of tournaments explodes instantly.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n; cin>>n;
+          vector<pair<int,int>> edges;
+          for(int a=0;a<n;a++)for(int b=a+1;b<n;b++)edges.push_back({a,b});
+          int E=edges.size(); vector<long long> dist(n+1,0);
+          for(long long bits=0;bits<(1LL<<E);bits++){
+              vector<vector<int>> adj(n), radj(n);
+              for(int ei=0;ei<E;ei++){int a=edges[ei].first,b=edges[ei].second;
+                  if(bits>>ei&1){adj[a].push_back(b);radj[b].push_back(a);} else {adj[b].push_back(a);radj[a].push_back(b);}}
+              vector<int> order; vector<char> vis(n,0);
+              function<void(int)> dfs=[&](int u){vis[u]=1;for(int v:adj[u])if(!vis[v])dfs(v);order.push_back(u);};
+              for(int i=0;i<n;i++)if(!vis[i])dfs(i);
+              fill(vis.begin(),vis.end(),0); int comp=0;
+              function<void(int)> rdfs=[&](int u){vis[u]=1;for(int v:radj[u])if(!vis[v])rdfs(v);};
+              for(int i=n-1;i>=0;i--)if(!vis[order[i]]){comp++;rdfs(order[i]);}
+              dist[comp]++;
+          }
+          for(int k=1;k<=n;k++) cout<<dist[k]<<"\n";
+      }
+      ```
+      *Complexity: O(2^(n(n−1)/2)·n²) — a handful of nodes at most.*
+
+      **② Optimization — O(n³) via SCC-generating-function + block DP (`n ≤ 500`).**
+      Compute strongly-connected counts `s[m]` from the `S·T = T − 1` recurrence,
+      then run the ordered-block DP; `dp[k][n]` is the answer for each `k`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const long long MOD = 1000000007LL;
+      long long modpow(long long b,long long e){long long r=1;while(e){if(e&1)r=r*b%MOD;b=b*b%MOD;e>>=1;}return r;}
+      int main(){
+          int n; if(!(cin>>n)) return 0;
+          vector<long long> f(n+1,1), fi(n+1,1);
+          for(int i=1;i<=n;i++) f[i]=f[i-1]*i%MOD;
+          fi[n]=modpow(f[n],MOD-2); for(int i=n;i>0;i--) fi[i-1]=fi[i]*i%MOD;
+          auto C=[&](int a,int b)->long long{ if(b<0||b>a)return 0; return f[a]*fi[b]%MOD*fi[a-b]%MOD; };
+          vector<long long> t(n+1);
+          for(int m=0;m<=n;m++) t[m]=modpow(2,1LL*m*(m-1)/2);      // total tournaments on m nodes
+          vector<long long> s(n+1,0); s[1]=1;                      // s[m] = strongly connected on m
+          for(int m=1;m<=n;m++){
+              long long val=t[m];
+              for(int i=1;i<m;i++) val=(val-C(m,i)*s[i]%MOD*t[m-i])%MOD;  // S*T = T-1
+              s[m]=(val%MOD+MOD)%MOD;
+          }
+          // dp[k][nn] = tournaments on nn labelled nodes with exactly k SCCs
+          vector<vector<long long>> dp(n+1, vector<long long>(n+1,0));
+          dp[0][0]=1;
+          for(int k=1;k<=n;k++){
+              for(int nn=k;nn<=n;nn++){
+                  long long val=0;
+                  for(int i=1;i<=nn;i++) if(dp[k-1][nn-i])
+                      val=(val+C(nn,i)*s[i]%MOD*dp[k-1][nn-i])%MOD;
+                  dp[k][nn]=val;
+              }
+          }
+          for(int k=1;k<=n;k++) cout<<dp[k][n]%MOD<<"\n";
+      }
+      ```
+      *Complexity: O(n³) time (≈`n³/6` ≈ `2·10⁷` at `n=500`), O(n²) space.*
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n)` — O(n³) two-phase construction. Key lines:
+
+      1. **`t[m]`** = `2^(m(m−1)/2)`, the number of all tournaments on `m` nodes.
+      2. **`s[m]`** via `S·T = T − 1`. Coefficient-wise
+         `Σ_i C(m,i)·s[i]·t[m−i] = t[m]`, so
+         `s[m] = t[m] − Σ_{i=1}^{m-1} C(m,i)·s[i]·t[m−i]`. This computes how many
+         tournaments on `m` nodes are strongly connected (one SCC).
+      3. **`dp[k][nn]`**: the source SCC of a `nn`-node tournament has size `i`
+         (must be strongly connected: `s[i]` ways on the chosen `i` nodes), the
+         rest freely forms a `nn−i`-node tournament with `k−1` SCCs. Choosing
+         which nodes are the source gives the binomial `C(nn,i)`.
+      4. The answers are exactly the row `dp[1…n][n]`, printed per `k`.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 3`. Total tournaments on 3 nodes = `2³ = 8`.
+
+      - `t[1]=1, t[2]=2, t[3]=8`.
+      - Strongly connected counts: `s[1]=1`, `s[2] = t[2] − C(2,1)s[1]t[1]
+        = 2 − 2·1·1 = 0` (a 2-node tournament is never strongly connected),
+        `s[3] = t[3] − C(3,1)s[1]t[2] − C(3,2)s[2]t[1]
+        = 8 − 3·1·2 − 3·0·1 = 8 − 6 = 2`.
+      - `dp[1][3] = s[3] = 2` → **k=1 → 2**.
+      - `dp[2][3] = C(3,1)·s[1]·dp[1][2] + C(3,2)·s[2]·dp[1][1]
+        = 3·1·s[2] + 3·0·1 = 0` → **k=2 → 0**.
+      - `dp[3][3] = C(3,1)·s[1]·dp[2][2]`; and
+        `dp[2][2] = C(2,1)·s[1]·dp[1][1] = 2·1·1 = 2`,
+        so `dp[3][3] = 3·1·2 = 6` → **k=3 → 6**.
+
+      Output row: `2, 0, 6` ✓ matches the sample. (The 8 tournaments split as
+      2 strongly connected, 0 with exactly 2 SCCs, and 6 transitive/3-SCC.)
+
+      The brute-force tier (①) enumerates all 8 tournaments for `n=3` and yields
+      the same `[2,0,6]`.
+
+  - type: mcq
+    prompt: "Why is a 2-node tournament never strongly connected, so that s[2] = 0?"
+    options:
+      - "Because a tournament has exactly one directed edge between the two nodes, so only one direction of reachability exists."
+      - "Because two nodes can never have edges between them."
+      - "Because strong connectivity requires at least four nodes."
+      - "Because the two nodes are always in different components."
+    answer: 0
+    explanation: "Between two nodes a tournament has exactly one directed edge, say u→v. Then v cannot reach u, so the graph is not strongly connected — and the count s[2]=0 feeds straight into dp[2][3]=0 for the sample. Strong connectivity needs a cycle, which needs at least 3 nodes."
+
+type: content
+---

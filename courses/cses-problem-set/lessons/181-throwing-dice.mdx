@@ -1,0 +1,266 @@
+---
+id: throwing-dice
+title: "Throwing Dice"
+type: content
+difficulty: medium
+order: 181
+tags:
+  - mathematics
+  - matrix-exponentiation
+  - dynamic-programming
+  - linear-recurrence
+  - modular-arithmetic
+blocks:
+  - type: markdown
+    content: |
+      # Throwing Dice — exponentiate the DP transition matrix
+
+      Count the number of ways to get a sum `n` by throwing dice, where each throw
+      gives `1..6`. This is exactly the "dice combinations" DP from the Dynamic
+      Programming chapter, but with `n` up to `10^18` — so the O(n) loop is
+      impossible and we must raise the **transition matrix** to a power instead.
+
+      ## From a recurrence to a matrix power
+
+      Let `dp[t]` = number of ways to reach sum `t`. Then `dp[0] = 1` (empty) and
+
+      ```
+      dp[t] = dp[t-1] + dp[t-2] + ... + dp[t-6]     (for t >= 1, dp[neg]=0)
+      ```
+
+      The recurrence is *linear with constant coefficients*, so the vector
+      `(dp[t], dp[t-1], ..., dp[t-5])` is carried to `(dp[t+1], ..., dp[t-4])` by a
+      fixed **6x6 companion matrix** `M` whose first row is all ones (because the
+      new value is the sum of the previous six):
+
+      ```
+      [1 1 1 1 1 1]
+      [1 0 0 0 0 0]
+      [0 1 0 0 0 0]
+      [0 0 1 0 0 0]
+      [0 0 0 1 0 0]
+      [0 0 0 0 1 0]
+      ```
+
+      Applying `M^(n-6)` to the base window `(dp[6], ..., dp[1])` yields
+      `dp[n]` as the first component, computed in `O(6^3 log n)`.
+
+      **Time:** `O(6^3 log n)` ≈ `O(log n)`. **Space:** `O(36)`.
+
+      :::tip
+      **Interview tip:** *"DP with n huge (>= ~10^15)"* is the tell that the DP
+      transitions are linear and should be exponentiated. The universal pattern:
+      write the recurrence `dp[t] = c1·dp[t-1] + ... + ck·dp[t-k]`, build the
+      companion matrix, and return the first component of `M^p · base`. The same
+      trick upgrades a dozen O(n) counting DPs into O(log n) solutions.
+      :::
+  - type: markdown
+    content: |
+      # Question — Throwing Dice
+
+      Your task is to calculate the number of ways to get a sum `n` by throwing
+      dice. Each throw yields an integer between `1 ... 6`.
+
+      For example, if `n = 10`, some possible ways are `3+3+4`, `1+4+1+4` and
+      `1+1+6+1+1`.
+
+      **Input**
+
+      The only input line contains an integer `n`.
+
+      **Output**
+
+      Print the number of ways modulo `10^9+7`.
+
+      **Constraints**
+
+      - `1 <= n <= 10^18`
+
+      **Example**
+
+      Input:
+      ```
+      8
+      ```
+
+      Output:
+      ```
+      125
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — plain DP, O(n) time, O(6) space**
+
+      Fill `dp[t] = dp[t-1] + ... + dp[t-6]` with a rolling window. Correct, but
+      `n` up to `10^18` makes `10^18` iterations impossible.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1e9 + 7;
+      int main(){
+          ll n; cin >> n;
+          vector<ll> dp(n + 1, 0); dp[0] = 1;
+          for (ll t = 1; t <= n; ++t)
+              for (int d = 1; d <= 6 && d <= t; ++d)
+                  dp[t] = (dp[t] + dp[t - d]) % MOD;
+          cout << dp[n] % MOD << "\n";   // O(n) — 10^18 steps, too slow
+          return 0;
+      }
+      ```
+
+      **② Optimization — matrix exponentiation, O(log n) time, O(36) space**
+
+      Build the 6x6 companion matrix and exponentiate it.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1e9 + 7;
+      const int D = 6;
+      using Mat = array<array<ll,D>,D>;
+
+      Mat mul(const Mat& a, const Mat& b){
+          Mat c{};
+          for (int i = 0; i < D; ++i)
+              for (int k = 0; k < D; ++k)
+                  if (a[i][k])
+                      for (int j = 0; j < D; ++j)
+                          c[i][j] = (c[i][j] + a[i][k] * b[k][j]) % MOD;
+          return c;
+      }
+      Mat mpow(Mat a, ll e){
+          Mat r{}; for (int i = 0; i < D; ++i) r[i][i] = 1;
+          while (e){ if (e & 1) r = mul(r, a); a = mul(a, a); e >>= 1; }
+          return r;
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          ll n; cin >> n;
+          if (n <= 6){                       // small n: dp[n] = 2^(n-1)
+              ll ans = 1; for (ll i = 0; i < n - 1; ++i) ans = ans * 2 % MOD;
+              cout << ans << "\n"; return 0;
+          }
+          vector<ll> base;                   // (dp[6], dp[5], ..., dp[1])
+          for (ll s = 6; s >= 1; --s){
+              ll v = 1; for (ll i = 0; i < s - 1; ++i) v = v * 2 % MOD;
+              base.push_back(v);             // dp[s] = 2^(s-1)
+          }
+          Mat M{};                        // companion matrix: row0 all-ones, shift rows
+          for (int j = 0; j < 6; ++j) M[0][j] = 1;
+          for (int i = 1; i < 6; ++i) M[i][i - 1] = 1;
+          Mat P = mpow(M, n - 6);
+          ll ans = 0;
+          for (int j = 0; j < 6; ++j) ans = (ans + P[0][j] * base[j]) % MOD;
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      **③ Further optimization** — none needed: the matrix is a fixed 6x6, so a
+      multiply is 216 modular products and exponentiation is `~60` squarings. That
+      is already O(log n) and well within any limit; there is nothing left to shave.
+
+      **④ Alternative — exponentiate in the quotient ring (linear-recurrence method)**
+
+      A genuinely different route: instead of a matrix, work modulo the recurrence's
+      characteristic polynomial `P(x) = x^6 - x^5 - ... - x - 1`, where
+      `x^6 = x^5 + ... + x^0`. Compute `x^n mod P(x)` by polynomial squaring, then
+      `dp[n] = sum coeff_i * dp[i]`. This is the "Kitamasa" method and is
+      `O(6^2 log n)` — faster than the 6x6 matrix.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1e9 + 7;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          ll n; cin >> n;
+          // reduce a degree-any polynomial mod x^6 - x^5 - ... - x^0  (x^6 = x^5+..+1)
+          auto red = [&](vector<ll>& f){
+              for (ll i = (ll)f.size() - 1; i >= 6; --i){
+                  ll c = f[i]; if (!c) continue;
+                  for (int j = 0; j <= 5; ++j) f[i - 6 + j] = (f[i - 6 + j] + c) % MOD; // x^i -> x^{i-6}(x^5+..+1)
+                  f[i] = 0;
+              }
+              while ((ll)f.size() > 6) f.pop_back();
+          };
+          auto pmul = [&](vector<ll> a, vector<ll> b){
+              vector<ll> c(11, 0);
+              for (int i = 0; i < (int)a.size(); ++i)
+                  for (int j = 0; j < (int)b.size(); ++j)
+                      c[i + j] = (c[i + j] + a[i] * b[j]) % MOD;
+              red(c); return c;
+          };
+          vector<ll> res(6, 0), base(6, 0); res[0] = 1; base[1] = 1; // res = x^0, base = x^1
+          ll e = n;
+          while (e){ if (e & 1) res = pmul(res, base); base = pmul(base, base); e >>= 1; }
+          // dp[0..5] = 1,1,2,4,8,16 ;  dp[n] = sum res[i]*dp[i]
+          ll dp[6] = {1, 1, 2, 4, 8, 16};
+          ll ans = 0; for (int i = 0; i < 6; ++i) ans = (ans + res[i] * dp[i]) % MOD;
+          cout << ans << "\n";
+          return 0;
+      }
+      ```
+
+      Both ② and ④ are correct and optimal in spirit; the matrix version is the one
+      to memorise because it generalises to any linear transition (walks, strings).
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the matrix solution **②**:
+
+      - Base window `(dp[6], dp[5], ..., dp[1])` uses the closed form `dp[s]=2^(s-1)`
+        — for `s <= 6` every composition is automatically built from parts `<= 6`,
+        and the number of compositions of `s` is `2^(s-1)`.
+      - The companion matrix `M`: row 0 is all ones (`dp[t+1]` is the sum of the
+        previous six), and rows 1..5 just *shift* the window down by one.
+      - `M^(n-6)` applied to the window slides it forward from `t=6` to `t=n`; only
+        row 0 is needed from the product for the answer.
+      - Modular arithmetic keeps every value in `[0, MOD)`.
+      - The `n <= 6` branch short-cuts the matrix work entirely.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `n = 8`. The DP values are `dp[1]=1, dp[2]=2, dp[3]=4, dp[4]=8,
+      dp[5]=16, dp[6]=32` (each = `2^(s-1)`), then
+
+      | t | dp[t] |
+      |---|-------|
+      | 6 | 32 |
+      | 7 | 32+16+8+4+2+1 = 63 |
+      | 8 | 63+32+16+8+4+2 = 125 |
+
+      So `dp[8] = 125`, matching the sample. With the matrix, the base window is
+      `(32,16,8,4,2,1)`, and `M^(n-6) = M^2` moves it to `(125, 63, 32, 16, 8, 4)`,
+      giving the same `125` as the first component.
+  - type: flowchart
+    title: "Exponentiate the DP transition"
+    nodes: ["Read n", "n <= 6? print 2^(n-1)",
+            "base = (dp[6],...,dp[1])", "build companion matrix M",
+            "P = M^(n-6)", "P compose with base",
+            "print first component"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 6, label: "yes"}
+      - {from: 1, to: 2, label: "no"}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: ""}
+      - {from: 5, to: 6, label: ""}
+  - type: mcq
+    prompt: "Where do the recurring savings come from when changing the dice DP from O(n) to matrix exponentiation, and how is dp[n] extracted?"
+    options:
+      - "The transition is linear with constant coefficients, so a fixed 6x6 companion matrix raised to M^(n-6) advances the whole window in O(log n); dp[n] is the first component after multiplying the base window"
+      - "Matrix exponentiation removes the modulo, so dp[n] is read directly from M's determinant"
+      - "Each of the n steps is converted into a single addition, so the matrix runs in O(n) but with a smaller constant"
+      - "The matrix is only used to verify the recurrence; the answer is always 2^(n-1)"
+    answer: 0
+    explanation: "dp[t] = sum of the previous six values is a linear constant-coefficient recurrence, so the six-window vector advances by one fixed 6x6 matrix. Exponentiating that matrix gives the answer in O(log n) — the base window (dp[6],...,dp[1]) times M^(n-6) has dp[n] = its first component. For n<=6, dp[n] = 2^(n-1) is a ready closed form."

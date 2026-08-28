@@ -1,0 +1,255 @@
+---
+id: corner-subgrid-check
+title: Corner Subgrid Check
+difficulty: hard
+order: 236
+tags:
+  - advanced-techniques
+  - corner-subgrid
+  - bitset
+  - grid
+blocks:
+  - type: markdown
+    content: |
+      # Corner Subgrid Check — is ANY subgrid's four corners the same letter?
+
+      A **subgrid** is any rectangle of cells chosen from the grid; its
+      *corners* are its four corner cells. This problem asks a *decision*: for
+      every letter, is there **at least one subgrid (height & width ≥ 2) whose
+      four corners all carry that letter.**
+
+      :::warning
+      Do not confuse this with a "coin-collecting" or grid-path problem. There
+      is no movement, no DP on paths and no collected coins here — the only
+      object of interest is a rectangle's **four corner letters**. Re-read the
+      sample before coding: a letter is answered `YES` exactly when two **rows**
+      and two **columns** can be chosen such that all four intersection cells
+      are that letter.
+      :::
+
+      The key reformulation: we need two distinct rows `r1 < r2` and two
+      distinct columns `c1 < c2` where
+      `grid[r1][c1] = grid[r1][c2] = grid[r2][c1] = grid[r2][c2] = L`. Equivalently
+      for letter `L`: **two rows share ≥ 2 columns that are both `L`.**
+
+      That "two rows that share two marked columns" phrasing is what makes the
+      problem solvable — it points at intersecting bitsets built from each row's
+      marked columns. With `n ≤ 3000`, packing a row's letter-positions into
+      `3000/64 ≈ 47` 64-bit words and AND-ing rows is the breakthrough.
+
+      :::tip
+      **Interview tip:** "find two rows sharing ≥ 2 marked columns" is the
+      template for a family of corner/rectangle-counting questions. The moment
+      you phrase it as *row-intersection*, bitsets (a row = set of columns)
+      are the natural next step and you can talk through the O(n²) row pairs ×
+      O(n/64) AND — a concrete, confident complexity answer beats a vague
+      "enumerate rectangles".
+      :::
+  - type: markdown
+    content: |
+      # Question — Corner Subgrid Check
+
+      You are given a grid of letters. Your task is to find subgrids whose
+      height and width is at least two, and all of whose corners have the same
+      letter.
+
+      For each letter, check whether there exists a valid subgrid whose corners
+      all have that letter.
+
+      **Input.** The first line has two integers `n` and `k`: the size of the
+      grid and the number of letters. The letters are the first `k` uppercase
+      letters. After this there are `n` lines describing the grid, each with `n`
+      letters.
+
+      **Output.** Print `k` lines: for each letter, `YES` if a valid subgrid
+      exists and `NO` otherwise.
+
+      **Constraints**
+      - `1 ≤ n ≤ 3000`
+      - `1 ≤ k ≤ 26`
+
+      **Example**
+      ```
+      Input:
+      4 5
+      AAAA
+      CBBC
+      CBBE
+      AAAA
+
+      Output:
+      YES
+      YES
+      NO
+      NO
+      NO
+      ```
+      Explanation: `A` has a subgrid using rows 1 and 4 (both `AAAA`); `B` uses
+      rows 2 and 3 with columns 2 and 3 (both rows have `BB` there); `C`, `D`
+      and `E` have no two rows sharing ≥ 2 columns of that letter.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate every rectangle, O(n⁴)**
+
+      For each letter, try every pair of rows and every pair of columns and
+      test the four corners.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,k; cin>>n>>k;
+          vector<string> g(n);
+          for(int i=0;i<n;i++) cin>>g[i];
+          for(int ch=0;ch<k;ch++){
+              bool ok=false;
+              for(int r1=0;r1<n && !ok;r1++)
+                  for(int r2=r1+1;r2<n && !ok;r2++)
+                      for(int c1=0;c1<n && !ok;c1++)
+                          for(int c2=c1+1;c2<n && !ok;c2++)
+                              if(g[r1][c1]==('A'+ch) && g[r1][c2]==('A'+ch)
+                              && g[r2][c1]==('A'+ch) && g[r2][c2]==('A'+ch)) ok=true;
+              cout<<(ok?"YES":"NO")<<"\n";
+          }
+          return 0;
+      }
+      ```
+
+      **O(k·n⁴)** — `n=3000` makes `n⁴ ≈ 8·10^13`; hopeless.
+
+      **② Optimization — row-pair bitset intersections, O(k·n³/64)**
+
+      For each letter, store each row as a bitset of its columns that equal that
+      letter; two rows give a rectangle iff their intersection has ≥ 2 bits.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,k; if(!(cin>>n>>k)) return 0;
+          vector<string> g(n);
+          for(int i=0;i<n;i++) cin>>g[i];
+          int W=(n+63)/64;
+          for(int ch=0;ch<k;ch++){
+              vector<vector<unsigned long long>> rb(n, vector<unsigned long long>(W,0));
+              for(int i=0;i<n;i++)
+                  for(int j=0;j<n;j++)
+                      if(g[i][j]==(char)('A'+ch)) rb[i][j>>6] |= (1ULL<<(j&63));
+              bool ok=false;
+              for(int i=0;i<n && !ok;i++)
+                  for(int j=i+1;j<n && !ok;j++){
+                      unsigned long long cnt=0;
+                      for(int w=0;w<W;w++) cnt += __builtin_popcountll(rb[i][w]&rb[j][w]);
+                      if(cnt>=2) ok=true;
+                  }
+              cout<<(ok?"YES":"NO")<<"\n";
+          }
+          return 0;
+      }
+      ```
+
+      **O(k·n³/64)** time — much better, but it rescans all k letters, each
+      doing `n²` row pairs × `n/64` words.
+
+      **③ Optimization — single pass with per-column row-masks, O(n³/64) (submission)**
+
+      Scan the grid **once**, not once per letter. Maintain, for each column `j`,
+      a running mask `seen[ch][j]` = OR over already-processed rows of "which
+      earlier columns also carried `ch` in that row". While scanning row `i`, we
+      keep `rowmask[ch]` = the marked columns of `ch` seen so far in row `i`. At
+      column `j` with letter `ch`, if `rowmask[ch] & seen[ch][j] != 0`, we have
+      two columns now and one earlier row that carried `ch` at both → found.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,k; if(!(cin>>n>>k)) return 0;
+          int W=(n+63)/64;
+          vector<vector<vector<unsigned long long>>> seen(
+              k, vector<vector<unsigned long long>>(n, vector<unsigned long long>(W,0)));
+          vector<char> ans(k,0);
+          for(int i=0;i<n;i++){
+              string s; cin>>s;
+              vector<vector<unsigned long long>> rowmask(k, vector<unsigned long long>(W,0));
+              for(int j=0;j<n;j++){
+                  int c=s[j]-'A';
+                  if(ans[c]) continue;
+                  auto &flag = seen[c][j];
+                  bool hit=false;
+                  for(int w=0;w<W;w++) if(rowmask[c][w] & flag[w]){ hit=true; break; }
+                  if(hit) ans[c]=1;
+                  for(int w=0;w<W;w++) flag[w] |= rowmask[c][w];
+                  rowmask[c][j>>6] |= (1ULL<<(j&63));
+              }
+          }
+          for(int ch=0;ch<k;ch++) cout<<(ans[ch]?"YES":"NO")<<"\n";
+          return 0;
+      }
+      ```
+
+      **O(n³/64)** time, **O(k·n²/8)** memory, and it visits every grid cell
+      exactly once regardless of `k`, exiting per-letter as soon as a letter is
+      found. This is the submission tier.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **Why "two rows share 2 columns" is the whole problem.** A rectangle
+        with corners all `L` is exactly two rows where, in some two column
+        indices, *both rows* carry `L`. So we never enumerate rectangles — only
+        row intersections.
+      - **`rowmask[c]` while scanning a row** collects, at column `j`, the
+        columns `< j` that are `c` in the current row. It is reset for every row.
+      - **`seen[c][j]` is the memory of earlier rows.** `seen[c][j]` ORs
+        together every past row's `rowmask[c]` *as it stood at column `j`*
+        (i.e. past rows' marked columns that are `< j`, plus their own `j` added
+        after the OR). So `seen[c][j]` never carries bit `j` itself.
+      - **The hit test.** `rowmask[c] & seen[c][j] ≠ 0` means: the current row
+        has `c` at some column `p < j` (in `rowmask`), and some earlier row had
+        `c` at both `p` and `j` (in `seen`). Together with the current `(i, j)`
+        cell = `c`, that is four corners `c` → a valid subgrid.
+      - **Padding is free.** `j>>6` / `(j&63)` index words; unused high bits
+        simply never get set and don't disturb intersections.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n=4, k=5`, grid:
+      ```
+      AAAA
+      CBBC
+      CBBE
+      AAAA
+      ```
+      Process rows top-to-bottom; `ans` starts all false.
+
+      - **Row 0 `AAAA`:** only letter `A` relevant. `A` not yet found, so build
+        `rowmask[A] = {cols 0,1,2,3}`; `seen[A][j] |= rowmask` (still empty
+        before it, so nothing). No hit — need a second row.
+      - **Row 1 `CBBC`:** letter `B` at cols 1,2: `rowmask[B]={1,2}`; `seen[B][1]`,
+        `seen[B][2]` empty → no hit yet. `C` at cols 0,3 recorded.
+      - **Row 2 `CBBE`:** `B` at cols 1,2. At col 1: `rowmask[B]={}` & `seen[B][1]`
+        empty. At col 2: `rowmask[B]={1}` & `seen[B][2]` (which holds row-1's
+        `{1}` now) → `{1} & {1} = {1} ≠ 0` → **hit** → `ans[B]=YES`.
+      - **Row 3 `AAAA`:** `A`: `seen[A][0..3]` holds row-0's `{0,1,2,3}`. At col 1,
+        `rowmask[A]={0}` & `seen[A][1]` contains bit 0 → **hit** → `ans[A]=YES`.
+      - **`C`:** rows with `C` = {1 (cols 0,3), 2 (col 0)}. No two rows share ≥ 2
+        columns → stays `NO`. **`D`,`E`:** `D` absent, `E` single cell → `NO`.
+
+      Output: **YES YES NO NO NO** — matches the expected
+      **YES YES NO NO NO** (verified against the compiled submission).
+  - type: mcq
+    prompt: 'In the O(n³/64) single-pass solution, what does the non-empty intersection `rowmask[c] & seen[c][j]` signal at cell (i, j)?'
+    options:
+      - That the current row carries letter c at both some column p < j and at column j
+      - That some earlier row carried c at both p and j, while the current row carries c at that same p — forming four shared corners
+      - That letter c already appeared anywhere in the grid before this row
+      - That columns p and j both contain c in the current row only
+    answer: 1
+    explanation: rowmask[c] collects the columns < j holding c in the current row, while seen[c][j] is the OR of all earlier rows' marks at columns < j together with a mark at j. A shared bit p means an earlier row had c at both p and j, and the current row has c at p and (at this cell) j — exactly two rows and two columns whose four corners are c, i.e. a valid subgrid.

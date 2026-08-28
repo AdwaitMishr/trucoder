@@ -1,0 +1,249 @@
+---
+id: money-sums
+title: "Money Sums"
+difficulty: medium
+order: 72
+tags:
+  - dynamic-programming
+  - subset-sum
+  - knapsack
+blocks:
+  - type: markdown
+    content: |
+      # Money Sums — which totals can a set of coins make?
+
+      Given `n` coins with values `x_1, x_2, ..., x_n`, you want every **distinct
+      sum** that can be produced by choosing a subset of the coins (you may use
+      each coin at most once). This is the classic **subset-sum** problem — the
+      "can we reach exactly this total?" decision problem turned into "what is
+      the set of all reachable totals?". It is the boolean version of the
+      0/1-knapsack DP.
+
+      ## The subset-sum idea
+
+      Let `S` be the largest total we care about (here `S = sum(x_i)`, at most
+      100·1000 = `10^5`). Keep a boolean array `dp[s]` meaning "some subset of
+      the coins seen so far adds up to exactly `s`". Process coins one by one.
+      For each coin `x`, and for every total `s` from `S` down to `x`, if `s - x`
+      was reachable, then `s` becomes reachable too:
+
+      ```
+      dp[0] = true
+      for each coin x:
+          for s = S down to x:
+              if dp[s - x]: dp[s] = true
+      ```
+
+      Iterating `s` **backwards** is essential: it guarantees each coin is used
+      at most once, because when we update `dp[s]` using `dp[s - x]`, the value
+      `s - x < s` was last updated in the *previous* coin's pass, so it cannot
+      reflect the current coin being used twice.
+
+      At the end, every `s ≥ 1` with `dp[s] = true` is a sum you can form; the
+      answer is the count plus the sorted list.
+
+      **Time:** O(n·S) — with S = sum(x) ≤ 10^5 and n ≤ 100, that is ~10^7 steps,
+      fast. **Space:** O(S).
+
+      :::tip
+      **Interview tip:** subset-sum is one of the most-asked DP questions there
+      is ("can you split this array/partition it / reach this total?"). The
+      reverse-direction loop over the capacity, and the boolean DP table, are
+      the two things interviewers check for. The **bitset trick** below is a
+      genuinely different answer they love — it cuts the time by a factor of 64
+      using nothing but a shift and an OR.
+      :::
+  - type: markdown
+    content: |
+      # Question — Money Sums
+
+      You have `n` coins with values `x_1, x_2, ..., x_n`. You want to know all
+      possible sums you can make using a subset of the coins (order doesn't
+      matter, and each coin is used at most once).
+
+      **Input**
+
+      The first input line has an integer `n`: the number of coins.
+
+      The second line has `n` integers `x_1, x_2, ..., x_n`: the coin values.
+
+      **Output**
+
+      First print an integer `k`: the number of distinct possible sums. Then
+      print `k` integers, the sums, in increasing order.
+
+      **Constraints**
+
+      - `1 <= n <= 100`
+      - `1 <= x_i <= 1000`
+
+      **Example**
+
+      Input:
+
+      ```
+      4
+      4 2 5 2
+      ```
+
+      Output:
+
+      ```
+      9
+      2 4 5 6 7 8 9 11 13
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(2^n · n) time, O(2^n) space**
+
+      Enumerate every subset with a bitmask; for each, sum the chosen coins and
+      remember the total. With `n = 100` there are `2^100 ≈ 10^30` subsets —
+      astronomically too many. Correct, but unusable at the real constraints.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n;
+          cin >> n;
+          vector<int> coin(n);
+          for (auto &x : coin) cin >> x;
+
+          set<int> sums;
+          for (int mask = 0; mask < (1 << n); ++mask) {
+              int s = 0;
+              for (int i = 0; i < n; ++i)
+                  if (mask & (1 << i)) s += coin[i];
+              if (s > 0) sums.insert(s);
+          }
+          cout << sums.size() << "\n";
+          for (int s : sums) cout << s << " ";
+          cout << "\n";
+      }
+      ```
+
+      **② Optimisation — boolean 0/1 subset-sum, O(n·S) time, O(S) space**
+
+      S = sum of all coins ≤ 10^5. dp[s] = "reachable total s?" using coins seen
+      so far; iterate capacity backwards so each coin is used once.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n;
+          cin >> n;
+          vector<int> coin(n);
+          int total = 0;
+          for (auto &x : coin) { cin >> x; total += x; }
+
+          vector<char> dp(total + 1, 0);
+          dp[0] = 1;
+          for (int c : coin)
+              for (int s = total; s >= c; --s)
+                  if (dp[s - c]) dp[s] = 1;
+
+          vector<int> ans;
+          for (int s = 1; s <= total; ++s) if (dp[s]) ans.push_back(s);
+          cout << ans.size() << "\n";
+          for (int s : ans) cout << s << " ";
+          cout << "\n";
+      }
+      ```
+
+      **③ Bitset optimisation — O(n·S/64) time, O(S/64) space**
+
+      A `std::bitset` stores the whole boolean row of reachable sums as one 64-bit
+      word per 64 entries. "dp shifted left by c, OR'd into dp" exactly encodes:
+      every currently-reachable total `t` also makes `t + c` reachable. The whole
+      inner capacity loop collapses into one shift + one OR.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      int main() {
+          ios::sync_with_stdio(false);
+          cin.tie(nullptr);
+          int n;
+          cin >> n;
+          bitset<100001> dp;          // S <= 100 * 1000 = 100000
+          dp[0] = 1;
+          for (int i = 0; i < n; ++i) {
+              int c;
+              cin >> c;
+              dp |= (dp << c);
+          }
+          cout << (dp.count() - 1) << "\n";   // -1 for dp[0]
+          for (int s = 1; s <= 100000; ++s)
+              if (dp[s]) cout << s << " ";
+          cout << "\n";
+      }
+      ```
+
+      **④ Alternative algorithm** — none is more efficient than a bitset here.
+      Because S ≤ 10^5 and n ≤ 100, even the plain O(n·S) boolean DP is already
+      comfortably fast; the bitset is a constant-factor win, not an asymptotic
+      one. There is no meaningful closed-form for the set of attainable subset
+      sums, so DP remains the approach.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on the O(n·S) solution in **②**:
+
+      - `dp[s]` is `1` iff the coins processed so far can make total `s`. We seed
+        `dp[0] = 1` (the empty subset).
+      - For each coin `c` we walk `s` from `total` down to `c`. If `dp[s - c]`
+        is reachable, then adding `c` makes `s` reachable, so we set `dp[s] = 1`.
+      - The **downwards** iteration is what enforces 0/1 (use each coin at most
+        once): `s - c` is smaller than `s`, so it reflects only coins processed
+        *before* `c`, never a second use of `c` itself.
+      - Coin **order** does not matter; subset membership is commutative, so any
+        order converges to the same reachable set.
+      - After all coins, we collect every positive `s` with `dp[s] = 1`, print
+        the count first, then the sorted list (index order already is sorted).
+
+      The ① brute force differs only in *how* it enumerates subsets (bitmask vs
+      DP); both explore "which coins are in the subset", but DP shares work
+      across totals instead of re-summing each subset independently.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the O(n·S) solution on coins `4 2 5 2` (total = 13). After each coin,
+      the reachable set (ignoring 0) is:
+
+      | step | reachable sums |
+      |------|----------------|
+      | start | `{}` |
+      | +4 | `{4}` |
+      | +2 | `{2, 4, 6}` |
+      | +5 | `{2, 4, 5, 6, 7, 9, 11}` |
+      | +2 | `{2, 4, 5, 6, 7, 8, 9, 11, 13}` |
+
+      Reading the last row: the distinct sums are exactly
+      `2 4 5 6 7 8 9 11 13`. Count = `9`, matching the sample output. A couple of
+      interesting ones: `13 = 4+2+5+2` uses all four coins, `8 = 4+2+2` reuses
+      the value `2` twice but via two *different* coins (allowed), and `1`, `3`,
+      `10`, `12` never appear — no subset sums to them. The count `9` and list
+      are printed, matching the expected output.
+  - type: mcq
+    prompt: 'Why must the capacity loop iterate from total downward (not upward) in the boolean subset-sum DP?'
+    options:
+      - 'To keep the sums sorted at the end'
+      - 'So that dp[s-c] reflects only the coins processed before the current coin, which prevents using the current coin more than once (0/1 semantics)'
+      - 'To speed up the loop by visiting fewer states'
+      - 'Because dp[s] is only defined for s < total'
+    answer: 1
+    explanation: 'A downward pass reads dp[s-c] at s-c < s, which was last updated in an earlier coin iteration; using it cannot count the current coin twice. An upward pass would let a coin contribute repeatedly (unbounded-knapsack behaviour), giving the wrong reachable set.'
+type: content
+---

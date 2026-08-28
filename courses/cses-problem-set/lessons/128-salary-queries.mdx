@@ -1,0 +1,291 @@
+---
+id: salary-queries
+title: "Salary Queries"
+type: content
+difficulty: medium
+order: 128
+tags:
+  - range-queries
+  - fenwick
+  - coordinate-compression
+  - offline
+blocks:
+  - type: markdown
+    content: |
+      # Salary Queries — Fenwick over a compressed salary range
+
+      A company has `n` employees with salaries. Two kinds of queries arrive:
+      `! k x` (set employee `k`'s salary to `x`) and `? a b` (how many
+      employees have a salary in `[a, b]`). We must process `q` interleaved
+      updates and range-count queries.
+
+      The update moves a point (one employee's salary), and the query needs a
+      **range count over salary values**. A Fenwick tree naturally counts
+      points, but the salaries can be up to `10^9` — too big to index directly
+      by value. The standard fix is **coordinate compression**: read every
+      value that will ever appear, sort + dedupe, and map them to ranks
+      `1..M`. Now a Fenwick tree of size `M` (instead of `10^9`) supports both
+      operations in `O(log M)`.
+
+      ## What to compress
+
+      Salaries can *change*, so we must anticipate every future value. Values
+      that can ever occupy the tree are:
+
+      - every initial salary `p_i`;
+      - every update target `x` (from `! k x`);
+      - every query bound `a` and `b` (to answer `? a b` we need prefix counts
+        up to `a` and `b`, so those bounds must be rankable too).
+
+      Collect all of them, `sort` + `unique`, and use `lower_bound` to get the
+      rank of any value in `O(log M)`.
+
+      ## Two operations, both O(log M)
+
+      - **Update** `! k x`: subtract the old salary's count (add `-1` at its
+        rank), then add `+1` at the new salary's rank.
+      - **Query** `? a b`: `count(<= b) - count(< a)`, i.e.
+        `sum(rank(b)) - sum(rank(a) - 1)`.
+
+      **Time:** `O((n + q) log M)` where `M = O(n + q)` is the number of
+      distinct salary values. **Space:** `O(M)`.
+
+      :::tip
+      **Interview tip:** coordinate compression is the reflex for any Fenwick /
+      segment-tree problem whose values are large but sparse ("count values in
+      a range" with `10^9`-sized values). Collect the candidate values offline
+      (all that can appear), rank them, and let the BIT work over ranks. This
+      turns "salary ranges", "price ranges", "coordinate counts" etc. into
+      indexable problems. Pair it with the BIT's prefix sum, and range-count
+      with point updates becomes two `O(log M)` operations.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      A company has `n` employees with certain salaries. Your task is to keep
+      track of the salaries and process queries.
+
+      ## Input
+
+      The first input line contains two integers `n` and `q`: the number of
+      employees and queries. The employees are numbered `1, 2, ..., n`.
+
+      The next line has `n` integers `p_1, p_2, ..., p_n`: each employee's
+      salary.
+
+      After this, there are `q` lines describing the queries. Each line has
+      one of the following forms:
+
+      - `! k x` : change the salary of employee `k` to `x`
+      - `? a b` : count the number of employees whose salary is between `a` and `b`
+
+      **Constraints**
+
+      - `1 <= n, q <= 2 * 10^5`
+      - `1 <= p_i <= 10^9`
+      - `1 <= k <= n`
+      - `1 <= x <= 10^9`
+      - `1 <= a <= b <= 10^9`
+
+      ## Output
+
+      Print the answer to each `?` query.
+
+      ## Example
+
+      Input:
+
+      ```
+      5 3
+      3 7 2 2 5
+      ? 2 3
+      ! 3 6
+      ? 2 3
+      ```
+
+      Output:
+
+      ```
+      3
+      2
+      ```
+
+      (Salaries `[3,7,2,2,5]`: two `2`s and one `3` are in `[2,3]` → `3`.
+      After setting employee 3 to `6`, salaries `[3,7,6,2,5]` has a `3` and a
+      `2` in `[2,3]` → `2`.)
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — scan employees per query, O(n · q)**
+
+      Keep the salary array; for `? a b` loop over all `n` employees counting
+      those in `[a, b]`; for `! k x` just overwrite `p[k]`. With `n = q = 2*10^5`
+      that's up to `4 * 10^10` steps. Too slow.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<long long> p(n + 1);
+          for (int i = 1; i <= n; i++) cin >> p[i];
+          while (q--) {
+              char t; cin >> t;
+              if (t == '!') { int k; long long x; cin >> k >> x; p[k] = x; }
+              else { long long a, b; cin >> a >> b;
+                  int cnt = 0;
+                  for (int i = 1; i <= n; i++) if (p[i] >= a && p[i] <= b) cnt++;
+                  cout << cnt << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`O(n · q)` — ~`4 * 10^10` worst case.*
+
+      **② Optimization — Fenwick over compressed salaries, O((n + q) log M)**
+
+      Compress all values that can appear (initial salaries, update targets,
+      query bounds) to ranks `1..M`; keep a BIT over ranks. Update moves one
+      point, query uses two prefix sums. This is the optimal tier.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<int> init(n);
+          vector<int> vals;                                   // all values that can appear
+          for (int i = 0; i < n; i++) { cin >> init[i]; vals.push_back(init[i]); }
+
+          struct Q { char t; int a, b; };                     // '!' -> a=k,b=x | '?' -> a=lo,b=hi
+          vector<Q> qs(q);
+          for (int i = 0; i < q; i++) {
+              char t; int a, b; cin >> t >> a >> b;
+              qs[i] = {t, a, b};
+              if (t == '!') vals.push_back(b);
+              else { vals.push_back(a); vals.push_back(b); }
+          }
+
+          sort(vals.begin(), vals.end());
+          vals.erase(unique(vals.begin(), vals.end()), vals.end());
+          auto idx = [&](int v) { return int(lower_bound(vals.begin(), vals.end(), v) - vals.begin()) + 1; };
+          int M = (int)vals.size();
+
+          vector<int> bit(M + 1, 0);
+          auto add = [&](int i, int v) { for (; i <= M; i += i & -i) bit[i] += v; };
+          auto sum = [&](int i) { int s = 0; for (; i > 0; i -= i & -i) s += bit[i]; return s; };
+
+          vector<int> emp(n);
+          for (int i = 0; i < n; i++) { emp[i] = init[i]; add(idx(init[i]), 1); }
+
+          for (auto &qq : qs) {
+              if (qq.t == '!') {
+                  int k = qq.a, nx = qq.b;
+                  add(idx(emp[k - 1]), -1);                   // remove the old salary
+                  emp[k - 1] = nx;
+                  add(idx(nx), 1);                            // insert the new salary
+              } else {
+                  int lo = qq.a, hi = qq.b;
+                  int up = sum(idx(hi));                       // # salaries <= hi
+                  int dn = (idx(lo) - 1 >= 1) ? sum(idx(lo) - 1) : 0;  // # salaries < lo
+                  cout << (up - dn) << "\n";
+              }
+          }
+          return 0;
+      }
+      ```
+
+      *`O((n + q) log M)` time, `O(M)` space with `M = O(n + q)`.*
+
+      **③ Alternative — segment tree over compressed values**
+
+      Build a segment tree over the compressed ranks storing a count per leaf
+      (range sum). Point updates and range-count queries come out to `O(log M)`
+      each — functionally identical to the BIT, just a bit more code. Fine if
+      you need to query more exotic aggregates later.
+
+      **④ Alternative — ordered multiset (count by order_of_key)**
+
+      If your language offers a tree/order-statistic set (e.g. a policy-based
+      tree), you can keep salaries in a multiset and answer `? a b` as
+      `order_of_key(b+1) - order_of_key(a)`. Updates require erasing/inserting
+      a value. Correct and readable, but the BIT-over-ranks version uses only
+      the standard library and is the most portable.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on **②**:
+
+      - **Compression set.** `vals` collects every initial salary, every `!`
+        target, and every `?` bound. After sort+unique, `lower_bound` maps any
+        value to a 1-based rank via `idx`. `M = vals.size()` is the BIT size —
+        bounded by `O(n + q)`, never the `10^9` raw value range.
+
+      - **Initial population.** For each employee `i`, set `emp[i] = init[i]`
+        and `add(idx(init[i]), 1)` — one count per rank.
+
+      - **Update `! k x`.** `emp[k-1]` is the employee's current salary; remove
+        its count (`add(idx(old), -1)`), overwrite `emp[k-1] = x`, add a count
+        at `add(idx(x), 1)`. The employee array is needed so a future `!` can
+        decrement the *current* salary.
+
+      - **Query `? a b`.** `up = sum(idx(hi))` counts salaries `<= hi`.
+        `dn = sum(idx(lo) - 1)` counts salaries `< lo`. Their difference is
+        the count in `[lo, hi]`. Because both `lo` and `hi` are in `vals`
+        (they were pushed), `idx` points exactly at them.
+
+      - **Why updates don't break prefix counts.** The BIT recomputes every
+        affected prefix automatically as you add `±1`, keeping all `sum`
+        queries consistent.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5, q = 3`, salaries `[3, 7, 2, 2, 5]`, queries
+      `? 2 3`, `! 3 6`, `? 2 3`.
+
+      Collected values: `{3,7,2,2,5, 2,3, 6, 2,3}` → sorted unique
+      `[2, 3, 5, 6, 7]` → ranks `2→1, 3→2, 5→3, 6→4, 7→5`.
+
+      Initial counts by rank: rank1(2)=2, rank2(3)=1, rank3(5)=1, rank5(7)=1.
+
+      | query | ranks used | counts | result |
+      |-------|-----------|--------|--------|
+      | `? 2 3` | sum(rank3) − sum(rank2−1) | `sum(2) − sum(0)` = `3 − 0` | **3** |
+      | `! 3 6` | add(rank3,−1); add(rank4,+1) | rank2→0, rank4→1 | — |
+      | `? 2 3` | sum(rank3) − sum(rank2−1) | `sum(2)` = `rank1+rank2` = `2` → `2−0` | **2** |
+
+      After the update, `sum(2) = rank1(2)=2 + rank2(3)=0 = 2`, so the answer is
+      `2` (salaries `3` and `2` are in `[2,3]`).
+
+      Expected (sample) — `3` `2`. Actual — `3` `2`. Match.
+  - type: flowchart
+    title: "Fenwick over compressed salary values"
+    nodes: ["collect all salaries, update targets, query bounds", "sort + unique -> ranks 1..M", "insert initial salaries into BIT", "read query", "!", "?"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4, label: "update k -> x"}
+      - {from: 3, to: 5, label: "count in [a,b]"}
+      - {from: 4, to: 3}
+      - {from: 5, to: 3}
+  - type: mcq
+    prompt: "Why are the query bounds a and b included in the coordinate-compression set, even though they are never stored as a salary?"
+    options:
+      - "To make the output readable."
+      - "Because count(<=b) and count(<a) are answered by two prefix sums, and each needs a rank; the bounds must be in the compressed set so indexOf(a) and indexOf(b) map to an existing rank."
+      - "Because the BIT can only store integers already present in vals."
+      - "To sort the queries by difficulty."
+    answer: 1
+    explanation: "A ? a b query is answered as sum(rank(b)) - sum(rank(a)-1), so we need exact ranks for a and b. If a or b never appeared as a salary/update value, they still must be compressed so lower_bound gives a valid rank. Including them guarantees that; every value that can be queried or stored has a rank."
+---

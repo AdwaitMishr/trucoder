@@ -1,0 +1,212 @@
+---
+id: subarray-sums-ii
+title: "Subarray Sums II"
+difficulty: medium
+order: 54
+tags:
+  - sorting-searching
+  - prefix-sum
+  - hashmap
+blocks:
+  - type: markdown
+    content: |
+      # Subarray Sums II — prefix sums + hashing for negative values
+
+      This is **Subarray Sums I but the values may be negative**. That trivial
+      change kills the sliding window: removing an element from the left could
+      *raise* the sum (if the element was negative), so the window is no longer
+      monotone and the two-pointer shrink is invalid. We need a different tool.
+
+      ## Prefix sums turn subarray sums into prefix differences
+
+      Define `P[0] = 0` and `P[i] = a_0 + ... + a_{i-1}` (sum of the first `i`
+      elements). Then any subarray sum is a difference of two prefixes:
+
+      ```
+      sum(a[l..r]) = P[r+1] - P[l]
+      ```
+
+      We want `sum(a[l..r]) = x`, i.e. `P[r+1] - P[l] = x`, which we rewrite
+      as:
+
+      ```
+      P[l] = P[r+1] - x
+      ```
+
+      So, for each right boundary `r+1`, the number of valid subarrays ending
+      there equals the number of earlier prefixes `P[l]` whose value is
+      `P[r+1] - x`. If we store every prefix value's **frequency** in a hash
+      map as we sweep right, each of those lookups is O(1).
+
+      ## The one-pass algorithm
+
+      Maintain `pref = P[r+1]` as we add elements. Before recording the current
+      prefix, look up how many previous prefixes equal `pref - x`, add that to
+      the answer, then increment `count[pref]`. Initialise `count[0] = 1`
+      because the empty prefix `P[0] = 0` is already "seen" and models
+      subarrays that start at index 0.
+
+      With negative elements there may be many prefix sums sharing a value, so
+      we count *multiplicities* — that is what makes the answer bigger than a
+      simple existence check.
+
+      **Time:** O(n) expected, **Space:** O(n).
+
+      :::tip
+      **Interview tip:** "count subarrays with sum k" (even with negative
+      numbers) is a classic HashMap prefix-sums problem and appears
+      frequently in phone screens. The key line is conceptual: *a subarray sum
+      is `prefix[r] - prefix[l]`, so the count equals how often `pref - x` has
+      appeared before*. Hardcode the `count[0] = 1` initialisation — the
+      classic bug is forgetting it and missing subarrays that start at index 0.
+      :::
+  - type: markdown
+    content: |
+      # Question — Subarray Sums II
+
+      Given an array of `n` integers (which may be zero, positive or negative),
+      your task is to count the number of subarrays having sum `x`.
+
+      **Input**
+
+      The first input line has two integers `n` and `x`: the size of the array
+      and the target sum.
+
+      The next line has `n` integers `a_1, a_2, ..., a_n`: the contents of the
+      array.
+
+      **Output**
+
+      Print one integer: the number of subarrays.
+
+      **Constraints**
+
+      - `1 <= n <= 2*10^5`
+      - `-10^9 <= x, a_i <= 10^9`
+
+      **Example**
+
+      Input:
+
+      ```
+      5 7
+      2 -1 3 5 -2
+      ```
+
+      Output:
+
+      ```
+      2
+      ```
+
+      (The two subarrays are `[2,-1,3,5,-2]` (the whole array) and `[-1,3,5]`.)
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n²) time, O(1) space**
+
+      Try every `(l, r)` pair and accumulate the sum directly. With `n = 2*10^5`
+      the ~`4*10^10` inner steps are far too slow, and (unlike Subarray Sums I)
+      we cannot even break early because a later negative element could restore
+      the sum.
+
+      ```cpp
+      long long brute(int n, long long x, const vector<long long>& a) {
+          long long count = 0;
+          for (int l = 0; l < n; ++l) {
+              long long s = 0;
+              for (int r = l; r < n; ++r) {
+                  s += a[r];
+                  if (s == x) count++;
+              }
+          }
+          return count;
+      }
+      ```
+
+      **② Optimisation — prefix sums + hashmap, O(n) time, O(n) space**
+
+      Sweep once, building prefix sums while counting how often each prefix
+      value has appeared. For each right boundary, the subarrays ending there
+      are the earlier prefixes equal to `pref - x`.
+
+      ```cpp
+      long long solve(int n, long long x, const vector<long long>& a) {
+          unordered_map<long long, long long> cnt;
+          cnt[0] = 1;                    // the empty prefix P[0] = 0 is "seen"
+          long long pref = 0, count = 0;
+          for (long long v : a) {
+              pref += v;
+              auto it = cnt.find(pref - x);
+              if (it != cnt.end()) count += it->second; // subarrays ending here
+              cnt[pref]++;               // record current prefix for later ends
+          }
+          return count;
+      }
+      ```
+
+      **③ Alternative — divide and conquer, O(n log n)**
+
+      Recursively count subarrays fully in the left half, fully in the right
+      half, then sum over the two half's boundary the pairs whose prefix
+      difference sums to `x`. Correct, but the hashmap linear scan is simpler
+      and optimal.
+
+      **④ Further optimisation** — O(n) is optimal: you must at least read the
+      array (Ω(n)) and the count may depend on every prefix, so the hashmap
+      solution cannot be improved asymptotically.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Step through the O(n) solution in **②**:
+
+      - `cnt` maps a prefix value to how many times it has appeared so far.
+      - `cnt[0] = 1` seeds the empty prefix. Without it, a subarray that starts
+        exactly at index 0 (so `l = 0`, `P[l] = P[0] = 0`) would never be
+        counted, because we only ever look at prefixes that came *before* the
+        current position.
+      - For each element we advance `pref`. If `pref - x` was seen before, then
+        for each such earlier prefix `P[l]` we have `pref - P[l] = x`, i.e. a
+        valid subarray `[l, r]`. We add *all* of them via `cnt[pref - x]`.
+      - Only then do we record the current `pref`, so a subarray of length 0
+        (same index for `l` and `r`) is never counted.
+
+      Because we process elements left to right and every subarray has a unique
+      right boundary, each valid subarray is counted exactly once — no double
+      counting, no omissions. `pref` can reach `n * 10^9 = 2*10^14`, so `long
+      long` is required.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace `solve(5, 7, [2,-1,3,5,-2])`. `cnt` is seeded with `{0:1}` and the
+      running answer `count = 0`:
+
+      | i | v | pref | pref - x | cnt[pref - x] | count | cnt after |
+      |---|-----|-------|----------|---------------|-------|-----------|
+      | - | - | 0 | - | - | 0 | {0:1} |
+      | 0 | 2 | 2 | -5 | 0 | 0 | {0:1,2:1} |
+      | 1 | -1 | 1 | -6 | 0 | 0 | {0:1,2:1,1:1} |
+      | 2 | 3 | 4 | -3 | 0 | 0 | {0:1,2:1,1:1,4:1} |
+      | 3 | 5 | 9 | 2 | 1 | 1 | {...,9:1} |
+      | 4 | -2 | 7 | 0 | 1 | 2 | {...,7:1} |
+
+      - At `i = 3`, `pref = 9` and `pref - x = 2`; prefix `2` appeared once (at
+        `P[1]`), giving subarray `[1..3]` = `[-1,3,5]` (sum 7).
+      - At `i = 4`, `pref = 7` and `pref - x = 0`; the empty prefix appeared
+        once, giving the whole array `[2,-1,3,5,-2]` (sum 7).
+
+      Return `2`, matching the sample output.
+  - type: mcq
+    prompt: 'Why can we not use the sliding-window approach from Subarray Sums I here?'
+    options:
+      - 'Because the answer is too large to fit in an int'
+      - 'Because a negative value inside the window can be removed and raise the sum, so the window sum is not monotone and shrinking is unreliable'
+      - 'Because the target x can also be 0'
+      - 'Because prefix sums cannot be negative'
+    answer: 1
+    explanation: 'The sliding window depends on the window sum being monotone in the left pointer (removing an element always lowers the sum). With negative numbers, removing a negative element increases the sum, so the window can oscillate and there is no safe shrink — you switch to prefix sums plus a hashmap that counts matching prefixes.'
+type: content
+---

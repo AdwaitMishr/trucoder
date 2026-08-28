@@ -1,0 +1,193 @@
+---
+id: advertisement
+title: Advertisement — Largest Rectangle in a Histogram
+difficulty: medium
+order: 351
+tags:
+  - monotonic-stack
+  - histogram
+  - two-pointers
+  - divide-and-conquer
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — largest rectangle in a histogram
+
+      A row of billboards has heights; renting a contiguous segment costs
+      `segment length × minimum height in the segment`. You want the **largest
+      possible rented area**. This is exactly the classic *largest rectangle in
+      a histogram*: every rectangle spans some `[l, r]` and has height equal to
+      the minimum bar in that span.
+
+      **The key idea — 'each bar is the bottleneck of some optimal rectangle.'**
+      For a fixed bar `i`, consider the widest rectangle whose height is exactly
+      `h[i]`: it extends left until the first bar strictly shorter than `h[i]`,
+      and right until the first bar strictly shorter than `h[i]`. That rectangle
+      is the *best* one where `h[i]` is the limiting height. The global optimum
+      is the maximum over all `i` of
+      `h[i] × (right_boundary(i) − left_boundary(i) − 1)`.
+
+      **Finding the boundaries with a monotonic stack.** A **monotonic
+      (non-decreasing) stack** of indices lets us discover, in one left-to-right
+      sweep, for every bar the index of the *nearest smaller element* on each
+      side. When we pop a bar because we meet a shorter one on the right, that
+      shorter bar fixes its right boundary; the index currently second on the
+      stack is its left boundary. Each bar is pushed and popped exactly once, so
+      the whole sweep is **O(n)**.
+
+      This single-stack trick is the canonical solution and appears (with a
+      bilinear/DP twist) as the CSES problem **Advertisement**.
+
+      :::tip
+      **Interview tip:** Largest-rectangle-in-histogram is one of the most
+      repeated stack questions. The pattern — a **monotonic stack that pops on a
+      smaller element to compute bounded-subarray maxima** — also solves
+      nearest-smaller-values, maximal rectangles in binary matrices, and 'sum of
+      subarray minimums'. If you can write the single-sweep stack cleanly,
+      you've unlocked a whole family.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      There are `n` billboards in a row, with heights `h[0]…h[n−1]`. You may rent
+      **any contiguous segment** of billboards; its rental price is the size of
+      the segment times the height of the *shortest* billboard inside it.
+
+      What is the **largest** total price you can achieve — i.e. the area of the
+      largest rectangle you can draw inside the histogram?
+
+      **Input.** The first line has `n`. The second line has `n` integers, the
+      billboard heights.
+
+      **Output.** One integer: the maximum achievable area.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 2·10^5`
+      - `1 ≤ h[i] ≤ 10^9`
+
+      **Sample.** (heights `2 1 5 6 2 3`)
+
+      **Input:**
+      ```
+      6
+      2 1 5 6 2 3
+      ```
+
+      **Output:**
+      ```
+      10
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — expand each bar — O(n²).** For each `i`, expand the
+      widest range where every bar is `≥ h[i]`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; if(!(cin>>n)) return 0;
+          vector<long long> h(n); for(auto&x:h) cin>>x;
+          long long best = 0;
+          for(int i=0;i<n;i++){
+              int l=i, r=i;
+              while(l>0   && h[l-1] >= h[i]) l--;   // extend left
+              while(r+1<n && h[r+1] >= h[i]) r++;   // extend right
+              best = max(best, h[i] * (r - l + 1));
+          }
+          cout << best << "\n";
+      }
+      ```
+      *Complexity: O(n²) — at `n = 2·10^5` this is ≈ 4·10^10 steps, too slow.*
+
+      **② Optimization — monotonic stack in one sweep — O(n) (`n ≤ 2·10^5`).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; if(!(cin>>n)) return 0;
+          vector<long long> h(n); for(auto&x:h) cin>>x;
+          h.push_back(0);                        // sentinel pops everything left
+          vector<int> st;                        // indices with non-decreasing heights
+          long long best = 0;
+          for(int i=0;i<=n;i++){
+              while(!st.empty() && h[st.back()] >= h[i]){
+                  long long ht = h[st.back()];
+                  st.pop_back();
+                  long long w = st.empty() ? i : i - st.back() - 1;  // right=i, left=next-on-stack
+                  best = max(best, ht * w);
+              }
+              st.push_back(i);
+          }
+          cout << best << "\n";
+      }
+      ```
+      *Complexity: O(n) time, O(n) space. Each index enters and leaves the stack
+      once, so the total work over the sweep is linear.*
+
+      **④ Alternative — divide & conquer on the minimum.** Find the minimum bar
+      in `[l,r]` (via RMQ / segment tree), the best rectangle spanning it is the
+      whole range; recurse on the left and right partitions (which must lie
+      strictly below the minimum). O(n log n) with a segment tree, O(n) with a
+      *Cartesian tree* / monotonic-stack-based tree. Elegant, and a different
+      mental model — but the single sweep above is simpler and faster.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve(n, h)` — O(n). Key lines:
+
+      1. **`h.push_back(0)`** — a zero sentinel forces every remaining bar to be
+         popped at the end, so no rectangle is missed.
+      2. **`while (h[st.back()] >= h[i])`** — pop any bar taller or equal to the
+         current one; the *current* index `i` is the popped bar's **right
+         boundary** (first strictly shorter bar to its right).
+      3. **`w = i - st.back() - 1`** after the pop — the new stack top is the
+         popped bar's **left boundary** (previous shorter bar), so `w` = width of
+         the widest rectangle of height `ht`.
+      4. **`best = max(best, ht * w)`** keeps the global maximum.
+      5. **`st.push_back(i)`** — the sweep always re-inserts the current index,
+         maintaining the non-decreasing invariant.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 6`, `h = [2, 1, 5, 6, 2, 3]` (+ sentinel `0`).
+
+      Sweep `i` from 0 to 6, popping when the top is `≥ h[i]`:
+
+      - `i=0` push (bar `2`). Stack: [0]
+      - `i=1` (`1`): pop `0` (ht 2): `w = 1-0-1 = 0`? — stack empty, so
+        `w = 1` → area `2·1=2`. Push `1`. Stack: [1]
+      - `i=2` (`5`): stack top `1` (h=1 ≤ 5) not popped. Push `2`. Stack: [1,2]
+      - `i=3` (`6`): no pop. Push `3`. Stack: [1,2,3]
+      - `i=4` (`2`): pop `3` (ht 6), `w=4-2-1=1` → `6`. pop `2` (ht 5),
+        `w=4-1-1=2` → `5·2=10`. Now top `1` (h=1 ≤ 2). Push `4`. Stack: [1,4]
+      - `i=5` (`3`): no pop. Push `5`. Stack: [1,4,5]
+      - `i=6` (`0`): pop `5` (ht 3), `w=6-4-1=1` → `3`. pop `4` (ht 2),
+        `w=6-1-1=4` → `2·4=8`. pop `1` (ht 1), `w=6` (empty) → `1·6=6`. Push `6`.
+
+      Max area = **10** (the rectangle of height `5` spanning bars `5` and `6`,
+      width 2). ✓ matches the sample.
+
+  - type: mcq
+    prompt: "When the sweep pops a bar with height ht, why is i - st.back() - 1 actually its maximum possible width?"
+    options:
+      - "Because i is the first strictly shorter bar on the right and st.back() is the nearest shorter-or-equal bar on the left, so the popped bar can spread exactly between them."
+      - "Because i counts every billboard in the row."
+      - "Because st.back() is always the tallest bar."
+      - "Because ht is the same for every bar."
+    answer: 0
+    explanation: "The popped bar is strictly greater than h[i] (so i bounds its right), and every bar after st.back() is at least ht (so the stack's previous top bounds its left). Hence the widest rectangle of height exactly ht spans indices (st.back(), i), of width i - st.back() - 1. Taking this over all bars yields the largest rectangle."
+type: content
+---

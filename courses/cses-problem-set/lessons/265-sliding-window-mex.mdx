@@ -1,0 +1,266 @@
+---
+id: sliding-window-mex
+title: "Sliding Window Mex"
+type: content
+difficulty: medium
+order: 265
+tags:
+  - sliding-window
+  - mex
+  - frequency-array
+  - set
+blocks:
+  - type: markdown
+    content: |
+      # Sliding Window Mex — smallest missing non-negative integer in each window
+
+      The **mex** (*minimum excluded value*) of a multiset is the smallest
+      non-negative integer that does **not** appear in it. Example:
+      `mex({0, 1, 3}) = 2`, `mex({12}) = 0`, `mex({0, 1, 2}) = 3`.
+
+      Here we slide a fixed-length window of size `k` over an array and report
+      the mex of every window. A naive read of each window is expensive, so we
+      need a way to maintain the mex while only *one element leaves* and *one
+      element enters* each step.
+
+      ## The key bound: mex of a size-k window is at most k
+
+      A window of `k` elements can hold at most `k` **distinct** values. Among
+      the `k + 1` candidates `0, 1, …, k`, at least one is therefore missing, so
+
+      ```
+      mex(window) <= k
+      ```
+
+      Consequences:
+
+      - Values `> k` never influence the mex → we can simply **ignore** them
+        when sliding.
+      - We only ever need counts for the numbers `0..k`, which gives us a
+        compact `freq[]` array of size `k + 1`.
+
+      ## Maintaining "which numbers are missing" with a set
+
+      Keep `cnt[v]` = how many copies of `v` (for `v ≤ k`) are inside the
+      window, alongside a `set<int>` of values currently **missing** from the
+      window (initialised with `0..k`).
+
+      - **Add** value `v ≤ k`: if `cnt[v]` becomes `1` (was `0`), remove `v`
+        from the missing set.
+      - **Remove** value `v ≤ k`: if `cnt[v]` becomes `0`, put `v` back into
+        the missing set.
+
+      Then the window's mex is simply the **smallest** element of the missing
+      set — `*set.begin()`. Because the missing set is always non-empty (there
+      is always at least one of `0..k` absent), this is always well defined.
+
+      :::tip
+      **Interview tip:** "do X for every sliding window" almost always reduces
+      to *maintain a counter of window content plus one extra structure* (a
+      set, a heap, a second pointer, a Fenwick tree) that answers the query.
+      For mex specifically, the `mex ≤ window-size` bound is the catch that
+      lets you ignore large values — call it out explicitly, it is the crux an
+      interviewer is fishing for.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given an array of `n` integers and a window length `k`. A
+      sliding window of size `k` moves over the array from left to right, one
+      position at a time. For **each** of the `n - k + 1` windows, compute the
+      **mex** of the window — the smallest non-negative integer that does not
+      appear in it.
+
+      ## Input
+
+      The first input line has two integers `n` and `k`. The next line has `n`
+      integers `a_1, a_2, …, a_n`.
+
+      **Constraints:** `1 <= k <= n <= 2*10^5`, `0 <= a_i <= 10^9`
+
+      ## Output
+
+      Print `n - k + 1` integers separated by spaces: the mex of each window in
+      order.
+
+      ## Sample
+
+      **Input:**
+      ```
+      6 3
+      0 1 2 0 1 3
+      ```
+      **Output:**
+      ```
+      3 3 3 2
+      ```
+      The windows are `[0,1,2]`, `[1,2,0]`, `[2,0,1]`, `[0,1,3]`; only the
+      last contains value `3` (its mex drops from `3` to `2`). All others miss
+      `3`, so their mex is `3`.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·k)**
+
+      For every window, scan its `k` elements into a `present[]` array of size
+      `k+1` (only count values `≤ k`), then scan `0..k` to find the first
+      missing value. Correct but rebuilds everything every step.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<int> a(n); for(auto&v:a) cin>>v;
+          for(int l=0; l<n-k+1; l++){
+              vector<int> cnt(k+2,0);
+              for(int i=l;i<l+k;i++) if(a[i]<=k) cnt[a[i]]++;
+              int mex=0; while(cnt[mex]>0) mex++;      // first missing value
+              cout<<(l?" ":"")<<mex;
+          }
+          cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O((n-k+1)*k)`, i.e. O(n·k) in the worst case — blows up for
+      `n = 2*10^5`.*
+
+      **② Optimization — freq array + set of missing values, O(n log k) (optimal)**
+
+      Slide the window while maintaining `cnt[v]` (`v ≤ k`) and a `set` of
+      currently-missing values. Per step we do O(log k) set work, so the whole
+      run is O(n log k). This is the tier we compile and verify.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k;
+          vector<int> a(n); for(auto&v:a) cin>>v;
+          vector<int> cnt(k+2,0);
+          set<int> missing;
+          for(int v=0; v<=k; v++) missing.insert(v);   // mex of a size-k window is at most k
+          auto add=[&](int v){ if(v<=k){ if(cnt[v]==0) missing.erase(v); cnt[v]++; } };
+          auto rem=[&](int v){ if(v<=k){ cnt[v]--; if(cnt[v]==0) missing.insert(v); } };
+          for(int i=0;i<k;i++) add(a[i]);
+          vector<int> out; out.push_back(*missing.begin());
+          for(int i=k;i<n;i++){ rem(a[i-k]); add(a[i]); out.push_back(*missing.begin()); }
+          for(int i=0;i<(int)out.size();i++) cout<<(i?" ":"")<<out[i];
+          cout<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n log k)` time, `O(k)` space. `k ≤ 2*10^5` → ~2 million set ops, far
+      inside the limit.*
+
+      **③ Further optimization — segment tree over counts (first zero), O(n log k)**
+
+      Instead of a set, hang a segment tree over positions `0..k` storing the
+      count in each, and query the leftmost position whose count is `0`
+      (descend toward the smallest index with a zero). Adds and removals are
+      point updates; the mex-finding descent is O(log k). Same big-O, but
+      avoids per-step set rebalancing overhead and shows a reusable
+      "range-min on counts" template.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      struct Seg { int n; vector<int> mn;
+          Seg(int n_):n(n_){mn.assign(4*n,0);}
+          void upd(int p,int d,int nd,int l,int r){ if(r-l==1){mn[nd]+=d;return;}
+              int m=(l+r)/2; if(p<m) upd(p,d,nd*2,l,m); else upd(p,d,nd*2+1,m,r);
+              mn[nd]=min(mn[nd*2],mn[nd*2+1]); }
+          int firstZero(){ int nd=1,l=0,r=n; while(r-l>1){int m=(l+r)/2;
+              if(mn[nd*2]==0) nd=nd*2,r=m; else nd=nd*2+1,l=m; } return l; } };
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n,k; cin>>n>>k; vector<int> a(n); for(auto&v:a) cin>>v;
+          Seg seg(k+1);
+          auto add=[&](int v){ if(v<=k) seg.upd(v,+1,1,0,k+1); };
+          auto rem=[&](int v){ if(v<=k) seg.upd(v,-1,1,0,k+1); };
+          for(int i=0;i<k;i++) add(a[i]);
+          vector<int> out; out.push_back(seg.firstZero());
+          for(int i=k;i<n;i++){ rem(a[i-k]); add(a[i]); out.push_back(seg.firstZero()); }
+          for(int i=0;i<(int)out.size();i++) cout<<(i?" ":"")<<out[i];
+          cout<<"\n"; return 0;
+      }
+      ```
+
+      *`O(n log k)` time, `O(k)` space.*
+
+      **④ Alternative algorithm** — there is no asymptotically better approach:
+      finding a mex is an "order/absence" query over a changing multiset, and
+      any solution must maintain which values are present cheaply — a set, a
+      Fenwick tree, or a segment tree all do the same O(log k) per slide. So
+      tiers ② and ③ are the two real implementations to keep in mind; skip a
+      fourth.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Ignore everything > k.** `add`/`rem` touch `cnt[]` only when `v <= k`;
+        values above `k` are dropped. This is exactly the `mex <= k` bound doing
+        its job — it bounds our arrays at `k+1` and keeps the missing set tiny.
+      - **The missing set is an "absence ledger".** Inserting `0..k` at the
+        start, we erase a value the moment it first appears (`cnt[v] 0→1`) and
+        re-insert it the moment the last copy leaves (`cnt[v] 1→0`). The set is
+        therefore always exactly the values absent from the window.
+      - **mex = smallest missing.** `*missing.begin()` is the smallest
+        non-negative integer not inside the window — precisely the mex.
+      - **Slide with two O(1)-ish moves.** Each step removes `a[i-k]` (the
+        element leaving) and adds `a[i]` (the one entering). The set's
+        smallest element is re-read after each slide.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 6, k = 3`, `a = [0, 1, 2, 0, 1, 3]`. `missing = {0,1,2,3}`
+      initially; `cnt[]` all zero.
+
+      **Build window [0,1,2]:**
+      - add `0` → `cnt[0]=1`, erase `0`. missing `{1,2,3}`.
+      - add `1` → `cnt[1]=1`, erase `1`. missing `{2,3}`.
+      - add `2` → `cnt[2]=1`, erase `2`. missing `{3}`.
+      - mex = `*missing.begin() = 3`. **Output 3.**
+
+      **Slide → [1,2,0]** (remove `a[0]=0`, add `a[3]=0`):
+      - rem `0` → `cnt[0]=0`, insert `0`. missing `{0,3}`.
+      - add `0` → `cnt[0]=1`, erase `0`. missing `{3}`.
+      - mex = `3`. **Output 3.**
+
+      **Slide → [2,0,1]** (remove `a[1]=1`, add `a[4]=1`):
+      - rem `1` → insert `1`. missing `{1,3}`; add `1` → erase `1`. missing `{3}`.
+      - mex = `3`. **Output 3.**
+
+      **Slide → [0,1,3]** (remove `a[2]=2`, add `a[5]=3`):
+      - rem `2` → `cnt[2]=0`, insert `2`. missing `{2,3}`.
+      - add `3` → `cnt[3]=1`, erase `3`. missing `{2}`.
+      - mex = `*missing.begin() = 2`. **Output 2.**
+
+      Result: `3 3 3 2` — matches the expected sample.
+  - type: flowchart
+    title: "Sliding-window mex via freq + missing set"
+    nodes: ["init missing = {0..k}, cnt all 0", "add first k elements (erase on first appearance)", "mex = *missing.begin()", "slide: rem a[i-k], add a[i]", "update cnt + missing set", "output mex for every window"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 3}
+  - type: mcq
+    prompt: "For a window of length k, why can we ignore any array value greater than k?"
+    options:
+      - "Because values larger than k are always distinct within the window."
+      - "Because the mex of a size-k window is at most k, so only values <= k can ever be the mex or block it."
+      - "Because k is always small enough that big values never matter."
+      - "Because the answer only depends on the number of elements, not their values."
+    answer: 1
+    explanation: "A window of k elements contains at most k distinct values, so among the k+1 numbers 0..k at least one is missing — hence mex <= k. A value v > k can therefore never be the answer and never changes whether any number 0..k is present, so ignoring it cannot change any mex."
+---

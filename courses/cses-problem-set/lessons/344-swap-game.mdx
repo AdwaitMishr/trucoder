@@ -1,0 +1,247 @@
+---
+id: swap-game
+title: "Swap Game"
+difficulty: hard
+order: 344
+tags:
+  - graph
+  - bfs
+  - permutation
+  - shortest-path
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — shortest path over permutation states
+
+      We have an `n·n` grid holding the numbers `1..n²`. In one move you swap
+      two **adjacent** cells (sharing an edge). The task: reach the sorted
+      arrangement (values `1..n²` in row-major order) with the *fewest* moves.
+
+      This is a **shortest-path (unweighted BFS) problem over states**, where a
+      state is an entire arrangement of the grid. The key realizations:
+
+      - **State = permutation.** A full arrangement of the `n²` cells is one
+        node in the search graph. The graph is undirected (swapping back
+        undoes a move), and edges connect arrangements differing by one
+        adjacent swap.
+      - **Goal.** The identity arrangement.
+      - **BFS** explores arrangements in increasing move count, so the first
+        time we reach the goal the number of moves is minimal.
+
+      Because `n ≤ 4`, each grid has at most `n² = 16` cells. The direct BFS
+      from the start keeps a visited map and expands the frontier level by
+      level; the number of states reachable within the small answer depth stays
+      manageable, which is why this simple approach is accepted.
+
+      **Time:** `O(V + E)` where `V` is the number of explored arrangements and
+      each has `O(n²·4)` transitions. Overall tiny for `n ≤ 4`.
+
+      :::tip
+      **Interview tip:** Whenever the "move" acts on a whole configuration
+      (grid, board, string), the configuration IS the graph node. BFS gives the
+      minimum number of moves. When the answer space is large, the follow-up
+      trick shown in tier ② is **bidirectional BFS**, which explores both from
+      the start *and* from the goal and meets in the middle.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given an `n·n` grid where every cell holds a distinct integer from
+      `1` to `n²`. In one move you swap two adjacent cells (cells that share a
+      side). You want the cells to hold the numbers `1,2,…,n²` in **row-major
+      order** (top-left cell is `1`, the cell to its right is `2`, and so on).
+
+      **Input.** The first input line has the integer `n`. Then `n` lines follow,
+      each with `n` integers — the current arrangement.
+
+      **Output.** Print the **minimum number of moves** needed. An answer always
+      exists.
+
+      **Constraints.**
+      - `1 ≤ n ≤ 4`
+      - Each number from `1` to `n²` appears exactly once.
+
+      **Sample.**
+
+      **Input:**
+      ```
+      3
+      1 2 6
+      7 5 3
+      4 8 9
+      ```
+
+      **Output:**
+      ```
+      2
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — BFS from start (the accepted baseline for `n ≤ 4`).**
+      Encode an arrangement as a string of length `n²`; from each state, try
+      swapping the cell at `(r,c)` with each in-grid neighbor and record the
+      distance of any new state. Stop as soon as the goal is reached.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<int> g(n*n);
+          for(int i=0;i<n*n;i++) cin >> g[i];
+          string start; for(int v:g) start += char('0'+v);
+          string target;
+          for(int i=1;i<=n*n;i++) target += char('0'+i);
+          if(start==target){ cout<<0<<"\n"; return 0; }
+          unordered_map<string,int> dist; dist[start]=0;
+          queue<string> q; q.push(start);
+          int dr[4]={-1,1,0,0}, dc[4]={0,0,-1,1};
+          while(!q.empty()){
+              string s=q.front(); q.pop();
+              int d=dist[s];
+              for(int r=0;r<n;r++) for(int c=0;c<n;c++){
+                  for(int k=0;k<4;k++){
+                      int nr=r+dr[k], nc=c+dc[k];
+                      if(nr<0||nr>=n||nc<0||nc>=n) continue;
+                      int p=r*n+c, np=nr*n+nc;
+                      string t=s; swap(t[p],t[np]);
+                      if(dist.count(t)) continue;
+                      dist[t]=d+1;
+                      if(t==target){ cout<<d+1<<"\n"; return 0; }
+                      q.push(t);
+                  }
+              }
+          }
+          cout<<-1<<"\n";
+          return 0;
+      }
+      ```
+      *Complexity: BFS over the explored arrangement graph — fine because `n ≤ 4`.*
+
+      **② Optimization — bidirectional BFS.** Grow the frontier from the start
+      **and** from the goal simultaneously, expanding whichever side is smaller.
+      The first arrangement reached from both sides fixes the distance as
+      `d_start + d_goal`. This can shrink the explored state set by a factor
+      roughly equal to squaring the search radius.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<int> g(n*n); for(int i=0;i<n*n;i++) cin>>g[i];
+          string start; for(int v:g) start+=char('0'+v);
+          string target; for(int i=1;i<=n*n;i++) target+=char('0'+i);
+          if(start==target){ cout<<0<<"\n"; return 0; }
+          int dr[4]={-1,1,0,0}, dc[4]={0,0,-1,1};
+          unordered_map<string,int> d1,d2; queue<string> q1,q2;
+          d1[start]=0; q1.push(start); d2[target]=0; q2.push(target);
+          while(!q1.empty() && !q2.empty()){
+              if(q1.size()<=q2.size()){
+                  string s=q1.front(); q1.pop(); int cur=d1[s];
+                  for(int r=0;r<n;r++)for(int c=0;c<n;c++)for(int k=0;k<4;k++){
+                      int nr=r+dr[k],nc=c+dc[k]; if(nr<0||nr>=n||nc<0||nc>=n)continue;
+                      string t=s; swap(t[r*n+c],t[nr*n+nc]);
+                      if(d1.count(t))continue; d1[t]=cur+1;
+                      if(d2.count(t)){ cout<<cur+1+d2[t]<<"\n"; return 0; }
+                      q1.push(t);
+                  }
+              } else {
+                  string s=q2.front(); q2.pop(); int cur=d2[s];
+                  for(int r=0;r<n;r++)for(int c=0;c<n;c++)for(int k=0;k<4;k++){
+                      int nr=r+dr[k],nc=c+dc[k]; if(nr<0||nr>=n||nc<0||nc>=n)continue;
+                      string t=s; swap(t[r*n+c],t[nr*n+nc]);
+                      if(d2.count(t))continue; d2[t]=cur+1;
+                      if(d1.count(t)){ cout<<d1[t]+cur+1<<"\n"; return 0; }
+                      q2.push(t);
+                  }
+              }
+          }
+          return 0;
+      }
+      ```
+      *Complexity: still BFS, but the explored frontier is dramatically smaller
+      (frontiers meet near half the answer depth).*
+
+      **④ Alternative — informed search (A\* / IDA\*).** Instead of expanding by
+      breadth, expand the node with the smallest `g + h` where `g` is moves used
+      and `h` is an admissible heuristic such as the **sum of Manhattan
+      distances** each number is from its target cell. Because `h` never
+      overestimates, the first goal popped is optimal, and the heuristic focuses
+      the search far from the goal. This is a "smarter-frontier" alternative to
+      BFS for large or hard instances.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `minMoves(grid)` — BFS. Key lines:
+
+      1. **`start` / `target`** — the grid packed into a string of length `n²`
+         so a whole arrangement is a single key (fast hashing, easy goal test).
+      2. **`dist` map + frontier `q`** — standard unweighted BFS bookkeeping;
+         each state's distance is its move count.
+      3. **Neighbor expansion** — from each cell `(r,c)` swap with the 4
+         in-grid neighbours, skipping states already visited to avoid cycles.
+      4. **Early exit** — the moment a neighbour equals `target` we return
+         `d+1`; because BFS works in levels, this is the minimum.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 3`, grid shown below. Target is `1 2 3 4 5 6 7 8 9`.
+
+      ```
+      1 2 6        positions: 1 2 6
+      7 5 3   →         7 5 3
+      4 8 9             4 8 9
+      ```
+
+      Cells `3` (row 1, col 2) and `6` (row 0, col 2) are swapped; cells `4`
+      (row 2, col 0) and `7` (row 1, col 0) are swapped. Both pairs are
+      **vertical neighbours**, so each is one valid move:
+
+      - Move 1: swap `6`↔`3` → `1 2 3 / 7 5 6 / 4 8 9`.
+      - Move 2: swap `7`↔`4` → `1 2 3 / 4 5 6 / 7 8 9`.
+
+      Two moves reach the goal; no single move can (it would fix only one of the
+      two misplaced cycles), so the minimum is **2**. ✓ matches the sample.
+
+  - type: flowchart
+    title: "BFS over arrangements"
+    nodes:
+      - "Encode start arrangement"
+      - "Queue of states, dist=0"
+      - "Pop state, expand 4 neighbours"
+      - "Seen before?"
+      - "Visit, dist++, goal?"
+      - "Return dist"
+    edges:
+      - {from: 0, to: 1, label: "src"}
+      - {from: 1, to: 2, label: "next"}
+      - {from: 2, to: 3, label: "check"}
+      - {from: 3, to: 2, label: "skip"}
+      - {from: 3, to: 4, label: "new"}
+      - {from: 4, to: 5, label: "found"}
+      - {from: 4, to: 1, label: "continue"}
+
+  - type: mcq
+    prompt: "Why does BFS (rather than DFS) give the minimum number of moves in the Swap Game?"
+    options:
+      - "Because BFS explores arrangements in increasing order of distance, so the first time the goal is reached the move count is already minimal."
+      - "Because BFS uses less memory than DFS."
+      - "Because swapping is reversible, so the graph is a tree."
+      - "Because BFS tries every arrangement exactly once regardless of order."
+    answer: 0
+    explanation: "BFS processes the frontier level by level (distance 0, then 1, then 2, …), so the first discovery of the goal happens at the smallest possible depth. That depth is precisely the minimum number of adjacent swaps. DFS finds *a* path, not necessarily the shortest one."
+
+type: content
+---

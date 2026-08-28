@@ -1,0 +1,228 @@
+---
+id: polygon-lattice-points
+title: Polygon Lattice Points
+difficulty: medium
+order: 222
+tags:
+  - geometry
+  - picks-theorem
+  - gcd
+  - shoelace
+blocks:
+  - type: markdown
+    content: |
+      # Polygon Lattice Points — count integer-coordinate points with Pick's theorem
+
+      A **lattice point** is a point `(x, y)` where both coordinates are integers.
+      Given a simple polygon whose vertices are lattice points, we want two
+      counts: lattice points **inside** the polygon and lattice points **on its
+      boundary**. These are related by a beautiful theorem.
+
+      **Pick's theorem.** For a simple polygon with lattice vertices, let
+
+      - `I` = number of lattice points inside,
+      - `B` = number of lattice points on the boundary,
+      - `A` = the area of the polygon.
+
+      Then
+
+      ```
+      A = I + B/2 − 1
+      ```
+
+      Rearranged: **`I = A − B/2 + 1`**. So if we can compute `A` and `B`, we get
+      `I` for free — no point enumeration at all.
+
+      **Two sub-problems, both already solved.**
+
+      1. **Area `A`.** Use the shoelace formula from lesson 220. We keep `2A`
+         (the integer shoelace sum). From `I = A − B/2 + 1`, multiply by 2:
+         `2I = 2A − B + 2`, so `I = (2A − B + 2)/2`. Because the theorem
+         guarantees an integer, the numerator is exactly even.
+      2. **Boundary points `B`.** Walking edge by edge, the number of lattice
+         points on the (closed) segment from `(x1,y1)` to `(x2,y2)` is
+         `gcd(|x2−x1|, |y2−y1|) + 1`. Summing `gcd(|dx|,|dy|)` over the `n` edges
+         counts every boundary point exactly once (each of the `B` points is the
+         start of exactly one segment visit), so
+         `B = Σ_edges gcd(|dx|,|dy|)`.
+
+      **Why this is O(n log C).** One `O(A)`-style loop for the shoelace sum and
+      one for the gcd sums, `n` gcds total at `O(log max-coord)` each →
+      **O(n log C)** time (practically `O(n)`), **O(1)** extra space.
+
+      **Overflow note.** `2A` can reach `8·10^18`, so accumulate the shoelace sum
+      in `__int128_t`; `B ≤ n·(2·10^9) ≤ 2·10^14` fits in `long long`. The final
+      `I` fits `long long`.
+
+      :::tip
+      **Interview tip:** Pick's theorem is a classic "aha" moment problem — the
+      naive enumerator (loop over the bounding box) is hopeless because the
+      range can be `10^18`-sized. Naming `A = I + B/2 − 1` and decomposing
+      `B = Σ gcd(|dx|,|dy|)` shows you can turn a counting problem into `n`
+      gcds plus the shoelace sum you already know (lesson 220). Remember `(2A − B
+      + 2)/2` as the closed form you output.
+      :::
+  - type: markdown
+    content: |
+      # Question — Polygon Lattice Points
+
+      Given a polygon, your task is to calculate the number of lattice points
+      inside the polygon and on its boundary. A lattice point is a point whose
+      coordinates are integers.
+
+      The polygon consists of `n` vertices `(x1,y1), (x2,y2), …, (xn,yn)`. The
+      vertices `(xi,yi)` and `(x_{i+1},y_{i+1})` are adjacent for
+      `i = 1, 2, …, n-1`, and the vertices `(x1,y1)` and `(xn,yn)` are also
+      adjacent.
+
+      **Input.** The first input line has an integer `n`: the number of vertices.
+      After this, there are `n` lines that describe the vertices (the `i`th has
+      two integers `xi` and `yi`).
+
+      You may assume that the polygon is **simple**, i.e., it does not intersect
+      itself.
+
+      **Output.** Print two integers: the number of lattice points **inside** the
+      polygon and the number of lattice points **on its boundary**.
+
+      **Constraints**
+
+      - `3 ≤ n ≤ 10^5`
+      - `-10^9 ≤ xi, yi ≤ 10^9`
+
+      Sample input:
+
+      ```
+      4
+      1 1
+      5 3
+      3 5
+      1 4
+      ```
+
+      Sample output:
+
+      ```
+      6 8
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — enumerate the bounding box, O((range)²·n) (impossible)**
+
+      Sweep every integer point in the polygon's bounding box and ray-cast each
+      one to test containment (lesson 221). The bounding box spans up to
+      `2·10^9` per axis, i.e. up to `4·10^18` candidate points — astronomical;
+      this cannot complete. It is correct but utterly infeasible, which is the
+      whole point of using Pick's theorem.
+
+      ```cpp
+      // for (long x = minx; x <= maxx; ++x)
+      //   for (long y = miny; y <= maxy; ++y)
+      //       if (inside(poly, {x,y})) I++;
+      // range up to 2e9^2 = 4e18 iterations -> hopeless
+      ```
+
+      **O((range)²·n)** — infeasible for real constraints.
+
+      **② Optimization — Pick's theorem, O(n log C) (submission)**
+
+      Compute `2A` with the shoelace sum (`__int128_t`) and `B` as the sum of
+      per-edge gcds, then apply `I = (2A − B + 2)/2`.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      using ll = long long;
+      using i128 = __int128_t;
+      ll gcd(ll a, ll b){ return b ? gcd(b, a % b) : a; }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<ll> x(n), y(n);
+          for(int i=0;i<n;i++) cin >> x[i] >> y[i];
+          i128 twoA = 0;         // 2*area via shoelace (accumulate in width int)
+          ll B = 0;              // boundary lattice points = sum of gcd(|dx|,|dy|)
+          for(int i=0;i<n;i++){
+              int j = (i+1)%n;
+              twoA += (i128)x[i]*y[j] - (i128)x[j]*y[i];
+              B += gcd(llabs(x[i]-x[j]), llabs(y[i]-y[j]));
+          }
+          if(twoA < 0) twoA = -twoA;
+          // Pick: A = I + B/2 - 1  =>  I = (2A - B + 2)/2
+          ll I = ((ll)twoA - B + 2) / 2;
+          cout << I << " " << B << "\n";
+          return 0;
+      }
+      ```
+
+      **O(n log C)** time, **O(1)** space. This is the submission tier — compile
+      with `g++ -std=c++17 -O2`.
+
+      **③ Alternative — boundary via a hand-rolled gcd.** If you avoid the math
+      library, the same per-edge gcd is a 1-liner inner loop
+      `while (b) { a %= b; swap(a,b); }`. Functionally identical; the point is
+      that the entire solution reduces to "shoelace area + per-edge gcds + one
+      formula line" — no point enumeration, no polygon rasterization.
+  - type: markdown
+    content: |
+      # Code-logic
+
+      - **`twoA` from the shoelace loop.** Reuse the `x[i]*y[j] − x[j]*y[i]` sum
+        from lesson 220, widened to `__int128_t` so the running total (up to
+        `≈10^21` for `n = 10^5`) never overflows. Take the absolute value.
+      - **`B` as a gcd sum.** For each edge add `gcd(|dx|,|dy|)`. This is the
+        number of lattice points on that edge minus one; summing over all edges
+        counts each of the `B` boundary points exactly once.
+      - **One formula line.** `I = (2A − B + 2)/2`. The numerator is guaranteed
+        even because Pick's theorem guarantees `I` is an integer; integer
+        division is exact.
+      - **Sanity check.** Every result is non-negative: the interior count `I ≥ 0`
+        and boundary `B ≥ 3·(something)`. If `I` came out negative you have an
+        arithmetic bug (or a non-simple input).
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      **Input (sample):** `n = 4`, vertices `(1,1) (5,3) (3,5) (1,4)`.
+
+      **Boundary `B`** (per-edge gcd, with `j = i+1 mod 4`):
+
+      | i | edge | dx | dy | gcd(\|dx\|,\|dy\|) |
+      |---|--------------|----|-----|-------------------|
+      | 0 | (1,1)→(5,3) | 4 | 2 | 2 |
+      | 1 | (5,3)→(3,5) | 2 | 2 | 2 |
+      | 2 | (3,5)→(1,4) | 2 | 1 | 1 |
+      | 3 | (1,4)→(1,1) | 0 | 3 | 3 |
+
+      `B = 2 + 2 + 1 + 3 = 8`.
+
+      **Shoelace `2A`:**
+
+      | i | j | term x_i·y_j − x_j·y_i |
+      |---|----|--------------------|
+      | 0 | 1 | 1·3 − 5·1 = −2 |
+      | 1 | 2 | 5·5 − 3·3 = +16 |
+      | 2 | 3 | 3·4 − 1·5 = +7 |
+      | 3 | 0 | 1·1 − 1·4 = −3 |
+
+      `2A = |(−2+16+7−3)| = 18`.
+
+      **Interior** `I = (2A − B + 2)/2 = (18 − 8 + 2)/2 = 12/2 = 6`.
+
+      Output: `6 8`.
+
+      **Expected `6 8` — Actual `6 8` (from the compiled `g++ -std=c++17 -O2`
+      submission). Match.**
+  - type: mcq
+    prompt: 'Why can we compute the interior lattice-point count I without enumerating any lattice points?'
+    options:
+      - Because Pick’s theorem links I to the area A and boundary count B, both of which are computed in O(n) from the vertex coordinates
+      - Because every interior point lies on the shoelace sum
+      - Because the bounding box of the polygon always has area one
+      - Because the polygon has lattice vertices so every point inside is necessarily a lattice point
+    answer: 0
+    explanation: Pick’s theorem, A = I + B/2 − 1, lets us solve I = (2A − B + 2)/2 directly. The area A comes from the O(n) shoelace sum and the boundary count B comes from O(n) per-edge gcds — no point-by-point enumeration is needed or feasible. Interior points are not placed one per grid unit, so (option 3) is false; lattice vertices do not make the interior lattice-only (option 4 is false); and I is not a shoelace term (option 1 is false).
+type: content
+---

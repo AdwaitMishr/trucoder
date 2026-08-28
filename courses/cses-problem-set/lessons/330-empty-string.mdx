@@ -1,0 +1,272 @@
+---
+id: empty-string
+title: Empty String
+type: content
+difficulty: medium
+order: 330
+tags:
+  - interval-dp
+  - combinatorics
+  - counting
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      # Empty String — counting ways to delete adjacent equal pairs
+
+      Starting from a string over `a..z`, at each step you may delete any two
+      **adjacent equal** characters, and the two neighbours on either side then
+      become adjacent. The goal is to erase the whole string. We count the
+      number of **distinct deletion sequences** that succeed.
+
+      When a pair is deleted and its neighbours closes up, new pairs can become
+      adjacent far from where we started — so a simple left-to-right scan is
+      wrong. The right hammer is **interval DP**: the subproblem is "how many
+      ways to erase the substring `s[l..r]`".
+
+      ## The matching structure
+
+      For the whole string to vanish, its characters must be matched in `n/2`
+      (disjoint) pairs of equal letters, where each pair is deleted at the
+      moment its two equal members have become adjacent. Think of the pairs like
+      nested parentheses:
+
+      - a pair `(l, i)` may only be deleted after *everything between* them,
+        `s[l+1 .. i-1]`, has already been removed (so `l` and `i` become
+        adjacent, then vanish together);
+      - the region *after* `i`, `s[i+1 .. r]`, is independent.
+
+      So for the fix-first-character judgement: `s[l]` must pair with some `s[i]`
+      with `s[l] = s[i]`. Once that pair is settled, the inner block and the
+      outer block are erased independently — *and interleaved arbitrarily*.
+
+      ## The interleaving count
+
+      The inner block `s[l+1..i-1]` takes some number of deletions and the outer
+      block `s[i+1..r]` takes some too, and the deletion of the `(l,i)` pair
+      itself is one more. Every ordering that keeps the inner-deletions before
+      `(l,i)` and the outer ones anywhere is a distinct valid sequence. This
+      binomial interleaving factor is the heart of the counting.
+
+      ## Complexity
+
+      Filling `O(n²)` states each with an `O(n)` scan over the matching partner
+      gives `O(n³)` time, `O(n²)` space — fine for `n ≤ 500`.
+
+      :::tip
+      **Interview tip:** "remove adjacent duplicate pairs / empty a string by
+      deleting matching neighbours" is an interview staple. The moment you say
+      "adjacent and they close up afterwards", reach for **interval DP** with
+      `dp[l][r]` over substrings, and pair the leftmost character with a matching
+      one. The subtle, almost always-asked follow-up is the **binomial
+      interleaving factor**: when independent sub-blocks are erased, their
+      deletion orders can mix, which is exactly why the answer is not a plain
+      product. Grab the official CSES sample `aabccb → 3` and trace the three
+      interleavings mentally before writing code.
+      :::
+
+  - type: markdown
+    content: |
+      # The Problem
+
+      You are given a string consisting of `n` characters between `a` and `z`.
+
+      On each turn, you may remove any two adjacent characters that are equal.
+      Your goal is to construct an empty string by removing all the characters.
+
+      In how many ways can you do this?
+
+      ## Input
+
+      The only input line has a string of length `n`.
+
+      ## Output
+
+      Print one integer: the number of ways modulo `10^9 + 7`.
+
+      ## Constraints
+
+      - `1 ≤ n ≤ 500`
+
+      ## Sample
+
+      **Input:**
+      ```
+      aabccb
+      ```
+
+      **Output:**
+      ```
+      3
+      ```
+
+      **Explanation:** the three removal orders for `aabccb` are
+      `(aa),(cc),(bb)`, `(cc),(aa),(bb)`, and `(cc),(bb),(aa)` (indexed by the
+      pairs removed).
+  - type: markdown
+    content: |
+      # Solution — progressive tiers
+
+      **① Brute force — recursively try every deletion, O(exponential) (too slow)**
+
+      Enumerate every adjacent equal pair, remove it, recurse on the new string,
+      and count how many branches empty the string. Correct for tiny `n`, but
+      the branching explodes.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      unordered_map<string,long long> memo;   // string -> ways to empty it
+      long long ways(const string& s){
+          if(s.empty()) return 1;
+          if(memo.count(s)) return memo[s];
+          long long res=0;
+          for(int i=0;i+1<(int)s.size();i++){
+              if(s[i]==s[i+1]){
+                  string t=s; t.erase(i,2);
+                  res=(res+ways(t))%1000000007LL;
+              }
+          }
+          return memo[s]=res;
+      }
+      int main(){ string s; cin>>s; cout<<ways(s)<<"\n"; }
+      ```
+
+      *Exponential in `n` (many identical substrings help, but worst case is
+      `2^(n/2)`-ish branches) — hopeless for `n = 500`.*
+
+      **② Optimization — interval DP with binomial interleaving, O(n³) (optimal)**
+
+      `dp[l][r]` = number of ways to erase `s[l..r]`. Pair `s[l]` with every
+      `i` where `s[l] = s[i]`; the part between `(l,i)` and the part after `i`
+      are independent, and we multiply by the number of ways to interleave
+      their deletions. This is the tier we compile and run (it matches the
+      official sample `aabccb → 3`).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      const ll MOD = 1000000007LL;
+
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          string s; cin>>s;
+          int n=s.size();
+          static ll C[505][505];                       // binomial coefficients
+          for(int i=0;i<=n;i++){ C[i][0]=1; for(int j=1;j<=i;j++) C[i][j]=(C[i-1][j-1]+C[i-1][j])%MOD; }
+          static ll dp[505][505];                      // dp[l][r]: erase s[l..r]
+          for(int len=2; len<=n; len+=2){              // substrings of even length
+              for(int l=0; l+len-1<n; l++){
+                  int r=l+len-1;
+                  ll res=0;
+                  for(int i=l+1;i<=r;i++){
+                      if(s[l]!=s[i]) continue;         // l must pair with a matching char
+                      ll inner = (l+1<=i-1)? dp[l+1][i-1] : 1;   // erase s[l+1..i-1]
+                      ll outer = (i+1<=r)? dp[i+1][r]  : 1;       // erase s[i+1..r]
+                      int delTotal=(r-l+1)/2;                     // total deletions in s[l..r]
+                      int delInner=(i-l+1)/2;                     // deletions before/at (l,i)
+                      ll inter = C[delTotal][delInner];           // interleave factor
+                      res=(res + inner*outer%MOD * inter)%MOD;
+                  }
+                  dp[l][r]=res;
+              }
+          }
+          cout<<dp[0][n-1]<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n³)` time, `O(n²)` space — the intended solution.*
+
+      **③ Further optimization — none needed**
+
+      `n ≤ 500` makes `O(n³) = 1.25×10^8` primitive ops borderline-fast in C++
+      (already in the sub-second range), and the recurrence has no obvious
+      asymptotic improvement. No Fenwick/segment-tree optimization applies.
+
+      **④ Alternative — top-down memoised recursion**
+
+      A recursive `dp(l,r)` with memoisation (as in the conceptual sketch) has
+      identical complexity and is often easier to write correctly by hand, but
+      the bottom-up version above is deterministic and avoids recursion-depth
+      concerns. Both enumerate the same `(l, i)` pairings; they are the same
+      algorithm.
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **`dp` is indexed by substring `[l, r]`.** Only even-length substrings
+        can ever be erased, so `len` steps by 2 and odd strings are never
+        touched (the answer for `n` odd is implicitly `0` because `dp[0][n-1]`
+        is never filled — we still guard by only building even `len`).
+      - **Pair `s[l]` with `s[i]`.** `s[l]` is the leftmost character, so in any
+        valid deletion its partner `s[i]` is found by scanning `i = l+1..r` for
+        equal characters. Everything strictly between them must have been
+        removed first (that's `inner`); everything after `i` is independent
+        (that's `outer`).
+      - **`inner`/`outer` default to 1** for empty ranges (`l+1 > i-1` or
+        `i+1 > r`), i.e. there is exactly one way to erase an empty slice.
+      - **The binomial factor `C(delTotal, delInner)`** counts how to interleave
+        the deletions of the inner block with those of the outer block. We have
+        `delTotal = (r-l+1)/2` deletions in total for `s[l..r]`; `delInner =
+        (i-l+1)/2` deletions happen in the region up to and including the `(l,i)`
+        pair (the inner block plus that final deletion). Choosing which slots
+        among the total are "inner-side" gives the interleaving — and the
+        `(l,i)` deletion is automatically the last inner-side deletion.
+
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `s = "aabccb"`, `n = 6`.
+
+      Even-length substrings, in increasing length:
+
+      - **length 2:**
+        - `dp[0][1]` = erase `"aa"`: `i=1`, `s[0]==s[1]`, `inner=1`,
+          `outer=1`, `C(1,1)=1` → `1`.
+        - `dp[3][4]` = erase `"cc"`: `1`.
+        - `dp[1][2]` (`"ab"`), `dp[2][3]` (`"bc"`), `dp[4][5]` (`"cb"`) → `0`
+          (no equal pair).
+      - **length 4:**
+        - `dp[2][5]` = `"bccb"`: `s[2]='b'`. `i=5`: `s[5]==s[2]`, `inner =
+          dp[3][4] = 1`, `outer=1`, `C(2,2)=1` → `dp[2][5] = 1`.
+        - `dp[0][3]` = `"aabc"`: `s[0]='a'`, partner `i` only at `i=1`, but
+          `outer = dp[2][3] = 0` → `dp[0][3] = 0`.
+        - `dp[1][4]` = `"abcc"` → `0`.
+      - **length 6:** `dp[0][5]` = `"aabccb"`:
+        - `s[0]='a'`, `i=1`: `inner = dp[1][0] = 1` (empty slice), `outer =
+          dp[2][5] = 1`, `delTotal = 3`, `delInner = 1`, `C(3,1) = 3` →
+          `dp[0][5] = 1 · 1 · 3 = 3`.
+
+      Expected (sample) `3` — **match**. The three removal orders are
+      `(0,1),(3,4),(2,5)`; `(3,4),(0,1),(2,5)`; and `(3,4),(2,5),(0,1)`.
+
+      Output:
+      ```
+      3
+      ```
+  - type: flowchart
+    title: "Empty String — interval DP with interleaving"
+    nodes: ["read s, answer dp[0][n-1]", "for substring length = 2..n (even)", "for each start l, substring ends at r", "for partner i where s[l]==s[i]", "inner = erase s[l+1..i-1], outer = erase s[i+1..r]", "dp[l][r] += inner*outer*C(delTotal, delInner)", "print dp[0][n-1]"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 5}
+      - {from: 5, to: 3, label: "next partner"}
+      - {from: 5, to: 2, label: "next l"}
+      - {from: 5, to: 1, label: "next length"}
+      - {from: 1, to: 6, label: "all lengths done"}
+  - type: mcq
+    prompt: "Why must the binomial interleaving factor be included, rather than just multiplying the inner and outer block counts?"
+    options:
+      - "Because the deletions of the inner block and the outer block are independent operations whose orders may be interleaved freely; only the inner block must finish before the paired (l,i) deletion, so the number of distinct merged sequences is a binomial choice, not a plain product."
+      - "Because the string is always a single pair, so no ordering exists."
+      - "Because deleting from the left and right must alternate exactly."
+      - "Because binomial coefficients are required to keep the answer modulo 10^9+7."
+    answer: 0
+    explanation: "Given a settled pair (l,i), the inner block s[l+1..i-1] must be fully removed before (l,i) can be deleted, but the outer block s[i+1..r] may be interleaved with those inner deletions in any order. The two independent block counts multiply, and the number of distinct merged orderings of delTotal deletions, choosing delInner for the inner side, is C(delTotal, delInner). Omitting this factor undercounts badly (e.g. it would collapse aabccb's 3 orders into fewer)."
+---

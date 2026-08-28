@@ -1,0 +1,200 @@
+---
+id: permutations
+title: Permutations
+difficulty: easy
+order: 5
+tags:
+  - intro
+  - construction
+  - math
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — a construction problem
+
+      We must build a permutation of `1..n` where **no two adjacent numbers
+      differ by exactly 1**. There is no "searching" to optimise — this is a
+      **construction**: find *some* arrangement that works, or prove none
+      exists.
+
+      **The insight: separate the parities.** Consecutive integers live in
+      different parity classes, so the danger is only ever between a number
+      and its immediate neighbour within the sequence. If all numbers that are
+      adjacent in the permutation come from *opposite ends* of the number line,
+      their difference is never 1.
+
+      The standard construction: **list all even numbers, then all odd
+      numbers** (either order).
+      - Evens are spaced 2 apart: `2, 4, 6, …` — differences of 2.
+      - Odds are spaced 2 apart: `1, 3, 5, …` — differences of 2.
+      - The single transition point (last even → first odd) has a difference
+        of at least 3 for `n ≥ 4`.
+
+      **Why does `n ≤ 3` fail?**
+      - `n = 1`: `[1]` is trivially fine.
+      - `n = 2`: the only permutations are `[1,2]` and `[2,1]`, both with
+        difference 1 → no solution.
+      - `n = 3`: every permutation contains an adjacent `{1,2}` or `{2,3}`
+        pair inside it → no solution.
+      - `n = 4` and up: the parity split always works.
+
+      **Worked mini-example (n = 5).** Evens first: `2, 4`; then odds `1, 3, 5`
+      → `[2, 4, 1, 3, 5]`. Diffs: `2, 3, 2, 2` — none equal to 1. ✓
+
+      **Complexity.** Linear fill: time `O(n)`, space `O(n)`.
+
+      :::tip
+      **Interview tip:** Construction problems reward *structure*, not brute
+      force. Naming the pattern ("evens then odds") and proving the boundary
+      cases is exactly the reasoning interviewers probe. Always check the
+      small `n` by hand before writing the general loop.
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      A permutation of integers `1, 2, …, n` is called *beautiful* if there are
+      no adjacent elements whose difference is 1.
+
+      Given `n`, construct a beautiful permutation if such a permutation
+      exists.
+
+      **Input:** The only input line contains an integer `n`.
+
+      **Output:** Print a beautiful permutation of integers `1, 2, …, n`. If
+      there are several solutions, you may print any of them. If there are no
+      solutions, print `"NO SOLUTION"`.
+
+      **Constraints:** `1 ≤ n ≤ 10^6`
+
+      ### Samples
+
+      Example 1 — Input:
+      ```text
+      5
+      ```
+      Output (any valid one is accepted; here one possibility):
+      ```text
+      4 2 5 3 1
+      ```
+
+      Example 2 — Input:
+      ```text
+      3
+      ```
+      Output:
+      ```text
+      NO SOLUTION
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(n!) time, O(n) space (search all permutations).**
+
+      ```cpp
+      vector<int> solve(long long n) {
+          vector<int> perm(n);
+          for (int i = 0; i < n; ++i) perm[i] = i + 1;
+          do {
+              bool ok = true;
+              for (int i = 1; i < n; ++i) {
+                  if (abs(perm[i] - perm[i - 1]) == 1) { ok = false; break; }
+              }
+              if (ok) return perm;
+          } while (next_permutation(perm.begin(), perm.end()));
+          return {}; // none found
+      }
+      ```
+
+      Generate every permutation in lexicographic order and return the first whose
+      adjacent differences are all `≠ 1`. Correct by exhaustive search, but there are
+      `n!` permutations — hopeless beyond tiny `n`: for `n = 10^6` the search space is
+      astronomically larger than anything a machine can enumerate.
+
+      **② Optimization — O(n) time, O(n) space (parity construction).**
+
+      ```cpp
+      vector<int> solve(long long n) {
+          vector<int> perm;
+          if (n == 1) {
+              perm.push_back(1);
+              return perm;
+          }
+          if (n <= 3) return perm; // n = 2, 3 have no beautiful permutation
+          for (int v = 2; v <= n; v += 2) perm.push_back(v);
+          for (int v = 1; v <= n; v += 2) perm.push_back(v);
+          return perm;
+      }
+      ```
+
+      Consecutive integers always live in opposite parity classes, so if every adjacent
+      pair in the permutation is spaced 2 apart, no difference of 1 can occur. Listing
+      all even numbers `2, 4, 6, …` then all odds `1, 3, 5, …` gives adjacent differences
+      of 2 within each half and `≥ 3` across the single boundary (for `n ≥ 4`). Two linear
+      loops → `O(n)` time and `O(n)` space. An empty result signals `NO SOLUTION` for
+      `n = 2, 3`.
+
+      **④ Alternative algorithm — O(n) time, O(n) space (mirror construction).**
+
+      ```cpp
+      vector<int> solve(long long n) {
+          vector<int> perm;
+          if (n == 1) { perm.push_back(1); return perm; }
+          if (n <= 3) return perm;
+          if (n == 4) return {2, 4, 1, 3}; // mirror (odds-then-evens) hits boundary 3|2 here
+          for (int v = 1; v <= n; v += 2) perm.push_back(v);
+          for (int v = 2; v <= n; v += 2) perm.push_back(v);
+          return perm;
+      }
+      ```
+
+      The mirror image of the parity construction — odds first, then evens — is for
+      every `n ≥ 5` just as valid as the evens-then-odds order. One boundary needs a
+      tweak: at `n = 4` the last odd is `3` and the first even is `2`, so the naive
+      mirror `1 3 | 2 4` puts `3` next to `2` (difference 1). We special-case `n = 4`
+      with the valid `[2, 4, 1, 3]`. This makes the real point of the tier: the
+      construction is a *choice* — many permutations work (the problem accepts any) —
+      so it only matters that you build *some* correct one. Same `O(n)` time and
+      `O(n)` space.
+
+      Reason through the code above with the next block — then trace it on the sample input below.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` returns a `vector<int>`; an empty vector represents
+      `"NO SOLUTION"` (TruCoder checks this as `[]`). The branches:
+      - `n == 1` → return `[1]`.
+      - `n <= 3` (i.e. `n == 2` or `3`) → return `{}`.
+      - otherwise, push every even number `2, 4, …, n`, then every odd number
+        `1, 3, …, n`.
+
+      Two linear loops give time `O(n)` and space `O(n)` for the returned
+      permutation. The parity split guarantees no adjacent difference of 1:
+      within each half the step is 2, and at the boundary (largest even,
+      smallest odd) the gap is at least 3 once `n ≥ 4`. Any valid permutation
+      is accepted by the problem, so returning the evens-then-odds order is a
+      correct answer.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 5` (the CSES sample; note the sample shows one valid
+      output — `4 2 5 3 1` — but *any* beautiful permutation is correct).
+
+      **Expected output (ours):** `[2, 4, 1, 3, 5]`.
+
+      **Actual run:**
+      - `n = 5` is not `≤ 3`, so we fill evens then odds.
+      - evens: `v = 2`, `v = 4` → `[2, 4]`.
+      - odds: `v = 1`, `v = 3`, `v = 5` → `[2, 4, 1, 3, 5]`.
+
+      **Check the diffs:** `|2-4|=2`, `|4-1|=3`, `|1-3|=2`, `|3-5|=2`. None is
+      `1`, so the returned permutation is beautiful and accepted.
+
+      **Boundary case `n = 3`:** `n ≤ 3` and `n ≠ 1`, so we return `{}`
+      (`NO SOLUTION`) — matching the second sample.
+type: content
+---
+

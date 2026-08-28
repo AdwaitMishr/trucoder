@@ -1,0 +1,220 @@
+---
+id: distinct-values-subsequences
+title: Distinct Values Subsequences
+difficulty: medium
+order: 41
+tags:
+  - sorting
+  - counting
+  - modulo
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — count distinct-valued subsequences by independent choices
+
+      A **subsequence** keeps array elements in their original left-to-right
+      order but is allowed to *skip* positions (unlike a subarray, which must be
+      contiguous). Here we count subsequences whose elements are **all
+      distinct**, and we treat two subsequences as different when they differ in
+      the set of chosen *indices* (so the sample counts `[1]` twice). Since every
+      value has many copies, this is a counting problem, not a scanning problem.
+
+      **The one-line insight.** For a subarray we needed a sliding window,
+      because subarrays are contiguous blocks. For a subsequence, contiguity is
+      irrelevant: a subsequence is just a set of chosen positions. The only rule
+      is that two chosen positions may **not** carry the same value.
+
+      So count **per value**. A value `v` appears `c_v` times. In any valid
+      subsequence you may pick *at most one* of those positions — either none, or
+      exactly one of the `c_v` copies: that is `c_v + 1` independent choices.
+      Choices for different values never conflict (they are distinct values), so
+      the number of valid index-subsets is the product:
+
+      ```text
+      product over distinct v of (c_v + 1)
+      ```
+
+      Subtract `1` for the empty subset, which is not a subsequence of interest.
+
+      **Worked mini-example.** `a = [1, 2, 1]`: value `1` occurs twice, value `2`
+      once → `(2+1) · (1+1) − 1 = 5`. Indeed the valid subsequences are `[1]`
+      (×2 by index), `[2]`, `[1,2]`, `[2,1]` — five.
+
+      **A note on output size.** With all values distinct the answer is
+      `2^n − 1`, which for `n = 2 · 10^5` is ≈ `6 · 10^60205` — roughly 60,000
+      digits. The exact count needs big integers. So this lesson (deliberately)
+      asks for the answer **modulo `10^9 + 7`**, a standard judge-friendly
+      convention; the counting object is exactly the same.
+
+      **Complexity.** Time `O(n)`, space `O(n)` when using a hash map of counts.
+
+      :::tip
+      **Interview tip:** "Count subsets with a 'no equal pair' constraint" becomes
+      a product of independent choices once you group equal elements. Reaching
+      for *counting by grouping / independence* here — instead of brute-forcing
+      `2^n` subsets — is the key move, and modulo `10^9 + 7` is the default
+      modulus to keep answers bounded.
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an array of `n` integers, count the number of **subsequences** where
+      each element is distinct. A subsequence is a sequence of array elements
+      from left to right that may have gaps. Two subsequences are different if
+      they use different sets of positions.
+
+      **Input:** The first line has an integer `n`: the array size. The second
+      line has `n` integers `x1, x2, …, xn`: the array contents.
+
+      **Output:** Print the number of subsequences with distinct elements,
+      **modulo `10^9 + 7`**.
+
+      **Constraints:**
+
+      - `1 ≤ n ≤ 2 · 10^5`
+      - `1 ≤ x_i ≤ 10^9`
+
+      **Note (labeled variant).** CSES's phrasing asks for the exact enormous
+      count, which requires big-integer arithmetic; here we report it modulo
+      `10^9 + 7` so the answer always fits in a 64-bit container. Everything else
+      is identical to the original problem.
+
+      ### Sample
+
+      Input:
+
+      ```text
+      4
+      1 2 1 3
+      ```
+
+      Output:
+
+      ```text
+      11
+      ```
+
+      The subsequences are `[1]` (two times), `[2]`, `[3]`, `[1,2]`, `[1,3]`
+      (two times), `[2,1]`, `[2,3]`, `[1,2,3]` and `[2,1,3]`.
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n · 2^n)**
+
+      Enumerate every non-empty subset of indices as a bitmask, check that its
+      values are pairwise distinct, and count it.
+
+      ```cpp
+      long long solve(int n, vector<int>& a) {
+          const long long MOD = 1000000007LL;
+          long long cnt = 0;
+          for (int mask = 1; mask < (1 << n); ++mask) {
+              unordered_set<int> seen;
+              bool ok = true;
+              for (int i = 0; i < n; ++i)
+                  if (mask >> i & 1) {
+                      if (seen.count(a[i])) { ok = false; break; }
+                      seen.insert(a[i]);
+                  }
+              if (ok) cnt = (cnt + 1) % MOD;
+          }
+          return cnt;
+      }
+      ```
+
+      Time `O(n · 2^n)`. With `n = 40` already a billion subsets — completely
+      unusable at `2 · 10^5`.
+
+      **② Optimization — product of `(frequency + 1)`, minus 1 — O(n)**
+
+      ```cpp
+      long long solve(int n, vector<int>& a) {
+          const long long MOD = 1000000007LL;
+          unordered_map<int, long long> freq;
+          for (int x : a) freq[x]++;           // count how many times each value appears
+          long long ans = 1;
+          for (auto& kv : freq)
+              ans = ans * ((kv.second + 1) % MOD) % MOD;  // pick 0 or 1 of each value
+          return (ans - 1 + MOD) % MOD;        // drop the empty subsequence
+      }
+      ```
+
+      Time `O(n)` expected, `O(n)` space.
+
+      **③ Further optimization — none needed**
+
+      We must read the whole array to count frequencies, so `Ω(n)` is a floor and
+      `O(n)` is optimal.
+
+      **④ Alternative — sort-based grouping — O(n log n)**
+
+      The same product can be computed without a hash table by grouping equal
+      values after sorting.
+
+      ```cpp
+      long long solve(int n, vector<int>& a) {
+          const long long MOD = 1000000007LL;
+          sort(a.begin(), a.end());
+          long long ans = 1;
+          for (int i = 0; i < n; ) {
+              int j = i;
+              while (j < n && a[j] == a[i]) j++;          // run of equal values
+              ans = ans * ((j - i + 1) % MOD) % MOD;      // c + 1 choices
+              i = j;
+          }
+          return (ans - 1 + MOD) % MOD;
+      }
+      ```
+
+      Time `O(n log n)` (dominated by the sort), space `O(1)` extra. Slower than
+      the hash-map version but deterministic and easy to write.
+  - type: markdown
+    content: |
+      ## Correctness of the product formula
+
+      Fix the frequency `c_v` of each value `v`. Two chosen positions are allowed
+      together exactly when their values differ. Multiple copies of the *same*
+      value can never both appear, so for value `v` the valid choices are: pick
+      none, or pick exactly one of its `c_v` positions — `c_v + 1` ways. Because a
+      position's value is fixed, choices for different values don't interact; the
+      total number of valid (non-empty) index-subsets is
+
+      ```text
+      (c_1 + 1)(c_2 + 1) … (c_m + 1) − 1
+      ```
+
+      Each such index-set maps to exactly one subsequence (read the chosen
+      positions left to right), and distinct index-sets give distinct
+      subsequences under the problem's convention — so the product minus one is
+      exactly the requested count.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 4`, `a = [1, 2, 1, 3]` (the CSES sample).
+
+      **Expected output:** `11`.
+
+      **Step 1 — frequencies.** `1 → 2`, `2 → 1`, `3 → 1`.
+
+      **Step 2 — product.** `(2+1) · (1+1) · (1+1) = 3 · 2 · 2 = 12`.
+
+      **Step 3 — drop the empty subsequence.** `12 − 1 = 11`.
+
+      **Verification against the enumerated list** (11 subsequences): singles
+      `[1]×2, [2], [3]` (4); pairs `[1,2], [1,3]×2, [2,1], [2,3]` (5); triples
+      `[1,2,3], [2,1,3]` (2). Total `4 + 5 + 2 = 11`. `11 mod 10^9+7 = 11`,
+      matching the expected output.
+  - type: mcq
+    prompt: Why is the correct count equal to the product of (frequency + 1), minus 1, for each distinct value?
+    options:
+      - 'Because for each value you may include at most one occurrence — c+1 independent choices — and different values never conflict, so the counts multiply; the minus 1 removes the empty subset.'
+      - 'Because every value contributes exactly two options: include or exclude.'
+      - 'Because the answer is always the number of distinct values plus the number of duplicates.'
+      - 'Because subsequences cannot share the same value across different indices.'
+    answer: 0
+    explanation: 'For a value appearing c times, any valid subsequence can use at most one of those positions, giving c+1 choices (none, or exactly one). Values are independent, so the total is the product of these choices, and we subtract 1 for the all-excluded empty subset.'
+type: content
+---

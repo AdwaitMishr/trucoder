@@ -1,0 +1,242 @@
+---
+id: counting-bits
+title: Counting Bits
+type: content
+difficulty: medium
+order: 276
+tags:
+  - bitwise
+  - digit-dp
+  - pattern
+  - math
+blocks:
+  - type: markdown
+    content: |
+      # Counting Bits — total one-bits from 1 to n, without a loop
+
+      Given `n`, count the **total number of `1` bits** in the binary
+      representations of every integer from `1` up to `n`. For `n = 7`, the
+      numbers are `1, 10, 11, 100, 101, 110, 111` — twelve `1` bits in total.
+
+      Of course it's absurd to count them one by one when `n` can be `10^9`.
+      The lesson is that **bits can be counted position by position**, using the
+      beautiful periodic block pattern each bit position draws as integers
+      increase — no explicit digit DP machinery required for the simplest
+      version, and a clean digit DP for the general "look at the digits"
+      framing.
+
+      ## The block pattern of a single bit
+
+      Pick bit position `b`. Write the integers `0,1,2,3,…` and watch bit `b`:
+
+      ```
+      value : 0  1  2  3  4  5  6  7   8  9 10 11 ...
+      bit 0 : 0  1  0  1  0  1  0  1   0  1  0  1   ...   period 2
+      bit 1 : 0  0  1  1  0  0  1  1   0  0  1  1   ...   period 4
+      bit 2 : 0  0  0  0  1  1  1  1   0  0  0  0   ...   period 8
+      ```
+
+      Bit `b` is `1` exactly on `2^b` consecutive integers, then `0` on the next
+      `2^b`, repeating with period `2^{b+1}`. So among the numbers `0..n`:
+
+      - every full period `2^{b+1}` contributes exactly `2^b` ones at position `b`,
+      - a leftover partial block contributes `max(0, leftover − 2^b)` more ones.
+
+      Summing over all `b` up to `⌊log₂ n⌋` gives the answer in `O(log n)`. Since
+      `0` has no one-bits, counting `1..n` and `0..n` give the same total — we may
+      use the neat `0..n` block arithmetic.
+
+      :::tip
+      **Interview tip:** "count set bits of all numbers up to n" is a classic
+      asked in phone screens. The one-liner kernel interviewers want is the
+      per-position periodicity `(n+1)/2^{b+1}·2^b` plus `max(0, (n+1) mod
+      2^{b+1} − 2^b)`. Say the words "each bit position alternates in blocks of
+      its own period" out loud. Recognizing block-periodicity converts an
+      apparently linear-sum problem into a closed-form one — the same trick
+      powers counting divisors, multiples, and digit-DP sums of digits.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      Your task is to count the number of one bits in the binary representations
+      of integers between `1` and `n`.
+
+      ## Input
+
+      The only input line has an integer `n`.
+
+      ## Output
+
+      Print the number of one bits in the binary representations of integers
+      between `1` and `n`.
+
+      ## Constraints
+
+      - `1 <= n <= 10^9`
+
+      ## Sample
+
+      **Input:**
+      ```
+      7
+      ```
+      **Output:**
+      ```
+      12
+      ```
+      **Explanation:** the binary representations of `1 … 7` are `1, 10, 11, 100,
+      101, 110, and 111`, so there are a total of `12` one bits.
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — popcount every number, O(n log n) (too slow)**
+
+      Loop `x` from `1` to `n`, count the bits of each `x` with `__builtin_popcount`
+      (`O(log n)` bits each), and sum. Correct but `O(n log n)` — for
+      `n = 10^9` that is billions of operations, far over the time limit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          long long n; cin>>n;
+          long long total=0;
+          for(long long x=1; x<=n; x++)
+              total += __builtin_popcountll(x);
+          cout<<total<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(n log n)` — works for tiny `n`, hopeless at `n = 10^9`.*
+
+      **② Optimization — count per bit position, O(log n) (optimal)**
+
+      Exploit the periodicity: for each bit `b`, count its `1`s among `0..n`
+      in closed form. This is the tier we compile and verify (the O(log n) loop
+      is trivial for `n ≤ 10^9`, which has at most 30 bits).
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          long long n; cin>>n;
+          long long total=0;
+          for(int b=0; (1LL<<b) <= n; b++){        // each bit position
+              long long period = 1LL << (b+1);     // length of one 0/1 block pair
+              long long full  = (n+1) / period;    // complete periods in 0..n
+              total += full * (1LL<<b);            // 2^b ones per full period
+              long long rem   = (n+1) % period;    // leftover partial block
+              total += max(0LL, rem - (1LL<<b));   // ones in the partial block
+          }
+          cout<<total<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(30)` = `O(log n)` time, `O(1)` space.*
+
+      **③ Alternative — digit DP over the binary digits (also O(log n))**
+
+      A digit-DP view: `count(0) = 0`; for `n ≥ 1` let `b` be the top set bit and
+      `p = 2^b`. All `b`-bit numbers `0..p−1` contribute `b·2^{b−1}` set bits;
+      numbers `p..n` each carry a leading `1` (contributing `n−p+1`), and their
+      remaining bits are exactly the set of `1..(n−p)`, handled recursively:
+
+      ```
+      count(n) = count(p−1) + (n−p+1) + count(n−p)
+      ```
+
+      A different, equally valid method — it mirrors the block reasoning digit by
+      digit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      ll countSet(ll n){
+          if(n<=0) return 0;
+          int b = 63 - __builtin_clzll(n);       // position of highest set bit
+          ll p  = 1LL << b;
+          ll block = (b>=1) ? (1LL * b * (1LL << (b-1))) : 0;   // bits in 0..p-1
+          return block + (n - p + 1) + countSet(n - p);          // +leading ones+rest
+      }
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(0);
+          ll n; cin>>n;
+          cout<<countSet(n)<<"\n";
+          return 0;
+      }
+      ```
+
+      *`O(log n)` recursion depth, `O(log n)` time.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **One pass per bit.** Bit `b` only exists up to `n`'s own width, so the
+        loop stops once `2^b > n` — at most 30 iterations for `n ≤ 10^9`.
+      - **`full · 2^b` from complete periods.** In the integers `0..n` there are
+        `⌊(n+1)/2^{b+1}⌋` full periods; each period is `2^b` ones at bit `b`.
+      - **`max(0, rem − 2^b)` from the tail.** The leftover `rem = (n+1) mod
+        2^{b+1}` positions start with `2^b` zeroes then `2^b` ones; only the part
+        beyond `2^b` is `1`. Clamping at `0` handles tails that end inside the
+        zero-run.
+      - **Counting `0..n` ≡ counting `1..n`.** Integer `0` contributes zero bits,
+        so the neat `0..n` block arithmetic costs nothing in correctness.
+      - **Digit DP spot-check on the sample.** With `n = 7`: top bit `b = 2`,
+        `p = 4`; `block = 2·2 = 4`, `(n−p+1) = 4`, `countSet(3) = 2·1 + 2 +
+        countSet(1)`…
+      - **All sums are 64-bit.** The answer for `n = 10^9` is ≈ `1.5·10^10`,
+        comfortably below `2^63`.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Sample: `n = 7`. Count `0..7` per bit position.
+
+      ```
+      b=0  period 2 : full=(8)/2=4 , ones=4*1=4 ; rem=8%2=0 , +0           -> 4
+      b=1  period 4 : full=8/4=2   , ones=2*2=4 ; rem=8%4=0 , +0           -> 4
+      b=2  period 8 : full=8/8=1   , ones=1*4=4 ; rem=8%8=0 , +0           -> 4
+      total = 4 + 4 + 4 = 12
+      ```
+
+      The numbers `1…7` in binary (`1,10,11,100,101,110,111`) contain
+      `1+1+2+1+2+2+3 = 12` one-bits.
+
+      Output:
+
+      ```
+      12
+      ```
+
+      Expected (sample) `12` — **match**. Using the digit-DP route instead:
+      `count(7) = count(3) + 4 + count(3)` with `count(3) = count(1) + 2 +
+      count(1)` and `count(1) = 0 + 1 + 0 = 1`, giving `count(3) = 1+2+1 = 4`
+      and `count(7) = 4+4+4 = 12` — same answer by construction.
+  - type: flowchart
+    title: "Total set bits 1..n by per-bit periodicity"
+    nodes: ["read n, total = 0", "for bit b = 0.. -- up to width of n", "period = 2^(b+1)", "add row(n+1)/period)-2^b for full periods", "add max(0, (n+1) mod period - 2^b) for tail", "total = sum over all bits", "print total"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 2}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+      - {from: 4, to: 1, label: "next bit"}
+      - {from: 4, to: 5, label: "last bit"}
+      - {from: 5, to: 6}
+  - type: mcq
+    prompt: "Why can we count set bits of 1..n by summing over bit positions instead of over numbers?"
+    options:
+      - "Because each bit position b has the same number of ones in every block of 2^(b+1) consecutive integers, so a closed-form per-position total over 0..n replaces an O(n) scan; 0 contributes no bits, so counting 0..n matches 1..n."
+      - "Because __builtin_popcount can count primes, not set bits."
+      - "Because binary representations never have more than one bit set per number."
+      - "Because the sum of popcounts equals n itself."
+    answer: 0
+    explanation: "Bit b toggles with period 2^(b+1): 2^b ones then 2^b zeroes, repeating. So among 0..n it is set ((n+1)/2^(b+1))-2^b + max(0, (n+1) mod 2^(b+1) - 2^b) times — an O(1) expression. Summing over the at-most-30 relevant positions yields the total in O(log n), free to start the count at 0 because 0 contributes zero one-bits."
+---

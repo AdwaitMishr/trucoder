@@ -1,0 +1,213 @@
+---
+id: playlist
+title: Playlist
+difficulty: easy
+order: 37
+tags:
+  - sorting
+  - sliding-window
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — longest window of all-distinct values (two pointers)
+
+      You have a long sequence of songs (each song carries an id) and want the
+      longest **contiguous** stretch in which every song is distinct. This is the
+      classic *longest subarray with all distinct elements*, and the standard
+      tool is a **sliding window driven by two pointers**.
+
+      Keep a window `[left .. right]`. Grow `right` one song at a time. Maintain
+      the *last index* at which each value appeared. When the value at `right`
+      already appears inside the window (its last index is `>= left`), a
+      duplicate just entered, so advance `left` past that previous copy — this
+      restores "all distinct" instantly, because anything between is fine to
+      drop. Then the new window `[left .. right]` is all-distinct and its length
+      is `right - left + 1`; track the running maximum.
+
+      **Why the property is monotone.** If `[L..R]` has all distinct values, then
+      *every* window inside it does too. So growing the right end never forces a
+      left pointer to move backward — it only ever moves forward. That single
+      fact is what makes two pointers `O(n)`: each of `left`/`right` advances at
+      most `n` times in total.
+
+      **Worked mini-example.** `[3, 1, 2, 1, 4]`:
+
+      | right | value | action | window | length | best |
+      |-------|-------|--------|--------|--------|------|
+      | 0 | 3 | fresh | [3] | 1 | 1 |
+      | 1 | 1 | fresh | [3,1] | 2 | 2 |
+      | 2 | 2 | fresh | [3,1,2] | 3 | 3 |
+      | 3 | 1 | dup of idx 1 → left=2 | [2,1] | 2 | 3 |
+      | 4 | 4 | fresh | [2,1,4] | 3 | 3 |
+
+      Answer `3`.
+
+      **Complexity.** Time `O(n)`, space `O(n)` (the map of last indices).
+
+      :::tip
+      **Interview tip:** "Longest substring/window where every element is
+      distinct" is one of the most-asked two-pointer questions in interviews
+      (LeetCode's *Longest Substring Without Repeating Characters* is the exact
+      same idea, just over a string). The reflex to build: *grow a window on the
+      right; whenever a constraint is violated, shrink from the left only.*
+      :::
+  - type: markdown
+    content: |
+      ## The Problem
+
+      You are given a playlist of a radio station since its establishment. The
+      playlist has a total of `n` songs. What is the longest sequence of
+      **successive** songs where each song is unique?
+
+      **Input:** The first input line contains an integer `n`: the number of
+      songs. The next line has `n` integers `k1, k2, ..., kn`: the id number of
+      each song.
+
+      **Output:** Print the length of the longest sequence of unique songs.
+
+      **Constraints:**
+
+      - `1 ≤ n ≤ 2 · 10^5`
+      - `1 ≤ k_i ≤ 10^9`
+
+      ### Sample
+
+      Input:
+
+      ```text
+      8
+      1 2 1 3 2 7 4 2
+      ```
+
+      Output:
+
+      ```text
+      5
+      ```
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n²)**
+
+      For every start index, extend the window and add values to a set, stopping
+      at the first duplicate. Track the longest valid window.
+
+      ```cpp
+      int solve(int n, vector<int>& a) {
+          int best = 0;
+          for (int i = 0; i < n; ++i) {
+              unordered_set<int> seen;
+              for (int j = i; j < n; ++j) {
+                  if (seen.count(a[j])) break;   // duplicate -> stop this start
+                  seen.insert(a[j]);
+                  best = max(best, j - i + 1);
+              }
+          }
+          return best;
+      }
+      ```
+
+      Time `O(n²)`, space `O(n)` per window. Every start restarts the whole scan;
+      with `n = 2 · 10^5` that is `4 · 10^10` steps — hopeless.
+
+      **② Optimization — two pointers with a last-occurrence map — O(n)**
+
+      ```cpp
+      int solve(int n, vector<int>& a) {
+          unordered_map<int, int> last;   // value -> most recent index
+          int left = 0, best = 0;
+          for (int right = 0; right < n; ++right) {
+              if (last.count(a[right]) && last[a[right]] >= left)
+                  left = last[a[right]] + 1;      // jump past the duplicate
+              last[a[right]] = right;
+              best = max(best, right - left + 1);
+          }
+          return best;
+      }
+      ```
+
+      Time `O(n)`, space `O(n)`. Each element is inserted/erased once as we scan.
+
+      **③ Further optimization — none needed**
+
+      We must read all `n` values, so `Ω(n)` is a hard floor; the `O(n)` two
+      pointer solution is optimal.
+
+      **④ Alternative — shrink-in-a-loop with a set — O(n)**
+
+      Same two pointers, but instead of jumping `left` using the stored index,
+      keep the current window values in an `unordered_set` and erase from the
+      left until the duplicate is gone. Slightly more work per step but simpler
+      to reason about.
+
+      ```cpp
+      int solve(int n, vector<int>& a) {
+          unordered_set<int> in;        // values currently inside the window
+          int left = 0, best = 0;
+          for (int right = 0; right < n; ++right) {
+              while (in.count(a[right])) {   // duplicate -> shrink from the left
+                  in.erase(a[left]); ++left;
+              }
+              in.insert(a[right]);
+              best = max(best, right - left + 1);
+          }
+          return best;
+      }
+      ```
+
+      Time `O(n)` amortized, space `O(n)`. Both `right` and `left` move `n` times
+      in total.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` takes the songs as a `vector<int>` and returns the longest
+      all-distinct window length as an `int` (bounded by `n`, so `int` is fine).
+      We keep `last` mapping each song id to the last index it was seen at, and a
+      left pointer `left` that marks the start of the current all-distinct
+      window.
+
+      The key line is the duplicate check: when the value at `right` was last
+      seen *at or after* `left`, it is genuinely inside our window, so we set
+      `left = last[a[right]] + 1` to expel it. Updating `last[a[right]] = right`
+      then records the newest copy, and `right - left + 1` is the length of the
+      largest all-distinct window ending at `right`. Taking the max across all
+      right ends gives the answer.
+
+      The `unordered_map` gives expected `O(1)` reads and writes; had the song
+      ids been bounded integers we could use a plain array instead.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** `n = 8`, `a = [1, 2, 1, 3, 2, 7, 4, 2]` (the CSES sample).
+
+      **Expected output:** `5`.
+
+      **Actual run:**
+
+      | right | value | last seen | new left | length | best |
+      |-------|-------|-----------|----------|--------|------|
+      | 0 | 1 | — | 0 | 1 | 1 |
+      | 1 | 2 | — | 0 | 2 | 2 |
+      | 2 | 1 | 0 ≥ 0 | 1 | 2 | 2 |
+      | 3 | 3 | — | 1 | 3 | 3 |
+      | 4 | 2 | 1 ≥ 1 | 2 | 3 | 3 |
+      | 5 | 7 | — | 2 | 4 | 4 |
+      | 6 | 4 | — | 2 | 5 | 5 |
+      | 7 | 2 | 4 ≥ 2 | 5 | 3 | 5 |
+
+      Final `best = 5` — the window `[1, 3, 2, 7, 4]` (indices 2..6), all
+      distinct. This matches the expected output exactly.
+  - type: mcq
+    prompt: Why does the two-pointer window run in O(n) rather than O(n²)?
+    options:
+      - 'Because every duplicate is expelled instantly by jumping left to last[a[right]] + 1, and both pointers only move forward — at most n times each in total.'
+      - 'Because an unordered_map has O(1) lookups, which by itself makes the whole loop linear.'
+      - 'Because the longest window is always found in a single rightward scan.'
+      - Because the playlist cannot contain repeated song ids.
+    answer: 0
+    explanation: 'The window property "all distinct" is monotone, so the left pointer never needs to move backward. Each element is added once (when right passes it) and dropped at most once (when left passes it). That gives O(n) total work, irrespective of the O(1)-per-op cost of the hash map.'
+type: content
+---

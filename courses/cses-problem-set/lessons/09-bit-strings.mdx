@@ -1,0 +1,219 @@
+---
+id: bit-strings
+title: Bit Strings
+difficulty: easy
+order: 9
+tags:
+  - intro
+  - math
+  - binary
+blocks:
+  - type: markdown
+    content: |
+      ## Counting choices under a modulo
+
+      A bit string of length `n` is just a decision at each of `n` positions:
+      each position is independently `0` or `1`. Independent choices multiply,
+      so the number of bit strings is:
+
+      ```
+      2 * 2 * ... * 2   (n factors)  =  2^n
+      ```
+
+      That is the whole algorithm — the work is in computing `2^n` correctly
+      when the answer must be reported **modulo `10^9 + 7`**.
+
+      The straightforward way is an iterative loop that doubles the running
+      product `n` times, reducing mod `10^9+7` at every step so the value
+      never grows huge:
+
+      ```
+      result = 1
+      repeat n times: result = (result * 2) % MOD
+      ```
+
+      Each multiplication is on numbers < `10^9+7`, whose product is about
+      `10^18` — still fine for a 64-bit integer, so even `n = 10^6` runs
+      comfortably. (An even faster *binary exponentiation* does the job in
+      `O(log n)` by repeatedly squaring, but the simple loop is plenty here.)
+
+      *Worked mini-example, n = 3:* `result` goes `1 → 2 → 4 → 8`, so the
+      answer is `8` — exactly the eight strings `000..111`.
+
+      **Time complexity:** `O(n)` with the simple loop (or `O(log n)` with
+      fast exponentiation). **Space:** `O(1)`.
+
+      :::tip
+      **Interview tip:** Modular exponentiation is one of the most reused
+      primitives in coding interviews and system design — probabilities,
+      hash-pair counting, and combinatorics problems constantly ask for
+      `x^k mod m`. Know both roles: a plain loop for huge-but-small `k`, and
+      fast (square-and-multiply) exponentiation when the exponent itself is
+      large. Mod results are always a `long long` return.
+      :::
+  - type: markdown
+    content: |
+      ## Question
+
+      Your task is to calculate the number of bit strings of length `n`.
+
+      **Input**
+
+      The only input line has an integer `n`.
+
+      **Output**
+
+      Print the result modulo `10^9+7`.
+
+      **Constraints**
+
+      - `1 <= n <= 10^6`
+
+      **Example**
+
+      Input:
+
+      ```
+      3
+      ```
+
+      Output:
+
+      ```
+      8
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — O(2ⁿ) time, O(n) space (enumerate every bit string).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(long long n) {
+          const long long MOD = 1000000007LL;
+          long long cnt = 0;
+          function<void(long long)> rec = [&](long long pos) {
+              if (pos == n) { cnt = (cnt + 1) % MOD; return; }
+              rec(pos + 1);   // place a 0
+              rec(pos + 1);   // place a 1
+          };
+          rec(0);
+          return cnt;
+      }
+      ```
+
+      Generate and count every possible bit string via a recursion that forks twice per
+      position. Trivially correct — the count really is `2ⁿ` — but it visits `2ⁿ` leaves,
+      so for `n = 10^6` it would run `2^10^6` steps: impossible. It only works for toy
+      inputs.
+
+      **② Optimization — O(n) time, O(1) space (iterative doubling).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(long long n) {
+          const long long MOD = 1000000007LL;
+          long long result = 1;
+          for (long long i = 0; i < n; i++) {
+              result = (result * 2) % MOD;
+          }
+          return result;
+      }
+      ```
+
+      Since each bit position is an independent binary choice, multiply a running total
+      by `2` `n` times, reducing mod `10^9+7` after every step so the value stays inside
+      `long long`. One linear pass — the intended fast solution for `n ≤ 10^6`.
+
+      **③ Further optimization — O(log n) time, O(1) space (binary exponentiation).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(long long n) {
+          const long long MOD = 1000000007LL;
+          long long base = 2, result = 1, e = n;
+          while (e > 0) {
+              if (e & 1) result = (result * base) % MOD;
+              base = (base * base) % MOD;
+              e >>= 1;
+          }
+          return result;
+      }
+      ```
+
+      Square-and-multiply computes `2^n` using the binary expansion of `n`, so it needs
+      only `O(log n)` multiplications instead of `n`. For `n ≤ 10^6` it is overkill, but
+      it is the version that scales to astronomically large exponents.
+
+      **④ Alternative algorithm — O(e) time (exponent reduction via Fermat).**
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+
+      long long solve(long long n) {
+          const long long MOD = 1000000007LL, PM1 = 1000000006LL; // p - 1
+          long long e = n % PM1;                       // Fermat: 2^(p-1) == 1 mod p
+          long long result = 1;
+          for (long long i = 0; i < e; i++) result = (result * 2) % MOD;
+          return result;
+      }
+      ```
+
+      A different modular-arithmetic idea: because `p = 10^9+7` is prime, Fermat's little
+      theorem says `2^(p-1) ≡ 1 (mod p)`, so the sequence of powers is periodic with
+      period `p-1` and we may replace `n` by `n mod (p-1)` before multiplying. For small
+      `n` the reduced exponent is unchanged, so this is still `O(e)`; combined with the
+      binary exponentiation of tier ③ it becomes `O(log n)` — the point is the exponent
+      reduction, a different route to the same answer.
+
+      Reason through the code above with the next block — then trace it on the sample input below.
+  - type: markdown
+    content: |
+      ## Code logic
+
+      There is no branching or data structure here — the "algorithm" is the
+      recognition that each bit position is an independent binary choice, so
+      the count is `2^n`, and then doing that arithmetic under a modulus.
+
+      The loop multiplies a running `result` by `2`, `n` times, applying
+      `% MOD` after every multiplication. Because both operands stay under
+      `10^9+7`, their product (< `10^18`) fits in `long long`, so there is
+      no overflow even for `n = 10^6`. The modulo is applied at each step
+      rather than at the end precisely so the intermediate value never grows
+      out of range.
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      Trace the CSES sample `n = 3`. Start `result = 1`.
+
+      | i | before          | result = (result * 2) % MOD |
+      |---|-----------------|-----------------------------|
+      | 0 | result = 1      | 2                           |
+      | 1 | result = 2      | 4                           |
+      | 2 | result = 4      | 8                           |
+
+      Return `8`, matching the sample. For a case where the modulus matters,
+      `n = 30`: `2^30 = 1073741824`, and `1073741824 mod (10^9+7) =
+      73741817`. Since `2^30 > MOD`, the final `% MOD` trims the result —
+      exactly what the private test expects.
+  - type: mcq
+    prompt: 'When n can be as large as 10^6, why is taking the modulo at every multiplication correct (and necessary) instead of computing 2^n fully then modding once?'
+    options:
+      - Applying % every step is only about code style and has no correctness benefit.
+      - '(a*b) mod m == ((a mod m)*(b mod m)) mod m, so reducing each step keeps long_long safe while preserving the answer.'
+      - 'The result is independent of the modulus at each step, so step reduction changes the answer.'
+      - 'You should use a floating point pow() instead, since C++ integers cannot multiply numbers that large.'
+    answer: 1
+    explanation: 'Modular multiplication is distributive: (a*b) mod m = ((a mod m)*(b mod m)) mod m. So reducing after every step keeps every intermediate below ~10^18 (safe in long long) yet produces the exact same final residue as reducing once at the end.'
+type: content
+---
+

@@ -1,0 +1,326 @@
+---
+id: area-of-rectangles
+title: "Area of Rectangles — sweep line + segment tree on y"
+type: content
+difficulty: hard
+order: 232
+tags:
+  - geometry
+  - sweep-line
+  - segment-tree
+  - coords-compression
+  - adhoc
+blocks:
+  - type: markdown
+    content: |
+      # Area of Rectangles — the union area via a sweeping vertical line
+
+      You are given `n` axis-aligned rectangles (sides parallel to the axes) and
+      must print the **total area covered by at least one of them** — where two
+      rectangles *overlap*, the overlapped region counts **once**. This is the
+      "union of rectangles" problem, and `n` can be large enough that the naive
+      pairwise/brute approach explodes.
+
+      ## The sweep-line idea
+
+      Instead of thinking in 2D, sweep a **vertical line** from left to right
+      over the `x`-range. At any horizontal position `x`, the vertical line cuts
+      through some collection of "y-intervals" (the rectangles that currently
+      span `x`). The **covered height** at `x` is the total length of the union
+      of those intervals. As `x` moves, covered height changes only at rectangle
+      **x-edges**:
+
+      - rectangle `[x1,x2] × [y1,y2]` *adds* `[y1,y2]` to the active set when the
+        sweep reaches `x1`,
+      - and *removes* it when the sweep reaches `x2`.
+
+      Between two consecutive x-edges the active set (hence covered height `H`)
+      is constant, so that strip contributes `width × H`, where
+      `width = x_next - x_prev`.
+
+      ## A segment tree that tracks covered length
+
+      The hard part is maintaining the covered **length** of the active union as
+      we add/remove intervals. We do it with a segment tree over **compressed
+      y-edges**:
+
+      - Collect every `y1`,`y2` → compress into a sorted unique array `ys`, so
+        the tree ranges over the intervals `[ys[i], ys[i+1]]`.
+      - Each node stores `cnt` (how many active rectangles fully cover this
+        node's interval) and `len` (the covered length inside it).
+      - On update: if `cnt > 0` the node is fully covered so `len` is its full
+        interval width; otherwise `len` equals the sum of its children's `len`.
+
+      Adding/removing an interval updates `O(log m)` nodes, so each event costs
+      `O(log n)`, and the union width × height gives the exact area.
+
+      **Time:** `O(n log n)`. **Space:** `O(n)`.
+
+      :::tip
+      **Interview tip:** the phrase *"union of axis-aligned rectangles"* or any
+      "measure" question over intervals is the sweep-line trigger. Two parts to
+      memorise: (1) **events** — open/close at `x1`/`x2` with a `+1/-1`
+      delta; (2) **interval-coverage segment tree** — a node is fully covered
+      while `cnt>0`, else it's the sum of children. The same pattern computes
+      perimeter (union), overlapping length of intervals, and "k-th covered
+      strip". Coordinate compression is what makes coordinates up to `10^9`
+      trivially small.
+      :::
+  - type: markdown
+    content: |
+      # Question — Area of Rectangles
+
+      Your task is to calculate the total area covered by at least one of `n`
+      axis-aligned rectangles. The rectangles are given by their corner
+      coordinates, and they may overlap.
+
+      **Input**
+
+      The first line contains an integer `n`. Then `n` lines follow, each with
+      four integers `x1`, `y1`, `x2`, `y2` describing one rectangle with
+      corners `(x1,y1)` and `(x2,y2)`.
+
+      **Output**
+
+      Print the total area covered.
+
+      **Constraints**
+
+      - `1 <= n <= 10^5`
+      - `-10^9 <= x1 < x2 <= 10^9`
+      - `-10^9 <= y1 < y2 <= 10^9`
+      - the answer fits in a signed 64-bit integer
+
+      **Example**
+
+      Input:
+      ```
+      3
+      1 1 4 4
+      2 2 5 3
+      3 1 4 5
+      ```
+
+      Output:
+      ```
+      11
+      ```
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — 2-D bitmap over compressed unit cells, O(n^3) worst case**
+
+      Correct and dead simple: compress both axes, split the plane into unit cells
+      `(x-slab i, y-slab j)`, and mark a cell covered if any rectangle spans it. For
+      `n = 10^5` this is ~`10^15` cell checks — only usable on tiny inputs, but it
+      demonstrates *exactly* what union means.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<array<ll,4>> r(n);
+          vector<ll> xs, ys;
+          for (auto &a : r){ cin >> a[0] >> a[1] >> a[2] >> a[3];
+                             xs.push_back(a[0]); xs.push_back(a[2]);
+                             ys.push_back(a[1]); ys.push_back(a[3]); }
+          auto comp = [](vector<ll> v){ sort(v.begin(), v.end());
+              v.erase(unique(v.begin(), v.end()), v.end()); return v; };
+          xs = comp(xs); ys = comp(ys);
+          ll X = (ll)xs.size() - 1, Y = (ll)ys.size() - 1;
+          vector<vector<char>> cov(X, vector<char>(Y, 0));
+          for (auto &a : r){
+              int xa = lower_bound(xs.begin(), xs.end(), a[0]) - xs.begin();
+              int xb = lower_bound(xs.begin(), xs.end(), a[2]) - xs.begin();
+              int ya = lower_bound(ys.begin(), ys.end(), a[1]) - ys.begin();
+              int yb = lower_bound(ys.begin(), ys.end(), a[3]) - ys.begin();
+              for (int i = xa; i < xb; ++i) for (int j = ya; j < yb; ++j) cov[i][j] = 1;
+          }
+          ll area = 0;
+          for (int i = 0; i < X; ++i) for (int j = 0; j < Y; ++j)
+              if (cov[i][j]) area += (xs[i+1] - xs[i]) * (ys[j+1] - ys[j]);
+          cout << area << "\n";
+          return 0;
+      }
+      ```
+
+      Each rectangle visits up to `O(n^2)` cells, so total is `O(n^3)` — far too slow
+      for `n = 10^5`, but it is the ground-truth reference.
+
+      **② Optimization — sweep line + interval-coverage segment tree, O(n log n)**
+
+      Sort rectangles' `x`-edges into events; sweep left → right; maintain the
+      covered `y`-length in the segment tree; add `width × coveredLength` strips.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      struct Event { ll x, y1, y2; int delta; };
+      vector<ll> ys;
+      vector<int> cnt;
+      vector<ll> len;
+
+      void pull(int node, int l, int r) {
+          if (cnt[node] > 0) len[node] = ys[r + 1] - ys[l];      // fully covered
+          else if (l == r) len[node] = 0;
+          else len[node] = len[node << 1] + len[node << 1 | 1];  // union of children
+      }
+
+      void update(int node, int l, int r, int ql, int qr, int delta) {
+          if (ql <= l && r <= qr) { cnt[node] += delta; pull(node, l, r); return; }
+          int mid = (l + r) >> 1;
+          if (ql <= mid) update(node << 1, l, mid, ql, qr, delta);
+          if (qr > mid) update(node << 1 | 1, mid + 1, r, ql, qr, delta);
+          pull(node, l, r);
+      }
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<Event> ev;
+          for (int i = 0; i < n; ++i) {
+              ll x1, y1, x2, y2; cin >> x1 >> y1 >> x2 >> y2;
+              ev.push_back({x1, y1, y2, +1});
+              ev.push_back({x2, y1, y2, -1});
+              ys.push_back(y1); ys.push_back(y2);
+          }
+          sort(ys.begin(), ys.end());
+          ys.erase(unique(ys.begin(), ys.end()), ys.end());
+          int m = (int)ys.size();               // m-1 intervals [ys[i], ys[i+1]]
+          cnt.assign(4 * m + 4, 0);
+          len.assign(4 * m + 4, 0);
+          sort(ev.begin(), ev.end(), [](const Event &a, const Event &b){ return a.x < b.x; });
+          ll area = 0, prevX = ev[0].x;
+          for (int i = 0; i < (int)ev.size();) {
+              ll curX = ev[i].x;
+              area += (curX - prevX) * len[1];   // covered height over [prevX, curX)
+              while (i < (int)ev.size() && ev[i].x == curX) {
+                  int yl = (int)(lower_bound(ys.begin(), ys.end(), ev[i].y1) - ys.begin());
+                  int yr = (int)(lower_bound(ys.begin(), ys.end(), ev[i].y2) - ys.begin()) - 1;
+                  if (yl <= yr) update(1, 0, m - 2, yl, yr, ev[i].delta);
+                  ++i;
+              }
+              prevX = curX;
+          }
+          cout << area << "\n";
+          return 0;
+      }
+      ```
+
+      **③ Further optimization** — the above is already `O(n log n)`, the
+      theoretical optimum for union-of-rectangles with this event structure;
+      there is no lower-complexity general method. (A "merge segments per sweep
+      row" alternative over compressed `x` also works and is `O(n^2)` worst
+      case, so it is *not* better.)
+
+      **④ Alternative — scan over compressed x-cells (O(n^2) worst case)**
+
+      A different but valid route: compress *both* axes and, per x-slab, collect
+      the active y-intervals and merge them with a sort. Simpler to write, but
+      `O(n^2)` on dense inputs — fine only when `n` is small.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n; cin >> n;
+          vector<array<ll,4>> r(n);
+          vector<ll> xs, ys;
+          for (auto &a : r){ cin >> a[0] >> a[1] >> a[2] >> a[3]; xs.push_back(a[0]); xs.push_back(a[2]); ys.push_back(a[1]); ys.push_back(a[3]); }
+          sort(xs.begin(), xs.end()); xs.erase(unique(xs.begin(), xs.end()), xs.end());
+          sort(ys.begin(), ys.end()); ys.erase(unique(ys.begin(), ys.end()), ys.end());
+          ll area = 0;
+          // for each x-slab, collect intervals covering it and merge
+          for (int i = 0; i + 1 < (int)xs.size(); ++i){
+              vector<pair<ll,ll>> segs;
+              for (auto &a : r)
+                  if (a[0] <= xs[i] && xs[i+1] <= a[2])
+                      segs.push_back({a[1], a[3]});
+              sort(segs.begin(), segs.end());
+              ll lo = 0, hi = 0; ll h = 0; bool any = false;
+              for (auto &s : segs){
+                  if (!any){ lo = s.first; hi = s.second; any = true; }
+                  else if (s.first <= hi) hi = max(hi, s.second);
+                  else { h += hi - lo; lo = s.first; hi = s.second; }
+              }
+              if (any) h += hi - lo;
+              area += (xs[i+1] - xs[i]) * h;
+          }
+          cout << area << "\n";
+          return 0;
+      }
+      ```
+
+      All correct; the sweep-line segment tree (②) is the one to reach for.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Focus on **②**:
+
+      - Each rectangle becomes two `Event`s: `{x1, y1, y2, +1}` (open) and
+        `{x2, y1, y2, -1}` (close). The `+1/-1` counts how many rectangles are
+        *actively covering* the interval `[y1,y2]` at the current sweep column.
+      - `ys` holds the unique `y`-coordinates. Leaf `i` of the segment tree owns
+        the interval `[ys[i], ys[i+1]]`; `yr = index(y2) - 1` maps a half-open
+        range correctly.
+      - `pull`: if `cnt[node] > 0` the interval is fully covered, so
+        `len = ys[r+1] - ys[l]`. Otherwise the covered length is the sum of the
+        two children (an empty leaf contributes `0`).
+      - We aggregate events with the *same* `x` before advancing `prevX`, so a
+        strip's own `x`-width is measured correctly even when several edges
+        coincide.
+      - `len[1]` is the total covered height across the y-axis; multiplying by
+        the `x`-width between consecutive event columns gives that strip's area.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Two rectangles: `[0,0]×[2,2]` and `[1,1]×[3,3]` — area should be
+      `4 + 4 - 1 = 7`.
+
+      Events: `(x=0, +[0,2])`, `(x=1, +[1,3])`, `(x=2, -[0,2])`, `(x=3, -[1,3])`.
+      Compressed `ys = [0,1,2,3]`, so leaves are `[0,1],[1,2],[2,3]`.
+
+      | x event | applied  | covered y | strip width | area added |
+      |---------|----------|-----------|-------------|-----------|
+      | x=0     | +[0,2]   | [0,2] → len 2 | 1 (to x=1) | 1·2 = 2 |
+      | x=1     | +[1,3]   | [0,3] → len 3 | 1 (to x=2) | 1·3 = 3 |
+      | x=2     | -[0,2]   | [1,3] → len 2 | 1 (to x=3) | 1·2 = 2 |
+      | x=3     | -[1,3]   | 0             | —           | —     |
+
+      After processing the `x=0` event the covered height is 2 (interval
+      `[0,2]`); that height persists over `[0,1]`, contributing `2`. Then
+      `x=1` adds `[1,3]`, covered height becomes 3 over `[1,2]`, etc. Total
+      `2+3+2 = 7`. The segment tree's `len[1]` returns `2, 3, 2` for the three
+      strips exactly as the table's "covered y" column.
+  - type: flowchart
+    title: "Sweep line to union area"
+    nodes: ["Read rectangles", "Events at x1 (+), x2 (-)", "Compress y's",
+            "Process events by x", "Update covered-length segtree",
+            "area += width × covered", "Print area"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: ""}
+      - {from: 5, to: 3, label: "next x"}
+      - {from: 5, to: 6, label: "all events"}
+  - type: mcq
+    prompt: "Why does the interval-coverage segment tree correctly report the union-covered y-length even when many overlapping rectangles are active simultaneously?"
+    options:
+      - "A node is fully covered whenever its cnt > 0, otherwise it reports the sum of its children's covered lengths, so each y point is counted exactly once per leaf regardless of how many rectangles pile on top of it"
+      - "The tree stores the maximum rectangle height per column, which already encodes the union"
+      - "Couning only the topmost rectangle per x avoids overlap automatically without any tree"
+      - "The tree re-sorts all rectangles on every event, keeping the union exact by recomputation"
+    answer: 0
+    explanation: "Each leaf interval is either fully covered (cnt>0) or covered exactly as much as its children together. Infinite overlap depth collapses because cnt counts how many rectangles cover the node, but len only marks the node 'covered' once (cnt>0). Summing leaf-covered lengths therefore counts every y coordinate at most once — the union length — and the +1/-1 events update cnt incrementally as the sweep moves."
+---

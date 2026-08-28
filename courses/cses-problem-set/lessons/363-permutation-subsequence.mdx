@@ -1,0 +1,251 @@
+---
+id: permutation-subsequence
+title: Permutation Subsequence
+difficulty: hard
+order: 363
+tags:
+  - additional
+  - lcs
+  - lis
+  - permutations
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — LCS on permutations reduces to LIS
+
+      The most common subsequence (LCS) of two general arrays is solved by
+      `O(n·m)` dynamic programming. Here both arrays are **permutations**, and
+      that structural fact is the whole game: it lets us shrink the problem to a
+      **longest increasing subsequence (LIS)** in `O(n log n)`.
+
+      **Key reduction.** Because `b` is a permutation, each value occurs exactly
+      once in `b`. Define `pos[v]` = the (1‑indexed) position of value `v` in
+      array `b`. Now walk through `a` from left to right and replace every
+      element by `pos[·]`. Any value that does not appear in `b` at all (when the
+      value ranges differ) can never be in a common subsequence, so it is
+      dropped.
+
+      A common subsequence is a list of values that
+      1. appear in this order inside `a` (guaranteed by scanning `a`), and
+      2. appear in this order inside `b`.
+
+      Condition 2 is exactly "their positions in `b` are increasing". So the
+      LCS length equals the length of a **longest strictly increasing
+      subsequence** of the position array.
+
+      The classic `O(n log n)` LIS algorithm ("patience sorting") keeps, for
+      each length `k`, the smallest possible tail value of an increasing
+      subsequence of length `k`. We augment it with predecessor pointers so the
+      actual sequence (not just its length) can be reconstructed.
+
+      :::tip
+      **Interview tip:** "Everything appears at most once" or "both inputs are
+      permutations" is a strong signal that the generic DP is the *wrong*
+      tool — map to positions and use LIS instead. Realize you are replacing a
+      quadratic LCS with a linearithmic LIS only when values are distinct.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given two arrays which are permutations, find their longest common
+      subsequence.
+
+      A **subsequence** is a sequence of array elements read left to right that
+      may skip elements in between. A **common subsequence** appears in both
+      arrays.
+
+      **Input.** The first line has two integers `n` and `m`: the sizes of the
+      arrays. The second line has `n` integers `a₁, a₂, …, aₙ`: the contents of
+      the first array. The third line has `m` integers `b₁, b₂, …, bₘ`: the
+      contents of the second array.
+
+      **Output.** First print the length of a longest common subsequence. After
+      that, an example of such a sequence. If several solutions exist, print any
+      of them.
+
+      **Constraints**
+      - `1 ≤ n, m ≤ 2·10^5`
+      - `1 ≤ aᵢ ≤ n`
+      - `1 ≤ bᵢ ≤ m`
+
+      **Sample**
+
+      Input:
+      ```
+      8 6
+      3 1 2 8 5 7 6 4
+      6 5 1 2 3 4
+      ```
+
+      Output:
+      ```
+      3
+      1 2 4
+      ```
+
+      *Explanation:* `1 2 4` appears in `a` at indices 2, 3, 8 and in `b` at the
+      end, so it is a common subsequence of length 3. No longer common
+      subsequence exists.
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n·m).** The textbook LCS DP: `dp[i][j]` = LCS of the
+      prefixes `a[1..i]` and `b[1..j]`, with `dp[i][j] = dp[i-1][j-1] + 1` when
+      `a[i] == b[j]`, else `max(dp[i-1][j], dp[i][j-1])`. Correct, but needs an
+      `n·m` table — for `n = m = 2·10^5` that is `4·10^10` states, far beyond any
+      limit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          int n, m; cin >> n >> m;
+          vector<int> a(n), b(m);
+          for(int&x:a)cin>>x;
+          for(int&x:b)cin>>x;
+          vector<vector<int>> dp(n+1, vector<int>(m+1, 0));
+          for(int i=1;i<=n;i++)
+              for(int j=1;j<=m;j++){
+                  if(a[i-1]==b[j-1]) dp[i][j]=dp[i-1][j-1]+1;
+                  else dp[i][j]=max(dp[i-1][j], dp[i][j-1]);
+              }
+          cout << dp[n][m] << "\n";
+      }
+      ```
+      *Complexity: O(n·m) time and O(n·m) space — unusable at 2·10^5.*
+
+      **② Optimization — O(n log n).** Use the permutation structure. Build
+      `pos` of `b`, map each element of `a` that also lives in `b` to its
+      position, drop the rest, then run patience‑sorting LIS with predecessor
+      pointers and reconstruct one optimal sequence.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n, m; cin >> n >> m;
+          vector<int> a(n); for(auto&x:a) cin>>x;
+          vector<int> b(m); for(auto&x:b) cin>>x;
+          vector<int> pos(m+1);
+          for(int i=0;i<m;i++) pos[b[i]]=i;
+          vector<int> val, kept;
+          for(int x: a){
+              if(x>=1 && x<=m){ val.push_back(pos[x]); kept.push_back(x); }
+          }
+          int L = (int)val.size();
+          vector<int> tails, prev(L, -1);
+          for(int j=0;j<L;j++){
+              int x = val[j];
+              int p = (int)(lower_bound(tails.begin(), tails.end(), x,
+                          [&](int idx, int v){ return val[idx] < v; }) - tails.begin());
+              if(p==0) prev[j]=-1; else prev[j]=tails[p-1];
+              if(p==(int)tails.size()) tails.push_back(j);
+              else tails[p]=j;
+          }
+          vector<int> used;
+          for(int cur = tails.empty()?-1:tails.back(); cur!=-1; cur=prev[cur])
+              used.push_back(cur);
+          reverse(used.begin(), used.end());
+          cout << (int)tails.size() << "\n";
+          for(size_t i=0;i<used.size();i++)
+              cout << (i?" ":"") << kept[used[i]];
+          cout << "\n";
+      }
+      ```
+      *Complexity: O(n log n) time (one binary search per element), O(n) space — ideal for 2·10^5.*
+
+      **③ Further optimization — none.** LIS already reads the input once and
+      spends `log n` per element; an optimal algorithm must inspect every value,
+      so `Ω(n)`, and this is `O(n log n)`. No asymptotic gain remains.
+
+      **④ Alternative.** If the arrays were *not* permutations (values can
+      repeat), the LIS reduction fails because the same value may appear many
+      times in `b`. The only correct general approach is the `O(n·m)` DP (①). The
+      distinct‑value assumption is precisely what licenses the fast tier.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      `solve` — LIS on positions. Key lines:
+
+      1. **Mapping.** `pos[b[i]] = i` records each value's position in `b`. Then
+         `val` collects `pos[a[x]]` for every `a`‑element that is also in `b`
+         (`x <= m`); values larger than `m` are absent from `b` and skipped.
+      2. **Patience sorting.** `tails[k]` stores an index `j` into `val` such
+         that `val[tails[k]]` is the smallest tail value of an increasing
+         subsequence of length `k+1`. `lower_bound` finds the first tail that is
+         `>= x`, which we overwrite with `x` (strictly increasing implies we
+         replace the first value that is not *less*).
+      3. **Reconstruction.** `prev[j]` is the index preceding `j` in the best
+         subsequence ending at `j`. We backtrack from `tails.back()` to rebuild
+         the actual indices, then map them back to original values with `kept`.
+      4. **Output.** Length is `tails.size()`; the sequence is printed from the
+         backtracked indices.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input:** n = 8, m = 6, `a = 3 1 2 8 5 7 6 4`, `b = 6 5 1 2 3 4` → expected
+      `3` then `1 2 4`.
+
+      Position table `pos` in `b`: `1→3, 2→4, 3→5, 4→6, 5→2, 6→1`.
+
+      Mapping `a` through `pos` (elements `8` and `7` are `> m = 6`, so they are
+      dropped):
+
+      | original `a` | 3 | 1 | 2 | 8 | 5 | 7 | 6 | 4 |
+      |--------------|---|---|---|---|---|---|---|---|
+      | position     | 5 | 3 | 4 | — | 2 | — | 1 | 6 |
+      | kept?        | ✓ | ✓ | ✓ | ✗ | ✓ | ✗ | ✓ | ✓ |
+
+      Position array `[5,3,4,2,1,6]`. Its LIS:
+
+      | index | value | tails after | prev |
+      |-------|-------|-------------|------|
+      | 0 | 5 | `[5]` | — |
+      | 1 | 3 | `[3]` | — |
+      | 2 | 4 | `[3,4]` | 1 |
+      | 3 | 2 | `[2,4]` | — |
+      | 4 | 1 | `[1,4]` | — |
+      | 5 | 6 | `[1,4,6]` | 2 |
+
+      Backtracking from index 5 (`6`) → prev 2 (`4`) → prev 1 (`3`), read in
+      reverse: positions `3,4,6` → kept values `1,2,4`. Length `3`.
+
+      The brute DP (①) would fill a table and also report length 3 with some
+      optimal sequence; the LIS tier (②) reaches the same answer and prints one,
+      `1 2 4`, matching the CSES sample.
+
+  - type: flowchart
+    title: "LCS of permutations via position-mapped LIS"
+    nodes:
+      - Start: read a, b; build pos[] of b
+      - Map each a-element to pos[] (drop values not in b)
+      - Patience-sort LIS with prev pointers
+      - Backtrack tails.back() via prev
+      - Print length and sequence
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: "val[j]=pos[a[j]]"}
+      - {from: 2, to: 3, label: "tails built"}
+      - {from: 3, to: 4, label: ""}
+
+  - type: mcq
+    prompt: "Why does the LIS reduction from the LCS of two permutations work, but fail for general arrays?"
+    options:
+      - "Because in a permutation every value occurs at most once, so a common subsequence is equivalent to an increasing order of distinct positions in b."
+      - "Because permutations are always sorted."
+      - "Because the answer is always small for permutations."
+      - "Because pos[] of b must be sorted before the mapping."
+    answer: 0
+    explanation: "Each value appears at most once in b, so 'values appear in the same order in b' means exactly 'their positions in b are strictly increasing'. Mapping each a-element to its b-position turns a common-subsequence problem into a longest increasing subsequence problem. If b contained repeated values, two equal positions could appear and the same-position-in-b condition would no longer be a clean strictly-increasing constraint."
+
+type: content
+---

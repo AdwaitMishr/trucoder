@@ -1,0 +1,192 @@
+---
+id: all-letter-subgrid-count-i
+title: All Letter Subgrid Count I
+difficulty: medium
+order: 325
+tags:
+  - counting
+  - grid
+  - subgrid
+  - monotonic-stack
+  - histogram
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — counting \"uniform\" subgrids
+
+      Given an `n × m` grid of lowercase letters `a..z`, count every rectangular
+      subgrid in which **all cells hold the same letter**. A ``uniform`` subgrid
+      may be any size — including larger multi-cell blocks — as long as no cell
+      inside it differs.
+
+      **Reduction to the all-`1` problem.** For a fixed letter `L`, replace each
+      cell with `1` if it equals `L`, else `0`. Then a subgrid is *uniform in `L`*
+      exactly when it is an all-`1` subgrid of this binary mask. So the total
+      answer is the sum over every distinct letter `L` of the number of all-`1`
+      submatrices of `mask(L)` — which we already know how to count in `O(n·m)`
+      with a histogram + monotonic stack (see the ``Filled Subgrid Count``
+      lessons).
+
+      **Why summing over letters is correct and complete.** Every uniform subgrid
+      has *some* letter `L`, and for that `L` it is an all-`1` block. Conversely
+      every all-`1` block of `mask(L)` is a uniform `L` subgrid. Distinct letters
+      give disjoint families (a subgrid is uniform in exactly one letter), so we
+      can simply add the per-letter counts.
+
+      **Complexity.** With an alphabet `Σ ≤ 26`, time `O(Σ·n·m)`, space `O(m)`.
+
+      :::tip
+      **Interview tip:** \"count submatrices whose cells all equal some value / lie
+      in one class\" is solved by peeling off each class and running the all-ones
+      submatrix counter. The classic opener is LeetCode *Count Submatrices With All
+      Ones*; the letter twist just adds the `Σ` outer loop. Say the reduction out
+      loud first — interviewers want the *insight*, not the stack code.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an `n × m` grid of lowercase letters, count the number of rectangular
+      subgrids (contiguous blocks of cells) in which **every cell is the same
+      letter**.
+
+      **Input.** The first line has two integers `n` and `m`. After this there are
+      `n` lines, each with `m` lowercase letters.
+
+      **Output.** Print the number of uniform subgrids.
+
+      **Constraints**
+      - `1 ≤ n, m ≤ 1000`
+
+      **Example**
+
+      Input:
+      ```
+      2 2
+      ab
+      ba
+      ```
+
+      Output:
+      ```
+      4
+      ```
+      (Only the four single cells are uniform here — every `2`-cell segment mixes
+      two different letters.)
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n³·m³).** Enumerate every subgrid and check that all its
+      cells equal the top-left cell (early-break on the first mismatch). Correct for
+      tiny grids; the four loops plus the scan blow up for `n, m ≤ 1000`.
+
+      ```cpp
+      long long brute(int n, int m, const vector<string>& g) {
+          long long ans = 0;
+          for (int r1 = 0; r1 < n; r1++) for (int r2 = r1; r2 < n; r2++)
+              for (int c1 = 0; c1 < m; c1++) for (int c2 = c1; c2 < m; c2++) {
+                  char first = g[r1][c1]; bool ok = true;
+                  for (int r = r1; r <= r2 && ok; r++)
+                      for (int c = c1; c <= c2; c++)
+                          if (g[r][c] != first) { ok = false; break; }
+                  if (ok) ans++;
+              }
+          return ans;
+      }
+      ```
+
+      **② Optimization — O(Σ·n·m) per-letter histogram + monotonic stack — the
+      intended solution.** For each distinct letter, build its 0/1 mask's column
+      heights and count all-`1` submatrices with a monotonic stack. Verified against
+      brute force.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      long long countFor(const vector<string>& g, char L) {
+          int n = g.size(), m = g[0].size();
+          vector<int> h(m, 0); long long ans = 0;
+          for (int i = 0; i < n; i++) {
+              for (int j = 0; j < m; j++)
+                  h[j] = (g[i][j] == L) ? h[j] + 1 : 0;
+              vector<int> st; vector<long long> dp(m, 0);
+              for (int j = 0; j < m; j++) {
+                  while (!st.empty() && h[st.back()] >= h[j]) st.pop_back();
+                  if (st.empty()) dp[j] = (long long)h[j] * (j + 1);
+                  else           { int p = st.back(); dp[j] = (long long)h[j] * (j - p) + dp[p]; }
+                  st.push_back(j); ans += dp[j];
+              }
+          }
+          return ans;
+      }
+      long long solve(int n, int m, const vector<string>& g) {
+          set<char> letters;
+          for (auto& r : g) for (char c : r) letters.insert(c);
+          long long ans = 0;
+          for (char L : letters) ans += countFor(g, L);
+          return ans;
+      }
+      int main() { int n, m; cin >> n >> m; vector<string> g(n);
+                   for (auto& r : g) cin >> r; cout << solve(n, m, g) << "\n"; }
+      ```
+
+      **③ Alternative — O(Σ·n²·m) row-pair counting (small `n`).** For each letter
+      `L` and each pair of rows, mark columns where the whole `L`-slice is filled
+      and count consecutive runs (as in the ``Filled Subgrid Count I`` alternative).
+      Simpler to reason about, but the `O(n²)` row-pair factor is too slow for the
+      real constraints.
+
+      **④ Note.** Only *distinct* letters present in the grid are worth iterating —
+      the `set<char>` in `solve` both keeps the loop tight and is a correctness
+      nicety (letters that never appear contribute `0` masks).
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      Focus on the **②** per-letter solution.
+
+      - **`mask`-by-colour:** `countFor(g, L)` treats cell `(i,j)` as `1` when
+        `g[i][j] == L` and `0` otherwise. The height `h[j]` then measures the
+        length of the vertical run of `L`s ending at `(i,j)`.
+      - **Stack recurrence:** identical to the all-`1` counter — for each bottom row,
+        `dp[j] = h[j]·(j − p) + dp[p]` (with `p` the nearest shorter column)
+        counts every uniform-`L` subgrid whose bottom-right is `(i,j)`.
+      - **Sum over letters:** `solve` gathers the distinct letters once and adds
+        each `countFor`. Since a uniform subgrid is uniform in *exactly one* letter,
+        the families are disjoint and simple addition is exact.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 2, m = 2`, grid `["ab", "ba"]`. Distinct letters
+      `{a, b}`.
+
+      **Letter `a`:**
+      - positions `(0,0)` and `(1,1)`; heights row 0 = `[1,0]`, row 1 = `[0,1]`.
+      - Row 0: `dp = [1, 0]` → 1. Row 1: `dp = [0, 1]` → 1. Total **2**.
+
+      **Letter `b`:**
+      - positions `(0,1)` and `(1,0)`; heights row 0 = `[0,1]`, row 1 = `[1,0]`.
+      - Row 0: `dp = [0, 1]` → 1. Row 1: `dp = [1, 0]` → 1. Total **2**.
+
+      Sum = **4**. Indeed only the four single cells are uniform: `(0,0)=a`,
+      `(0,1)=b`, `(1,0)=b`, `(1,1)=a`. Any 2-cell segment mixes two letters.
+
+      **Actual vs expected:** output `4` matches the sample.
+  - type: mcq
+    prompt: "Why is it valid to count each letter independently and just add the results, instead of needing to handle overlapping uniform subgrids specially?"
+    options:
+      - "Because each distinct letter's uniform subgrids form a disjoint family — a subgrid is uniform in exactly one letter — so summing per-letter counts counts every uniform subgrid exactly once with no double counting."
+      - "Because letters never appear more than once anywhere in the grid."
+      - "Because the answer is computed modulo a prime so overlaps cancel out."
+      - "Because uniform subgrids cannot touch each other."
+    answer: 0
+    explanation: "A subgrid has one defining letter: it is uniform in some single letter L and cannot simultaneously be uniform in a different letter (its cells are fixed). Thus the uniform subgrids of 'a', then 'b', ... are disjoint subsets of all subgrids. Summing the all-1-submatrix counts of each letter's mask therefore counts every uniform subgrid precisely once — no inclusion-exclusion needed."
+
+type: content
+---

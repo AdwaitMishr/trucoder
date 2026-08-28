@@ -1,0 +1,328 @@
+---
+id: visible-buildings-queries
+title: Visible Buildings Queries
+type: content
+difficulty: hard
+order: 131
+tags:
+  - range-queries
+  - monotonic-stack
+  - next-greater-element
+  - segment-tree
+  - functional-graph
+blocks:
+  - type: markdown
+    content: |
+      # Visible Buildings Queries — records, next-greater chains, and depth
+
+      There are `n` buildings in a row with heights `h[1..n]`. Standing on the
+      roof of building `k` you look **to the right**. Building `i > k` is
+      *visible* iff it is **strictly taller than every building strictly between
+      `k` and `i`**. How many buildings can you see?
+
+      (Note: building `k+1` is always visible — there are no buildings between
+      `k` and `k+1`. Each further visible building must be taller than *all* the
+      buildings between you and it.)
+
+      ## The visible set is the "record maxima" of a suffix
+
+      Scanning right from `k`, the visible buildings are exactly the elements
+      that set a new running maximum. Position `k+1` is always one. Then the
+      next visible one is the first building with height greater than `h[k+1]`,
+      then the first with height greater than *that*, and so on. In other words
+      they form the **chain of "next greater element" jumps**:
+
+      ```
+      k+1  →  nge(k+1)  →  nge(nge(k+1))  →  ...
+      ```
+
+      where `nge(i)` = the smallest index `j > i` with `h[j] > h[i]` (strictly
+      greater). Each `nge` edge points to the parent of `i` in a forest; the
+      visible count from `k` is the **depth** of node `k+1` in that forest —
+      how many ancestors it has along the chain.
+
+      This turns the problem into two clean steps:
+
+      1. **Build the forest.** A single monotonic stack computes `nge[i]` for
+         every `i` in `O(n)` (strictly-greater → pop `<=`).
+      2. **Precompute depths.** Since every `nge` edge points strictly to the
+         right, `depth[i] = 1 + depth[nge[i]]` (0 if the chain ends), processed
+         right-to-left in `O(n)`.
+
+      Each query is then answered in `O(1)`.
+
+      :::tip
+      **Interview tip:** problems phrased as \"how many buildings/towers/monsters
+      to the right can I see\" reduce to **next-greater-element chains** and the
+      depth of a node in a forest — an interview favourite precisely because it
+      hides behind friendly wording (skyline, stock looking, battle lines). The
+      tell is \"strictly taller than everything in between\". Recognising the
+      reduction to a monotonic-stack forest, then answering on *depths* rather
+      than re-scanning, is the separation point.
+      :::
+  - type: markdown
+    content: |
+      # The Problem
+
+      There are `n` buildings in a row, numbered `1..n` left to right. The
+      height of building `i` is `h_i`.
+
+      You stand on the roof of building `k` and look to the right. Building
+      `i > k` is **visible** if it is strictly taller than every building
+      strictly between `k` and `i` (i.e. `h_i > max(h[k+1..i-1])`). Building
+      `k+1` (if it exists) is always visible.
+
+      Process queries of the type `2 k`: print how many buildings are visible
+      from building `k`.
+
+      ## Input
+
+      The first input line has two integers `n` and `q`: the number of buildings
+      and queries.
+
+      The second line has `n` integers `h_1, h_2, ..., h_n`: the building
+      heights.
+
+      Then there are `q` lines, each containing `2 k` (`1 <= k <= n`).
+
+      ## Output
+
+      Print the answer to each query, one per line.
+
+      ## Constraints
+
+      - `1 <= n, q <= 2 * 10^5`
+      - `1 <= h_i <= 10^9`
+
+      ## Sample
+
+      **Input:**
+      ```
+      5 3
+      4 2 5 3 6
+      2 1
+      2 3
+      2 5
+      ```
+      **Output:**
+      ```
+      3
+      2
+      0
+      ```
+  - type: markdown
+    content: |
+      ### Solution — progressive tiers
+
+      **① Brute force — O(n) per query, O(q·n) total**
+
+      For a query at `k`, walk `i = k+1 .. n` keeping `runMax = max(h[k+1..i-1])`;
+      count `i` when `h[i] > runMax`; then update `runMax`. Correct, but a full
+      scan per query is `O(q·n)` — far too slow for `2*10^5` of each.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<ll> h(n + 1);
+          for (int i = 1; i <= n; i++) cin >> h[i];
+          while (q--) {
+              int t, k; cin >> t >> k;
+              ll runMax = LLONG_MIN;
+              int cnt = 0;
+              for (int i = k + 1; i <= n; i++) {
+                  if (h[i] > runMax) cnt++;
+                  runMax = max(runMax, h[i]);      // strictly-taller rule
+              }
+              cout << cnt << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      *`O(q·n)` worst case — correct but `4*10^10` steps at the limit.*
+
+      **② Optimization — segment tree "find next greater" — O(n + q·V·log n)**
+
+      A max-segment tree lets a query hop along the chain: starting at `cur`,
+      find the *leftmost* index `> cur` whose value exceeds `h[cur]` (an
+      `O(log n)` descent that prunes any node whose max is not tall enough).
+      Count how many hops fit before the chain ends. The hop count equals the
+      number of visible buildings, so the approach is correct — but in the worst
+      case (an increasing array) a single query evolves every building, giving
+      `O(n log n)` per query.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      struct SegMax {
+          int n; vector<ll> t;
+          SegMax(const vector<ll>& a) { n = (int)a.size() - 1; t.assign(4 * n, 0); build(1, 1, n, a); }
+          void build(int v, int l, int r, const vector<ll>& a) {
+              if (l == r) { t[v] = a[l]; return; }
+              int m = (l + r) / 2;
+              build(v * 2, l, m, a); build(v * 2 + 1, m + 1, r, a);
+              t[v] = max(t[v * 2], t[v * 2 + 1]);
+          }
+          // leftmost index >= ql with value strictly > thr; -1 if none
+          int findFirst(int v, int l, int r, int ql, ll thr) {
+              if (r < ql || t[v] <= thr) return -1;
+              if (l == r) return l;
+              int m = (l + r) / 2;
+              int left = findFirst(v * 2, l, m, ql, thr);
+              if (left != -1) return left;
+              return findFirst(v * 2 + 1, m + 1, r, ql, thr);
+          }
+      };
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<ll> h(n + 1);
+          for (int i = 1; i <= n; i++) cin >> h[i];
+          SegMax st(h);
+          while (q--) {
+              int t, k; cin >> t >> k;
+              int cnt = 0, cur = k;
+              while (true) {
+                  int nxt = st.findFirst(1, 1, n, cur + 1, h[cur]);
+                  if (nxt == -1) break;
+                  cnt++; cur = nxt;
+              }
+              cout << cnt << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      *`O(log n)` per hop but up to `n` hops per query — correct, not worst-case optimal.*
+
+      **③ Further optimization — next-greater forest + depths — O(n + q)** — optimal
+
+      Build `nge[i]` with one monotonic stack (pop `<=` so `nge` is *strictly*
+      greater), then compute `depth[i] = 1 + depth[nge[i]]` right-to-left. With
+      `cur = k + 1`, the visible count is `depth[k+1]` (or `0` when `k = n`).
+      Each query is `O(1)`. This is the tier we compile.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      typedef long long ll;
+
+      int main() {
+          ios::sync_with_stdio(false); cin.tie(0);
+          int n, q; cin >> n >> q;
+          vector<ll> h(n + 1);
+          for (int i = 1; i <= n; i++) cin >> h[i];
+
+          // next strictly-greater element to the right, via monotonic stack
+          vector<int> nge(n + 2, n + 1);         // n+1 sentinel = "chain ends"
+          vector<int> st;
+          for (int i = n; i >= 1; i--) {
+              while (!st.empty() && h[st.back()] <= h[i]) st.pop_back();
+              nge[i] = st.empty() ? n + 1 : st.back();
+              st.push_back(i);
+          }
+
+          // depth[i] = number of records in the suffix h[i..n] (counts i)
+          vector<int> depth(n + 2, 0);
+          for (int i = n; i >= 1; i--)
+              depth[i] = (nge[i] <= n) ? depth[nge[i]] + 1 : 1;
+
+          while (q--) {
+              int t, k; cin >> t >> k;
+              cout << (k + 1 <= n ? depth[k + 1] : 0) << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      *`O(n + q)` time, `O(n)` space — optimal for these constraints.*
+  - type: markdown
+    content: |
+      # Code logic
+
+      - **Monotonic stack.** Scanning right-to-left, keep the stack decreasing.
+        Before pushing `i`, pop every index whose height is `<= h[i]` — those
+        can never be `i`'s next-greater (they are no taller and lie left of a
+        taller building). The new top is the first strictly-taller building to
+        the right. Popping `<=` (not `<`) is what enforces *strictly* visible.
+
+      - **Depth DP.** `nge` always points right, so the recursion is acyclic and
+        we fill `depth` from `n` down. `depth[i] = 1 + depth[nge[i]]` because
+        the visible chain from `i` is `i` followed by the chain from `nge[i]`.
+        The value is exactly how many buildings you would see *starting* at `i`.
+
+      - **Query.** You look right from `k`, so the chain begins at the first
+        building to your right, `k+1`. Answer `depth[k+1]`; if `k = n` there is
+        nothing to the right, so print `0`.
+
+      - **Why the chain is the whole answer.** The visible buildings from `k`
+        are the left-to-right record maxima of the suffix. Each next record is
+        precisely the next strictly-greater element of the previous record, so
+        the `nge` chain from `k+1` enumerates them all, in order. No scanning,
+        no repeated work — depths make every query a single array read.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, `h = [4, 2, 5, 3, 6]`.
+
+      **Next-greater (strict), right-to-left:**
+      ```
+      i=5 (6): none            -> nge[5] = 6 (sentinel)
+      i=4 (3): pop? top 5 has 6>3 kept; nge[4] = 5
+      i=3 (5): pop 5 (6>5 kept); nge[3] = 5
+      i=2 (2): pop ... top 3 has 5>2; nge[2] = 3
+      i=1 (4): top 3 has 5>4; nge[1] = 3
+      ```
+
+      **Depths, right-to-left** (`depth[i] = 1 + depth[nge[i]]`):
+      ```
+      depth[5] = 1
+      depth[4] = 1 + depth[5] = 2
+      depth[3] = 1 + depth[5] = 2
+      depth[2] = 1 + depth[3] = 3
+      depth[1] = 1 + depth[3] = 3
+      ```
+
+      **Query `2 1`** — look right from building 1, so start at `k+1 = 2`:
+      `depth[2] = 3`. Visible are buildings `2 (2), 3 (5), 5 (6)` — yes,
+      `pos4 (3)` is hidden behind `pos3 (5)`. Answer `3`.
+
+      **Query `2 3`** — start at `4`: `depth[4] = 2`. Visible: `4 (3), 5 (6)`.
+      Answer `2`.
+
+      **Query `2 5`** — `k = n`, nothing to the right: print `0`.
+
+      Printed output:
+      ```
+      3
+      2
+      0
+      ```
+      Matching the sample exactly.
+  - type: flowchart
+    title: "Count visible buildings via next-greater forest depths"
+    nodes: ["query 2 k: you stand at building k", "the visible chain starts at k+1", "nge[] = next strictly-greater to the right (monotonic stack)", "depth[i] = 1 + depth[nge[i]], filled right-to-left", "answer = depth[k+1] (or 0 if k >= n)"]
+    edges:
+      - {from: 0, to: 1}
+      - {from: 1, to: 4}
+      - {from: 2, to: 3}
+      - {from: 3, to: 4}
+  - type: mcq
+    prompt: "The visible buildings when standing at k are exactly the eager chain k+1, nge(k+1), nge(nge(k+1)), … because…"
+    options:
+      - "…every visible building must be strictly taller than all buildings to its left, and that is precisely what being reachable via strictly-greater next-greater jumps from k+1 expresses; equal heights are popped (<=) and are never records."
+      - "…the tallest building in the whole array is always the only visible one."
+      - "…visibility depends only on h[k], so building heights on the right do not matter."
+      - "…you simply count every building to the right, and nge is a red herring."
+    answer: 0
+    explanation: "A building i is visible iff h[i] > max(h[k+1..i-1]), i.e. it sets a new running maximum when scanning right — it is a left-to-right record. Records after k+1 are exactly the strictly-greater next-greater chain (ties are popped by <= and are never records), so count = depth of k+1 in the nge forest."
+---

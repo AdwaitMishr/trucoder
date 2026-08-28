@@ -1,0 +1,206 @@
+---
+id: all-letter-subgrid-count-ii
+title: All Letter Subgrid Count II
+difficulty: hard
+order: 326
+tags:
+  - counting
+  - grid
+  - subgrid
+  - monotonic-stack
+  - histogram
+  - overflow
+blocks:
+  - type: markdown
+    content: |
+      ## Theory — uniform subgrids at scale (and 64-bit awareness)
+
+      This lesson raises the stakes on ``All Letter Subgrid Count I``: the same
+      \"count subgrids whose cells are all one letter\" question, but with **much
+      larger constraints** (`n, m ≤ 2000`) where the `O(Σ·n³·m³)` brute force and
+      even `O(Σ·n²·m)` row-pair methods are hopeless. The goal is to make the
+      **per-letter `O(Σ·n·m)` histogram + monotonic-stack** the only viable route —
+      and to confront the **answer-size** trap that the earlier lesson deliberately
+      skipped.
+
+      **Reduction unchanged.** For each distinct letter `L`, zero-one-mask the grid
+      and count all-`1` submatrices with a monotonic stack; sum over `L`. The work
+      is `O(Σ·n·m)`; with `Σ = 26` and `n = m = 2000` that is ≈ `10⁸` cell-steps,
+      comfortably inside a 2-second budget in C++.
+
+      **The overflow trap (the new lesson).** When the grid is a single letter, the
+      answer is the number of *all* submatrices, `C(n+1,2)·C(m+1,2)`. For
+      `n = m = 2000` this is `(2000·2001/2)² ≈ 4.0×10¹²`; across up to 26 letters a
+      mixed grid can reach ~`10¹⁴`. That **does not fit a 32-bit `int`** — every
+      accumulator and the return type must be `long long` (signed 64-bit, max ≈
+      `9.2×10¹⁸`). A learner who uses `int` will silently overflow and print a
+      wrong, often negative, answer.
+
+      **Complexity.** Time `O(Σ·n·m)`, space `O(m)`.
+
+      :::tip
+      **Interview tip:** once you have the O(n·m) monotonic-stack recipe, the two
+      \"trap\" variations interviewers love are (1) a *larger/binary-inflexible*
+      alphabet forcing you to keep the `Σ` factor and prove it's affordable, and
+      (2) an *answer that overflows*. Always estimate the magnitude (`n²·m²/4·Σ`)
+      before choosing `int` vs `long long` — a wrong-width accumulator is a silent,
+      brutal bug that brute force won't be around to catch.
+      :::
+
+  - type: markdown
+    content: |
+      ## The Problem
+
+      Given an `n × m` grid of lowercase letters, count the number of rectangular
+      subgrids in which **every cell is the same letter**. The answer is guaranteed
+      to fit a signed 64-bit integer, but **not** necessarily a 32-bit one.
+
+      **Input.** The first line has two integers `n` and `m`. After this there are
+      `n` lines, each with `m` lowercase letters.
+
+      **Output.** Print the number of uniform subgrids.
+
+      **Constraints**
+      - `1 ≤ n, m ≤ 2000`
+
+      **Example**
+
+      Input:
+      ```
+      3 4
+      aabb
+      abba
+      bbbb
+      ```
+
+      Output:
+      ```
+      27
+      ```
+
+  - type: markdown
+    content: |-
+      ### Solution — progressive tiers
+
+      **① Brute force — O(Σ·n³·m³).** Enumerate every subgrid per letter, check
+      uniformity by scanning. Instant TLE at `n, m ≤ 2000`; shown only as the
+      starting baseline.
+
+      ```cpp
+      long long brute(int n, int m, const vector<string>& g) {
+          long long ans = 0;
+          for (int r1 = 0; r1 < n; r1++) for (int r2 = r1; r2 < n; r2++)
+              for (int c1 = 0; c1 < m; c1++) for (int c2 = c1; c2 < m; c2++) {
+                  char first = g[r1][c1]; bool ok = true;
+                  for (int r = r1; r <= r2 && ok; r++)
+                      for (int c = c1; c <= c2; c++)
+                          if (g[r][c] != first) { ok = false; break; }
+                  if (ok) ans++;
+              }
+          return ans;
+      }
+      ```
+
+      **② Optimization — O(Σ·n·m) per-letter histogram + monotonic stack — the
+      intended solution.** Same core as ``All Letter Subgrid Count I``, restated
+      with the count-width kept in `long long` throughout. Verified against brute
+      force.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      long long countFor(const vector<string>& g, char L) {
+          int n = g.size(), m = g[0].size();
+          vector<int> h(m, 0); long long ans = 0;
+          for (int i = 0; i < n; i++) {
+              for (int j = 0; j < m; j++)
+                  h[j] = (g[i][j] == L) ? h[j] + 1 : 0;
+              vector<int> st; vector<long long> dp(m, 0);
+              for (int j = 0; j < m; j++) {
+                  while (!st.empty() && h[st.back()] >= h[j]) st.pop_back();
+                  if (st.empty()) dp[j] = (long long)h[j] * (j + 1);
+                  else           { int p = st.back(); dp[j] = (long long)h[j] * (j - p) + dp[p]; }
+                  st.push_back(j); ans += dp[j];
+              }
+          }
+          return ans;
+      }
+      long long solve(int n, int m, const vector<string>& g) {
+          set<char> letters;
+          for (auto& r : g) for (char c : r) letters.insert(c);
+          long long ans = 0;
+          for (char L : letters) ans += countFor(g, L);
+          return ans;
+      }
+      int main() { int n, m; cin >> n >> m; vector<string> g(n);
+                   for (auto& r : g) cin >> r; cout << solve(n, m, g) << "\n"; }
+      ```
+
+      **③ Further optimization — keep `Σ` small, keep widths 64-bit.** Because mid
+      results (`dp[j]`, `ans`) can reach ~`10¹⁴`, nothing relevant may be an `int`
+      — both `dp` and `ans` are `long long`. Two cheap wins: (1) only iterate the
+      *distinct* letters actually present (`set`), and (2) the heights `h[j]` may
+      stay `int` since a per-column height never exceeds `n ≤ 2000`. Changing
+      anything else to `int` silently breaks it.
+
+      **④ Alternative — 64-bit-aware row-pair `O(Σ·n²·m)`.** For small `n` only. For
+      each letter and each row pair, count consecutive fully-`L` columns: a run of
+      length `L` adds `L·(L+1)/2`. Correct, but the `O(n²)` row-pair factor makes it
+      inapplicable at `n = 2000`, which is precisely the point of this lesson.
+
+  - type: markdown
+    content: |
+      ## Code logic
+
+      Focus on the **②** solution and its overflow discipline.
+
+      - **Per-letter pass:** `countFor(g, L)` masks to letter `L`, builds column
+        heights, and runs the monotonic-stack all-`1` counter per bottom row. Each
+        pass is `O(n·m)`.
+      - **`long long` everywhere that counts:** `ans` accumulates up to ~`10¹⁴`;
+        `dp[j]` holds up to `h[j]·(j−p) + dp[p]` which for a tall run is up to
+        ~`n·m` ≈ `4×10⁶` per cell but across 26 letters sums to ~`10¹⁴`. `h` stays
+        `int` (heights ≤ `n`).
+      - **Distinct letters:** `set<char>` bounds `Σ` to letters that actually
+        appear, so the `O(Σ·n·m)` bound is tight to the data.
+
+  - type: markdown
+    content: |
+      ## Walkthrough
+
+      **Input (sample):** `n = 3, m = 4`, grid `["aabb", "abba", "bbbb"]`.
+      Distinct letters `{a, b}`.
+
+      **Letter `a`** — positions with `a`: `(0,0),(0,1),(1,0),(1,3)`. Per-row
+      all-`1`-submatrix counts (heights reset when a cell is `b`):
+
+      - Row 0 `aabb`: heights `[1,2,0,0]` → all-`1` subgrids ending here: `dp` sum
+        = `1 + 2 = 3` (the `(0,0)`-only and `(0..1 cols)` blocks of `a`).
+      - Row 1 `abba`: heights `[2,0,0,1]` → bottom-row contribution `dp` sum =
+        `2 + 0 + 0 + 1 = 3` (two tall/single `a` blocks).
+      - Row 2 `bbbb`: no `a` → `0`.
+      - Letter `a` total = **6**.
+
+      **Letter `b`** — the complement. Row 0 heights `[0,0,1,2]` → `dp` sum =
+        `0+0+1+2 = 3`; row 1 heights `[0,1,2,0]` → `0+1+2+0 = 3`; row 2 `bbbb`
+        heights `[1,2,3,4]` → every subarray of `bbbb` is uniform-`b`: `4+3+2+1 =
+        10`. Letter `b` total = `3 + 3 + 10 = **16**`.
+
+      **Total = 6 + 16 = 27**, and a brute-force check confirms **27**, matching
+      the sample.
+
+      **64-bit sanity:** an all-`a` `2000×2000` grid yields
+      `(2000·2001/2)² = 4 004 001 000 000 ≈ 4.0×10¹²` — far beyond `int`'s `2.1×10⁹`,
+      so the `long long` return type is mandatory.
+  - type: mcq
+    prompt: "For an all-'a' 2000×2000 grid, the answer ≈ 4.0×10¹². What happens if the accumulator is a 32-bit int, and what should it be?"
+    options:
+      - "It overflows silently to a wrong (often negative) value; every counting accumulator and the return type must be a signed 64-bit long long."
+      - "Nothing — 4.0×10¹² fits fine in a 32-bit unsigned int."
+      - "It throws a compile-time error that the learner must catch."
+      - "The judge automatically promotes int results to long long, so it is safe."
+    answer: 0
+    explanation: "A 32-bit signed int holds at most ≈ 2.1×10⁹; 4.0×10¹² exceeds it, so the count wraps around (typically to a large negative number) with no error. The fix is to make every accumulator — dp and the running ans — a signed 64-bit long long (max ≈ 9.2×10¹⁸). Estimating n²m²/4 · Σ before coding prevents this silent, hard-to-debug bug."
+
+type: content
+---

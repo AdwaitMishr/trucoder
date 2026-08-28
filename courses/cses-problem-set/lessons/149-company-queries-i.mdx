@@ -1,0 +1,212 @@
+---
+id: company-queries-i
+title: "Company Queries I"
+type: content
+difficulty: medium
+order: 149
+tags:
+  - tree-algorithms
+  - binary-lifting
+  - ancestor
+  - dynamic-programming
+blocks:
+  - type: markdown
+    content: |
+      # Company Queries I — binary lifting for k-th ancestor
+
+      We are asked, for many independent queries `(x, k)`, for the **k-th
+      ancestor** of a node `x` (the `0`-th ancestor is `x` itself, the `1`-st is
+      its parent). The challenge: up to `2 * 10^5` queries on a tree of up to
+      `2 * 10^5` nodes, so climbing one parent at a time per query is too slow.
+
+      ## Binary lifting in one line
+
+      Precompute `up[i][j]` = the `2^j`-th ancestor of node `i`. Then to answer
+      "k-th ancestor", look at the binary representation of `k` — each set bit `j`
+      means "jump `2^j` steps up", and those jumps compose:
+
+      ```
+      up[i][j] = up[ up[i][j-1] ][j-1]      // 2^j = 2^(j-1) + 2^(j-1)
+      ```
+
+      Setting `up[i][0] = boss[i]` (the immediate parent), the whole table builds
+      in O(n log n). A query then makes one jump per set bit of `k` — at most
+      `log n` jumps → **O(log n) per query**.
+
+      If a jump climbs past the root, we land on a sentinel (`0`); after processing
+      all bits, if we reached the sentinel the answer is `-1`.
+
+      **Total:** O((n + q) log n) time, O(n log n) space.
+
+      :::tip
+      **Interview tip:** binary lifting is the single most reusable tree
+      technique for ancestor queries, LCAs (lowest common ancestor), and
+      "x-th ancestor" / path-sum questions. The `up[i][j] = up[up[i][j-1]][j-1]`
+      recurrence and the bit-by-bit jump are worth committing to memory; the same
+      table powers LCA via "lift the deeper node, then lift both together".
+      :::
+  - type: markdown
+    content: |
+      # Question — Company Queries I
+
+      A company has `n` employees, numbered `1, 2, ..., n`. The company has a
+      tree hierarchy: employee `1` is the CEO, and each other employee has a
+      known boss. We are given `q` queries, each asking for a node's **k-th
+      ancestor**.
+
+      **Input**
+
+      The first input line contains an integer `n`: the number of employees.
+
+      The next line contains `n-1` integers: the boss of each employee `2, 3,
+      ..., n`. The boss of an employee is the person they directly report to.
+
+      The next line contains an integer `q`: the number of queries.
+
+      After this, there are `q` lines describing the queries. Each line has two
+      integers `x` and `k`: the k-th ancestor of employee `x`.
+
+      **Output**
+
+      For each query, print the k-th ancestor of `x`. If such an ancestor does
+      not exist, print `-1`.
+
+      **Constraints**
+
+      - `1 <= n <= 2 * 10^5`
+      - `1 <= q <= 2 * 10^5`
+      - `1 <= x <= n`
+
+      **Example**
+
+      Input:
+
+      ```
+      5
+      1 1 2 3
+      3
+      1 1
+      2 0
+      4 1
+      ```
+
+      Output:
+
+      ```
+      -1
+      2
+      2
+      ```
+
+      Query `1 1`: 1 is the CEO, it has no 1st ancestor → `-1`. Query `2 0`: the
+      0-th ancestor of 2 is 2. Query `4 1`: the 1st ancestor (boss) of 4 is 2.
+  - type: markdown
+    content: |-
+      ### Solution
+
+      **① Brute force — climb one parent per step, O(n) per query**
+
+      For each query, move `x` up `k` times along `boss[]`, printing `-1` if we
+      leave the root first. Correct but O(k) per query, and `k` can be ~`n` with
+      up to `2 * 10^5` queries → up to `4 * 10^10` steps. Too slow.
+
+      ```cpp
+      // Illustration of the naive idea only — O(n) per query, unusable.
+      // while(k--){ if(x==0){x=-1;break;} x = boss[x]; }
+      ```
+
+      **② Optimization — binary lifting, O(log n) per query, O(n log n) total time, O(n log n) space**
+
+      Build the `up` table, then answer each query bit by bit.
+
+      ```cpp
+      #include <bits/stdc++.h>
+      using namespace std;
+      const int LOG=19;
+      int main(){
+          ios::sync_with_stdio(false); cin.tie(nullptr);
+          int n,q; cin >> n;
+          vector<vector<int>> up(n+1, vector<int>(LOG,0));
+          for(int i=2;i<=n;++i){ int b; cin>>b; up[i][0]=b; }
+          for(int j=1;j<LOG;++j)
+              for(int i=1;i<=n;++i)
+                  up[i][j] = up[ up[i][j-1] ][j-1];
+          cin >> q;
+          while(q--){
+              int x,k; cin >> x >> k;
+              for(int j=0; k; k >>= 1, ++j)
+                  if(k & 1) x = up[x][j];
+              cout << (x ? x : -1) << "\n";
+          }
+          return 0;
+      }
+      ```
+
+      `LOG = 19` covers `2^18 = 262144 > 2 * 10^5` depth, and `up[root][*] = 0`
+      so any jump past the root yields the sentinel `0` → `-1`.
+
+      **③ Further optimization** — not needed: O(log n) per query is optimal since
+      the query's answer genuinely depends on `log n` bits of `k`.
+
+      **④ Alternative — Euler tour + RMQ / HLD** — heavier machinery
+      (`O(n log n)` builds, `O(log n)` queries via heavy-light decomposition or a
+      position-in-Euler-tour depth lookup) that also solves the problem but brings
+      complexity binary lifting doesn't need. For pure ancestor queries, binary
+      lifting (②) is the intended and simplest solution.
+  - type: markdown
+    content: |
+      # Code logic
+
+      Follow the binary-lifting solution in **②**:
+
+      - `up[i][0]` is employee `i`'s boss. The loop
+        `up[i][j] = up[up[i][j-1]][j-1]` composes two `2^(j-1)` jumps into one
+        `2^j` jump; this is the entire preprocessing (O(n log n)).
+      - Note the input order: `q` is read **after** the `n-1` bosses, so the table
+        must be built before reading the queries.
+      - Per query, iterate the bits of `k` from least significant up: whenever a
+        bit is set, apply the matching `2^j` jump `x = up[x][j]`. Because the jumps
+        commute (they are all upward), bit order does not matter.
+      - If `x` ever becomes `0` the node climbed past the CEO: print `-1`.
+      - A `0`-th ancestor query has `k = 0`, the loop body never runs, and `x` is
+        printed unchanged — matching the definition that the 0-th ancestor is the
+        node itself.
+  - type: markdown
+    content: |
+      # Walkthrough
+
+      Trace the sample: `n = 5`, bosses `1 1 2 3`, then `q = 3` queries.
+
+      Preprocessing: `up[2][0]=1, up[3][0]=1, up[4][0]=2, up[5][0]=3`, then higher
+      jumps e.g. `up[4][1] = up[up[4][0]][0] = up[2][0] = 1`.
+
+      | query | k in binary | jumps applied | result |
+      |-------|-------------|---------------|--------|
+      | (x=1, k=1) | 1 (`bit 0`) | x = up[1][0] = 0 | `-1` |
+      | (x=2, k=0) | 0 (no bits) | none | `2` |
+      | (x=4, k=1) | 1 (`bit 0`) | x = up[4][0] = 2 | `2` |
+
+      Output: `-1`, `2`, `2`, matching the sample.
+  - type: flowchart
+    title: "Binary lifting"
+    nodes: ["read n, bosses", "build up[i][j] table (O(n log n))",
+            "read q queries", "next query (x, k)",
+            "for each set bit j of k: x = up[x][j]",
+            "x==0 ? print -1 : print x"]
+    edges:
+      - {from: 0, to: 1, label: ""}
+      - {from: 1, to: 2, label: ""}
+      - {from: 2, to: 3, label: ""}
+      - {from: 3, to: 4, label: ""}
+      - {from: 4, to: 5, label: ""}
+      - {from: 5, to: 3, label: "next query"}
+  - type: mcq
+    prompt: "How does preprocessing jump[ i ][ j ] make a k-th-ancestor query run in O(log n) instead of O(k)?"
+    options:
+      - "By storing the 2^j-th ancestor of every node (built from two 2^(j-1) jumps), the query decomposes k into its binary bits — at most log n of them — and applies one 2^j jump per set bit, so the cost depends on the bit-length of k, not its value"
+      - "By precomputing the answer to every possible query in an O(n^2) table"
+      - "By using memoized recursion to cache k-th ancestors"
+      - "By sorting the queries so k only ever increases"
+    answer: 0
+    explanation: "The table is built with the recurrence up[i][j] = up[up[i][j-1]][j-1], capturing each power-of-two ancestor. Any integer k has at most ⌈log2(n)⌉ ≍ 18 set bits here, so answering means ≤ log n upward jumps keyed to those bits — independent of how large k is. This is the same cost model that makes binary-lifting-based LCA optimal."
+---
