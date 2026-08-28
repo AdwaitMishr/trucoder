@@ -130,9 +130,19 @@ const webDir = [
   path.join(__dirname, "..", "web"),
 ].find((d) => fs.existsSync(path.join(d, "index.html")));
 if (webDir) {
-  app.use(express.static(webDir));
+  app.use(
+    express.static(webDir, {
+      // never cache the SPA shell or its (already-hashed) assets — prevents
+      // browsers ever serving a stale pre-fix bundle after a rebuild.
+      setHeaders: (res) => res.setHeader("Cache-Control", "no-store"),
+    })
+  );
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api")) return next();
+    // never cache the SPA shell: the hashed asset filenames already bust
+    // per-build caches, and caching index.html stranded users on stale
+    // bundles after every rebuild (quiz-state-bleed symptom).
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.sendFile(path.join(webDir, "index.html"));
   });
 } else {

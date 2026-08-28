@@ -292,14 +292,13 @@ blocks:
       - {from: 0, to: 1}
       - {from: 1, to: 2}
       - {from: 2, to: 3}
-      - {from: 3, to: 9, label: "yes"}
+      - {from: 3, to: 8, label: "yes"}
       - {from: 3, to: 4, label: "no"}
       - {from: 4, to: 5}
       - {from: 5, to: 6}
       - {from: 6, to: 7}
       - {from: 7, to: 8}
       - {from: 8, to: 2, label: "next query"}
-      - {from: 9, to: 8, label: "unchanged"}
   - type: mcq
     prompt: 'Why does just one swap allow all m queries to be answered in O(1) each instead of O(n) each?'
     options:
